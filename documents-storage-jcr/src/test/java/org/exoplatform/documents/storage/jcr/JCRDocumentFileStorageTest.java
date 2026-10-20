@@ -940,13 +940,13 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode5, "", spaceService)).thenReturn(folderWithSpecificName1);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(identityManager, identity, fileNode, "", spaceService)).thenReturn(file);
 
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(identityManager,
-                                                           userSession,
-                                                           nodeIterator,
-                                                           identity,
-                                                           spaceService,
-                                                           false,
-                                                           filter))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(eq(identityManager),
+                                                           eq(userSession),
+                                                           any(NodeIterator.class),
+                                                           eq(identity),
+                                                           eq(spaceService),
+                                                           eq(false),
+                                                           eq(filter)))
                       .thenCallRealMethod();
 
 
@@ -955,8 +955,9 @@ public class JCRDocumentFileStorageTest {
     assertEquals(2, nodes.size());
     when(nodeIterator.hasNext()).thenReturn(true, false);
     when(nodeIterator.nextNode()).thenReturn(folderNode2);
+    // the folder holds one child: a page starting past it is empty
     nodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 2, 4);
-    assertEquals(1, nodes.size());
+    assertEquals(0, nodes.size());
 
     // case of folderNodeId empty
     filter.setParentFolderId(null);
@@ -981,33 +982,33 @@ public class JCRDocumentFileStorageTest {
     when(queryResult.getNodes()).thenReturn(nodeIterator1);
     when(nodeIterator1.hasNext()).thenReturn(true, true, false);
     when(nodeIterator1.nextNode()).thenReturn(folderNode2, folderNode1);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(
-                                                           identityManager,
-                                                           userSession,
-                                                           nodeIterator1,
-                                                           identity,
-                                                           spaceService,
-                                                           false, filter))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(eq(identityManager),
+                                                           eq(userSession),
+                                                           any(NodeIterator.class),
+                                                           eq(identity),
+                                                           eq(spaceService),
+                                                           eq(false),
+                                                           eq(filter)))
                       .thenCallRealMethod();
     List<AbstractNode> nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 2);
     assertEquals(2, nodes1.size());
     when(nodeIterator1.hasNext()).thenReturn(true, false);
     when(nodeIterator1.nextNode()).thenReturn(folderNode2);
     nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 2, 4);
-    assertEquals(1, nodes1.size());
+    assertEquals(0, nodes1.size());
 
     // case folder with specific name
     NodeIterator nodeIterator2 = mock(NodeIterator.class);
     when(queryResult.getNodes()).thenReturn(nodeIterator2);
     when(nodeIterator2.hasNext()).thenReturn(true, true, true,false);
     when(nodeIterator2.nextNode()).thenReturn(folderNode3, folderNode4, folderNode5);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(
-                                                           identityManager,
-                                                           userSession,
-                                                           nodeIterator2,
-                                                           identity,
-                                                           spaceService,
-                                                           false, filter))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(eq(identityManager),
+                                                           eq(userSession),
+                                                           any(NodeIterator.class),
+                                                           eq(identity),
+                                                           eq(spaceService),
+                                                           eq(false),
+                                                           eq(filter)))
                       .thenCallRealMethod();
 
     //assert NumberFormatException when try to parse specific folder name
@@ -2523,6 +2524,149 @@ public class JCRDocumentFileStorageTest {
 
     assertThrows(ItemNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentById(session, "shortcutId", aclIdentity));
     assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentById("shortcutId", "john"));
+  }
+
+  /**
+   * A folder's children are paged over the listing, folders first, then files:
+   * a shortcut to a file the folder query returns sorted among the folders is
+   * listed with the files, and reading the listing page by page gives every
+   * child once, in order. The queries serve their rows by the offset and the
+   * limit they are given, as the repository does.
+   */
+  @Test
+  public void getFolderChildNodesPagesOverTheListingWithAFileShortcutAmongTheFolders() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn("user");
+    SessionImpl session = mockFolderListingSession(identity);
+    Node fileB = createFileMock("bTarget", Calendar.getInstance(), session);
+    Node shortcutB = createSymlinkMock("bTargetFileIdentifier", "B");
+    List<Node> folderRows = List.of(createFolderMock("A", Calendar.getInstance(), session),
+                                    shortcutB,
+                                    createFolderMock("C", Calendar.getInstance(), session),
+                                    createFolderMock("D", Calendar.getInstance(), session),
+                                    createFolderMock("E", Calendar.getInstance(), session),
+                                    createFolderMock("F", Calendar.getInstance(), session));
+    List<Node> fileRows = List.of(shortcutB, createFileMock("f1", Calendar.getInstance(), session));
+    mockFolderListingQueries(session, folderRows, fileRows);
+    assertNotNull(fileB);
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "", 1L, "");
+    filter.setSortField(DocumentSortField.NAME);
+    filter.setAscending(true);
+
+    List<String> listed = new ArrayList<>();
+    for (int offset = 0; offset < 9; offset += 3) {
+      jcrDocumentFileStorage.getFolderChildNodes(filter, identity, offset, 3).forEach(child -> listed.add(child.getName()));
+    }
+
+    assertEquals(List.of("A", "C", "D", "E", "F", "B.lnk", "f1"), listed);
+    assertEquals(List.of("E", "F", "B.lnk"),
+                 jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 3, 3).stream().map(AbstractNode::getName).toList());
+  }
+
+  /**
+   * A page is filled up to its limit whenever the folder holds more children,
+   * however many of the rows read first the listing leaves out (shortcuts to
+   * files among the folders, a shortcut whose target is gone): the rows are
+   * read again past the last one read. So a listing asked for one child more
+   * than a bound gets it whenever the folder holds that many, and a shorter
+   * listing means the folder holds no more.
+   */
+  @Test
+  public void getFolderChildNodesFillsThePageWhenRowsAreLeftOut() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn("user");
+    SessionImpl session = mockFolderListingSession(identity);
+    List<Node> folderRows = new ArrayList<>();
+    createFileMock("target", Calendar.getInstance(), session);
+    for (int i = 0; i < 4; i++) {
+      folderRows.add(createSymlinkMock("targetFileIdentifier", "fileShortcut" + i));
+    }
+    folderRows.add(createSymlinkMock("goneIdentifier", "deadShortcut"));
+    for (int i = 10; i < 32; i++) {
+      folderRows.add(createFolderMock("folder" + i, Calendar.getInstance(), session));
+    }
+    mockFolderListingQueries(session, folderRows, List.of());
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "", 1L, "");
+    filter.setSortField(DocumentSortField.NAME);
+    filter.setAscending(true);
+
+    List<AbstractNode> page = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 21);
+    assertEquals(21, page.size());
+    assertEquals("folder10", page.get(0).getName());
+    assertEquals("folder30", page.get(20).getName());
+
+    assertEquals(22, jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 23).size());
+    assertEquals(22, jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0).size());
+  }
+
+  /**
+   * Opens the user's session on a parent folder whose children the listing
+   * converts with the real conversion code.
+   *
+   * @param identity the user's identity
+   * @return the user's session
+   */
+  private SessionImpl mockFolderListingSession(org.exoplatform.services.security.Identity identity) throws Exception {
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    SessionImpl session = mock(SessionImpl.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Node parentNode = mock(Node.class);
+    when(parentNode.getPath()).thenReturn("/documents/path");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "12e2")).thenReturn(parentNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(any(), any(), any(), any(), any(), anyBoolean(), any()))
+                      .thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(any(), any(), any(), any(), any())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(any())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.retrieveFileProperties(any(), any(), any(), any(), any()))
+                      .thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(any(IdentityManager.class),
+                                                              any(org.exoplatform.services.security.Identity.class),
+                                                              any(Node.class),
+                                                              anyString(),
+                                                              any(SpaceService.class)))
+                      .thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(any(IdentityManager.class),
+                                                              any(org.exoplatform.services.security.Identity.class),
+                                                              any(Node.class),
+                                                              any(FileNode.class),
+                                                              any(SpaceService.class)))
+                      .thenCallRealMethod();
+    return session;
+  }
+
+  /**
+   * Answers the folder query and the file query of a listing with the given
+   * rows, served by the offset and the limit each query is given, no limit
+   * serving every row past the offset.
+   *
+   * @param session the user's session
+   * @param folderRows the rows of the folder query, in its order
+   * @param fileRows the rows of the file query, in its order
+   */
+  private void mockFolderListingQueries(SessionImpl session, List<Node> folderRows, List<Node> fileRows) throws Exception {
+    WorkspaceImpl workspace = mock(WorkspaceImpl.class);
+    QueryManager queryManager = mock(QueryManager.class);
+    when(session.getWorkspace()).thenReturn(workspace);
+    doReturn(queryManager).when(workspace).getQueryManager();
+    when(queryManager.createQuery(anyString(), eq(Query.SQL))).thenAnswer(invocation -> {
+      List<Node> rows = invocation.getArgument(0, String.class).contains("'nt:folder'") ? folderRows : fileRows;
+      long[] offsetAndLimit = new long[2];
+      QueryImpl query = mock(QueryImpl.class);
+      doAnswer(set -> offsetAndLimit[0] = set.getArgument(0, Long.class)).when(query).setOffset(anyLong());
+      doAnswer(set -> offsetAndLimit[1] = set.getArgument(0, Long.class)).when(query).setLimit(anyLong());
+      when(query.execute()).thenAnswer(execution -> {
+        int from = (int) Math.min(offsetAndLimit[0], rows.size());
+        int to = offsetAndLimit[1] <= 0 ? rows.size() : (int) Math.min(from + offsetAndLimit[1], rows.size());
+        QueryResult result = mock(QueryResult.class);
+        when(result.getNodes()).thenReturn(new org.exoplatform.services.jcr.impl.util.EntityCollection(new ArrayList<>(rows.subList(from,
+                                                                                                                                          to))));
+        return result;
+      });
+      return query;
+    });
   }
 
 }

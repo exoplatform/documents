@@ -189,11 +189,16 @@ public interface DocumentFileService {
   /**
    * Retrieves a list of accessible files, for a selected user, by applying the
    * designated filter. The parentForlderId of filter object will be used to
-   * select the list of Nodes to retrieve.
+   * select the list of Nodes to retrieve. Without a search criterion, the
+   * folder's children are listed folders first, then files, a shortcut with
+   * its target's kind, and a shortcut whose target is gone or can't be read
+   * left out; the offset and the limit page over that listing, so successive
+   * pages neither skip nor repeat a child.
    * 
    * @param filter {@link DocumentFolderFilter} that contains filtering criteria
    * @param offset Offset of the result list
-   * @param limit Limit of the result list
+   * @param limit Limit of the result list; without a search criterion, none
+   *          when zero or less
    * @param userIdentityId {@link Identity} technical identifier of the user
    *          acessing files
    * @return {@link List} of {@link AbstractNode}
