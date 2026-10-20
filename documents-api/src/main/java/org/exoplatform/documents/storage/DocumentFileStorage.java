@@ -517,6 +517,23 @@ public interface DocumentFileStorage {
   }
 
   /**
+   * Returns a part of the text of a document file, with the length of the
+   * whole text and the document's outline, so a document too large to be read
+   * in one go is read part by part, or one section at a time. The whole text
+   * is extracted from the file once per version of it and kept for the next
+   * parts. No permission is checked here: the caller checks the user can
+   * access the document first.
+   *
+   * @param documentId Document identifier
+   * @param offset the first character to read
+   * @param maxChars the most characters to read, 0 for the outline only
+   * @return the part read, or why there is no text
+   */
+  default DocumentTextPage getFileTextPage(String documentId, long offset, int maxChars) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Returns a document file content as Text
    * 
    * @param documentId Document identifier
