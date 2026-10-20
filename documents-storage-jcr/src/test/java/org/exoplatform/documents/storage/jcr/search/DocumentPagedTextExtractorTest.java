@@ -333,6 +333,24 @@ class DocumentPagedTextExtractorTest {
   }
 
   /**
+   * A cache directory removed while the server runs, by a cleaner of the
+   * temporary directory for instance, is created again by the next
+   * extraction, which reads the file.
+   * Mutants: the directory created at the start only.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void extractsAgainOnceItsCacheDirectoryIsGone() throws Exception {
+    storeText(DOCUMENT_ID, "before", 1L);
+    assertEquals("before", extractor.getPage(DOCUMENT_ID, 0, 10).text());
+    org.apache.commons.io.FileUtils.deleteDirectory(directory.resolve("cache").toFile());
+    storeText(OTHER_ID, "after", 1L);
+
+    assertEquals("after", extractor.getPage(OTHER_ID, 0, 10).text());
+  }
+
+  /**
    * Past the most versions remembered, the least recently read one is
    * forgotten, even when the versions take no room on disk.
    * Mutants: the number of versions not bounded.

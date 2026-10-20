@@ -417,6 +417,8 @@ public class DocumentPagedTextExtractor {
       try (InputStream stream = data.getStream()) {
         Files.copy(stream, binary.toPath(), StandardCopyOption.REPLACE_EXISTING);
       }
+      // the cache directory, under the temporary directory, may have been emptied since the start
+      Files.createDirectories(cacheDirectory);
       long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
       List<DocumentOutlineEntry> outline = new ArrayList<>();
       CountingWriter writer = new CountingWriter(new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(textFile),
