@@ -78,13 +78,14 @@ import org.exoplatform.services.log.Log;
  * instance, can be read in parts, or one section at a time.
  * <p>
  * The file is copied to a temporary file and parsed from it. A Word document,
- * a presentation and a PDF get their outline from the same walk that writes
- * their text, the PDF being parsed with its buffers in temporary files. Any
- * other supported type, a spreadsheet, an older Office or an OpenDocument file
- * for instance, is read by the platform's document readers, without an
- * outline; most of them load the whole file, so reading one takes a heap of at
- * least the file's size, up to the largest file read, the same limit as the
- * largest file a user can attach in the UI. One file is extracted at a time; a caller waits for its extraction a bounded time, the
+ * a presentation, a PDF and a spreadsheet get their outline from the same walk
+ * that writes their text, the PDF being parsed with its buffers in temporary
+ * files and the spreadsheet streamed a row at a time. Any other supported
+ * type, an older Office or an OpenDocument file for instance, is read by the
+ * platform's document readers, without an outline; most of them load the
+ * whole file, so reading one takes a heap of at least the file's size, up to
+ * the largest file read, the same limit as the largest file a user can attach
+ * in the UI. One file is extracted at a time; a caller waits for its extraction a bounded time, the
  * extraction going on after it so a later call finds the text. The text is
  * stored as UTF-16, two bytes a character, so a part is read at its offset
  * without reading what comes before it. The cache is a node's own: another

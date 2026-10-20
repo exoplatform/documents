@@ -175,7 +175,7 @@ public class DocumentMcpTool implements McpToolPlugin {
   /**
    * The note ending a text cut at the most characters read on the fly. It
    * gives no offset: read_document_text lays out a Word document, a
-   * presentation or a PDF its own way, so this text's length is no position
+   * presentation, a PDF or a spreadsheet its own way, so this text's length is no position
    * in that one.
    */
   private static final String      MSG_TEXT_CONTINUES      =
@@ -690,7 +690,8 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Lists a document's headings: a Word document's headings, a PDF's
-   * bookmarks, a presentation's slide titles, each with where its section
+   * bookmarks, a presentation's slide titles, a spreadsheet's sheets, each
+   * with where its section
    * starts and ends in the text {@code read_document_text} reads.
    *
    * @param documentId the document id

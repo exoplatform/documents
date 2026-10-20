@@ -29,7 +29,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param offset where its section starts in the text
  * @param endOffset where its section ends: the next heading of the same or a
  *          higher level that starts after it, or the end of the text
- * @param page the PDF page or the slide it is on, null for a Word document
+ * @param page the PDF page, the slide or the sheet it is on, null for a Word
+ *          document
  */
 @JsonInclude(Include.NON_NULL)
 public record DocumentHeadingModel(int index,

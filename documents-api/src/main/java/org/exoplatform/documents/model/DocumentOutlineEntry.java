@@ -24,8 +24,8 @@ package org.exoplatform.documents.model;
  * @param level its depth, 1 for a top-level heading
  * @param title its text
  * @param offset the character in the document's text where its section starts
- * @param page the PDF page or the slide it is on, from 1, null for a Word
- *          document
+ * @param page the PDF page, the slide or the sheet it is on, from 1, null for
+ *          a Word document
  */
 public record DocumentOutlineEntry(int index, int level, String title, long offset, Integer page) {
 }

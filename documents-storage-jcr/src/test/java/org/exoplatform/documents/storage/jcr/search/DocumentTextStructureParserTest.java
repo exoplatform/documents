@@ -367,6 +367,70 @@ class DocumentTextStructureParserTest {
   }
 
   /**
+   * A spreadsheet's sheets are its outline, each at the start of its rows with
+   * its number, each row on one line, its cells' values separated.
+   * Mutants: a sheet's entry dropped, the offset taken after its rows, the
+   * sheet number dropped, a row's cells not separated.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aSpreadsheetsSheetsAreItsOutline() throws IOException {
+    File file = directory.resolve("budget.xlsx").toFile();
+    try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+         FileOutputStream out = new FileOutputStream(file)) {
+      var costs = workbook.createSheet("Costs");
+      var header = costs.createRow(0);
+      header.createCell(0).setCellValue("Item");
+      header.createCell(1).setCellValue("Amount");
+      var line = costs.createRow(1);
+      line.createCell(0).setCellValue("Servers");
+      line.createCell(1).setCellValue(1200);
+      workbook.createSheet("Notes").createRow(0).createCell(0).setCellValue("Reviewed in March");
+      workbook.write(out);
+    }
+    StringWriter text = new StringWriter();
+
+    List<DocumentOutlineEntry> outline = parse(file, DocumentTextStructureParser.XLSX_MIME_TYPE, text, Long.MAX_VALUE);
+
+    String written = text.toString();
+    assertEquals(List.of("Costs", "Notes"), outline.stream().map(DocumentOutlineEntry::title).toList());
+    assertEquals(List.of(1, 2), outline.stream().map(DocumentOutlineEntry::page).toList());
+    assertHeadingsAtTheirOffsets(written, outline);
+    assertTrue(written.contains("Item | Amount\nServers | 1200\n"), written);
+    assertTrue(written.substring((int) outline.get(1).offset()).startsWith("Sheet 2: Notes\nReviewed in March"), written);
+  }
+
+  /**
+   * A spreadsheet's text cut at the most characters read stops as a cut, the
+   * outline holding the sheets written: the writer's refusal reaches the
+   * caller as itself through the streaming handler.
+   * Mutants: the refusal raised as an unreadable file.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aCutSpreadsheetKeepsTheSheetsWrittenBeforeTheCut() throws IOException {
+    File file = directory.resolve("large.xlsx").toFile();
+    try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+         FileOutputStream out = new FileOutputStream(file)) {
+      var first = workbook.createSheet("First");
+      for (int i = 0; i < 50; i++) {
+        first.createRow(i).createCell(0).setCellValue("Row number " + i);
+      }
+      workbook.createSheet("Second").createRow(0).createCell(0).setCellValue("Never reached");
+      workbook.write(out);
+    }
+    List<DocumentOutlineEntry> outline = new ArrayList<>();
+    CountingWriter writer = new CountingWriter(new StringWriter(), 100, Long.MAX_VALUE);
+
+    assertThrows(TextLimitReachedException.class,
+                 () -> DocumentTextStructureParser.parse(file, DocumentTextStructureParser.XLSX_MIME_TYPE, writer, outline));
+    assertEquals(List.of("First"), outline.stream().map(DocumentOutlineEntry::title).toList());
+    assertTrue(writer.isTruncated());
+  }
+
+  /**
    * A PDF's bookmarks, nested ones included, are outline entries at the start
    * of the page each points to, with the page's number and the depth of the
    * bookmark.
@@ -617,7 +681,8 @@ class DocumentTextStructureParserTest {
     assertTrue(DocumentTextStructureParser.isStructured("application/pdf; charset=binary"));
     assertTrue(DocumentTextStructureParser.isStructured(DocumentTextStructureParser.DOCX_MIME_TYPE.toUpperCase()));
     assertTrue(DocumentTextStructureParser.isStructured(DocumentTextStructureParser.PPTX_MIME_TYPE));
-    assertFalse(DocumentTextStructureParser.isStructured("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+    assertTrue(DocumentTextStructureParser.isStructured(DocumentTextStructureParser.XLSX_MIME_TYPE));
+    assertFalse(DocumentTextStructureParser.isStructured("application/vnd.oasis.opendocument.spreadsheet"));
     assertFalse(DocumentTextStructureParser.isStructured(null));
   }
 

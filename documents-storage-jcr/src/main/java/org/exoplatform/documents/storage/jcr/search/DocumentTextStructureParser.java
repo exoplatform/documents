@@ -18,6 +18,8 @@ package org.exoplatform.documents.storage.jcr.search;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,6 +32,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.xml.parsers.ParserConfigurationException;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.io.MemoryUsageSetting;
@@ -38,8 +42,11 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDDocumentOutline;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineNode;
+import org.apache.poi.openxml4j.exceptions.OpenXML4JException;
 import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.openxml4j.opc.PackageAccess;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.util.XMLHelper;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFGroupShape;
 import org.apache.poi.xslf.usermodel.XSLFShape;
@@ -48,6 +55,10 @@ import org.apache.poi.xslf.usermodel.XSLFTable;
 import org.apache.poi.xslf.usermodel.XSLFTableCell;
 import org.apache.poi.xslf.usermodel.XSLFTableRow;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import org.apache.poi.xssf.eventusermodel.ReadOnlySharedStringsTable;
+import org.apache.poi.xssf.eventusermodel.XSSFReader;
+import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler;
+import org.apache.poi.xssf.model.StylesTable;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.ICell;
 import org.apache.poi.xwpf.usermodel.XWPFComment;
@@ -64,14 +75,18 @@ import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTDecimalNumber;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPrGeneral;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.XMLReader;
 
 import org.exoplatform.documents.model.DocumentOutlineEntry;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
 /**
- * Writes the text of a Word document, a presentation or a PDF together with
- * its outline: the Word headings, the slide titles, the PDF bookmarks, each
+ * Writes the text of a Word document, a presentation, a PDF or a spreadsheet
+ * together with its outline: the Word headings, the slide titles, the PDF
+ * bookmarks, the sheet names, each
  * at the character its section starts in the text written. The text and the
  * outline come from one walk of the file, so the positions match the text.
  * Pictures are never decoded: only the text of the file is read.
@@ -83,6 +98,8 @@ final class DocumentTextStructureParser {
   static final String           PPTX_MIME_TYPE   = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
   static final String           PDF_MIME_TYPE    = "application/pdf";
+
+  static final String           XLSX_MIME_TYPE   = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
   /** The most bookmarks read from one PDF, its outline being cut there. */
   static final int              MAX_BOOKMARKS     = 10_000;
@@ -102,11 +119,12 @@ final class DocumentTextStructureParser {
    * Tells whether the text and the outline of a file type are read here.
    *
    * @param mimeType the file type
-   * @return true for a Word document, a presentation or a PDF
+   * @return true for a Word document, a presentation, a PDF or a spreadsheet
    */
   static boolean isStructured(String mimeType) {
     String type = StringUtils.substringBefore(StringUtils.trimToEmpty(mimeType), ";").trim().toLowerCase(Locale.ROOT);
-    return DOCX_MIME_TYPE.equals(type) || PPTX_MIME_TYPE.equals(type) || PDF_MIME_TYPE.equals(type);
+    return DOCX_MIME_TYPE.equals(type) || PPTX_MIME_TYPE.equals(type) || PDF_MIME_TYPE.equals(type)
+        || XLSX_MIME_TYPE.equals(type);
   }
 
   /**
@@ -126,6 +144,7 @@ final class DocumentTextStructureParser {
     switch (type) {
     case DOCX_MIME_TYPE -> parseWord(file, out, outline);
     case PPTX_MIME_TYPE -> parsePresentation(file, out, outline);
+    case XLSX_MIME_TYPE -> parseSpreadsheet(file, out, outline);
     case PDF_MIME_TYPE -> parsePdf(file, out, outline);
     default -> throw new IllegalArgumentException("Not a structured type: " + mimeType);
     }
@@ -325,6 +344,44 @@ final class DocumentTextStructureParser {
       }
     } catch (org.apache.poi.openxml4j.exceptions.InvalidFormatException e) {
       throw new IOException("Not a presentation", e);
+    }
+  }
+
+  /**
+   * Writes a spreadsheet sheet by sheet, each sheet's name becoming an
+   * outline entry, its rows streamed one at a time, so a large workbook is
+   * never held in memory, as the platform's own spreadsheet reader does.
+   *
+   * @param file the xlsx file
+   * @param out where the text is written
+   * @param outline where the sheet names are added
+   * @throws IOException when the file can't be read or the writer refuses
+   *           more text
+   */
+  private static void parseSpreadsheet(File file, CountingWriter out, List<DocumentOutlineEntry> outline) throws IOException {
+    try (OPCPackage pkg = OPCPackage.open(file, PackageAccess.READ)) {
+      XSSFReader reader = new XSSFReader(pkg);
+      ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg, false);
+      StylesTable styles = reader.getStylesTable();
+      XSSFReader.SheetIterator sheets = (XSSFReader.SheetIterator) reader.getSheetsData();
+      int number = 0;
+      while (sheets.hasNext()) {
+        try (InputStream sheet = sheets.next()) {
+          number++;
+          String name = StringUtils.defaultIfBlank(StringUtils.normalizeSpace(sheets.getSheetName()), "Sheet %d".formatted(number));
+          outline.add(new DocumentOutlineEntry(outline.size(), 1, name, out.count(), number));
+          out.write("Sheet %d: %s\n".formatted(number, name));
+          XMLReader xml = XMLHelper.newXMLReader();
+          xml.setContentHandler(new XSSFSheetXMLHandler(styles, strings, new SpreadsheetRowWriter(out), new DataFormatter(), false));
+          xml.parse(new InputSource(sheet));
+          out.write('\n');
+        }
+      }
+    } catch (UncheckedIOException e) {
+      // the writer refusing more text, a cut or the deadline, raised through the streaming handler
+      throw e.getCause();
+    } catch (OpenXML4JException | SAXException | ParserConfigurationException e) {
+      throw new IOException("Not a spreadsheet", e);
     }
   }
 
