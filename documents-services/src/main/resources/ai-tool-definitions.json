@@ -28,7 +28,7 @@
     {
       "name": "get_documents_by_folder_id",
       "title": "Get DMS files and/or folders under a given folder",
-      "description": "Retrieves the files (and/or folders) located under a folder stored in the DMS.",
+      "description": "Retrieves the files (and/or folders) located under a folder stored in the DMS. Each gives whether you can edit or delete it (can_edit, can_delete); a shortcut gives shortcut_target_id and no rights: call get_document_permissions with its id before writing through it.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -210,7 +210,7 @@
     {
       "name": "search_documents",
       "title": "Search for files",
-      "description": "Searches for documents matching the specified query and optional filters. With updated_since, returns the files changed since that date, the most recent first, with or without a query: use it to keep a folder in sync instead of opening each document. It searches the whole tree under the folder or the space, files only, as the search index holds them (a change can take a moment to show). Each file says whether you can edit or delete it (can_edit, can_delete).",
+      "description": "Searches for documents matching the specified query and optional filters. With updated_since, returns the files changed since that date, the most recent first, with or without a query: use it to keep a folder in sync instead of opening each document. It searches the whole tree under the folder or the space, files only, as the search index holds them (a change can take a moment to show). Each file says whether you can edit or delete it (can_edit, can_delete); a shortcut the search finds is answered as its target, with the target's id and rights.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -259,7 +259,7 @@
     {
       "name": "list_folder_children",
       "title": "List DMS folder children",
-      "description": "Lists the direct child files and folders of a folder, folders first. Each child gives its updated_date and whether you can edit it (for a folder: add or upload documents in it) or delete it (can_edit, can_delete). With updated_since, lists only the children changed since that date, the most recent first; a folder whose listing returns more than 1000 documents is refused, then use search_documents with parent_folder_id and updated_since. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
+      "description": "Lists the direct child files and folders of a folder, folders first. Each child gives its updated_date and whether you can edit it (for a folder: add or upload documents in it) or delete it (can_edit, can_delete); a shortcut gives shortcut_target_id and no rights: call get_document_permissions with its id before writing through it. With updated_since, lists only the children changed since that date, the most recent first; a folder whose listing returns more than 1000 documents is refused, then use search_documents with parent_folder_id and updated_since. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
