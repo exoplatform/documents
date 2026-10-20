@@ -80,7 +80,7 @@
     {
       "name": "get_document_by_id",
       "title": "Get DMS folder or file by its id",
-      "description": "Fetches the metadata of a document given its unique identifier.",
+      "description": "Fetches the metadata of a document given its unique identifier, with can_edit and can_delete, your rights on it. A shortcut's id gives its target's metadata and edit right; can_delete is then left out, deleting a shortcut removing only the shortcut.",
       "input_schema": {
         "type": "object",
         "properties": {
