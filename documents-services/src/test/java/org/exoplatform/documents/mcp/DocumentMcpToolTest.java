@@ -496,7 +496,6 @@ public class DocumentMcpToolTest {
   public void getDocumentContentByIdStatesWhyThereIsNoText() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     assertNoTextMessage(DocumentTextContent.Status.UNSUPPORTED_FORMAT, "its format is not supported for text extraction.");
-    assertNoTextMessage(DocumentTextContent.Status.TOO_LARGE, "the file is too large for its text to be read in one go.");
     assertNoTextMessage(DocumentTextContent.Status.NO_TEXT, "no text was found in the file");
     assertNoTextMessage(DocumentTextContent.Status.UNREADABLE, "the file could not be read.");
     assertNoTextMessage(DocumentTextContent.Status.NOT_A_FILE, "is not a file with a content, so it has no text.");
@@ -2229,6 +2228,39 @@ public class DocumentMcpToolTest {
     assertTrue(assertThrows(IllegalStateException.class,
                             () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, null)).getMessage()
                                                                                                     .contains("no text was found"));
+  }
+
+  /**
+   * A file too large to be read in one go gives the first part read part by
+   * part, with the text's length and the offset to read on; a text that fits
+   * in that part comes whole, a cut one says so; a file too large even part
+   * by part, or one still being read, says it.
+   * Mutants: the refusal kept, the note dropped or with the wrong offset, a
+   * part smaller than the largest, the cut not told.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentContentByIdReadsTheFirstPartOfAFileTooLargeForOneGo() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(DocumentTextContent.none(DocumentTextContent.Status.TOO_LARGE));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, DocumentMcpTool.MAX_TEXT_PART_CHARS))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("0123456789", 0, 500_000, false, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("whole", 0, 5, false, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("cut", 0, 3, true, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.TOO_LARGE))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.BUSY));
+
+    String first = documentMcpTool.getDocumentContentById(DOCUMENT_ID);
+    assertTrue(first.startsWith("0123456789\n\n["));
+    assertTrue(first.contains("500000 characters long"));
+    assertTrue(first.contains("read_document_text with offset=10"));
+    assertEquals("whole", documentMcpTool.getDocumentContentById(DOCUMENT_ID));
+    assertTrue(documentMcpTool.getDocumentContentById(DOCUMENT_ID).contains("it was cut at the most characters read"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID)).getMessage().contains("even part by part"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID)).getMessage().contains("Call the same tool again"));
   }
 
   /**

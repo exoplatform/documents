@@ -185,6 +185,14 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_TEXT_BEING_READ     =
                                                            "The document with id %s is being read, or other large documents are, which takes a while. Call the same tool again in a minute.";
 
+  /** The note ending the first part of a document too large to be read in one go: its length, where to read on. */
+  private static final String      MSG_FIRST_PART_CONTINUES =
+                                                            "\n\n[This is the first part of a large document, whose text is %d characters long. To read the rest, call read_document_text with offset=%d, or get_document_outline to find a chapter.]";
+
+  /** The note ending a text read part by part that was cut at the most characters read from one document. */
+  private static final String      MSG_PAGED_TEXT_CUT       =
+                                                            "\n\n[The document's text stops here: it was cut at the most characters read from one document.]";
+
   /** The refusal of a document too large even to be read part by part. */
   private static final String      MSG_TOO_LARGE_FOR_PARTS =
                                                            "The document with id %s is over the largest size whose text is read, even part by part.";
@@ -562,6 +570,10 @@ public class DocumentMcpTool implements McpToolPlugin {
    * service exposes no way to know whether an indexing operation is pending for
    * a file, and the file itself was just read without success. Only a busy
    * extractor, a fact known for certain, is worded as worth another attempt.
+   * <p>
+   * A file too large to be read in one go is read as {@code read_document_text}
+   * reads it, up to the largest file a user can attach: its first part is
+   * returned, with the length of its text and the offset to read on.
    *
    * @param documentId the document identifier
    * @return the text of the document
@@ -575,9 +587,30 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (content != null && content.hasText()) {
       return content.truncated() ? content.text() + MSG_TEXT_CONTINUES : content.text();
     }
+    if (content != null && content.status() == DocumentTextContent.Status.TOO_LARGE) {
+      return readFirstPart(documentId);
+    }
     throw new IllegalStateException(getNoTextMessage(documentId,
                                                      content == null ? DocumentTextContent.Status.UNREADABLE
                                                                      : content.status()));
+  }
+
+  /**
+   * Reads the first part of a document too large to be read in one go, as
+   * {@code read_document_text} reads it, ending with how to read on.
+   *
+   * @param documentId the document id
+   * @return the first part, with its note
+   * @throws IllegalStateException when the document has no readable text, with
+   *           the reason
+   */
+  private String readFirstPart(String documentId) {
+    DocumentTextPage page = getTextPage(documentId, 0, MAX_TEXT_PART_CHARS);
+    long partEnd = page.offset() + page.text().length();
+    if (partEnd < page.totalChars()) {
+      return page.text() + MSG_FIRST_PART_CONTINUES.formatted(page.totalChars(), partEnd);
+    }
+    return page.truncated() ? page.text() + MSG_PAGED_TEXT_CUT : page.text();
   }
 
   /**
