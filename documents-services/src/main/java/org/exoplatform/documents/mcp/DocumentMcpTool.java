@@ -497,6 +497,17 @@ public class DocumentMcpTool implements McpToolPlugin {
     return toDocumentFolderModel(personalRootFolder);
   }
 
+  /**
+   * Returns a document's metadata, with the user's rights on it. A shortcut
+   * resolves to its target, whose metadata and edit right are returned; its
+   * delete right is left out, deleting the shortcut removing only the
+   * shortcut.
+   *
+   * @param documentId the document id
+   * @return the document
+   * @throws IllegalAccessException when the user can't read it
+   * @throws ObjectNotFoundException when it doesn't exist
+   */
   public DocumentModel getDocumentById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
     AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
