@@ -128,7 +128,7 @@
     {
       "name": "get_document_outline",
       "title": "Get the outline of a DMS file",
-      "description": "Lists the headings of a document: a Word document's headings, a PDF's bookmarks, a presentation's slide titles. Each heading gives its index, level (1 for a top-level heading), title, the offset and end_offset of its section in the document's text, and its page or slide when the document has pages. Read one section with read_document_text and its section index, instead of reading the whole document. Works on large files, up to 200 MB: the first call on a large file may answer that it is being read, then call it again a minute later. An empty list means the document has no heading; read it by offset then.",
+      "description": "Lists the headings of a document: a Word document's headings, a PDF's bookmarks, a presentation's slide titles. Each heading gives its index, level (1 for a top-level heading), title, the offset and end_offset of its section in the document's text, and its page or slide when the document has pages. Read one section with read_document_text and its section index, instead of reading the whole document. Works on large files, up to the largest file a user can attach (200 MB by default): the first call on a large file may answer that it is being read, then call it again a minute later. An empty list means the document has no heading; read it by offset then.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -152,7 +152,7 @@
     {
       "name": "read_document_text",
       "title": "Read a part of a DMS file's text",
-      "description": "Reads a part of a document's text, at most max_chars characters (40000 when left out, 200000 at most), from an offset or within one section of get_document_outline. The answer gives the part's offset and end_offset, the total_chars of the whole text, and next_offset where the next part starts (left out at the end of the text, or of the section): call it again with offset=next_offset to read on. Pictures are not read, so a large file full of pictures, up to 200 MB, is read too: the first call on a large file may answer that it is being read, then call it again a minute later. truncated is true when the document's text was cut at the most characters read from one document.",
+      "description": "Reads a part of a document's text, at most max_chars characters (40000 when left out, 200000 at most), from an offset or within one section of get_document_outline. The answer gives the part's offset and end_offset, the total_chars of the whole text, and next_offset where the next part starts (left out at the end of the text, or of the section): call it again with offset=next_offset to read on. Pictures are not read, so a large file full of pictures, up to the largest file a user can attach (200 MB by default), is read too: the first call on a large file may answer that it is being read, then call it again a minute later. truncated is true when the document's text was cut at the most characters read from one document.",
       "input_schema": {
         "type": "object",
         "properties": {
