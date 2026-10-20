@@ -282,6 +282,51 @@ class DocumentPagedTextExtractorTest {
   }
 
   /**
+   * A file that failed to be read is read again on the next call, while a
+   * refusal that holds for the file's version is remembered with it.
+   * Mutants: every outcome remembered, no refusal remembered.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void readsAgainAFileThatFailedButRemembersARefusal() throws Exception {
+    AdvancedDocumentReader flaky = mock(AdvancedDocumentReader.class);
+    when(flaky.getContentAsReader(any())).thenThrow(new IOException("broken"))
+                                         .thenAnswer(invocation -> new StringReader("read at last"));
+    storeFile(DOCUMENT_ID, "flaky.txt", "text/plain", new byte[3], 1L);
+    when(documentReaderService.getDocumentReader("text/plain")).thenReturn(flaky);
+
+    assertEquals(Status.UNREADABLE, extractor.getPage(DOCUMENT_ID, 0, 20).status());
+    assertEquals("read at last", extractor.getPage(DOCUMENT_ID, 0, 20).text());
+    assertEquals(2, extractions.get());
+
+    storeFile(OTHER_ID, "photo.png", "image/png", new byte[10], 1L);
+    assertEquals(Status.UNSUPPORTED_FORMAT, extractor.getPage(OTHER_ID, 0, 10).status());
+    assertEquals(Status.UNSUPPORTED_FORMAT, extractor.getPage(OTHER_ID, 0, 10).status());
+    assertEquals(3, extractions.get());
+  }
+
+  /**
+   * Past the most versions remembered, the least recently read one is
+   * forgotten, even when the versions take no room on disk.
+   * Mutants: the number of versions not bounded.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void forgetsTheLeastRecentlyReadVersionPastTheMostVersions() throws Exception {
+    extractor.setMaxCachedVersions(1);
+    storeFile(DOCUMENT_ID, "photo.png", "image/png", new byte[10], 1L);
+    storeFile(OTHER_ID, "other.png", "image/png", new byte[10], 1L);
+
+    extractor.getPage(DOCUMENT_ID, 0, 10);
+    extractor.getPage(OTHER_ID, 0, 10);
+    extractor.getPage(DOCUMENT_ID, 0, 10);
+
+    assertEquals(3, extractions.get());
+  }
+
+  /**
    * A Word document is read with its outline, the outline coming with every
    * part.
    * Mutants: the structured parser bypassed, the outline dropped from a part.

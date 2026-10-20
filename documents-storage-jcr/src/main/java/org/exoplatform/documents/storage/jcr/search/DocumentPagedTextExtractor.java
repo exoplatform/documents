@@ -30,10 +30,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -92,6 +94,20 @@ public class DocumentPagedTextExtractor {
   /** How many extractions may wait for the one running. */
   static final int                   MAX_QUEUED_EXTRACTIONS = 4;
 
+  /** The most file versions the cache remembers, a refusal taking no room on disk. */
+  static final int                   MAX_CACHED_VERSIONS    = 10_000;
+
+  /**
+   * The outcomes that hold for as long as the version of the file does, and
+   * are remembered with it; any other, a timeout or a failure to read, is
+   * tried again on the next call.
+   */
+  static final Set<Status>           REMEMBERED_STATUSES    = EnumSet.of(Status.EXTRACTED,
+                                                                         Status.NO_TEXT,
+                                                                         Status.NOT_A_FILE,
+                                                                         Status.TOO_LARGE,
+                                                                         Status.UNSUPPORTED_FORMAT);
+
   private static final Log           LOG                    = ExoLogger.getLogger(DocumentPagedTextExtractor.class);
 
   private static final String        COLLABORATION          = "collaboration";
@@ -122,6 +138,8 @@ public class DocumentPagedTextExtractor {
   private final LinkedHashMap<String, Extraction> cache = new LinkedHashMap<>(16, 0.75f, true);
 
   private long                       cacheBytes;
+
+  private int                        maxCachedVersions      = MAX_CACHED_VERSIONS;
 
   /**
    * The text of one version of a file, as extracted.
@@ -226,6 +244,15 @@ public class DocumentPagedTextExtractor {
   }
 
   /**
+   * Sets the most file versions the cache remembers.
+   *
+   * @param maxCachedVersions the number of versions
+   */
+  void setMaxCachedVersions(int maxCachedVersions) {
+    this.maxCachedVersions = maxCachedVersions;
+  }
+
+  /**
    * Stops the extraction thread.
    */
   public void shutdown() {
@@ -267,7 +294,7 @@ public class DocumentPagedTextExtractor {
             return extraction;
           } finally {
             synchronized (cache) {
-              if (extraction != null) {
+              if (extraction != null && REMEMBERED_STATUSES.contains(extraction.status())) {
                 remember(k, extraction);
               }
               running.remove(k);
@@ -480,7 +507,7 @@ public class DocumentPagedTextExtractor {
 
   /**
    * Keeps an extraction in the cache, evicting the least recently read ones
-   * past the cache's size.
+   * past the cache's size or its number of versions.
    *
    * @param key the version key
    * @param extraction the extraction
@@ -490,7 +517,7 @@ public class DocumentPagedTextExtractor {
       cache.put(key, extraction);
       cacheBytes += extraction.totalChars() * 2;
       Iterator<Map.Entry<String, Extraction>> eldest = cache.entrySet().iterator();
-      while (cacheBytes > maxCacheBytes && eldest.hasNext()) {
+      while ((cacheBytes > maxCacheBytes || cache.size() > maxCachedVersions) && eldest.hasNext()) {
         Map.Entry<String, Extraction> entry = eldest.next();
         if (entry.getValue() == extraction) {
           // the text just extracted stays, however large, for the call waiting for it
