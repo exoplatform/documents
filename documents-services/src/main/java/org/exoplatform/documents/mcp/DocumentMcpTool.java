@@ -707,7 +707,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                         document.isFolder(),
                                         true,
                                         canEdit,
-                                        acl != null && acl.isCanDelete());
+                                        isOwner(document) || (acl != null && acl.isCanDelete()));
   }
 
   public List<BreadcrumbItemModel> getFolderBreadcrumb(String folderId) throws ObjectNotFoundException,
@@ -1892,7 +1892,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    * document into its model, leaving them unknown when it computed none. The
    * storage reads them from the document's permission entries only, while the
    * repository grants every right to the document's owner: the owner's rights
-   * are added here, so a listing agrees with {@link #getDocumentPermissions}.
+   * are added here, as {@link #getDocumentPermissions} adds them.
    *
    * @param model the model to complete
    * @param document the document it maps
@@ -1900,10 +1900,21 @@ public class DocumentMcpTool implements McpToolPlugin {
   private void setPermissions(DocumentModel model, AbstractNode document) {
     NodePermission acl = document.getAcl();
     if (acl != null) {
-      boolean owner = StringUtils.equals(document.getCreatorUserName(), getCurrentUserName());
+      boolean owner = isOwner(document);
       model.setCanEdit(owner || acl.isCanEdit());
       model.setCanDelete(owner || acl.isCanDelete());
     }
+  }
+
+  /**
+   * Tells whether the current user owns a document, the repository granting
+   * its owner every right whatever its permission entries say.
+   *
+   * @param document the document
+   * @return true when the user is its owner
+   */
+  private boolean isOwner(AbstractNode document) {
+    return StringUtils.equals(document.getCreatorUserName(), getCurrentUserName());
   }
 
   private String getAudioTranscription(String documentId) {
