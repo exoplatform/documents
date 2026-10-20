@@ -18,15 +18,19 @@ package org.exoplatform.documents.storage.jcr.search;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.Writer;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.io.MemoryUsageSetting;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -71,6 +75,9 @@ final class DocumentTextStructureParser {
   static final String           PPTX_MIME_TYPE   = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
   static final String           PDF_MIME_TYPE    = "application/pdf";
+
+  /** The most bookmarks read from one PDF, its outline being cut there. */
+  static final int              MAX_BOOKMARKS     = 10_000;
 
   /** The deepest Word heading kept in the outline. */
   private static final int      MAX_HEADING_LEVEL = 9;
@@ -291,146 +298,78 @@ final class DocumentTextStructureParser {
       } finally {
         PDDocumentOutline bookmarks = document.getDocumentCatalog().getDocumentOutline();
         if (bookmarks != null) {
-          addBookmarks(document, bookmarks, 1, pageStarts, outline);
+          addBookmarks(document, bookmarks, pageStarts, out, outline);
         }
       }
     }
   }
 
   /**
-   * Adds the bookmarks under a node, and theirs, depth first.
+   * Adds a PDF's bookmarks, depth first. A bookmark met twice, a list of
+   * bookmarks looping on itself or on a parent, ends the list it is in; past
+   * {@link #MAX_BOOKMARKS} bookmarks, or past the deadline, the walk stops.
+   *
+   * @param document the PDF
+   * @param bookmarks its outline
+   * @param pageStarts where each page written starts in the text
+   * @param out the writer of the text, whose deadline bounds the walk
+   * @param outline the outline to add to
+   * @throws IOException when a bookmark can't be read or the deadline is
+   *           passed
+   */
+  private static void addBookmarks(PDDocument document,
+                                   PDDocumentOutline bookmarks,
+                                   List<Long> pageStarts,
+                                   CountingWriter out,
+                                   List<DocumentOutlineEntry> outline) throws IOException {
+    Map<COSDictionary, Integer> pageIndexes = new IdentityHashMap<>();
+    int index = 0;
+    for (PDPage page : document.getPages()) {
+      pageIndexes.putIfAbsent(page.getCOSObject(), index++);
+    }
+    Set<COSDictionary> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+    visited.add(bookmarks.getCOSObject());
+    addBookmarks(document, bookmarks, 1, pageIndexes, pageStarts, visited, out, outline);
+  }
+
+  /**
+   * Adds the bookmarks under a node, and theirs, following each one's next
+   * sibling by hand: PDFBox's own iteration of the children never ends on a
+   * list whose last bookmark points back to an earlier one.
    *
    * @param document the PDF
    * @param node the node whose children are added
    * @param level the depth of its children
+   * @param pageIndexes the index of each page, by its dictionary
    * @param pageStarts where each page written starts in the text
+   * @param visited the bookmarks already met, by their dictionary
+   * @param out the writer of the text, whose deadline bounds the walk
    * @param outline the outline to add to
-   * @throws IOException when a bookmark can't be read
+   * @throws IOException when a bookmark can't be read or the deadline is
+   *           passed
    */
-  private static void addBookmarks(PDDocument document,
+  private static void addBookmarks(PDDocument document, // NOSONAR
                                    PDOutlineNode node,
                                    int level,
+                                   Map<COSDictionary, Integer> pageIndexes,
                                    List<Long> pageStarts,
+                                   Set<COSDictionary> visited,
+                                   CountingWriter out,
                                    List<DocumentOutlineEntry> outline) throws IOException {
-    for (PDOutlineItem item : node.children()) {
+    for (PDOutlineItem item = node.getFirstChild(); item != null; item = item.getNextSibling()) {
+      if (visited.size() > MAX_BOOKMARKS || !visited.add(item.getCOSObject())) {
+        return;
+      }
+      out.checkDeadline();
       PDPage page = item.findDestinationPage(document);
-      int pageIndex = page == null ? -1 : document.getPages().indexOf(page);
+      Integer pageIndex = page == null ? null : pageIndexes.get(page.getCOSObject());
       String title = StringUtils.trimToNull(StringUtils.normalizeSpace(item.getTitle()));
-      if (title != null && pageIndex >= 0 && pageIndex < pageStarts.size()) {
+      if (title != null && pageIndex != null && pageIndex < pageStarts.size()) {
         outline.add(new DocumentOutlineEntry(outline.size(), level, title, pageStarts.get(pageIndex), pageIndex + 1));
       }
       if (level < MAX_HEADING_LEVEL) {
-        addBookmarks(document, item, level + 1, pageStarts, outline);
+        addBookmarks(document, item, level + 1, pageIndexes, pageStarts, visited, out, outline);
       }
-    }
-  }
-
-  /**
-   * A writer counting the characters written, refusing any past a limit or a
-   * deadline, so a huge or slow file stops being read at either.
-   */
-  static class CountingWriter extends Writer {
-
-    private final Writer out;
-
-    private final long   maxChars;
-
-    private final long   deadlineNanos;
-
-    private long         count;
-
-    private boolean      truncated;
-
-    /**
-     * Wraps a writer.
-     *
-     * @param out the writer receiving the text
-     * @param maxChars the most characters written
-     * @param deadlineNanos the {@link System#nanoTime()} past which writing fails
-     */
-    CountingWriter(Writer out, long maxChars, long deadlineNanos) {
-      this.out = out;
-      this.maxChars = maxChars;
-      this.deadlineNanos = deadlineNanos;
-    }
-
-    /**
-     * Tells how many characters were written.
-     *
-     * @return the count
-     */
-    long count() {
-      return count;
-    }
-
-    /**
-     * Tells whether text was refused for being past the limit.
-     *
-     * @return true when the text written is cut
-     */
-    boolean isTruncated() {
-      return truncated;
-    }
-
-    /**
-     * Writes characters up to the limit; past it, writes what fits and fails
-     * with {@link TextLimitReachedException}.
-     *
-     * @param chars the characters
-     * @param offset the first one
-     * @param length how many
-     * @throws IOException when the limit or the deadline is passed, or the
-     *           writer fails
-     */
-    @Override
-    public void write(char[] chars, int offset, int length) throws IOException {
-      if (System.nanoTime() > deadlineNanos) {
-        throw new java.io.InterruptedIOException("Reading the file took too long");
-      }
-      if (Thread.currentThread().isInterrupted()) {
-        throw new java.io.InterruptedIOException("Text extraction interrupted");
-      }
-      long room = maxChars - count;
-      int written = (int) Math.min(room, length);
-      if (written > 0) {
-        out.write(chars, offset, written);
-        count += written;
-      }
-      if (written < length) {
-        truncated = true;
-        throw new TextLimitReachedException();
-      }
-    }
-
-    /**
-     * Flushes the writer.
-     *
-     * @throws IOException when it fails
-     */
-    @Override
-    public void flush() throws IOException {
-      out.flush();
-    }
-
-    /**
-     * Closes the writer.
-     *
-     * @throws IOException when it fails
-     */
-    @Override
-    public void close() throws IOException {
-      out.close();
-    }
-  }
-
-  /** Raised once the most characters read from one document are written. */
-  static class TextLimitReachedException extends IOException {
-
-    private static final long serialVersionUID = 1L;
-
-    /** Builds the exception. */
-    TextLimitReachedException() {
-      super("The most characters read from one document were reached");
     }
   }
 

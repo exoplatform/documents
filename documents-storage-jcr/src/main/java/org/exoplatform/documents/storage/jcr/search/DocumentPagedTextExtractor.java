@@ -57,8 +57,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.documents.model.DocumentOutlineEntry;
 import org.exoplatform.documents.model.DocumentTextContent.Status;
 import org.exoplatform.documents.model.DocumentTextPage;
-import org.exoplatform.documents.storage.jcr.search.DocumentTextStructureParser.CountingWriter;
-import org.exoplatform.documents.storage.jcr.search.DocumentTextStructureParser.TextLimitReachedException;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.document.AdvancedDocumentReader;

@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -47,14 +48,13 @@ import org.apache.poi.xwpf.usermodel.XWPFStyle;
 import org.apache.poi.xwpf.usermodel.XWPFStyles;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTString;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STStyleType;
 
 import org.exoplatform.documents.model.DocumentOutlineEntry;
-import org.exoplatform.documents.storage.jcr.search.DocumentTextStructureParser.CountingWriter;
-import org.exoplatform.documents.storage.jcr.search.DocumentTextStructureParser.TextLimitReachedException;
 
 /**
  * Parses Word documents, presentations and PDFs built with POI and PDFBox, and
@@ -271,6 +271,92 @@ class DocumentTextStructureParserTest {
     assertTrue(written.substring((int) outline.get(0).offset()).startsWith("Chapter one starts"));
     assertTrue(written.substring((int) outline.get(1).offset()).startsWith("Section one dot one"));
     assertFalse(written.substring((int) outline.get(0).offset()).startsWith("Cover"));
+  }
+
+  /**
+   * A PDF whose last bookmark points back to an earlier sibling, and whose
+   * nested bookmark points back to its parent, is read: each bookmark once,
+   * the walk ending where the list loops. PDFBox's own iteration of such a
+   * list never ends.
+   * Mutants: the children iterated by PDFBox, the visited bookmarks not kept.
+   *
+   * @throws IOException never
+   */
+  @Test
+  @Timeout(30)
+  void aPdfsLoopingBookmarksAreEachReadOnce() throws IOException {
+    File file = directory.resolve("looping.pdf").toFile();
+    try (PDDocument document = new PDDocument()) {
+      PDPage page = new PDPage();
+      document.addPage(page);
+      PDDocumentOutline bookmarks = new PDDocumentOutline();
+      document.getDocumentCatalog().setDocumentOutline(bookmarks);
+      PDOutlineItem first = bookmark("A", page);
+      PDOutlineItem second = bookmark("B", page);
+      PDOutlineItem third = bookmark("C", page);
+      bookmarks.addLast(first);
+      bookmarks.addLast(second);
+      bookmarks.addLast(third);
+      third.getCOSObject().setItem(COSName.NEXT, second);
+      PDOutlineItem nested = bookmark("A.1", page);
+      first.addLast(nested);
+      nested.getCOSObject().setItem(COSName.NEXT, first);
+      document.save(file);
+    }
+
+    List<DocumentOutlineEntry> outline = parse(file, DocumentTextStructureParser.PDF_MIME_TYPE, new StringWriter(), Long.MAX_VALUE);
+
+    assertEquals(List.of("A", "A.1", "B", "C"), outline.stream().map(DocumentOutlineEntry::title).toList());
+  }
+
+  /**
+   * A PDF's outline is cut at the most bookmarks read from one file.
+   * Mutants: the cap removed, off by one.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aPdfsOutlineIsCutAtTheMostBookmarks() throws IOException {
+    File file = directory.resolve("many-bookmarks.pdf").toFile();
+    try (PDDocument document = new PDDocument()) {
+      PDPage page = new PDPage();
+      document.addPage(page);
+      PDDocumentOutline bookmarks = new PDDocumentOutline();
+      document.getDocumentCatalog().setDocumentOutline(bookmarks);
+      for (int i = 0; i < DocumentTextStructureParser.MAX_BOOKMARKS + 5; i++) {
+        bookmarks.addLast(bookmark("Bookmark " + i, page));
+      }
+      document.save(file);
+    }
+
+    List<DocumentOutlineEntry> outline = parse(file, DocumentTextStructureParser.PDF_MIME_TYPE, new StringWriter(), Long.MAX_VALUE);
+
+    assertEquals(DocumentTextStructureParser.MAX_BOOKMARKS, outline.size());
+  }
+
+  /**
+   * The walk of a PDF's bookmarks stops at the deadline, even when the file
+   * writes no text that would check it.
+   * Mutants: the deadline not checked in the walk.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aPdfsBookmarksStopBeingReadAtTheDeadline() throws IOException {
+    File file = directory.resolve("no-pages.pdf").toFile();
+    try (PDDocument document = new PDDocument()) {
+      PDDocumentOutline bookmarks = new PDDocumentOutline();
+      document.getDocumentCatalog().setDocumentOutline(bookmarks);
+      PDOutlineItem item = new PDOutlineItem();
+      item.setTitle("Nowhere");
+      bookmarks.addLast(item);
+      document.save(file);
+    }
+    CountingWriter late = new CountingWriter(new StringWriter(), Long.MAX_VALUE, System.nanoTime() - 1);
+    List<DocumentOutlineEntry> outline = new ArrayList<>();
+
+    assertThrows(java.io.InterruptedIOException.class,
+                 () -> DocumentTextStructureParser.parse(file, DocumentTextStructureParser.PDF_MIME_TYPE, late, outline));
   }
 
   /**
