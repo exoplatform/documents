@@ -366,6 +366,7 @@ public class DocumentPagedTextExtractor {
     Session session = openSystemSession();
     File binary = null;
     Path textFile = cacheDirectory.resolve(DigestUtils.sha256Hex(key) + ".txt");
+    boolean kept = false;
     try {
       Node content = getContent(session, documentId);
       if (content == null) {
@@ -409,21 +410,23 @@ public class DocumentPagedTextExtractor {
         // the text is cut at the most characters kept, the outline holds its headings up to there
         LOG.debug("The text of document {} is cut at {} characters", documentId, maxChars);
       } catch (InterruptedIOException e) {
-        Files.deleteIfExists(textFile);
         LOG.warn("Reading the text of document {} took more than {} ms, abandoned", documentId, timeoutMillis);
         return PagedTextExtraction.none(Status.TIMED_OUT);
       } catch (IOException | RuntimeException e) {
-        Files.deleteIfExists(textFile);
         LOG.warn("Could not read the text of document {}", documentId, e);
         return PagedTextExtraction.none(Status.UNREADABLE);
       }
       if (writer.count() == 0 || isBlank(textFile, writer.count())) {
-        Files.deleteIfExists(textFile);
         return PagedTextExtraction.none(Status.NO_TEXT);
       }
+      kept = true;
       return new PagedTextExtraction(textFile, writer.count(), writer.isTruncated(), List.copyOf(outline), Status.EXTRACTED);
     } finally {
       session.logout();
+      if (!kept) {
+        // whatever stopped the reading, an Error included, no text but an extracted one stays on disk
+        Files.deleteIfExists(textFile);
+      }
       if (binary != null) {
         Files.deleteIfExists(binary.toPath());
       }

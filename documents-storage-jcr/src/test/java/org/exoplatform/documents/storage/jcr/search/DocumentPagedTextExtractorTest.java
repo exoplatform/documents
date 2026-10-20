@@ -58,6 +58,7 @@ import org.exoplatform.documents.model.DocumentTextPage;
 import org.exoplatform.documents.storage.jcr.model.PagedTextExtraction;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.document.AdvancedDocumentReader;
+import org.exoplatform.services.document.DocumentReadException;
 import org.exoplatform.services.document.DocumentReaderService;
 import org.exoplatform.services.jcr.core.ExtendedSession;
 
@@ -305,6 +306,30 @@ class DocumentPagedTextExtractorTest {
     assertEquals(Status.UNSUPPORTED_FORMAT, extractor.getPage(OTHER_ID, 0, 10).status());
     assertEquals(Status.UNSUPPORTED_FORMAT, extractor.getPage(OTHER_ID, 0, 10).status());
     assertEquals(3, extractions.get());
+  }
+
+  /**
+   * A file a platform reader refuses with its own checked exception, as on a
+   * corrupt file, or whose reading fails with an error, is unreadable and
+   * leaves no text file in the cache.
+   * Mutants: the text file kept when the reading ends on an exception none of
+   * the catches takes.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void leavesNoTextFileWhenAReaderFails() throws Exception {
+    AdvancedDocumentReader corrupt = mock(AdvancedDocumentReader.class);
+    when(corrupt.getContentAsReader(any())).thenThrow(new DocumentReadException("corrupt", null))
+                                           .thenThrow(new OutOfMemoryError("too large for the heap"));
+    storeFile(DOCUMENT_ID, "corrupt.txt", "text/plain", new byte[3], 1L);
+    when(documentReaderService.getDocumentReader("text/plain")).thenReturn(corrupt);
+    Path cache = directory.resolve("cache");
+
+    assertEquals(Status.UNREADABLE, extractor.getPage(DOCUMENT_ID, 0, 10).status());
+    assertEquals(0, cache.toFile().list().length);
+    assertEquals(Status.UNREADABLE, extractor.getPage(DOCUMENT_ID, 0, 10).status());
+    assertEquals(0, cache.toFile().list().length);
   }
 
   /**
