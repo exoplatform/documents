@@ -212,6 +212,10 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_FOLDER_NOT_WRITABLE =
                                                            "You can't add documents to the folder '%s' (%s): you can read it but not write in it. Pick a folder whose can_edit is true (get_document_permissions tells it), or ask a space manager for the right.";
 
+  /** The refusal of a file added through a shortcut to a folder. */
+  private static final String      MSG_FOLDER_IS_SHORTCUT  =
+                                                           "The folder id %s is a shortcut to the folder %s: pass that folder's id as parent_folder_id to add the document there (get_document_permissions tells whether you can write in it).";
+
   /** The creator of the nodes the platform creates for a space. */
   private static final String      SYSTEM_USER            = "__system";
 
@@ -2068,7 +2072,19 @@ public class DocumentMcpTool implements McpToolPlugin {
    * Stages the given bytes as a single file and imports it into the folder,
    * then resolves and returns the created document. {@code importFiles} expects
    * a zip and unzips it, so the file is wrapped in a one-entry zip whose entry
-   * name becomes the created document title.
+   * name becomes the created document title. A shortcut to a folder is
+   * refused, naming the folder it points to: its id resolves to that folder
+   * for the reads and the rights, while the import would write under the
+   * shortcut node itself.
+   *
+   * @param parentFolderId the folder to add the file to
+   * @param fileName the file name
+   * @param bytes the file content
+   * @return the created document
+   * @throws IllegalAccessException when the user can't write in the folder
+   * @throws ObjectNotFoundException when the folder can't be read
+   * @throws IllegalArgumentException when the content is empty, or the folder
+   *           id is a shortcut's
    */
   private DocumentModel importContent(String parentFolderId,
                                       String fileName,
@@ -2079,6 +2095,10 @@ public class DocumentMcpTool implements McpToolPlugin {
     // Validate the parent folder exists and is readable before staging anything,
     // so a bad id fails with a clean ObjectNotFoundException / IllegalAccessException.
     AbstractNode parentFolder = getNode(parentFolderId);
+    if (!StringUtils.equals(parentFolderId, parentFolder.getId())) {
+      // a shortcut's id resolves to its target, while the import writes under the shortcut node itself
+      throw new IllegalArgumentException(MSG_FOLDER_IS_SHORTCUT.formatted(parentFolderId, parentFolder.getId()));
+    }
     String entryName = sanitizeFileName(fileName);
     // The import runs in the background under the user's session, which refuses
     // the write there, out of the caller's sight: the right is checked here so
