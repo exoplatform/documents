@@ -104,7 +104,7 @@
     {
       "name": "get_document_content_by_id",
       "title": "Get DMS file content",
-      "description": "Retrieves the textual or Markdown content of a document by its unique identifier, in one go. For a long document, a large file (a book, a thesis, a document full of pictures) or one chapter only, use get_document_outline and read_document_text instead: they read it part by part. A text cut at the most characters read in one go ends with a note giving the offset to read the rest from.",
+      "description": "Retrieves the textual or Markdown content of a document by its unique identifier, in one go. For a long document, a large file (a book, a thesis, a document full of pictures) or one chapter only, use get_document_outline and read_document_text instead: they read it part by part. A text cut at the most characters read in one go ends with a note saying how to read the rest.",
       "input_schema": {
         "type": "object",
         "properties": {

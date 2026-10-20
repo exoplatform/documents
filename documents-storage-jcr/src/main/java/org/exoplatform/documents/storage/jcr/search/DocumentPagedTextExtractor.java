@@ -250,26 +250,33 @@ public class DocumentPagedTextExtractor {
     if (key == null) {
       return Extraction.none(Status.NOT_A_FILE);
     }
+    Future<Extraction> future;
+    // the cache and the running extractions are looked up, and an extraction started, under
+    // one lock its end takes too: a version is never extracted twice into its one cache file
     synchronized (cache) {
       Extraction cached = cache.get(key);
       if (cached != null) {
         return cached;
       }
-    }
-    Future<Extraction> future;
-    try {
-      future = running.computeIfAbsent(key, k -> executor.submit(() -> {
-        try {
-          Extraction extraction = extract(documentId, k);
-          remember(k, extraction);
-          return extraction;
-        } finally {
-          running.remove(k);
-        }
-      }));
-    } catch (RejectedExecutionException e) {
-      LOG.warn("Too many large documents are being read, the text of document {} is not extracted", documentId);
-      return Extraction.none(Status.BUSY);
+      try {
+        future = running.computeIfAbsent(key, k -> executor.submit(() -> {
+          Extraction extraction = null;
+          try {
+            extraction = extract(documentId, k);
+            return extraction;
+          } finally {
+            synchronized (cache) {
+              if (extraction != null) {
+                remember(k, extraction);
+              }
+              running.remove(k);
+            }
+          }
+        }));
+      } catch (RejectedExecutionException e) {
+        LOG.warn("Too many large documents are being read, the text of document {} is not extracted", documentId);
+        return Extraction.none(Status.BUSY);
+      }
     }
     try {
       return future.get(waitMillis, TimeUnit.MILLISECONDS);
@@ -479,7 +486,10 @@ public class DocumentPagedTextExtractor {
    */
   private void remember(String key, Extraction extraction) {
     synchronized (cache) {
-      cache.put(key, extraction);
+      Extraction replaced = cache.put(key, extraction);
+      if (replaced != null) {
+        cacheBytes -= replaced.totalChars() * 2;
+      }
       cacheBytes += extraction.totalChars() * 2;
       Iterator<Map.Entry<String, Extraction>> eldest = cache.entrySet().iterator();
       while (cacheBytes > maxCacheBytes && eldest.hasNext()) {

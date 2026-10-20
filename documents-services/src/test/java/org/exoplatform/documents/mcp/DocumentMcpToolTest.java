@@ -2190,7 +2190,7 @@ public class DocumentMcpToolTest {
   /**
    * The one-shot read says when its text was cut and where to read on, and a
    * file too large for it points to the part-by-part tools.
-   * Mutants: the cut not told, the offset wrong, the pointer dropped.
+   * Mutants: the cut not told, an offset given, the pointer dropped.
    *
    * @throws Exception never
    */
@@ -2202,7 +2202,9 @@ public class DocumentMcpToolTest {
     String text = documentMcpTool.getDocumentContentById(DOCUMENT_ID);
 
     assertTrue(text.startsWith("0123456789"));
-    assertTrue(text.contains("read_document_text from offset 10"));
+    assertTrue(text.contains("get_document_outline and read_document_text"));
+    // this text's length is no position in the text read part by part, so none is given
+    assertFalse(text.contains("offset 10"));
     assertTrue(DocumentMcpTool.getNoTextMessage(DOCUMENT_ID, DocumentTextContent.Status.TOO_LARGE).contains("get_document_outline"));
   }
 

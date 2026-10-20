@@ -172,9 +172,14 @@ public class DocumentMcpTool implements McpToolPlugin {
   /** The most characters {@code read_document_text} returns in one call. */
   static final int                 MAX_TEXT_PART_CHARS     = 200_000;
 
-  /** The note ending a text cut at the most characters read on the fly. */
+  /**
+   * The note ending a text cut at the most characters read on the fly. It
+   * gives no offset: read_document_text lays out a Word document, a
+   * presentation or a PDF its own way, so this text's length is no position
+   * in that one.
+   */
   private static final String      MSG_TEXT_CONTINUES      =
-                                                           "%n%n[The text continues past this point: read the rest with read_document_text from offset %d.]";
+                                                           "\n\n[The text continues past this point. To read the rest, call get_document_outline and read_document_text with the sections that follow, or read_document_text by offset from the start: its text is laid out its own way, so this text's length is not an offset in it.]";
 
   /** The answer while a large document's text is being extracted. */
   private static final String      MSG_TEXT_BEING_READ     =
@@ -568,7 +573,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     checkCanAccessDocument(documentId);
     DocumentTextContent content = documentFileService.getFileTextContent(documentId);
     if (content != null && content.hasText()) {
-      return content.truncated() ? content.text() + MSG_TEXT_CONTINUES.formatted(content.text().length()) : content.text();
+      return content.truncated() ? content.text() + MSG_TEXT_CONTINUES : content.text();
     }
     throw new IllegalStateException(getNoTextMessage(documentId,
                                                      content == null ? DocumentTextContent.Status.UNREADABLE
