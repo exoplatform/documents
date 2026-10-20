@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -2229,6 +2230,46 @@ public class DocumentMcpToolTest {
     // the repository grants every right to the owner, whatever the entries say
     assertEquals(Boolean.TRUE, models.get(3).getCanEdit());
     assertEquals(Boolean.TRUE, models.get(3).getCanDelete());
+  }
+
+  /**
+   * A shortcut listed in a folder carries no rights, its own not being its
+   * target's, and names its target, so the agent asks get_document_permissions
+   * before writing through it; the other children keep theirs. The same for
+   * get_documents_by_folder_id, which lists the same children.
+   * Mutants: the shortcut's own rights copied, the target not named, the
+   * rights of a plain child dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listedShortcutsCarryTheirTargetAndNoRights() throws Exception {
+    AbstractNode shortcut = childChangedAt("shortcut-id", true, 1L);
+    shortcut.setSourceID("target-id");
+    shortcut.setCreatorUserName(USERNAME);
+    shortcut.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
+    AbstractNode file = childChangedAt(DOCUMENT_ID, false, 1L);
+    file.setAcl(new NodePermission(true, true, false, false, null, null, null, null));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(shortcut, file));
+    Mockito.<List<? extends AbstractNode>>when(documentFileService.getDocumentItems(any(), any(), anyInt(), anyInt(), anyLong(), anyBoolean()))
+           .thenReturn(List.of(shortcut, file));
+
+    List<DocumentModel> listed;
+    List<DocumentModel> byFolder;
+    // the creator's user card is not what this test checks
+    try (MockedStatic<io.meeds.mcp.server.tool.util.UserToolUtils> users = Mockito.mockStatic(io.meeds.mcp.server.tool.util.UserToolUtils.class)) {
+      listed = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
+      byFolder = documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, null, null, null);
+    }
+
+    for (List<DocumentModel> models : List.of(listed, byFolder)) {
+      assertEquals("target-id", models.get(0).getShortcutTargetId());
+      assertNull(models.get(0).getCanEdit());
+      assertNull(models.get(0).getCanDelete());
+      assertNull(models.get(1).getShortcutTargetId());
+      assertEquals(Boolean.TRUE, models.get(1).getCanEdit());
+      assertEquals(Boolean.FALSE, models.get(1).getCanDelete());
+    }
   }
 
   /**

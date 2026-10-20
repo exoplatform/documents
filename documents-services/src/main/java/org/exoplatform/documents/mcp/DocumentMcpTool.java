@@ -1925,16 +1925,20 @@ public class DocumentMcpTool implements McpToolPlugin {
    * storage computes them from the document's permission entries, and a
    * delete right on any document of the user's own drive, while the
    * repository grants every right to the document's owner: the owner's rights
-   * are added here, as {@link #getDocumentPermissions} adds them. The rights
-   * are the node's the storage returned: a shortcut listed in a folder is the
-   * shortcut itself, a shortcut asked by its id resolves to its target.
+   * are added here, as {@link #getDocumentPermissions} adds them. A shortcut
+   * listed in a folder is the shortcut node itself, whose rights aren't its
+   * target's: its rights are left unknown and its target named, for
+   * {@link #getDocumentPermissions} to tell them. A shortcut asked by its id
+   * resolves to its target, whose rights the storage returned.
    *
    * @param model the model to complete
    * @param document the document it maps
    */
   private void setPermissions(DocumentModel model, AbstractNode document) {
     NodePermission acl = document.getAcl();
-    if (acl != null) {
+    if (StringUtils.isNotBlank(document.getSourceID())) {
+      model.setShortcutTargetId(document.getSourceID());
+    } else if (acl != null) {
       boolean owner = isOwner(document);
       model.setCanEdit(owner || acl.isCanEdit());
       model.setCanDelete(owner || acl.isCanDelete());
