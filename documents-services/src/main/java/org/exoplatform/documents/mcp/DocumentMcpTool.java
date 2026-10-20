@@ -23,6 +23,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -641,8 +643,10 @@ public class DocumentMcpTool implements McpToolPlugin {
    * children are read from the first one up to the end of the page, and the
    * page is cut here. A date is checked against the same last-change date the
    * listing shows, over the folder's children read in one go, up to
-   * {@link #MAX_SCANNED_CHILDREN}; a folder holding more is refused rather
-   * than answered with part of its changes.
+   * {@link #MAX_SCANNED_CHILDREN}; a folder whose listing returns more is
+   * refused rather than answered with part of its changes. The listing leaves
+   * out what it can't read (a shortcut whose target is gone), so it is what
+   * it returns that is counted.
    *
    * @param folderId the folder id
    * @param offset the first child
@@ -1885,7 +1889,10 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Copies the user's edit and delete rights the storage computed on a
-   * document into its model, leaving them unknown when it computed none.
+   * document into its model, leaving them unknown when it computed none. The
+   * storage reads them from the document's permission entries only, while the
+   * repository grants every right to the document's owner: the owner's rights
+   * are added here, so a listing agrees with {@link #getDocumentPermissions}.
    *
    * @param model the model to complete
    * @param document the document it maps
@@ -1893,8 +1900,9 @@ public class DocumentMcpTool implements McpToolPlugin {
   private void setPermissions(DocumentModel model, AbstractNode document) {
     NodePermission acl = document.getAcl();
     if (acl != null) {
-      model.setCanEdit(acl.isCanEdit());
-      model.setCanDelete(acl.isCanDelete());
+      boolean owner = StringUtils.equals(document.getCreatorUserName(), getCurrentUserName());
+      model.setCanEdit(owner || acl.isCanEdit());
+      model.setCanDelete(owner || acl.isCanDelete());
     }
   }
 
@@ -1944,19 +1952,31 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     String value = updatedSince.trim();
     try {
-      return OffsetDateTime.parse(value).toInstant().toEpochMilli();
-    } catch (DateTimeParseException e) {
-      // Not a date-time with an offset: tried without one below
-    }
-    try {
-      return LocalDateTime.parse(value).toInstant(ZoneOffset.UTC).toEpochMilli();
-    } catch (DateTimeParseException e) {
-      // Not a date-time: tried as a date below
-    }
-    try {
-      return LocalDate.parse(value).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-    } catch (DateTimeParseException e) {
+      Instant instant;
+      try {
+        instant = OffsetDateTime.parse(value).toInstant();
+      } catch (DateTimeParseException e) {
+        instant = parseWithoutOffset(value);
+      }
+      return instant.toEpochMilli();
+    } catch (DateTimeException | ArithmeticException e) {
+      // unreadable, or a year too far for a date in milliseconds
       throw new IllegalArgumentException(MSG_UPDATED_SINCE_UNREADABLE.formatted(updatedSince));
+    }
+  }
+
+  /**
+   * Reads a date-time or a date without an offset, in UTC.
+   *
+   * @param value the date-time or the date
+   * @return the instant
+   * @throws DateTimeParseException when it is neither
+   */
+  private static Instant parseWithoutOffset(String value) {
+    try {
+      return LocalDateTime.parse(value).toInstant(ZoneOffset.UTC);
+    } catch (DateTimeParseException e) {
+      return LocalDate.parse(value).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
   }
 
