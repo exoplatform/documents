@@ -41,6 +41,7 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import org.apache.poi.xslf.usermodel.XSLFGroupShape;
 import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTable;
@@ -50,6 +51,7 @@ import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFSDT;
 import org.apache.poi.xwpf.usermodel.XWPFStyle;
 import org.apache.poi.xwpf.usermodel.XWPFStyles;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -122,8 +124,8 @@ final class DocumentTextStructureParser {
   }
 
   /**
-   * Writes a Word document's paragraphs and tables in their order, each
-   * heading paragraph becoming an outline entry.
+   * Writes a Word document's paragraphs, tables and block content controls in
+   * their order, each heading paragraph becoming an outline entry.
    *
    * @param file the docx file
    * @param out where the text is written
@@ -155,6 +157,13 @@ final class DocumentTextStructureParser {
             out.write('\n');
           }
           out.write('\n');
+        } else if (element instanceof XWPFSDT contentControl) {
+          // a block content control, as in documents made from a template: its text, no heading read in it
+          String text = StringUtils.trimToNull(contentControl.getContent().getText());
+          if (text != null) {
+            out.write(text);
+            out.write('\n');
+          }
         }
       }
     } catch (org.apache.poi.openxml4j.exceptions.InvalidFormatException e) {
@@ -247,7 +256,8 @@ final class DocumentTextStructureParser {
   }
 
   /**
-   * Writes the text of a slide's shape, the title already written left out.
+   * Writes the text of a slide's shape, the shapes of a group included, the
+   * title already written left out.
    *
    * @param shape the shape
    * @param title the slide's title, null for none
@@ -260,6 +270,10 @@ final class DocumentTextStructureParser {
       if (text != null && !StringUtils.equals(StringUtils.normalizeSpace(text), title)) {
         out.write(text);
         out.write('\n');
+      }
+    } else if (shape instanceof XSLFGroupShape group) {
+      for (XSLFShape member : group.getShapes()) {
+        writeShape(member, title, out);
       }
     } else if (shape instanceof XSLFTable table) {
       for (XSLFTableRow row : table.getRows()) {

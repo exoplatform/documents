@@ -228,6 +228,59 @@ class DocumentTextStructureParserTest {
   }
 
   /**
+   * The text of a shape inside a group, as a presentation's diagrams hold
+   * it, is written with the slide's.
+   * Mutants: a group's shapes left out.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aPresentationsGroupedShapesAreRead() throws IOException {
+    File file = directory.resolve("grouped.pptx").toFile();
+    try (XMLSlideShow show = new XMLSlideShow(); FileOutputStream out = new FileOutputStream(file)) {
+      XSLFSlide slide = show.createSlide();
+      slide.createTextBox().setText("Plain box");
+      slide.createGroup().createTextBox().setText("Grouped box");
+      show.write(out);
+    }
+    StringWriter text = new StringWriter();
+
+    parse(file, DocumentTextStructureParser.PPTX_MIME_TYPE, text, Long.MAX_VALUE);
+
+    assertTrue(text.toString().contains("Plain box"));
+    assertTrue(text.toString().contains("Grouped box"));
+  }
+
+  /**
+   * The text of a block content control, as documents made from a template
+   * hold it, is written in its place among the paragraphs.
+   * Mutants: a content control left out.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aWordDocumentsContentControlsAreRead() throws IOException {
+    File file = directory.resolve("template.docx").toFile();
+    try (XWPFDocument document = new XWPFDocument(); FileOutputStream out = new FileOutputStream(file)) {
+      document.createParagraph().createRun().setText("Before the control");
+      document.getDocument()
+              .getBody()
+              .addNewSdt()
+              .addNewSdtContent()
+              .addNewP()
+              .addNewR()
+              .addNewT()
+              .setStringValue("Inside the control");
+      document.write(out);
+    }
+    StringWriter text = new StringWriter();
+
+    parse(file, DocumentTextStructureParser.DOCX_MIME_TYPE, text, Long.MAX_VALUE);
+
+    assertEquals("Before the control\nInside the control\n", text.toString());
+  }
+
+  /**
    * A PDF's bookmarks, nested ones included, are outline entries at the start
    * of the page each points to, with the page's number and the depth of the
    * bookmark.
