@@ -608,8 +608,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * be read in one go is read this way, part by part.
    *
    * @param documentId the document id
-   * @param offset the first character, from 0; within a section, from the
-   *          section's start
+   * @param offset the first character, from 0, in the whole text, as
+   *          next_offset gives it; within a section, brought into it: the
+   *          section's start when before it
    * @param maxChars the most characters returned
    * @param section the index of the heading whose section is read, null to
    *          read by offset
@@ -636,8 +637,8 @@ public class DocumentMcpTool implements McpToolPlugin {
         throw new IllegalArgumentException(MSG_NO_SUCH_SECTION.formatted(section, documentId, headings.size()));
       }
       heading = headings.get(section);
-      start = heading.offset() + start;
       end = heading.endOffset();
+      start = Math.clamp(start, heading.offset(), Math.max(heading.offset(), end));
     }
     DocumentTextPage page = getTextPage(documentId, start, (int) Math.max(0, Math.min(size, end - start)));
     end = Math.min(end, page.totalChars());
@@ -696,7 +697,9 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Turns a document's outline into headings, each section ending at the next
-   * heading of the same or a higher level, or at the end of the text.
+   * heading of the same or a higher level that starts after it, or at the end
+   * of the text: a heading sharing its start with the next one, two bookmarks
+   * on one PDF page, covers that page too.
    *
    * @param page a part of the text, carrying the outline
    * @return the headings
@@ -709,7 +712,7 @@ public class DocumentMcpTool implements McpToolPlugin {
       long end = page.totalChars();
       for (int j = i + 1; j < outline.size(); j++) {
         DocumentOutlineEntry next = outline.get(j);
-        if (next.level() <= entry.level() && next.offset() >= entry.offset()) {
+        if (next.level() <= entry.level() && next.offset() > entry.offset()) {
           end = next.offset();
           break;
         }

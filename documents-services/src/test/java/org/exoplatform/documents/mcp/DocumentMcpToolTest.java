@@ -2094,32 +2094,45 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * A section is read from its heading's offset, an offset counted from
-   * there, up to the next heading of the same or a higher level, a deeper one
-   * not ending it; there is no next part past the section's end.
-   * Mutants: the section's start ignored, a deeper heading ending it, the
-   * read going past its end, the next offset past it.
+   * A section is read from its heading's offset up to the next heading of
+   * the same or a higher level, a deeper one not ending it; the next offset it
+   * gives, passed back unchanged, reads the rest of the section, and an offset
+   * before the section starts at its heading; there is no next part past the
+   * section's end.
+   * Mutants: the section's start ignored, the offset counted from the
+   * section's start, a deeper heading ending it, the read going past its end,
+   * the next offset past it.
    *
    * @throws Exception never
    */
   @Test
   public void readDocumentTextReadsOneSectionUpToTheNextHeadingOfItsLevel() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
-    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, 0)).thenReturn(textPage("", 0));
-    when(documentFileService.getFileTextPage(DOCUMENT_ID, 2, 10)).thenReturn(textPage("2345678901", 2));
-    when(documentFileService.getFileTextPage(DOCUMENT_ID, 5, 4)).thenReturn(textPage("5678", 5));
-    when(documentFileService.getFileTextPage(DOCUMENT_ID, 9, 3)).thenReturn(textPage("901", 9));
+    String text = "01234567890123456789";
+    when(documentFileService.getFileTextPage(eq(DOCUMENT_ID), anyLong(), anyInt())).thenAnswer(invocation -> {
+      int from = (int) Math.min((long) invocation.getArgument(1), text.length());
+      int length = invocation.getArgument(2);
+      return textPage(text.substring(from, Math.min(text.length(), from + length)), from);
+    });
 
     org.exoplatform.documents.mcp.model.DocumentTextPartModel intro = documentMcpTool.readDocumentText(DOCUMENT_ID, 2L, 100, 0);
     org.exoplatform.documents.mcp.model.DocumentTextPartModel sub = documentMcpTool.readDocumentText(DOCUMENT_ID, null, 4, 1);
-    org.exoplatform.documents.mcp.model.DocumentTextPartModel subEnd = documentMcpTool.readDocumentText(DOCUMENT_ID, 4L, 100, 1);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel subEnd = documentMcpTool.readDocumentText(DOCUMENT_ID,
+                                                                                                         sub.nextOffset(),
+                                                                                                         100,
+                                                                                                         1);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel before = documentMcpTool.readDocumentText(DOCUMENT_ID, 1L, 4, 1);
 
     assertEquals("Intro", intro.section().title());
+    assertEquals("2345678901", intro.text());
     assertEquals(12, intro.section().endOffset());
     assertEquals(null, intro.nextOffset());
+    assertEquals("5678", sub.text());
     assertEquals(Long.valueOf(9), sub.nextOffset());
     assertEquals(12, sub.section().endOffset());
+    assertEquals("901", subEnd.text());
     assertEquals(null, subEnd.nextOffset());
+    assertEquals("5678", before.text());
   }
 
   /**
@@ -2160,6 +2173,34 @@ public class DocumentMcpToolTest {
     assertEquals(20, outline.totalChars());
     assertEquals(List.of(12L, 12L, 20L), outline.headings().stream().map(h -> h.endOffset()).toList());
     assertEquals(Integer.valueOf(3), outline.headings().get(2).page());
+  }
+
+  /**
+   * Two headings of one level starting at one offset, two bookmarks on one
+   * PDF page, do not give the first an empty section: it ends at the next
+   * heading starting after it.
+   * Mutants: the section ended at a heading sharing its start.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentOutlineEndsASectionAtAHeadingStartingAfterIt() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, 0))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("",
+                                                                         0,
+                                                                         20,
+                                                                         false,
+                                                                         List.of(new org.exoplatform.documents.model.DocumentOutlineEntry(0, 1, "One", 4, 2),
+                                                                                 new org.exoplatform.documents.model.DocumentOutlineEntry(1, 1, "Two", 4, 2),
+                                                                                 new org.exoplatform.documents.model.DocumentOutlineEntry(2, 1, "Three", 10, 3)),
+                                                                         DocumentTextContent.Status.EXTRACTED));
+
+    org.exoplatform.documents.mcp.model.DocumentOutlineModel outline = documentMcpTool.getDocumentOutline(DOCUMENT_ID);
+
+    assertEquals(10, outline.headings().get(0).endOffset());
+    assertEquals(10, outline.headings().get(1).endOffset());
+    assertEquals(20, outline.headings().get(2).endOffset());
   }
 
   /**

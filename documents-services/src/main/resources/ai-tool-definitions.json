@@ -162,7 +162,7 @@
           },
           "offset": {
             "type": "integer",
-            "description": "Optional first character to read, from 0 (0 when left out). With section, counted from the start of the section."
+            "description": "Optional first character to read, from 0 in the whole text, as next_offset and end_offset give it (0 when left out). With section, the section's start when left out or before it."
           },
           "max_chars": {
             "type": "integer",
