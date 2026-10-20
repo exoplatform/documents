@@ -281,10 +281,11 @@ class DocumentTextStructureParserTest {
   }
 
   /**
-   * A Word table's content controls, inside a cell or holding one, are read
-   * with the table's row, as the one-shot read reads them.
+   * A Word table's content controls, inside a cell or holding one, and a
+   * table inside a cell, are read with the table's row, as the one-shot read
+   * reads them.
    * Mutants: a cell read by its paragraphs only, a cell held by a content
-   * control left out.
+   * control left out, a nested table left out.
    *
    * @throws IOException never
    */
@@ -303,6 +304,16 @@ class DocumentTextStructureParserTest {
            .addNewT()
            .setStringValue("Field in a cell");
       table.getRow(0)
+           .getCell(0)
+           .getCTTc()
+           .addNewTbl()
+           .addNewTr()
+           .addNewTc()
+           .addNewP()
+           .addNewR()
+           .addNewT()
+           .setStringValue("Table in a cell");
+      table.getRow(0)
            .getCtRow()
            .addNewSdt()
            .addNewSdtContent()
@@ -319,6 +330,7 @@ class DocumentTextStructureParserTest {
 
     assertTrue(text.toString().contains("Field in a cell"), text.toString());
     assertTrue(text.toString().contains("Cell in a field"), text.toString());
+    assertTrue(text.toString().contains("Table in a cell"), text.toString());
   }
 
   /**
