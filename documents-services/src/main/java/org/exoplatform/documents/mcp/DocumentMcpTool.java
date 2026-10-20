@@ -216,6 +216,10 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_FOLDER_IS_SHORTCUT  =
                                                            "The folder id %s is a shortcut to the folder %s: pass that folder's id as %s to write there (get_document_permissions tells whether you can write in it).";
 
+  /** The refusal of a shortcut to a file given as the folder a tool writes in. */
+  private static final String      MSG_FILE_SHORTCUT_IS_NO_FOLDER =
+                                                                  "The id %s is a shortcut to the file %s, not a folder: pass a folder's id as %s.";
+
   /** The argument of the tools that add a document or a folder to a folder. */
   private static final String      PARENT_FOLDER_ID_ARG      = "parent_folder_id";
 
@@ -1743,7 +1747,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    * target for the reads and the rights, while the storage writes under the
    * node of the id it is given, the shortcut node itself, which takes no
    * child: the right would be checked on one node and the write attempted on
-   * another.
+   * another. A shortcut to a file is refused as no folder.
    *
    * @param folderId the folder id the tool was given
    * @param argumentName the tool argument that carries it, named in the
@@ -1756,10 +1760,13 @@ public class DocumentMcpTool implements McpToolPlugin {
   private AbstractNode getDestinationFolder(String folderId,
                                             String argumentName) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode folder = getNode(folderId);
-    if (!StringUtils.equals(folderId, folder.getId())) {
+    if (StringUtils.equals(folderId, folder.getId())) {
+      return folder;
+    } else if (folder instanceof FolderNode) {
       throw new IllegalArgumentException(MSG_FOLDER_IS_SHORTCUT.formatted(folderId, folder.getId(), argumentName));
+    } else {
+      throw new IllegalArgumentException(MSG_FILE_SHORTCUT_IS_NO_FOLDER.formatted(folderId, folder.getId(), argumentName));
     }
-    return folder;
   }
 
   private long getOwnerId(String documentId) {

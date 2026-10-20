@@ -2361,6 +2361,28 @@ public class DocumentMcpToolTest {
   }
 
   /**
+   * A shortcut to a file given as the folder a tool writes in is refused as no
+   * folder, naming the file, never as a shortcut to a folder whose id the
+   * agent would then pass.
+   * Mutant: a shortcut to a file refused as a shortcut to a folder.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileShortcutGivenAsTheFolderIsRefusedAsNoFolder() throws Exception {
+    when(documentFileService.getDocumentById("file-shortcut-id", USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.moveDocument(DOCUMENT_ID, "file-shortcut-id", null));
+
+    assertTrue(error.getMessage(), error.getMessage().contains("shortcut to the file " + DOCUMENT_ID + ", not a folder"));
+    assertTrue(error.getMessage(), error.getMessage().contains("destination_folder_id"));
+    assertFalse(error.getMessage(), error.getMessage().contains("shortcut to the folder"));
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+  }
+
+  /**
    * A file shortcut's id is still taken where a tool acts on a document, not
    * on a folder: a version added through a shortcut to a file, and a move of
    * that shortcut into a folder, go on.
