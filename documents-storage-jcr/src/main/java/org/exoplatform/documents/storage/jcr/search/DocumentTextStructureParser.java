@@ -49,9 +49,11 @@ import org.apache.poi.xslf.usermodel.XSLFTableCell;
 import org.apache.poi.xslf.usermodel.XSLFTableRow;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
+import org.apache.poi.xwpf.usermodel.ICell;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFSDT;
+import org.apache.poi.xwpf.usermodel.XWPFSDTCell;
 import org.apache.poi.xwpf.usermodel.XWPFStyle;
 import org.apache.poi.xwpf.usermodel.XWPFStyles;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -150,8 +152,8 @@ final class DocumentTextStructureParser {
         } else if (element instanceof XWPFTable table) {
           for (XWPFTableRow row : table.getRows()) {
             List<String> cells = new ArrayList<>();
-            for (XWPFTableCell cell : row.getTableCells()) {
-              cells.add(StringUtils.normalizeSpace(cell.getText()));
+            for (ICell cell : row.getTableICells()) {
+              cells.add(cellText(cell));
             }
             out.write(String.join(" | ", cells));
             out.write('\n');
@@ -169,6 +171,24 @@ final class DocumentTextStructureParser {
     } catch (org.apache.poi.openxml4j.exceptions.InvalidFormatException e) {
       throw new IOException("Not a Word document", e);
     }
+  }
+
+  /**
+   * Reads the text of a Word table's cell, as the one-shot read does: its
+   * paragraphs, nested tables and content controls, or the content of a
+   * content control holding the cell.
+   *
+   * @param cell the cell
+   * @return its text on one line
+   */
+  private static String cellText(ICell cell) {
+    String text = null;
+    if (cell instanceof XWPFTableCell tableCell) {
+      text = tableCell.getTextRecursively();
+    } else if (cell instanceof XWPFSDTCell contentControl) {
+      text = contentControl.getContent().getText();
+    }
+    return StringUtils.normalizeSpace(StringUtils.defaultString(text));
   }
 
   /**

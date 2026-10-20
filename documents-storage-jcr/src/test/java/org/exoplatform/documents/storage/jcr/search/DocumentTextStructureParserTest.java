@@ -281,6 +281,47 @@ class DocumentTextStructureParserTest {
   }
 
   /**
+   * A Word table's content controls, inside a cell or holding one, are read
+   * with the table's row, as the one-shot read reads them.
+   * Mutants: a cell read by its paragraphs only, a cell held by a content
+   * control left out.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aWordTablesContentControlsAreRead() throws IOException {
+    File file = directory.resolve("form.docx").toFile();
+    try (XWPFDocument document = new XWPFDocument(); FileOutputStream out = new FileOutputStream(file)) {
+      XWPFTable table = document.createTable(1, 1);
+      table.getRow(0)
+           .getCell(0)
+           .getCTTc()
+           .addNewSdt()
+           .addNewSdtContent()
+           .addNewP()
+           .addNewR()
+           .addNewT()
+           .setStringValue("Field in a cell");
+      table.getRow(0)
+           .getCtRow()
+           .addNewSdt()
+           .addNewSdtContent()
+           .addNewTc()
+           .addNewP()
+           .addNewR()
+           .addNewT()
+           .setStringValue("Cell in a field");
+      document.write(out);
+    }
+    StringWriter text = new StringWriter();
+
+    parse(file, DocumentTextStructureParser.DOCX_MIME_TYPE, text, Long.MAX_VALUE);
+
+    assertTrue(text.toString().contains("Field in a cell"), text.toString());
+    assertTrue(text.toString().contains("Cell in a field"), text.toString());
+  }
+
+  /**
    * A PDF's bookmarks, nested ones included, are outline entries at the start
    * of the page each points to, with the page's number and the depth of the
    * bookmark.
