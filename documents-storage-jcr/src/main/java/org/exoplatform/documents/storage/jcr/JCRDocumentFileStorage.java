@@ -460,14 +460,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       paths.add(path);
       paths.addAll(findSymlinkTargetPaths(session, path));
+      // the relevance order, unless the caller sorts by a field, such as the latest changes first
+      boolean sorted = filter.getSortField() != null;
       Collection<DocumentFileSearchResult> results = documentSearchServiceConnector.search(identity,
                                                                                            COLLABORATION,
                                                                                            paths,
                                                                                            filter,
                                                                                            offset,
                                                                                            limit,
-                                                                                           "_score",
-                                                                                           "DESC");
+                                                                                           sorted ? getSortField(filter, false) : "_score",
+                                                                                           sorted ? getSortDirection(filter) : "DESC");
       return results.stream()
                     .map(result -> (AbstractNode) toFileNode(identityManager, session, identity, result, spaceService))
                     .filter(Objects::nonNull)
