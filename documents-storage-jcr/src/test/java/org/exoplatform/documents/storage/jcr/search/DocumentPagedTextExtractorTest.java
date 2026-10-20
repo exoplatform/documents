@@ -491,4 +491,23 @@ class DocumentPagedTextExtractorTest {
     assertEquals(2, extractor.getPage(DOCUMENT_ID, 2, 3).offset());
   }
 
+  /**
+   * A part of one character asked on a pair's first half gives the pair
+   * whole, so a reader following the parts moves on instead of getting the
+   * same empty part again.
+   * Mutants: the empty part returned.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void aOneCharacterPartOnAPairGivesThePairWhole() throws Exception {
+    storeText(DOCUMENT_ID, "ab\uD83D\uDE00c", 1L);
+
+    DocumentTextPage page = extractor.getPage(DOCUMENT_ID, 2, 1);
+
+    assertEquals("\uD83D\uDE00", page.text());
+    assertEquals(2, page.offset());
+    assertEquals("c", extractor.getPage(DOCUMENT_ID, page.offset() + page.text().length(), 1).text());
+  }
+
 }
