@@ -295,7 +295,7 @@
     {
       "name": "get_document_permissions",
       "title": "Get your rights on a DMS folder or file",
-      "description": "Tells what you may do on a folder or a file before you try: can_read, can_edit (for a folder: create, upload or rename documents in it; for a file: edit it or add a version) and can_delete. Call it before writing into a folder you didn't create. A document you can't read is refused.",
+      "description": "Tells what you may do on a folder or a file before you try: can_read, can_edit (for a folder: create, upload or rename documents in it; for a file: edit it or add a version) and can_delete. Call it before writing into a folder you didn't create. For a shortcut, the rights are its target's (shortcut_target_id) and can_delete is left out: deleting a shortcut removes only the shortcut. A document you can't read is refused.",
       "input_schema": {
         "type": "object",
         "properties": {
