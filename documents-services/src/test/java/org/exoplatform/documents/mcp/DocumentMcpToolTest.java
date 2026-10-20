@@ -2255,6 +2255,28 @@ public class DocumentMcpToolTest {
   }
 
   /**
+   * get_document_permissions adds the owner's delete right as a listing
+   * does, so both tell the same about a document the user owns whose entries
+   * grant nothing.
+   * Mutants: the owner's delete right left to the entries.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentPermissionsTellsTheOwnersDeleteRightAsAListingDoes() throws Exception {
+    FileNode file = fileNode(DOCUMENT_ID, "application/pdf");
+    file.setCreatorUserName(USERNAME);
+    file.setAcl(new NodePermission(true, false, false, false, null, null, null, null));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(file);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(DOCUMENT_ID);
+
+    assertTrue(permissions.isCanEdit());
+    assertTrue(permissions.isCanDelete());
+  }
+
+  /**
    * A document added to a folder the user can only read is refused before
    * anything is staged or imported, with a reason naming the folder and the
    * tool that tells the rights, instead of failing later in the background.
