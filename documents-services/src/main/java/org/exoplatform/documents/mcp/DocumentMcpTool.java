@@ -127,6 +127,12 @@ public class DocumentMcpTool implements McpToolPlugin {
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
 
   /**
+   * The most children {@code list_folder_children} reads to keep those changed
+   * since a date.
+   */
+  static final int                 MAX_SCANNED_CHILDREN   = 1000;
+
+  /**
    * Same password policy DocumentFileRest applies to public-link passwords
    * (min length 9), so a link created here is openable with the given password.
    */
@@ -193,12 +199,6 @@ public class DocumentMcpTool implements McpToolPlugin {
   /** The refusal of a space name when the call's space can't be read. */
   private static final String      MSG_NAME_SCOPE_UNREADABLE =
                                                              "The space this call is limited to can't be read, so a space can't be named by its space_name. Call it again with its space_id.";
-
-  /**
-   * The most children {@code list_folder_children} reads to keep those changed
-   * since a date.
-   */
-  static final int                 MAX_SCANNED_CHILDREN   = 1000;
 
   /** The refusal of a date-limited listing of a folder holding too many children. */
   private static final String      MSG_TOO_MANY_CHILDREN  =
