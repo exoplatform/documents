@@ -212,9 +212,15 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_FOLDER_NOT_WRITABLE =
                                                            "You can't add documents to the folder '%s' (%s): you can read it but not write in it. Pick a folder whose can_edit is true (get_document_permissions tells it), or ask a space manager for the right.";
 
-  /** The refusal of a file added through a shortcut to a folder. */
+  /** The refusal of a shortcut's id given as the folder a tool writes in. */
   private static final String      MSG_FOLDER_IS_SHORTCUT  =
-                                                           "The folder id %s is a shortcut to the folder %s: pass that folder's id as parent_folder_id to add the document there (get_document_permissions tells whether you can write in it).";
+                                                           "The folder id %s is a shortcut to the folder %s: pass that folder's id as %s to write there (get_document_permissions tells whether you can write in it).";
+
+  /** The argument of the tools that add a document or a folder to a folder. */
+  private static final String      PARENT_FOLDER_ID_ARG      = "parent_folder_id";
+
+  /** The argument of the tools that move, copy or link a document to a folder. */
+  private static final String      DESTINATION_FOLDER_ID_ARG = "destination_folder_id";
 
   /** The creator of the nodes the platform creates for a space. */
   private static final String      SYSTEM_USER            = "__system";
@@ -850,7 +856,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     // fails with a clean ObjectNotFoundException / IllegalAccessException before
     // reaching the JCR storage.
     try {
-      getNode(parentFolderId);
+      getDestinationFolder(parentFolderId, PARENT_FOLDER_ID_ARG);
     } catch (ObjectNotFoundException e) {
       throw new ObjectNotFoundException(PARENT_FOLDER_NOT_FOUND_MESSAGE.formatted(parentFolderId));
     }
@@ -950,7 +956,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     // Validate the parent folder exists and is readable by the user, so a bad id
     // fails with a clean ObjectNotFoundException / IllegalAccessException before
     // reaching the JCR storage.
-    getNode(parentFolderId);
+    getDestinationFolder(parentFolderId, PARENT_FOLDER_ID_ARG);
     // ecms names the file after the title and does NOT append the extension, so
     // build a title that ends with '.<type>' (stripping a duplicate extension the
     // user may have typed to avoid 'report.docx.docx').
@@ -1114,7 +1120,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     checkDestinationInScopeSpace(destinationFolderId);
     checkScopedChange(documentId, false);
-    AbstractNode destination = getNode(destinationFolderId);
+    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     try {
       documentFileService.moveDocument(getOwnerId(documentId),
                                        documentId,
@@ -1155,6 +1161,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     // matched name-aware: this stays correct even if another node lands in the
     // destination concurrently (a blind folder-diff would otherwise return the
     // wrong document).
+    getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     AbstractNode source = getNode(documentId);
     String expectedName = source.getName();
     Class<? extends AbstractNode> kind = kindOf(source);
@@ -1416,7 +1423,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     // Validate the source and the destination folder exist and are readable by
     // the user before touching the JCR storage.
     checkCanAccessDocument(documentId);
-    AbstractNode destination = getNode(destinationFolderId);
+    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     try {
       documentFileService.createShortcut(documentId,
                                          destination.getPath(),
@@ -1728,6 +1735,31 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private AbstractNode getNode(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     return documentFileService.getDocumentById(documentId, getCurrentUserName());
+  }
+
+  /**
+   * Resolves the folder a tool writes in, refusing a shortcut's id with a
+   * message naming the folder it points to. A shortcut's id resolves to its
+   * target for the reads and the rights, while the storage writes under the
+   * node of the id it is given, the shortcut node itself, which takes no
+   * child: the right would be checked on one node and the write attempted on
+   * another.
+   *
+   * @param folderId the folder id the tool was given
+   * @param argumentName the tool argument that carries it, named in the
+   *          refusal
+   * @return the folder
+   * @throws IllegalAccessException when the user can't read the folder
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalArgumentException when the id is a shortcut's
+   */
+  private AbstractNode getDestinationFolder(String folderId,
+                                            String argumentName) throws IllegalAccessException, ObjectNotFoundException {
+    AbstractNode folder = getNode(folderId);
+    if (!StringUtils.equals(folderId, folder.getId())) {
+      throw new IllegalArgumentException(MSG_FOLDER_IS_SHORTCUT.formatted(folderId, folder.getId(), argumentName));
+    }
+    return folder;
   }
 
   private long getOwnerId(String documentId) {
@@ -2114,11 +2146,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     // Validate the parent folder exists and is readable before staging anything,
     // so a bad id fails with a clean ObjectNotFoundException / IllegalAccessException.
-    AbstractNode parentFolder = getNode(parentFolderId);
-    if (!StringUtils.equals(parentFolderId, parentFolder.getId())) {
-      // a shortcut's id resolves to its target, while the import writes under the shortcut node itself
-      throw new IllegalArgumentException(MSG_FOLDER_IS_SHORTCUT.formatted(parentFolderId, parentFolder.getId()));
-    }
+    AbstractNode parentFolder = getDestinationFolder(parentFolderId, PARENT_FOLDER_ID_ARG);
     String entryName = sanitizeFileName(fileName);
     // The import runs in the background under the user's session, which refuses
     // the write there, out of the caller's sight: the right is checked here so
