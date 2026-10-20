@@ -728,8 +728,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                             AbstractNode::isFolder,
                                                             wanted,
                                                             aclIdentity,
-                                                            includeHiddenFiles,
-                                                            filter);
+                                                            includeHiddenFiles);
           if (fileItems.size() < wanted) {
             String statementOfFiles = getFolderDocumentsQuery(parent.getPath(),
                                                               sortField,
@@ -743,8 +742,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                 child -> !child.isFolder(),
                                                 wanted - fileItems.size(),
                                                 aclIdentity,
-                                                includeHiddenFiles,
-                                                filter));
+                                                includeHiddenFiles));
           }
           return offset >= fileItems.size() ? new ArrayList<>()
                                              : new ArrayList<>(fileItems.subList(Math.max(offset, 0), fileItems.size()));
@@ -789,7 +787,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * folders, a shortcut to a folder among the files, a shortcut whose target
    * is gone or can't be read, a hidden child), so its rows are read again past
    * the last one read whenever too few were kept: the children returned are a
-   * prefix of the children listed, whatever the rows left out.
+   * prefix of the children listed, whatever the rows left out. The children
+   * keep the query's order, names compared whatever their case by the query
+   * itself: no sort after the rows are read, which would make a longer read
+   * order its children otherwise than a shorter one.
    *
    * @param session the user's session
    * @param statement the JCR-SQL query of the folder's children, sorted
@@ -797,7 +798,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @param wanted the most children to keep
    * @param aclIdentity the user's identity
    * @param includeHiddenFiles whether hidden children are listed
-   * @param filter the listing's filter
    * @return at most {@code wanted} children, fewer only when the rows ran out
    * @throws RepositoryException when the query can't be run
    */
@@ -806,8 +806,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                 Predicate<AbstractNode> kind,
                                                 int wanted,
                                                 Identity aclIdentity,
-                                                boolean includeHiddenFiles,
-                                                DocumentFolderFilter filter) throws RepositoryException {
+                                                boolean includeHiddenFiles) throws RepositoryException {
     List<AbstractNode> children = new ArrayList<>();
     long rowsRead = 0;
     while (children.size() < wanted) {
@@ -815,18 +814,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
       ((QueryImpl) jcrQuery).setOffset(rowsRead);
       ((QueryImpl) jcrQuery).setLimit(rowsAsked);
+      // names sort as the listing shows them, whatever their case; the rows are kept in that order
+      ((QueryImpl) jcrQuery).setCaseInsensitiveOrder(true);
       NodeIterator nodeIterator = jcrQuery.execute().getNodes();
       List<Node> rows = new ArrayList<>();
       while (nodeIterator.hasNext()) {
         rows.add(nodeIterator.nextNode());
       }
-      toNodes(identityManager,
-              session,
-              new EntityCollection(rows),
-              aclIdentity,
-              spaceService,
-              includeHiddenFiles,
-              filter).stream().filter(kind).forEach(children::add);
+      toNodesInRowOrder(identityManager,
+                        session,
+                        new EntityCollection(rows),
+                        aclIdentity,
+                        spaceService,
+                        includeHiddenFiles).stream().filter(kind).forEach(children::add);
       rowsRead += rows.size();
       if (rows.size() < rowsAsked) {
         break;
