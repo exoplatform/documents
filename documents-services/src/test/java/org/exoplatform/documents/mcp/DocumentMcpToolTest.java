@@ -44,6 +44,7 @@ import java.util.Locale;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
@@ -1362,6 +1363,7 @@ public class DocumentMcpToolTest {
     // the tool must re-resolve the newly added file in the destination folder, by
     // name (the copy keeps the source's "report.pdf" name).
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -1382,6 +1384,7 @@ public class DocumentMcpToolTest {
     // folder-diff + reduce((a,b)->b) heuristic returns the last added id (here the
     // concurrent "other.pdf"); the name-aware resolver must return the real copy.
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -1399,6 +1402,7 @@ public class DocumentMcpToolTest {
     // ("report.pdf" and its " (1)" counter variant). The resolver must refuse to
     // guess and throw a clear error rather than silently return one of them.
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -1428,6 +1432,7 @@ public class DocumentMcpToolTest {
     duplicated.setName("Copy of Projects");
     FileNode sameNamedFile = fileNodeNamed("file-1", "Projects");
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(source);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(List.of())
@@ -2313,6 +2318,84 @@ public class DocumentMcpToolTest {
     when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
     when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
     assertThrows(IllegalAccessException.class, () -> documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "body"));
+  }
+
+  /**
+   * Every tool that writes in a folder refuses a shortcut's id as that folder
+   * before writing anything, naming the folder it points to and the argument
+   * to pass it as: create_folder, create_document_from_template,
+   * upload_document, move_document, copy_document and
+   * create_document_shortcut, as create_document does. A shortcut's id
+   * resolves to its target for the reads and the rights, while the storage
+   * would write under the shortcut node itself.
+   * Mutants: the check dropped from any one of the tools, the argument not
+   * named.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void everyToolWritingInAFolderRefusesAFolderShortcutNamingItsTarget() throws Exception {
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getRootFolderOwnerId(anyString())).thenReturn(OWNER_ID);
+
+    assertRefusedAsAShortcut(() -> documentMcpTool.createFolder("shortcut-id", "New"), "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createFolder("shortcut-id", "A/B"), "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createDocumentFromTemplate("shortcut-id", "Q3 report", "docx"),
+                             "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.uploadDocument("shortcut-id", "report.pdf", "aGVsbG8=", null, null, null),
+                             "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.moveDocument(DOCUMENT_ID, "shortcut-id", null), "destination_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.copyDocument(DOCUMENT_ID, "shortcut-id"), "destination_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, "shortcut-id", null),
+                             "destination_folder_id");
+
+    verify(documentFileService, never()).createFolder(anyLong(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).getFolderChildNodes(any(), anyInt(), anyInt(), anyLong());
+    verify(documentFileService, never()).createDocumentFromTemplate(anyLong(), any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+    verify(documentFileService, never()).copyDocument(any(), any(), anyLong());
+    verify(documentFileService, never()).createShortcut(any(), any(), any(), any());
+  }
+
+  /**
+   * A file shortcut's id is still taken where a tool acts on a document, not
+   * on a folder: a version added through a shortcut to a file, and a move of
+   * that shortcut into a folder, go on.
+   * Mutant: the folder check applied to the document a tool acts on.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileShortcutIsStillTakenAsTheDocumentAToolActsOn() throws Exception {
+    when(documentFileService.getDocumentById("file-shortcut-id", USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.hasEditPermissionOnDocument("file-shortcut-id", USER_IDENTITY_ID)).thenReturn(true);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(anyString())).thenReturn(OWNER_ID);
+
+    documentMcpTool.addDocumentVersion("file-shortcut-id", "updated body", null, null, null, null, null);
+    documentMcpTool.moveDocument("file-shortcut-id", FOLDER_ID, null);
+
+    verify(documentFileService).createNewVersion(eq("file-shortcut-id"), eq(USERNAME), any());
+    verify(documentFileService).moveDocument(eq(OWNER_ID),
+                                             eq("file-shortcut-id"),
+                                             eq("/documents/Projects"),
+                                             eq(USER_IDENTITY_ID),
+                                             eq("keepBoth"));
+  }
+
+  /**
+   * Asserts a tool call is refused as given a folder shortcut's id, naming the
+   * folder it points to and the argument to pass it as.
+   *
+   * @param call the tool call
+   * @param argumentName the argument the refusal names
+   */
+  private void assertRefusedAsAShortcut(ThrowingRunnable call, String argumentName) {
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class, call);
+    assertTrue(error.getMessage(), error.getMessage().contains("shortcut-id is a shortcut to the folder " + FOLDER_ID));
+    assertTrue(error.getMessage(), error.getMessage().contains(argumentName));
   }
 
   /**
