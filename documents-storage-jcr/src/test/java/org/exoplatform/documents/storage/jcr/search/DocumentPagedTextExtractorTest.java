@@ -302,9 +302,9 @@ class DocumentPagedTextExtractorTest {
     assertEquals("read at last", extractor.getPage(DOCUMENT_ID, 0, 20).text());
     assertEquals(2, extractions.get());
 
-    storeFile(OTHER_ID, "photo.png", "image/png", new byte[10], 1L);
-    assertEquals(Status.UNSUPPORTED_FORMAT, extractor.getPage(OTHER_ID, 0, 10).status());
-    assertEquals(Status.UNSUPPORTED_FORMAT, extractor.getPage(OTHER_ID, 0, 10).status());
+    storeText(OTHER_ID, "   ", 1L);
+    assertEquals(Status.NO_TEXT, extractor.getPage(OTHER_ID, 0, 10).status());
+    assertEquals(Status.NO_TEXT, extractor.getPage(OTHER_ID, 0, 10).status());
     assertEquals(3, extractions.get());
   }
 
@@ -342,8 +342,8 @@ class DocumentPagedTextExtractorTest {
   @Test
   void forgetsTheLeastRecentlyReadVersionPastTheMostVersions() throws Exception {
     extractor.setMaxCachedVersions(1);
-    storeFile(DOCUMENT_ID, "photo.png", "image/png", new byte[10], 1L);
-    storeFile(OTHER_ID, "other.png", "image/png", new byte[10], 1L);
+    storeText(DOCUMENT_ID, "   ", 1L);
+    storeText(OTHER_ID, "   ", 1L);
 
     extractor.getPage(DOCUMENT_ID, 0, 10);
     extractor.getPage(OTHER_ID, 0, 10);
@@ -408,6 +408,40 @@ class DocumentPagedTextExtractorTest {
 
     assertEquals("finally", extractor.getPage(DOCUMENT_ID, 0, 10).text());
     assertEquals(1, extractions.get());
+  }
+
+  /**
+   * While a long extraction holds the extraction thread, a file of a format
+   * never read or too large is refused at once, never answered as being read
+   * nor queued.
+   * Mutants: the refusals decided on the extraction thread only.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void refusesAtOnceWhatItNeverReadsWhileAnotherFileIsRead() throws Exception {
+    extractor.shutdown();
+    extractor = newExtractor(100, 100, 1024 * 1024);
+    CountDownLatch release = new CountDownLatch(1);
+    AdvancedDocumentReader slow = mock(AdvancedDocumentReader.class);
+    when(slow.getContentAsReader(any())).thenAnswer(invocation -> {
+      release.await(5, TimeUnit.SECONDS);
+      return new StringReader("finally");
+    });
+    storeFile(DOCUMENT_ID, "slow.txt", "text/plain", new byte[3], 1L);
+    when(documentReaderService.getDocumentReader("text/plain")).thenReturn(slow);
+    storeFile(OTHER_ID, "movie.png", "image/png", new byte[10], 1L);
+    Property large = storeFile("large", "huge.txt", "text/plain", new byte[10], 1L);
+    when(large.getLength()).thenReturn(MAX_SIZE + 1);
+    try {
+      assertEquals(Status.BUSY, extractor.getPage(DOCUMENT_ID, 0, 10).status());
+
+      assertEquals(Status.UNSUPPORTED_FORMAT, extractor.getPage(OTHER_ID, 0, 10).status());
+      assertEquals(Status.TOO_LARGE, extractor.getPage("large", 0, 10).status());
+      assertEquals(1, extractions.get());
+    } finally {
+      release.countDown();
+    }
   }
 
   /**

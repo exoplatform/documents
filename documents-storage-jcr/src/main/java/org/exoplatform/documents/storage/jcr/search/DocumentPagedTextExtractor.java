@@ -261,14 +261,26 @@ public class DocumentPagedTextExtractor {
    */
   PagedTextExtraction getExtraction(String documentId) {
     String key;
+    Status refusal;
     try {
-      key = versionKey(documentId);
+      Session session = openSystemSession();
+      try {
+        Node content = getContent(session, documentId);
+        if (content == null) {
+          return PagedTextExtraction.none(Status.NOT_A_FILE);
+        }
+        key = versionKey(documentId, content);
+        // a file too large or of a format never read is refused here, never queued behind a long extraction
+        refusal = refusalOf(content);
+      } finally {
+        session.logout();
+      }
     } catch (RepositoryException e) {
       LOG.warn("Could not read the version of document {}", documentId, e);
       return PagedTextExtraction.none(Status.UNREADABLE);
     }
-    if (key == null) {
-      return PagedTextExtraction.none(Status.NOT_A_FILE);
+    if (refusal != null) {
+      return PagedTextExtraction.none(refusal);
     }
     Future<PagedTextExtraction> future;
     // the cache and the running extractions are looked up, and an extraction started, under
@@ -317,23 +329,43 @@ public class DocumentPagedTextExtractor {
    * changed and its size.
    *
    * @param documentId the document id
-   * @return the key, null when the document isn't a file with a content
+   * @param content the document's content node
+   * @return the key
    * @throws RepositoryException when the node can't be read
    */
-  private String versionKey(String documentId) throws RepositoryException {
-    Session session = openSystemSession();
+  private String versionKey(String documentId, Node content) throws RepositoryException {
+    long modified = content.hasProperty(NodeTypeConstants.JCR_LAST_MODIFIED) ? content.getProperty(NodeTypeConstants.JCR_LAST_MODIFIED)
+                                                                                     .getDate()
+                                                                                     .getTimeInMillis()
+                                                                              : 0;
+    return documentId + ":" + modified + ":" + content.getProperty(NodeTypeConstants.JCR_DATA).getLength();
+  }
+
+  /**
+   * Tells why a file's text is never read, from its size and its type, without
+   * reading the file.
+   *
+   * @param content the file's content node
+   * @return {@link Status#TOO_LARGE} or {@link Status#UNSUPPORTED_FORMAT}, null
+   *         when its text is read
+   * @throws RepositoryException when the node can't be read
+   */
+  private Status refusalOf(Node content) throws RepositoryException {
+    if (content.getProperty(NodeTypeConstants.JCR_DATA).getLength() > maxFileSizeBytes) {
+      return Status.TOO_LARGE;
+    }
+    String mimeType = DocumentTextExtractor.resolveMimeType(content.getParent(), content);
+    if (DocumentTextStructureParser.isStructured(mimeType)) {
+      return null;
+    }
+    if (!formats.isSupported(mimeType)) {
+      return Status.UNSUPPORTED_FORMAT;
+    }
     try {
-      Node content = getContent(session, documentId);
-      if (content == null) {
-        return null;
-      }
-      long modified = content.hasProperty(NodeTypeConstants.JCR_LAST_MODIFIED) ? content.getProperty(NodeTypeConstants.JCR_LAST_MODIFIED)
-                                                                                       .getDate()
-                                                                                       .getTimeInMillis()
-                                                                                : 0;
-      return documentId + ":" + modified + ":" + content.getProperty(NodeTypeConstants.JCR_DATA).getLength();
-    } finally {
-      session.logout();
+      documentReaderService.getDocumentReader(mimeType);
+      return null;
+    } catch (HandlerNotFoundException e) {
+      return Status.UNSUPPORTED_FORMAT;
     }
   }
 
@@ -372,24 +404,15 @@ public class DocumentPagedTextExtractor {
       if (content == null) {
         return PagedTextExtraction.none(Status.NOT_A_FILE);
       }
-      Node node = content.getParent();
+      // the file may have changed since the caller looked at it
+      Status refusal = refusalOf(content);
+      if (refusal != null) {
+        return PagedTextExtraction.none(refusal);
+      }
       Property data = content.getProperty(NodeTypeConstants.JCR_DATA);
-      if (data.getLength() > maxFileSizeBytes) {
-        return PagedTextExtraction.none(Status.TOO_LARGE);
-      }
-      String mimeType = DocumentTextExtractor.resolveMimeType(node, content);
+      String mimeType = DocumentTextExtractor.resolveMimeType(content.getParent(), content);
       boolean structured = DocumentTextStructureParser.isStructured(mimeType);
-      DocumentReader reader = null;
-      if (!structured) {
-        if (!formats.isSupported(mimeType)) {
-          return PagedTextExtraction.none(Status.UNSUPPORTED_FORMAT);
-        }
-        try {
-          reader = documentReaderService.getDocumentReader(mimeType);
-        } catch (HandlerNotFoundException e) {
-          return PagedTextExtraction.none(Status.UNSUPPORTED_FORMAT);
-        }
-      }
+      DocumentReader reader = structured ? null : documentReaderService.getDocumentReader(mimeType);
       binary = File.createTempFile("documents-paged-text-", ".bin");
       try (InputStream stream = data.getStream()) {
         Files.copy(stream, binary.toPath(), StandardCopyOption.REPLACE_EXISTING);
