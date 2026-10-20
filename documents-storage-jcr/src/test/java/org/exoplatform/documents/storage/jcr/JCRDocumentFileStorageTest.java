@@ -940,13 +940,12 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode5, "", spaceService)).thenReturn(folderWithSpecificName1);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(identityManager, identity, fileNode, "", spaceService)).thenReturn(file);
 
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(eq(identityManager),
-                                                           eq(userSession),
-                                                           any(NodeIterator.class),
-                                                           eq(identity),
-                                                           eq(spaceService),
-                                                           eq(false),
-                                                           eq(filter)))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(eq(identityManager),
+                                                                     eq(userSession),
+                                                                     any(NodeIterator.class),
+                                                                     eq(identity),
+                                                                     eq(spaceService),
+                                                                     eq(false)))
                       .thenCallRealMethod();
 
 
@@ -982,13 +981,12 @@ public class JCRDocumentFileStorageTest {
     when(queryResult.getNodes()).thenReturn(nodeIterator1);
     when(nodeIterator1.hasNext()).thenReturn(true, true, false);
     when(nodeIterator1.nextNode()).thenReturn(folderNode2, folderNode1);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(eq(identityManager),
-                                                           eq(userSession),
-                                                           any(NodeIterator.class),
-                                                           eq(identity),
-                                                           eq(spaceService),
-                                                           eq(false),
-                                                           eq(filter)))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(eq(identityManager),
+                                                                     eq(userSession),
+                                                                     any(NodeIterator.class),
+                                                                     eq(identity),
+                                                                     eq(spaceService),
+                                                                     eq(false)))
                       .thenCallRealMethod();
     List<AbstractNode> nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 2);
     assertEquals(2, nodes1.size());
@@ -1002,13 +1000,12 @@ public class JCRDocumentFileStorageTest {
     when(queryResult.getNodes()).thenReturn(nodeIterator2);
     when(nodeIterator2.hasNext()).thenReturn(true, true, true,false);
     when(nodeIterator2.nextNode()).thenReturn(folderNode3, folderNode4, folderNode5);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(eq(identityManager),
-                                                           eq(userSession),
-                                                           any(NodeIterator.class),
-                                                           eq(identity),
-                                                           eq(spaceService),
-                                                           eq(false),
-                                                           eq(filter)))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(eq(identityManager),
+                                                                     eq(userSession),
+                                                                     any(NodeIterator.class),
+                                                                     eq(identity),
+                                                                     eq(spaceService),
+                                                                     eq(false)))
                       .thenCallRealMethod();
 
     //assert NumberFormatException when try to parse specific folder name
@@ -1597,7 +1594,7 @@ public class JCRDocumentFileStorageTest {
     when(queryManager.createQuery(anyString(), anyString())).thenReturn(jcrQuery);
     when(jcrQuery.execute()).thenReturn(queryResult);
 
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(any(), any(), any(), any(), any(), anyBoolean(), any()))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(any(), any(), any(), any(), any(), anyBoolean()))
                       .thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(any(), any(), any(), any(), any())).thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(any()))
@@ -1617,68 +1614,41 @@ public class JCRDocumentFileStorageTest {
                                                               any(SpaceService.class)))
                       .thenCallRealMethod();
 
-    // creation date
+    // each sort: the rows come in the order the query serves them, and the
+    // listing keeps it, with no sort of its own
     filter.setSortField(DocumentSortField.CREATED_DATE);
     filter.setAscending(true);
     List<AbstractNode> fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertNotNull(fileNodes);
-    assertEquals("Abc", fileNodes.get(0).getName());
-    assertEquals("Xyz", fileNodes.get(1).getName());
-    assertEquals("Efg.lnk", fileNodes.get(2).getName());
+    assertEquals(List.of("Xyz", "Abc", "Efg.lnk"), fileNodes.stream().map(AbstractNode::getName).toList());
 
-    filter.setAscending(false);
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertEquals("Abc", fileNodes.get(2).getName());
-    assertEquals("Xyz", fileNodes.get(1).getName());
-    assertEquals("Efg.lnk", fileNodes.get(0).getName());
+    Map<DocumentSortField, List<Node>> ascendingRows = Map.of(DocumentSortField.CREATED_DATE,
+                                                              List.of(folderAbc, folderXyz, symlinkFolderEfg),
+                                                              DocumentSortField.MODIFIED_DATE,
+                                                              List.of(folderAbc, folderXyz, symlinkFolderEfg),
+                                                              DocumentSortField.NAME,
+                                                              List.of(folderAbc, symlinkFolderEfg, folderXyz));
+    for (DocumentSortField sortField : List.of(DocumentSortField.CREATED_DATE,
+                                               DocumentSortField.MODIFIED_DATE,
+                                               DocumentSortField.NAME)) {
+      for (boolean ascending : List.of(true, false)) {
+        List<Node> rows = new ArrayList<>(ascendingRows.get(sortField));
+        if (!ascending) {
+          Collections.reverse(rows);
+        }
+        when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
+        when(subItemsIterator.nextNode()).thenReturn(rows.get(0), rows.get(1), rows.get(2));
+        filter.setSortField(sortField);
+        filter.setAscending(ascending);
 
-    // modified date
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
+        fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
 
-    filter.setSortField(DocumentSortField.MODIFIED_DATE);
-    filter.setAscending(true);
-
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertNotNull(fileNodes);
-    assertEquals("Abc", fileNodes.get(0).getName());
-    assertEquals("Xyz", fileNodes.get(1).getName());
-    assertEquals("Efg.lnk", fileNodes.get(2).getName());
-
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-
-    filter.setAscending(false);
-
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertEquals("Efg.lnk", fileNodes.get(2).getName());
-    assertEquals("Abc", fileNodes.get(1).getName());
-    assertEquals("Xyz", fileNodes.get(0).getName());
-
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-    // name
-    filter.setSortField(DocumentSortField.NAME);
-    filter.setAscending(true);
-
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertNotNull(fileNodes);
-    assertEquals("Abc", fileNodes.get(0).getName());
-    assertEquals("Xyz", fileNodes.get(2).getName());
-    assertEquals("Efg.lnk", fileNodes.get(1).getName());
-
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-
-    filter.setAscending(false);
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertEquals("Abc", fileNodes.get(2).getName());
-    assertEquals("Xyz", fileNodes.get(0).getName());
-    assertEquals("Efg.lnk", fileNodes.get(1).getName());
+        assertEquals(sortField + (ascending ? " ASC" : " DESC"),
+                     rows.stream().map(row -> row == symlinkFolderEfg ? "Efg.lnk" : getNodeName(row)).toList(),
+                     fileNodes.stream().map(AbstractNode::getName).toList());
+      }
+    }
+    verify(jcrQuery, atLeastOnce()).setCaseInsensitiveOrder(true);
+    verify(jcrQuery, never()).setCaseInsensitiveOrder(false);
 
     Node file3 = createFileMock("file3", Calendar.getInstance(), userSession);
     Node file4 = createFileMock("file4", Calendar.getInstance(), userSession);
@@ -1710,6 +1680,20 @@ public class JCRDocumentFileStorageTest {
     assertNotNull(fileNodes);
     assertEquals(10, fileNodes.size());
 
+  }
+
+  /**
+   * Reads a mocked node's name, wrapping the repository's checked exception.
+   *
+   * @param node the node
+   * @return its name
+   */
+  private static String getNodeName(Node node) {
+    try {
+      return node.getName();
+    } catch (RepositoryException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   private Node createFolderMock(String name, Calendar createdDate, Session session) throws RepositoryException {
@@ -2693,6 +2677,56 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * A folder's children are listed in the order the query serves them, names
+   * compared whatever their case by the query itself, and paged over that
+   * order: reading the listing page by page gives the one-shot listing. The
+   * rows come in the repository's case-insensitive order, which upper-cases
+   * the names, so {@code _z} sorts after {@code B20}, where a lower-cased
+   * comparison would put it first: a sort of the rows read, done again on
+   * every longer read, would order a page otherwise than the one before it.
+   * Mutants: the case-insensitive order not asked of the query, the rows read
+   * sorted again.
+   */
+  @Test
+  public void getFolderChildNodesPagesOverTheQuerysCaseInsensitiveOrder() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn("user");
+    SessionImpl session = mockFolderListingSession(identity);
+    List<String> names = new ArrayList<>();
+    names.add("a");
+    for (int i = 1; i <= 20; i++) {
+      names.add("B%02d".formatted(i));
+    }
+    names.add("_z");
+    List<Node> folderRows = new ArrayList<>();
+    for (String name : names) {
+      folderRows.add(createFolderMock(name, Calendar.getInstance(), session));
+    }
+    List<QueryImpl> queries = mockFolderListingQueries(session, folderRows, List.of());
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "", 1L, "");
+    filter.setSortField(DocumentSortField.NAME);
+    filter.setAscending(true);
+
+    List<String> oneShot = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0)
+                                                 .stream()
+                                                 .map(AbstractNode::getName)
+                                                 .toList();
+    for (int limit : List.of(20, 5)) {
+      List<String> paged = new ArrayList<>();
+      for (int offset = 0; offset < names.size(); offset += limit) {
+        jcrDocumentFileStorage.getFolderChildNodes(filter, identity, offset, limit).forEach(child -> paged.add(child.getName()));
+      }
+      assertEquals("pages of " + limit, oneShot, paged);
+    }
+
+    assertEquals(names, oneShot);
+    assertFalse(queries.isEmpty());
+    for (QueryImpl query : queries) {
+      verify(query).setCaseInsensitiveOrder(true);
+    }
+  }
+
+  /**
    * Opens the user's session on a parent folder whose children the listing
    * converts with the real conversion code.
    *
@@ -2709,6 +2743,8 @@ public class JCRDocumentFileStorageTest {
     Node parentNode = mock(Node.class);
     when(parentNode.getPath()).thenReturn("/documents/path");
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "12e2")).thenReturn(parentNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(any(), any(), any(), any(), any(), anyBoolean()))
+                      .thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(any(), any(), any(), any(), any(), anyBoolean(), any()))
                       .thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(any(), any(), any(), any(), any())).thenCallRealMethod();
@@ -2738,8 +2774,10 @@ public class JCRDocumentFileStorageTest {
    * @param session the user's session
    * @param folderRows the rows of the folder query, in its order
    * @param fileRows the rows of the file query, in its order
+   * @return the queries created, as they are created
    */
-  private void mockFolderListingQueries(SessionImpl session, List<Node> folderRows, List<Node> fileRows) throws Exception {
+  private List<QueryImpl> mockFolderListingQueries(SessionImpl session, List<Node> folderRows, List<Node> fileRows) throws Exception {
+    List<QueryImpl> queries = new ArrayList<>();
     WorkspaceImpl workspace = mock(WorkspaceImpl.class);
     QueryManager queryManager = mock(QueryManager.class);
     when(session.getWorkspace()).thenReturn(workspace);
@@ -2748,6 +2786,7 @@ public class JCRDocumentFileStorageTest {
       List<Node> rows = invocation.getArgument(0, String.class).contains("'nt:folder'") ? folderRows : fileRows;
       long[] offsetAndLimit = new long[2];
       QueryImpl query = mock(QueryImpl.class);
+      queries.add(query);
       doAnswer(set -> offsetAndLimit[0] = set.getArgument(0, Long.class)).when(query).setOffset(anyLong());
       doAnswer(set -> offsetAndLimit[1] = set.getArgument(0, Long.class)).when(query).setLimit(anyLong());
       when(query.execute()).thenAnswer(execution -> {
@@ -2760,6 +2799,7 @@ public class JCRDocumentFileStorageTest {
       });
       return query;
     });
+    return queries;
   }
 
 }
