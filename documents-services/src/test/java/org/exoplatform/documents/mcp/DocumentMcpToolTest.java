@@ -2273,6 +2273,35 @@ public class DocumentMcpToolTest {
   }
 
   /**
+   * A document added through a shortcut to a folder is refused before the
+   * right is checked or the import run, naming the
+   * folder it points to: the shortcut's id resolves to that folder, while the
+   * import would write under the shortcut node. The same document added with
+   * the folder's own id goes on.
+   * Mutants: the check dropped, the target not named, the folder's own id
+   * refused too.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void createDocumentThroughAFolderShortcutIsRefusedNamingItsTarget() throws Exception {
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folderNode(FOLDER_ID));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.createDocument("shortcut-id", "notes.txt", "body"));
+
+    assertTrue(error.getMessage().contains(FOLDER_ID));
+    assertTrue(error.getMessage().contains("parent_folder_id"));
+    verify(documentFileService, never()).hasEditPermissionOnDocument(eq("shortcut-id"), anyLong());
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "body"));
+  }
+
+  /**
    * get_document_permissions takes the edit right from the repository's
    * check for the user, not from the listing's computed flag, and the
    * delete right from the computed one.
