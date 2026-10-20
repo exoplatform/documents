@@ -135,6 +135,39 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                                                                           "application/vnd.openxmlformats-officedocument.presentationml.presentation");
 
+  /**
+   * Files larger than this many MB are not read part by part: the largest
+   * file a user can attach in the UI, so any file attached there can be read.
+   */
+  public static final String                        PAGED_TEXT_MAX_SIZE_MB_PROPERTY          = "exo.social.composer.maxFileSizeInMB";
+
+  /** The text read part by part is cut at this many characters. */
+  public static final String                        PAGED_TEXT_MAX_CHARS_PROPERTY            =
+                                                                                         "exo.documents.textExtraction.paged.maxChars";
+
+  /** Extracting a file read part by part is abandoned after this many seconds. */
+  public static final String                        PAGED_TEXT_TIMEOUT_SECONDS_PROPERTY      =
+                                                                                         "exo.documents.textExtraction.paged.timeoutSeconds";
+
+  /** A caller waits this many seconds for a file's extraction before being told to ask again. */
+  public static final String                        PAGED_TEXT_WAIT_SECONDS_PROPERTY         =
+                                                                                         "exo.documents.textExtraction.paged.waitSeconds";
+
+  /** The texts extracted to be read part by part take at most this many MB on disk. */
+  public static final String                        PAGED_TEXT_CACHE_MAX_MB_PROPERTY         =
+                                                                                         "exo.documents.textExtraction.paged.cacheMaxMb";
+
+  /** The UI's own default for the largest file attached. */
+  private static final long                         DEFAULT_PAGED_TEXT_MAX_SIZE_MB           = 200;
+
+  private static final long                         DEFAULT_PAGED_TEXT_MAX_CHARS             = 20_000_000;
+
+  private static final long                         DEFAULT_PAGED_TEXT_TIMEOUT_SECONDS       = 300;
+
+  private static final long                         DEFAULT_PAGED_TEXT_WAIT_SECONDS          = 25;
+
+  private static final long                         DEFAULT_PAGED_TEXT_CACHE_MAX_MB          = 512;
+
   private final SpaceService                        spaceService;
 
   private final RepositoryService                   repositoryService;
@@ -178,39 +211,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final long                         DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS  = 20;
 
   private volatile DocumentTextExtractor            textExtractor;
-
-  /**
-   * Files larger than this many MB are not read part by part: the largest
-   * file a user can attach in the UI, so any file attached there can be read.
-   */
-  public static final String                        PAGED_TEXT_MAX_SIZE_MB_PROPERTY          = "exo.social.composer.maxFileSizeInMB";
-
-  /** The text read part by part is cut at this many characters. */
-  public static final String                        PAGED_TEXT_MAX_CHARS_PROPERTY            =
-                                                                                         "exo.documents.textExtraction.paged.maxChars";
-
-  /** Extracting a file read part by part is abandoned after this many seconds. */
-  public static final String                        PAGED_TEXT_TIMEOUT_SECONDS_PROPERTY      =
-                                                                                         "exo.documents.textExtraction.paged.timeoutSeconds";
-
-  /** A caller waits this many seconds for a file's extraction before being told to ask again. */
-  public static final String                        PAGED_TEXT_WAIT_SECONDS_PROPERTY         =
-                                                                                         "exo.documents.textExtraction.paged.waitSeconds";
-
-  /** The texts extracted to be read part by part take at most this many MB on disk. */
-  public static final String                        PAGED_TEXT_CACHE_MAX_MB_PROPERTY         =
-                                                                                         "exo.documents.textExtraction.paged.cacheMaxMb";
-
-  /** The UI's own default for the largest file attached. */
-  private static final long                         DEFAULT_PAGED_TEXT_MAX_SIZE_MB           = 200;
-
-  private static final long                         DEFAULT_PAGED_TEXT_MAX_CHARS             = 20_000_000;
-
-  private static final long                         DEFAULT_PAGED_TEXT_TIMEOUT_SECONDS       = 300;
-
-  private static final long                         DEFAULT_PAGED_TEXT_WAIT_SECONDS          = 25;
-
-  private static final long                         DEFAULT_PAGED_TEXT_CACHE_MAX_MB          = 512;
 
   private volatile DocumentPagedTextExtractor       pagedTextExtractor;
 
