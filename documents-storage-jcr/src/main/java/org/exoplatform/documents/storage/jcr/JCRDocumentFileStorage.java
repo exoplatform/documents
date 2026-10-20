@@ -3216,6 +3216,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return StringUtils.startsWith(nodePath, "/Users") && StringUtils.contains(nodePath, "/Private");
   }
 
+  /**
+   * Reads a document through the given session. A shortcut resolves to its
+   * target, carrying the shortcut's path.
+   *
+   * @param session the session to read with, whose user's rights apply
+   * @param documentId the document id
+   * @param identity the user's identity, to compute the user's rights
+   * @return the document, null when no node has the id or the session can't
+   *         read it
+   * @throws ItemNotFoundException when the node is neither a file nor a
+   *           folder, or is a shortcut whose target is gone or can't be read
+   * @throws RepositoryException when the repository can't be read
+   */
   public AbstractNode getDocumentById(Session session, String documentId, Identity identity) throws RepositoryException {
     Node node = getNodeByIdentifier(session, documentId);
     if (node == null) {
@@ -3228,7 +3241,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         } else {
           String symlinkPath = node.getPath();
           Node targetNode = getNodeByIdentifier(node.getSession(), nodeId);
-          if (JCRDocumentsUtil.isFile(targetNode)) {
+          if (targetNode == null) {
+            // a target that is gone, or that the session can't read, is answered as missing
+            throw new ItemNotFoundException();
+          } else if (JCRDocumentsUtil.isFile(targetNode)) {
             AbstractNode fileNode = toFileNode(identityManager, identity, targetNode, "", spaceService);
             fileNode.setPath(symlinkPath);
             return fileNode;
