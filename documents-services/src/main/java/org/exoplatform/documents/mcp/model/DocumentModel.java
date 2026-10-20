@@ -58,7 +58,9 @@ public abstract class DocumentModel {
 
   /**
    * Whether the current user can delete the document, null when the rights
-   * weren't computed for the listing that returned it.
+   * weren't computed for the listing that returned it, or for a shortcut asked
+   * by its id, which resolves to its target: deleting the shortcut removes
+   * only the shortcut.
    */
   @JsonProperty("can_delete")
   private Boolean   canDelete;
