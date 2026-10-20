@@ -132,6 +132,12 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
 
+  /** The characters {@code read_document_text} returns when the caller sets no number. */
+  static final int                 DEFAULT_TEXT_PART_CHARS = 40_000;
+
+  /** The most characters {@code read_document_text} returns in one call. */
+  static final int                 MAX_TEXT_PART_CHARS     = 200_000;
+
   /**
    * The most children {@code list_folder_children} reads to keep those changed
    * since a date.
@@ -165,12 +171,6 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private static final String      MSG_HIDE_FOLDER_ONLY   =
                                                           "Only a folder can be hidden or shown; %s is a file.";
-
-  /** The characters {@code read_document_text} returns when the caller sets no number. */
-  static final int                 DEFAULT_TEXT_PART_CHARS = 40_000;
-
-  /** The most characters {@code read_document_text} returns in one call. */
-  static final int                 MAX_TEXT_PART_CHARS     = 200_000;
 
   /**
    * The note ending a text cut at the most characters read on the fly. It
