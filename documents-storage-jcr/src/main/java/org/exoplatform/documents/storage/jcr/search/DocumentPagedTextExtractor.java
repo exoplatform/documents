@@ -199,8 +199,9 @@ public class DocumentPagedTextExtractor {
    *
    * @param documentId the document id
    * @param offset the first character to read
-   * @param length the most characters to read, 0 for none; a part of one
-   *          character asked on a surrogate pair gives the pair's two
+   * @param length the most characters to read, 0 for none; a part that would
+   *          hold only halves of surrogate pairs gets one more character, so
+   *          it gives a pair whole
    * @return the part, or why there is no text
    */
   public DocumentTextPage getPage(String documentId, long offset, int length) {
@@ -213,8 +214,8 @@ public class DocumentPagedTextExtractor {
       int count = (int) Math.max(0, Math.min(length, extraction.totalChars() - start));
       try {
         String stored = readStoredChars(extraction.file(), start, count);
-        if (withoutHalfPairs(stored).isEmpty() && start + count < extraction.totalChars()) {
-          // a part of one character asked on a pair's first half: the pair is given whole, so the reading moves on
+        if (count > 0 && withoutHalfPairs(stored).isEmpty() && start + count < extraction.totalChars()) {
+          // a part holding only halves of pairs: one more character gives a pair whole, so the reading moves on
           stored = readStoredChars(extraction.file(), start, count + 1);
         }
         // a part starting on a pair's second half starts after it: the next part follows the text given
