@@ -23,6 +23,12 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -42,11 +48,13 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
 import org.exoplatform.container.ExoContainerContext;
+import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
+import org.exoplatform.documents.mcp.model.DocumentPermissionsModel;
 import org.exoplatform.documents.mcp.model.DocumentPublicLinkModel;
 import org.exoplatform.documents.mcp.model.DocumentTreeItemModel;
 import org.exoplatform.documents.mcp.model.DocumentVersionModel;
@@ -183,6 +191,24 @@ public class DocumentMcpTool implements McpToolPlugin {
   /** The refusal of a space name when the call's space can't be read. */
   private static final String      MSG_NAME_SCOPE_UNREADABLE =
                                                              "The space this call is limited to can't be read, so a space can't be named by its space_name. Call it again with its space_id.";
+
+  /**
+   * The most children {@code list_folder_children} reads to keep those changed
+   * since a date.
+   */
+  static final int                 MAX_SCANNED_CHILDREN   = 1000;
+
+  /** The refusal of a date-limited listing of a folder holding too many children. */
+  private static final String      MSG_TOO_MANY_CHILDREN  =
+                                                          "The folder holds more than %d documents, too many to keep the changed ones here. Call search_documents with parent_folder_id and updated_since instead (it searches the whole folder tree, files only).";
+
+  /** The refusal of an unreadable {@code updated_since}. */
+  private static final String      MSG_UPDATED_SINCE_UNREADABLE =
+                                                                "The date '%s' can't be read. Pass updated_since as an ISO-8601 date or date-time, such as 2026-10-01 or 2026-10-01T08:00:00Z.";
+
+  /** The refusal of a file added to a folder the user can't write in. */
+  private static final String      MSG_FOLDER_NOT_WRITABLE =
+                                                           "You can't add documents to the folder '%s' (%s): you can read it but not write in it. Pick a folder whose can_edit is true (get_document_permissions tells it), or ask a space manager for the right.";
 
   /** The creator of the nodes the platform creates for a space. */
   private static final String      SYSTEM_USER            = "__system";
@@ -550,12 +576,15 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param offset the first result
    * @param limit the most results
    * @param isFavorites true to search the user's favorites only
+   * @param updatedSince an ISO-8601 date or date-time: only the files changed
+   *          since then, the most recent first; blank for any date
    * @return the matching documents
    * @throws ObjectNotFoundException when the space doesn't exist, or no space
    *           of the user carries the name
    * @throws IllegalAccessException when the user can't view the space
    * @throws IllegalArgumentException when both a space id and a name are
-   *           given, or several of the user's spaces carry the name
+   *           given, several of the user's spaces carry the name, the date
+   *           can't be read, or neither a query nor a date is given
    */
   public List<DocumentFileModel> searchDocuments(String query,
                                                  Long spaceId,
@@ -563,11 +592,21 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                  String parentFolderId,
                                                  Integer offset,
                                                  Integer limit,
-                                                 Boolean isFavorites) throws ObjectNotFoundException, IllegalAccessException {
+                                                 Boolean isFavorites,
+                                                 String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
+    Long updatedSinceTime = parseUpdatedSince(updatedSince);
+    if (StringUtils.isBlank(query) && updatedSinceTime == null) {
+      throw new IllegalArgumentException("Pass a 'query', or 'updated_since' to list the files changed since a date.");
+    }
     DocumentTimelineFilter filter = new DocumentTimelineFilter();
     filter.setQuery(query);
     if (isFavorites != null && isFavorites.booleanValue()) {
       filter.setFavorites(true);
+    }
+    if (updatedSinceTime != null) {
+      filter.setAfterDate(updatedSinceTime);
+      filter.setSortField(DocumentSortField.MODIFIED_DATE);
+      filter.setAscending(false);
     }
     Long searchedSpaceId = resolveSpaceId(spaceId, spaceName, "search_documents");
     if (StringUtils.isNotBlank(parentFolderId)) {
@@ -593,16 +632,78 @@ public class DocumentMcpTool implements McpToolPlugin {
   // Folder navigation and metadata (reads)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Lists the direct children of a folder, folders first, or with a date only
+   * the children changed since then, the most recent first.
+   * <p>
+   * The storage pages its folders by the offset but always reads its files
+   * from the first one, so a page past the first would repeat files: the
+   * children are read from the first one up to the end of the page, and the
+   * page is cut here. A date is checked against the same last-change date the
+   * listing shows, over the folder's children read in one go, up to
+   * {@link #MAX_SCANNED_CHILDREN}; a folder holding more is refused rather
+   * than answered with part of its changes.
+   *
+   * @param folderId the folder id
+   * @param offset the first child
+   * @param limit the most children
+   * @param updatedSince an ISO-8601 date or date-time, blank for any date
+   * @return the children
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read the folder
+   * @throws IllegalArgumentException when the folder id is blank, the date
+   *           can't be read, or the folder holds too many children to filter
+   */
   public List<DocumentModel> listFolderChildren(String folderId,
                                                 Integer offset,
-                                                Integer limit) throws ObjectNotFoundException, IllegalAccessException {
+                                                Integer limit,
+                                                String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
     checkFolderIdParameter(folderId);
+    Long updatedSinceTime = parseUpdatedSince(updatedSince);
+    int first = Math.max(getInteger(offset, DEFAULT_OFFSET), 0);
+    int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter,
-                                                                          getInteger(offset, DEFAULT_OFFSET),
-                                                                          getInteger(limit, DEFAULT_LIMIT),
-                                                                          getCurrentUserIdentityId());
-    return children.stream().map(this::toDocumentModel).toList();
+    List<AbstractNode> children;
+    if (updatedSinceTime == null) {
+      children = documentFileService.getFolderChildNodes(filter, 0, first + size, getCurrentUserIdentityId());
+    } else {
+      children = documentFileService.getFolderChildNodes(filter, 0, MAX_SCANNED_CHILDREN + 1, getCurrentUserIdentityId());
+      if (children.size() > MAX_SCANNED_CHILDREN) {
+        throw new IllegalArgumentException(MSG_TOO_MANY_CHILDREN.formatted(MAX_SCANNED_CHILDREN));
+      }
+      children = children.stream()
+                         .filter(child -> child.getModifiedDate() >= updatedSinceTime)
+                         .sorted(Comparator.comparingLong(AbstractNode::getModifiedDate).reversed())
+                         .toList();
+    }
+    return children.stream().skip(first).limit(size).map(this::toDocumentModel).toList();
+  }
+
+  /**
+   * Tells what the current user may do on a folder or a file: the edit right
+   * as the repository checks it for the user, the delete right as the
+   * Documents app computes it.
+   *
+   * @param documentId the folder or file id
+   * @return the user's rights on it
+   * @throws ObjectNotFoundException when the document doesn't exist
+   * @throws IllegalAccessException when the user can't read the document
+   */
+  public DocumentPermissionsModel getDocumentPermissions(String documentId) throws ObjectNotFoundException,
+                                                                            IllegalAccessException {
+    checkDocumentIdParameter(documentId);
+    AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
+    if (document == null) {
+      throw new ObjectNotFoundException("No document has the id %s.".formatted(documentId));
+    }
+    boolean canEdit = documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId());
+    NodePermission acl = document.getAcl();
+    return new DocumentPermissionsModel(document.getId(),
+                                        document.getName(),
+                                        document.isFolder(),
+                                        true,
+                                        canEdit,
+                                        acl != null && acl.isCanDelete());
   }
 
   public List<BreadcrumbItemModel> getFolderBreadcrumb(String folderId) throws ObjectNotFoundException,
@@ -1756,9 +1857,16 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * Maps a file to the model the tools return, with the user's rights when the
+   * listing computed them.
+   *
+   * @param fileNode the file
+   * @return the model
+   */
   private DocumentFileModel toDocumentFileModel(FileNode fileNode) {
     String documentId = fileNode.getId();
-    return new DocumentFileModel(documentId,
+    DocumentFileModel model = new DocumentFileModel(documentId,
                                  fileNode.getName(),
                                  fileNode.getPath(),
                                  getUrl(fileNode),
@@ -1771,6 +1879,23 @@ public class DocumentMcpTool implements McpToolPlugin {
                                  fileNode.getDescription(),
                                  formatDate(fileNode.getModifiedDate()),
                                  toUserModel(fileNode.getModifierId()));
+    setPermissions(model, fileNode);
+    return model;
+  }
+
+  /**
+   * Copies the user's edit and delete rights the storage computed on a
+   * document into its model, leaving them unknown when it computed none.
+   *
+   * @param model the model to complete
+   * @param document the document it maps
+   */
+  private void setPermissions(DocumentModel model, AbstractNode document) {
+    NodePermission acl = document.getAcl();
+    if (acl != null) {
+      model.setCanEdit(acl.isCanEdit());
+      model.setCanDelete(acl.isCanDelete());
+    }
   }
 
   private String getAudioTranscription(String documentId) {
@@ -1783,14 +1908,56 @@ public class DocumentMcpTool implements McpToolPlugin {
     return audioTranscription;
   }
 
+  /**
+   * Maps a folder to the model the tools return, with its last change and the
+   * user's rights when the listing computed them.
+   *
+   * @param folder the folder
+   * @return the model
+   */
   private DocumentFolderModel toDocumentFolderModel(AbstractNode folder) {
-    return new DocumentFolderModel(folder.getId(),
-                                   folder.getName(),
-                                   folder.getPath(),
-                                   getUrl(folder),
-                                   folder.getParentFolderId(),
-                                   formatDate(folder.getCreatedDate()),
-                                   toUserModel(folder.getCreatorUserName()));
+    DocumentFolderModel model = new DocumentFolderModel(folder.getId(),
+                                                        folder.getName(),
+                                                        folder.getPath(),
+                                                        getUrl(folder),
+                                                        folder.getParentFolderId(),
+                                                        formatDate(folder.getCreatedDate()),
+                                                        toUserModel(folder.getCreatorUserName()));
+    if (folder.getModifiedDate() > 0) {
+      model.setUpdatedDate(formatDate(folder.getModifiedDate()));
+    }
+    setPermissions(model, folder);
+    return model;
+  }
+
+  /**
+   * Reads the date a listing is limited to, as the model passes it: an
+   * ISO-8601 date-time with an offset, or a date-time or a date taken in UTC.
+   *
+   * @param updatedSince the date, blank for none
+   * @return the date in milliseconds, null for none
+   * @throws IllegalArgumentException when the date can't be read
+   */
+  private static Long parseUpdatedSince(String updatedSince) {
+    if (StringUtils.isBlank(updatedSince)) {
+      return null;
+    }
+    String value = updatedSince.trim();
+    try {
+      return OffsetDateTime.parse(value).toInstant().toEpochMilli();
+    } catch (DateTimeParseException e) {
+      // Not a date-time with an offset: tried without one below
+    }
+    try {
+      return LocalDateTime.parse(value).toInstant(ZoneOffset.UTC).toEpochMilli();
+    } catch (DateTimeParseException e) {
+      // Not a date-time: tried as a date below
+    }
+    try {
+      return LocalDate.parse(value).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+    } catch (DateTimeParseException e) {
+      throw new IllegalArgumentException(MSG_UPDATED_SINCE_UNREADABLE.formatted(updatedSince));
+    }
   }
 
   // FIXME should be removed once Notes refactored and cleaned
@@ -1841,8 +2008,14 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     // Validate the parent folder exists and is readable before staging anything,
     // so a bad id fails with a clean ObjectNotFoundException / IllegalAccessException.
-    getNode(parentFolderId);
+    AbstractNode parentFolder = getNode(parentFolderId);
     String entryName = sanitizeFileName(fileName);
+    // The import runs in the background under the user's session, which refuses
+    // the write there, out of the caller's sight: the right is checked here so
+    // the refusal reaches the caller with its reason. The session still enforces it.
+    if (!documentFileService.hasEditPermissionOnDocument(parentFolderId, getCurrentUserIdentityId())) {
+      throw new IllegalAccessException(MSG_FOLDER_NOT_WRITABLE.formatted(parentFolder.getName(), parentFolderId));
+    }
     String ownerId = String.valueOf(getOwnerId(parentFolderId));
     long userIdentityId = getCurrentUserIdentityId();
     // Snapshot the destination file ids before the import so the created node can
