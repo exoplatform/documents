@@ -38,7 +38,6 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDDocumentOutline;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem;
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineNode;
-import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
@@ -362,7 +361,7 @@ final class DocumentTextStructureParser {
   }
 
   /**
-   * Writes a PDF page by page, and turns its bookmarks into outline entries
+   * Writes a PDF's text in one pass, and turns its bookmarks into outline entries
    * at the start of the page each one points to. Bookmarks pointing to no
    * page, to a page that isn't there or past the text written, or whose
    * destination can't be read, are left out.
@@ -376,14 +375,11 @@ final class DocumentTextStructureParser {
     try (PDDocument document = PDDocument.load(file, MemoryUsageSetting.setupTempFileOnly())) {
       int pages = document.getNumberOfPages();
       List<Long> pageStarts = new ArrayList<>(pages);
-      PDFTextStripper stripper = new PDFTextStripper();
+      PageStartRecordingStripper stripper = new PageStartRecordingStripper(out, pageStarts);
       try {
-        for (int page = 1; page <= pages; page++) {
-          pageStarts.add(out.count());
-          stripper.setStartPage(page);
-          stripper.setEndPage(page);
-          out.write(stripper.getText(document));
-        }
+        stripper.writeText(document, out);
+        // the last pages, with no content, start at the end of the text
+        stripper.fillUpTo(pages);
       } finally {
         PDDocumentOutline bookmarks = document.getDocumentCatalog().getDocumentOutline();
         if (bookmarks != null) {

@@ -449,6 +449,53 @@ class DocumentTextStructureParserTest {
   }
 
   /**
+   * A PDF read in one pass places a bookmark at its page's start even past a
+   * page without content, which PDFBox skips, and a bookmark to that blank
+   * page at the start of the next text, a blank last page at the end of the
+   * text.
+   * Mutants: the skipped pages not noted, shifting every later page; the
+   * blank last pages not noted, their bookmarks dropped.
+   *
+   * @throws IOException never
+   */
+  @Test
+  void aPdfsBookmarksKeepTheirPagesPastABlankPage() throws IOException {
+    File file = directory.resolve("blank-page.pdf").toFile();
+    try (PDDocument document = new PDDocument()) {
+      List<PDPage> pages = new ArrayList<>();
+      for (String line : java.util.Arrays.asList("Page one", null, "Page three", null)) {
+        PDPage page = new PDPage();
+        document.addPage(page);
+        pages.add(page);
+        if (line != null) {
+          try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+            stream.beginText();
+            stream.setFont(PDType1Font.HELVETICA, 12);
+            stream.newLineAtOffset(72, 700);
+            stream.showText(line);
+            stream.endText();
+          }
+        }
+      }
+      PDDocumentOutline bookmarks = new PDDocumentOutline();
+      document.getDocumentCatalog().setDocumentOutline(bookmarks);
+      bookmarks.addLast(bookmark("Blank", pages.get(1)));
+      bookmarks.addLast(bookmark("Third", pages.get(2)));
+      bookmarks.addLast(bookmark("Last", pages.get(3)));
+      document.save(file);
+    }
+    StringWriter text = new StringWriter();
+
+    List<DocumentOutlineEntry> outline = parse(file, DocumentTextStructureParser.PDF_MIME_TYPE, text, Long.MAX_VALUE);
+
+    String written = text.toString();
+    assertEquals(List.of(2, 3, 4), outline.stream().map(DocumentOutlineEntry::page).toList());
+    assertTrue(written.substring((int) outline.get(1).offset()).startsWith("Page three"));
+    assertEquals(outline.get(1).offset(), outline.get(0).offset());
+    assertEquals(written.length(), outline.get(2).offset());
+  }
+
+  /**
    * A PDF bookmark whose destination PDFBox can't read, a bare number or a
    * page past the last one, is left out: the text and the other bookmarks
    * are kept.
