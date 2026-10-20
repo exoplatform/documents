@@ -2136,6 +2136,12 @@ public class DocumentMcpToolTest {
     IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                                                   () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "last week"));
     assertTrue(error.getMessage().contains("ISO-8601"));
+    // a year too far for a date in milliseconds is refused the same way, not with an overflow
+    for (String farAway : List.of("+999999999-12-31", "+999999999-12-31T00:00:00Z", "+999999999-12-31T00:00:00")) {
+      IllegalArgumentException overflow = assertThrows(IllegalArgumentException.class,
+                                                       () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, farAway));
+      assertTrue(overflow.getMessage().contains("ISO-8601"));
+    }
 
     long since = java.time.OffsetDateTime.parse("2026-10-01T10:00:00+02:00").toInstant().toEpochMilli();
     when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
@@ -2181,10 +2187,12 @@ public class DocumentMcpToolTest {
 
   /**
    * The listed folders and files carry the rights the storage computed for
-   * the user, and a folder its last change; a document whose rights weren't
-   * computed leaves them unknown rather than false.
+   * the user, the owner's being all of them as the repository grants, and a
+   * folder its last change; a document whose rights weren't computed leaves
+   * them unknown rather than false.
    * Mutants: the rights not copied, edit and delete swapped, unknown rights
-   * reported as false, the folder's date dropped.
+   * reported as false, the owner's rights left to the entries, the folder's
+   * date dropped.
    *
    * @throws Exception never
    */
@@ -2195,9 +2203,19 @@ public class DocumentMcpToolTest {
     AbstractNode file = childChangedAt(DOCUMENT_ID, false, 1L);
     file.setAcl(new NodePermission(true, false, true, false, null, null, null, null));
     AbstractNode unknown = childChangedAt("unknown", false, 1L);
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(folder, file, unknown));
+    AbstractNode owned = childChangedAt("owned", true, 1L);
+    owned.setCreatorUserName(USERNAME);
+    owned.setAcl(new NodePermission(true, false, false, false, null, null, null, null));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(folder,
+                                                                                                           file,
+                                                                                                           unknown,
+                                                                                                           owned));
 
-    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
+    List<DocumentModel> models;
+    // the creator's user card is not what this test checks
+    try (MockedStatic<io.meeds.mcp.server.tool.util.UserToolUtils> users = Mockito.mockStatic(io.meeds.mcp.server.tool.util.UserToolUtils.class)) {
+      models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
+    }
 
     assertEquals(Boolean.TRUE, models.get(0).getCanEdit());
     assertEquals(Boolean.FALSE, models.get(0).getCanDelete());
@@ -2206,6 +2224,9 @@ public class DocumentMcpToolTest {
     assertEquals(Boolean.TRUE, models.get(1).getCanDelete());
     assertEquals(null, models.get(2).getCanEdit());
     assertEquals(null, models.get(2).getCanDelete());
+    // the repository grants every right to the owner, whatever the entries say
+    assertEquals(Boolean.TRUE, models.get(3).getCanEdit());
+    assertEquals(Boolean.TRUE, models.get(3).getCanDelete());
   }
 
   /**
