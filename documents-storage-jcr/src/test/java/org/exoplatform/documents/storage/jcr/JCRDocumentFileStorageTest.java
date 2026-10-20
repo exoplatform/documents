@@ -2590,4 +2590,32 @@ public class JCRDocumentFileStorageTest {
                                                   eq("_score"), eq("DESC"));
   }
 
+  /**
+   * A shortcut whose target the user's session can't read, or that is gone,
+   * is answered as a missing document, as any id the user can't read is,
+   * instead of failing on the missing target. {@code isFile} and
+   * {@code isFolder} run their real code, so a target read without the null
+   * check fails here as it does on the platform.
+   */
+  @Test
+  public void getDocumentByIdAnswersAShortcutToAnUnreadableTargetAsMissing() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    when(identityRegistry.getIdentity("john")).thenReturn(aclIdentity);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity)).thenReturn(sessionProvider);
+    ManageableRepository repository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    SessionImpl session = mock(SessionImpl.class);
+    when(sessionProvider.getSession("collaboration", repository)).thenReturn(session);
+    Node shortcut = createSymlinkMock("unreadableTargetId", "report");
+    when(shortcut.getSession()).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "shortcutId")).thenReturn(shortcut);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "unreadableTargetId")).thenReturn(null);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFile(any())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any())).thenCallRealMethod();
+
+    assertThrows(ItemNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentById(session, "shortcutId", aclIdentity));
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentById("shortcutId", "john"));
+  }
+
 }
