@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -75,6 +76,7 @@ import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
+import org.exoplatform.services.jcr.impl.util.EntityCollection;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
@@ -100,6 +102,12 @@ import lombok.SneakyThrows;
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                       COLLABORATION               = "collaboration";
+
+  /**
+   * The fewest rows a folder listing reads at once, so a listing whose rows
+   * hold children it leaves out isn't read one row at a time.
+   */
+  private static final int                          MIN_CHILDREN_ROWS_READ      = 20;
 
   private static final List<String>                 FOLDER_NODE_TYPES           = List.of(NodeTypeConstants.NT_UNSTRUCTURED,
                                                                                           NodeTypeConstants.NT_FOLDER,
@@ -710,7 +718,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
             parent = getNodeByIdentifier(session, sourceNodeId);
           }
-          // Load folders + symlink of folders
+          // the folders, shortcuts to folders included, then the files, shortcuts to files included,
+          // paged over that sequence as listed; no limit, as for the JCR query, reads them all
+          int wanted = limit <= 0 ? Integer.MAX_VALUE
+                                  : (int) Math.min((long) Math.max(offset, 0) + limit, Integer.MAX_VALUE);
           String statementOfFolders = getFolderDocumentsQuery(parent.getPath(),
                                                               sortField,
                                                               sortDirection,
@@ -718,49 +729,31 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                               filter.getCategoryIds(),
                                                               filter.getExcludedCategoryIds(),
                                                               includeHiddenFiles);
-          Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
-          ((QueryImpl) jcrQuery).setOffset(offset);
-          ((QueryImpl) jcrQuery).setLimit(limit);
-          QueryResult queryResult = jcrQuery.execute();
-          NodeIterator nodeIterator = queryResult.getNodes();
-          List<AbstractNode> fileItems = new ArrayList<>(toNodes(identityManager,
-                                                                 session,
-                                                                 nodeIterator,
-                                                                 aclIdentity,
-                                                                 spaceService,
-                                                                 includeHiddenFiles,
-                                                                 filter).stream().filter(AbstractNode::isFolder).toList());
-          // load files + symlink of files
-          int itemsSize = fileItems.size();
-          if (itemsSize < limit) {
-            String statementOfSymlinks =
-                                       getFolderDocumentsQuery(parent.getPath(),
-                                                               sortField,
-                                                               sortDirection,
-                                                               List.of(NodeTypeConstants.NT_FILE, NodeTypeConstants.EXO_SYMLINK),
-                                                               filter.getCategoryIds(),
-                                                               filter.getExcludedCategoryIds(),
-                                                               includeHiddenFiles);
-            jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfSymlinks, Query.SQL);
-            ((QueryImpl) jcrQuery).setOffset(0);
-            ((QueryImpl) jcrQuery).setLimit(limit);
-            queryResult = jcrQuery.execute();
-            nodeIterator = queryResult.getNodes();
-            List<AbstractNode> fileItemsToAdd = toNodes(identityManager,
-                                                        session,
-                                                        nodeIterator,
-                                                        aclIdentity,
-                                                        spaceService,
-                                                        includeHiddenFiles,
-                                                        filter).stream().filter(f -> !f.isFolder()).toList();
-            int limitToAdd = limit - itemsSize;
-            if (fileItemsToAdd.size() > limitToAdd) {
-              fileItems.addAll(fileItemsToAdd.subList(0, limit - itemsSize));
-            } else {
-              fileItems.addAll(fileItemsToAdd);
-            }
+          List<AbstractNode> fileItems = readListedChildren(session,
+                                                            statementOfFolders,
+                                                            AbstractNode::isFolder,
+                                                            wanted,
+                                                            aclIdentity,
+                                                            includeHiddenFiles,
+                                                            filter);
+          if (fileItems.size() < wanted) {
+            String statementOfFiles = getFolderDocumentsQuery(parent.getPath(),
+                                                              sortField,
+                                                              sortDirection,
+                                                              List.of(NodeTypeConstants.NT_FILE, NodeTypeConstants.EXO_SYMLINK),
+                                                              filter.getCategoryIds(),
+                                                              filter.getExcludedCategoryIds(),
+                                                              includeHiddenFiles);
+            fileItems.addAll(readListedChildren(session,
+                                                statementOfFiles,
+                                                child -> !child.isFolder(),
+                                                wanted - fileItems.size(),
+                                                aclIdentity,
+                                                includeHiddenFiles,
+                                                filter));
           }
-          return fileItems;
+          return offset >= fileItems.size() ? new ArrayList<>()
+                                             : new ArrayList<>(fileItems.subList(Math.max(offset, 0), fileItems.size()));
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
@@ -793,6 +786,59 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
     }
+  }
+
+  /**
+   * Reads the first children a folder query lists, keeping those of the kind
+   * asked, until enough are kept or the query's rows run out. The query's rows
+   * hold children the listing leaves out (a shortcut to a file among the
+   * folders, a shortcut to a folder among the files, a shortcut whose target
+   * is gone or can't be read, a hidden child), so its rows are read again past
+   * the last one read whenever too few were kept: the children returned are a
+   * prefix of the children listed, whatever the rows left out.
+   *
+   * @param session the user's session
+   * @param statement the JCR-SQL query of the folder's children, sorted
+   * @param kind the kind of children kept
+   * @param wanted the most children to keep
+   * @param aclIdentity the user's identity
+   * @param includeHiddenFiles whether hidden children are listed
+   * @param filter the listing's filter
+   * @return at most {@code wanted} children, fewer only when the rows ran out
+   * @throws RepositoryException when the query can't be run
+   */
+  private List<AbstractNode> readListedChildren(Session session,
+                                                String statement,
+                                                Predicate<AbstractNode> kind,
+                                                int wanted,
+                                                Identity aclIdentity,
+                                                boolean includeHiddenFiles,
+                                                DocumentFolderFilter filter) throws RepositoryException {
+    List<AbstractNode> children = new ArrayList<>();
+    long rowsRead = 0;
+    while (children.size() < wanted) {
+      int rowsAsked = Math.max(wanted - children.size(), MIN_CHILDREN_ROWS_READ);
+      Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+      ((QueryImpl) jcrQuery).setOffset(rowsRead);
+      ((QueryImpl) jcrQuery).setLimit(rowsAsked);
+      NodeIterator nodeIterator = jcrQuery.execute().getNodes();
+      List<Node> rows = new ArrayList<>();
+      while (nodeIterator.hasNext()) {
+        rows.add(nodeIterator.nextNode());
+      }
+      toNodes(identityManager,
+              session,
+              new EntityCollection(rows),
+              aclIdentity,
+              spaceService,
+              includeHiddenFiles,
+              filter).stream().filter(kind).forEach(children::add);
+      rowsRead += rows.size();
+      if (rows.size() < rowsAsked) {
+        break;
+      }
+    }
+    return children.size() > wanted ? new ArrayList<>(children.subList(0, wanted)) : children;
   }
 
   @Override
