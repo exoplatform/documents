@@ -488,7 +488,7 @@
     {
       "name": "upload_document",
       "title": "Upload a file to the DMS",
-      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder. Use this when the user attaches a file or image in the conversation and asks to save it to the Documents app (the attachment is resolved automatically server-side), or from exactly one of a base64 payload or an http(s) URL (fetched server-side behind an SSRF guard). Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
+      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder. Use this when the user attaches a file or image in the conversation and asks to save it to the Documents app (the attachment is resolved automatically server-side), or from exactly one of a base64 payload or an http(s) URL (fetched server-side behind an SSRF guard). Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. The file is filed at once, the way the Documents app files an upload, and the created document is returned. Up to the app's upload size limit (200 MB by default), a url up to 15 MB; a base64 file over about 20 KB goes through start_document_upload instead. For text/markdown/HTML authored in the chat, use create_document instead.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -515,6 +515,11 @@
           "attachment_object_id": {
             "type": "string",
             "description": "Internal: object id of an existing platform attachment to upload (set automatically by the client — do not fill this yourself). Provide exactly one source: attachment_object_id, base64 or url."
+          },
+          "on_conflict": {
+            "type": "string",
+            "enum": ["keep_both", "new_version"],
+            "description": "What to do when the folder already holds a file of that name, the two choices the Documents app offers: keep_both (default) files a second one with a numbered name, new_version adds this file as a new version of the existing one, which keeps the old content in its version history; it is refused when the existing file keeps no versions, as the app then offers keep_both only. Ask the user when a file of that name exists and they didn't say."
           }
         },
         "required": [
@@ -528,6 +533,78 @@
         "openWorldHint": true
       },
       "require_approval": true
+    },
+    {
+      "name": "start_document_upload",
+      "title": "Start uploading a file in pieces",
+      "description": "Starts uploading a file into a folder in pieces, for a file too large to pass whole as base64 to upload_document (any file over about 20 KB). Announces the file: its folder, name, size and what to do when a file of that name exists; checks the folder, that you can add documents to it and that the file is within the upload size limit (max_bytes, 200 MB by default) before anything is sent. Then send the file's bytes, base64-encoded, in pieces of chunk_chars (20000) characters with append_document_upload_chunk (index 0, 1, 2, ... in order): the piece that completes the size files the document and returns it. The upload is kept 30 minutes without a piece, and a user keeps at most 3 in progress.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The folder the file is filed into. Get it from get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The file name with its extension, e.g. 'grid.xlsx'."
+          },
+          "size": {
+            "type": "integer",
+            "description": "The file's size in bytes, before base64 encoding."
+          },
+          "on_conflict": {
+            "type": "string",
+            "enum": ["keep_both", "new_version"],
+            "description": "What to do when the folder already holds a file of that name, the two choices the Documents app offers: keep_both (default) files a second one with a numbered name, new_version adds this file as a new version of the existing one, which keeps the old content in its version history; it is refused when the existing file keeps no versions, as the app then offers keep_both only. Ask the user when a file of that name exists and they didn't say."
+          }
+        },
+        "required": [
+          "parent_folder_id",
+          "name",
+          "size"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "append_document_upload_chunk",
+      "title": "Send a piece of a file uploaded in pieces",
+      "description": "Sends the next piece of a file started with start_document_upload: the piece's index (from 0, in order) and its base64 content (chunk_chars characters, 20000: cut the file's padded base64 every chunk_chars characters, the last piece holding the rest). The answer gives next_index and received_bytes; the piece that completes the file's size files it, as start_document_upload announced, and the answer then holds the created document. Sending a piece again after a lost answer is safe: it is not added twice, and the last piece sent again returns the document already filed.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "description": "The upload_id start_document_upload returned."
+          },
+          "index": {
+            "type": "integer",
+            "description": "The piece's number, from 0, one more for each piece."
+          },
+          "base64": {
+            "type": "string",
+            "description": "The piece of the file, base64-encoded."
+          }
+        },
+        "required": [
+          "upload_id",
+          "index",
+          "base64"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
     },
     {
       "name": "rename_document",

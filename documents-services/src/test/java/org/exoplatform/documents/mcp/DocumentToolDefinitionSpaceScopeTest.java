@@ -147,6 +147,9 @@ public class DocumentToolDefinitionSpaceScopeTest {
    * {@code attach_document_to_content}, {@code update_version_summary} and
    * {@code restore_document_version} (a version id of any node),
    * {@code upload_document} (a url or a chat attachment);</li>
+   * <li>the upload in pieces, as {@code upload_document}: its pieces name an
+   * upload, not a node, so no space can be checked on them
+   * ({@code start_document_upload}, {@code append_document_upload_chunk});</li>
    * <li>{@code delete_document} trashes the node and removes the shortcuts
    * and shares of it that lie in other places, {@code undo_delete_document}
    * names a node of the trash, and the favorites belong to the user.</li>
@@ -159,6 +162,8 @@ public class DocumentToolDefinitionSpaceScopeTest {
                                                     "get_folder_breadcrumb",
                                                     "get_documents_size",
                                                     "upload_document",
+                                                    "start_document_upload",
+                                                    "append_document_upload_chunk",
                                                     "delete_document",
                                                     "undo_delete_document",
                                                     "restore_document_version",

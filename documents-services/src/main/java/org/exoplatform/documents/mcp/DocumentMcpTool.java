@@ -20,16 +20,16 @@ import static io.meeds.mcp.server.tool.util.McpToolPluginUtils.getInteger;
 import static io.meeds.mcp.server.util.McpToolUtils.formatDate;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
+import java.util.UUID;
 
 import javax.jcr.RepositoryException;
 
@@ -42,13 +42,17 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
 import org.exoplatform.container.ExoContainerContext;
+import org.exoplatform.documents.constant.DocumentUploadLimit;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
+import org.exoplatform.documents.mcp.model.ChunkedUpload;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
 import org.exoplatform.documents.mcp.model.DocumentPublicLinkModel;
 import org.exoplatform.documents.mcp.model.DocumentTreeItemModel;
+import org.exoplatform.documents.mcp.model.DocumentUploadModel;
 import org.exoplatform.documents.mcp.model.DocumentVersionModel;
 import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
 import org.exoplatform.documents.model.AbstractNode;
@@ -78,6 +82,7 @@ import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.favorite.FavoriteService;
 import org.exoplatform.social.metadata.favorite.model.Favorite;
+import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
 import org.exoplatform.wiki.WikiException;
 import org.exoplatform.wiki.model.Page;
@@ -115,6 +120,21 @@ public class DocumentMcpTool implements McpToolPlugin {
    * shareable link (<code>{origin}/{containerName}/download-document/{nodeId}</code>).
    */
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
+
+  /** The most base64 characters of one piece of a file sent in pieces. */
+  static final int                 MAX_CHUNK_CHARS        = 1024 * 1024;
+
+  /** The base64 characters of one piece an assistant is told to send. */
+  static final int                 CHUNK_CHARS            = 20000;
+
+  /** How long an upload in pieces is kept without a piece. */
+  static final Duration            UPLOAD_TIME_TO_LIVE    = Duration.ofMinutes(30);
+
+  /** The most uploads in pieces a user keeps in progress. */
+  static final int                 MAX_OPEN_UPLOADS       = 3;
+
+  /** The directory, under the temporary directory, of the pieces of the uploads in progress. */
+  static final String              UPLOAD_DIRECTORY       = "documents-mcp-uploads";
 
   /**
    * Same password policy DocumentFileRest applies to public-link passwords
@@ -184,6 +204,23 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_NAME_SCOPE_UNREADABLE =
                                                              "The space this call is limited to can't be read, so a space can't be named by its space_name. Call it again with its space_id.";
 
+  /** The most children of a folder listed at once. */
+  private static final int         IMPORT_POLL_PAGE_SIZE  = 200;
+
+  /** The type an upload is staged under: the filing resolves the file's own from its name. */
+  private static final String      DEFAULT_UPLOAD_MIME_TYPE = "application/octet-stream";
+
+  /** The refusal of an upload into a document that is not a folder. */
+  private static final String      MSG_UPLOAD_NOT_A_FOLDER =
+                                                           "'%s' (%s) is a file, not a folder: a file is uploaded into a folder. To add a new version of this file, use add_document_version.";
+
+  /** Said of an upload in pieces whose file couldn't be filed. */
+  private static final String      MSG_UPLOAD_ENDED       = " The upload is ended: start it again with start_document_upload.";
+
+  /** The refusal of an upload into a folder the user can't write in. */
+  private static final String      MSG_UPLOAD_FOLDER_NOT_WRITABLE =
+                                                                  "You can't add documents to the folder '%s' (%s): you can read it but not write in it. Pick another folder, or ask a space manager for the right.";
+
   /** The creator of the nodes the platform creates for a space. */
   private static final String      SYSTEM_USER            = "__system";
 
@@ -242,6 +279,9 @@ public class DocumentMcpTool implements McpToolPlugin {
   /** Finds a space by its name among the calling user's spaces. */
   private final SpaceNameResolver   spaceNameResolver;
 
+  /** The uploads in pieces in progress on this node. */
+  private final ChunkedUploadStore  chunkedUploads;
+
   public DocumentMcpTool(DocumentFileService documentFileService,
                          AttachmentService attachmentService,
                          org.exoplatform.social.attachment.AttachmentService socialAttachmentService,
@@ -269,6 +309,11 @@ public class DocumentMcpTool implements McpToolPlugin {
     this.publicDocumentAccessService = publicDocumentAccessService;
     this.favoriteService = favoriteService;
     this.spaceNameResolver = new SpaceNameResolver(spaceService);
+    this.chunkedUploads = new ChunkedUploadStore(DocumentUploadLimit.getMaxBytes(),
+                                                 MAX_OPEN_UPLOADS,
+                                                 UPLOAD_TIME_TO_LIVE,
+                                                 Clock.systemUTC(),
+                                                 Path.of(System.getProperty("java.io.tmpdir"), UPLOAD_DIRECTORY));
   }
 
   /**
@@ -746,7 +791,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(content)) {
       throw new IllegalArgumentException("content is required to create a document (the text to write into the file).");
     }
-    return importContent(parentFolderId, name, content.getBytes(StandardCharsets.UTF_8));
+    return fileContent(parentFolderId, name, content.getBytes(StandardCharsets.UTF_8), UploadConflictAction.KEEP_BOTH);
   }
 
   /**
@@ -840,15 +885,29 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param attachmentObjectId the object id of the file the user attached in
    *          chat; set automatically by the client — do not fill it from the
    *          model
+   * @param onConflict what to do when the folder holds a file of that name:
+   *          keep_both (the default) or new_version
    * @return the created document
+   * @throws IllegalArgumentException when a parameter is missing or wrong (the
+   *           folder id, the source, the name, the conflict action), the file
+   *           is empty or over the upload size limit, or a new version is
+   *           asked of a folder, a shortcut or a file that keeps no versions
+   * @throws IllegalStateException when the file can't be read from its source
+   *           or filed
+   * @throws ObjectNotFoundException when the folder or the attachment doesn't
+   *           exist
+   * @throws IllegalAccessException when the user can't read the attachment,
+   *           or read the folder or add documents to it
    */
   public DocumentModel uploadDocument(String parentFolderId,
                                       String name,
                                       String base64,
                                       String url,
                                       String attachmentObjectType,
-                                      String attachmentObjectId) throws IllegalAccessException, ObjectNotFoundException {
+                                      String attachmentObjectId,
+                                      String onConflict) throws IllegalAccessException, ObjectNotFoundException {
     checkFolderIdParameter(parentFolderId);
+    UploadConflictAction conflictAction = toConflictAction(onConflict);
     boolean hasAttachment = StringUtils.isNotBlank(attachmentObjectId);
     boolean hasBase64 = StringUtils.isNotBlank(base64);
     boolean hasUrl = StringUtils.isNotBlank(url);
@@ -877,7 +936,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                                                             null,
                                                                                                             attachmentObjectType,
                                                                                                             attachmentObjectId),
-                                                                            UploadToolUtils.DEFAULT_MAX_BYTES);
+                                                                            DocumentUploadLimit.getMaxBytes());
         bytes = fetched.bytes();
         if (StringUtils.isBlank(fileName)) {
           fileName = fetched.fileName();
@@ -888,7 +947,7 @@ public class DocumentMcpTool implements McpToolPlugin {
         }
         bytes = UploadToolUtils.decodeBase64(base64);
       } else {
-        UploadToolUtils.FetchedContent fetched = UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, name);
+        UploadToolUtils.FetchedContent fetched = UploadToolUtils.fetchUrl(url, DocumentUploadLimit.getMaxBytes(), name);
         bytes = fetched.bytes();
         if (StringUtils.isBlank(fileName)) {
           fileName = fetched.fileName();
@@ -903,7 +962,187 @@ public class DocumentMcpTool implements McpToolPlugin {
       // LLM-directed type so it isn't swallowed by the generic wrapper message.
       throw new IllegalStateException("Could not read the file to upload from the given source: " + e.getMessage());
     }
-    return importContent(parentFolderId, fileName, bytes);
+    return fileContent(parentFolderId, fileName, bytes, conflictAction);
+  }
+
+  /**
+   * Starts sending a file in pieces, for a file too large to be sent whole in
+   * one tool call: checks the folder, the user's right to add a document to
+   * it, the file's size and that its name can take the conflict action,
+   * before any piece is sent. The piece that completes the size files the
+   * document.
+   *
+   * @param parentFolderId the folder the file is filed into
+   * @param name the file name, with its extension
+   * @param size the file's size, in bytes
+   * @param onConflict what to do when the folder holds a file of that name:
+   *          keep_both (the default) or new_version
+   * @return the upload, with how to send its pieces
+   * @throws IllegalArgumentException when a parameter is missing or wrong (the
+   *           folder id, the name, the size, the conflict action), the size is
+   *           over the upload size limit, or a new version is asked of a folder, a shortcut or a file that
+   *           keeps no versions
+   * @throws IllegalStateException when the user has too many uploads in
+   *           progress, the folder can't be read to check the name, or the
+   *           upload can't be stored on this server
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read the folder or add
+   *           documents to it
+   */
+  public DocumentUploadModel startDocumentUpload(String parentFolderId,
+                                                 String name,
+                                                 Long size,
+                                                 String onConflict) throws IllegalAccessException, ObjectNotFoundException {
+    checkFolderIdParameter(parentFolderId);
+    if (StringUtils.isBlank(name)) {
+      throw new IllegalArgumentException("The 'name' parameter is mandatory: it becomes the document file name (e.g. 'grid.xlsx').");
+    }
+    if (size == null) {
+      throw new IllegalArgumentException("The 'size' parameter is mandatory: the file's size in bytes, before base64 encoding.");
+    }
+    UploadConflictAction conflictAction = toConflictAction(onConflict);
+    checkUploadFolder(parentFolderId);
+    String fileName = sanitizeFileName(name);
+    // the name is checked again when the file is filed: the folder may change in between
+    documentFileService.checkUploadConflict(parentFolderId, fileName, conflictAction, getCurrentUserIdentityId());
+    return toUploadModel(chunkedUploads.start(getCurrentUserName(), parentFolderId, fileName, size, conflictAction));
+  }
+
+  /**
+   * Adds the next piece of a file sent in pieces; the piece that completes
+   * the file files it, and returns the document. A piece sent again after a
+   * lost answer is acknowledged without being added twice, and the last one
+   * returns the document it was filed as.
+   *
+   * @param uploadId the upload
+   * @param index the piece's number, from 0
+   * @param base64 the piece, base64-encoded
+   * @return the upload, with the next piece expected, or with its document
+   *         once filed
+   * @throws IllegalStateException when the last piece is sent again while
+   *           its file is being filed, which leaves the upload open, to be sent
+   *           again; or when the piece can't be stored, or the file can't be
+   *           filed, its folder gone included, which ends the upload
+   * @throws IllegalArgumentException when the piece is refused, which leaves
+   *           the upload open, or when the file is refused at its filing, a
+   *           new version asked of a folder, a shortcut or a file that keeps no
+   *           versions, which
+   *           ends the upload
+   * @throws IllegalAccessException when the user can no longer add documents
+   *           to the folder, which ends the upload
+   */
+  public DocumentUploadModel appendDocumentUploadChunk(String uploadId,
+                                                       Integer index,
+                                                       String base64) throws IllegalAccessException {
+    if (index == null || StringUtils.isBlank(base64)) {
+      throw new IllegalArgumentException("Pass the piece's 'index' (from 0) and its 'base64' content.");
+    }
+    if (base64.length() > MAX_CHUNK_CHARS) {
+      throw new IllegalArgumentException("A piece is at most %d base64 characters; send this one in smaller pieces.".formatted(MAX_CHUNK_CHARS));
+    }
+    ChunkedUpload upload = chunkedUploads.append(getCurrentUserName(), uploadId, index, decodePiece(index, base64));
+    if (upload.filing() && upload.document() == null) {
+      DocumentModel document = fileChunkedUpload(upload);
+      upload = upload.filedAs(document, upload.touched());
+    }
+    return toUploadModel(upload);
+  }
+
+  /**
+   * Decodes a piece as upload_document decodes base64, and refuses a piece
+   * cut inside a 4-character group: decoded alone, it would give wrong bytes.
+   * Such a piece decodes, unpadded, to a number of bytes that is not a
+   * multiple of 3, which only a padded last piece does.
+   *
+   * @param index the piece's number
+   * @param base64 the piece
+   * @return its bytes
+   */
+  private static byte[] decodePiece(int index, String base64) {
+    byte[] bytes;
+    try {
+      bytes = UploadToolUtils.decodeBase64(base64);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("The piece %d is not valid base64.".formatted(index));
+    }
+    if (bytes.length % 3 != 0 && !base64.strip().endsWith("=")) {
+      throw new IllegalArgumentException(("The piece %d was cut inside a group of 4 base64 characters: cut the file's padded "
+          + "base64 into pieces whose lengths are multiples of 4, and send this one again.").formatted(index));
+    }
+    return bytes;
+  }
+
+  /**
+   * Files an upload in pieces whose last piece came: its temporary file is
+   * handed to the platform's upload service, which the filing consumes. The
+   * upload keeps the document to answer its last piece sent again, or ends
+   * when the file can't be filed.
+   *
+   * @param upload the upload
+   * @return the document it was filed as
+   * @throws IllegalStateException when the file can't be filed, its folder
+   *           gone included
+   * @throws IllegalArgumentException when the file is refused at its
+   *           filing, a new version asked of a folder, a shortcut or a file that keeps no
+   *           versions
+   * @throws IllegalAccessException when the user can no longer add documents
+   *           to the folder
+   */
+  private DocumentModel fileChunkedUpload(ChunkedUpload upload) throws IllegalAccessException {
+    DocumentModel document = null;
+    String uploadResourceId = UUID.randomUUID().toString();
+    try {
+      UploadResource resource = new UploadResource(uploadResourceId);
+      resource.setFileName(upload.name());
+      resource.setMimeType(DEFAULT_UPLOAD_MIME_TYPE);
+      resource.setStoreLocation(upload.file().toString());
+      resource.setEstimatedSize(upload.size());
+      resource.setStatus(UploadResource.UPLOADED_STATUS);
+      uploadService.createUploadResource(resource);
+      document = fileUpload(upload.folderId(), uploadResourceId, upload.name(), upload.conflictAction());
+      return document;
+    } catch (IllegalStateException e) {
+      throw new IllegalStateException(e.getMessage() + MSG_UPLOAD_ENDED);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(e.getMessage() + MSG_UPLOAD_ENDED);
+    } catch (IllegalAccessException e) {
+      throw new IllegalAccessException(e.getMessage() + MSG_UPLOAD_ENDED);
+    } finally {
+      UploadToolUtils.release(uploadService, uploadResourceId);
+      if (document == null) {
+        chunkedUploads.failed(upload.id());
+      } else {
+        chunkedUploads.filed(upload.id(), document);
+      }
+    }
+  }
+
+  /**
+   * Maps an upload to the model the tools return.
+   *
+   * @param upload the upload
+   * @return the model
+   */
+  private DocumentUploadModel toUploadModel(ChunkedUpload upload) {
+    return new DocumentUploadModel(upload.id(),
+                                   upload.folderId(),
+                                   upload.name(),
+                                   upload.size(),
+                                   upload.received(),
+                                   upload.nextIndex(),
+                                   DocumentUploadLimit.getMaxBytes(),
+                                   CHUNK_CHARS,
+                                   UPLOAD_TIME_TO_LIVE.toMinutes(),
+                                   upload.document());
+  }
+
+  /**
+   * The uploads in pieces in progress on this node, for tests.
+   *
+   * @return the store
+   */
+  ChunkedUploadStore getChunkedUploads() {
+    return chunkedUploads;
   }
 
   /**
@@ -1165,16 +1404,20 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalArgumentException("Only a file can have versions; the id %s points to a folder. Provide a file document_id."
           .formatted(documentId));
     }
-    if (!documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId())) {
+    // a shortcut's node is the file it targets, which is the one versioned
+    String fileId = node.getId();
+    if (!documentFileService.hasEditPermissionOnDocument(fileId, getCurrentUserIdentityId())) {
       throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot add a new version to it."
           .formatted(documentId));
     }
     byte[] bytes = resolveContentBytes(content, base64, url, attachmentObjectType, attachmentObjectId);
-    documentFileService.createNewVersion(documentId, getCurrentUserName(), new ByteArrayInputStream(bytes));
+    // checked as a new file uploaded from a browser is, before it replaces the file's content
+    documentFileService.validateUploadedContent(node.getName(), ((FileNode) node).getMimeType(), bytes);
+    documentFileService.createNewVersion(fileId, getCurrentUserName(), new ByteArrayInputStream(bytes));
     if (StringUtils.isNotBlank(versionSummary)) {
-      applyVersionSummary(documentId, versionSummary);
+      applyVersionSummary(fileId, versionSummary);
     }
-    return getDocumentById(documentId);
+    return getDocumentById(fileId);
   }
 
   /**
@@ -1451,8 +1694,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * Resolves the raw bytes for a new file version from exactly one of the
    * supported sources (chat text, base64, url or a chat attachment), reusing
    * {@code upload_document}'s attachment/url resolution so the same ACL and SSRF
-   * guards apply. Every source is capped at
-   * {@code UploadToolUtils.DEFAULT_MAX_BYTES}.
+   * guards apply. Every source is capped at the upload size limit,
+   * {@link DocumentUploadLimit#getMaxBytes()}, as a new file is; a url within
+   * the shared fetcher's own ceiling.
    *
    * @param content chat text
    * @param base64 base64-encoded bytes
@@ -1484,25 +1728,31 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (sources > 1) {
       throw new IllegalArgumentException("Provide the new version content from only one source: 'content', 'base64', 'url' or the chat attachment — not several.");
     }
+    long maxBytes = DocumentUploadLimit.getMaxBytes();
     try {
       if (hasContent || hasBase64) {
         byte[] bytes = hasContent ? content.getBytes(StandardCharsets.UTF_8) : UploadToolUtils.decodeBase64(base64);
-        if (bytes.length > UploadToolUtils.DEFAULT_MAX_BYTES) {
-          throw new IllegalArgumentException(MSG_CONTENT_TOO_LARGE.formatted(bytes.length, UploadToolUtils.DEFAULT_MAX_BYTES));
+        if (bytes.length > maxBytes) {
+          throw new IllegalArgumentException(MSG_CONTENT_TOO_LARGE.formatted(bytes.length, maxBytes));
         }
         return bytes;
       } else if (hasAttachment) {
-        return UploadToolUtils.resolveImage(socialAttachmentService,
-                                            fileService,
-                                            getCurrentUserAclIdentity(),
-                                            new UploadToolUtils.ImageSource(null,
-                                                                            null,
-                                                                            attachmentObjectType,
-                                                                            attachmentObjectId),
-                                            UploadToolUtils.DEFAULT_MAX_BYTES)
-                              .bytes();
+        // the attachment is not bounded where it is read
+        byte[] bytes = UploadToolUtils.resolveImage(socialAttachmentService,
+                                                    fileService,
+                                                    getCurrentUserAclIdentity(),
+                                                    new UploadToolUtils.ImageSource(null,
+                                                                                    null,
+                                                                                    attachmentObjectType,
+                                                                                    attachmentObjectId),
+                                                    maxBytes)
+                                      .bytes();
+        if (bytes.length > maxBytes) {
+          throw new IllegalArgumentException(MSG_CONTENT_TOO_LARGE.formatted(bytes.length, maxBytes));
+        }
+        return bytes;
       } else {
-        return UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, null).bytes();
+        return UploadToolUtils.fetchUrl(url, maxBytes, null).bytes();
       }
     } catch (IllegalArgumentException | IllegalStateException e) {
       throw e;
@@ -1821,103 +2071,109 @@ public class DocumentMcpTool implements McpToolPlugin {
   // Content creation / upload helpers
   // ---------------------------------------------------------------------------
 
-  private static final int  IMPORT_POLL_MAX_ATTEMPTS = 20;
-
-  private static final long IMPORT_POLL_INTERVAL_MS  = 500L;
-
-  private static final int  IMPORT_POLL_PAGE_SIZE    = 200;
-
   /**
-   * Stages the given bytes as a single file and imports it into the folder,
-   * then resolves and returns the created document. {@code importFiles} expects
-   * a zip and unzips it, so the file is wrapped in a one-entry zip whose entry
-   * name becomes the created document title.
+   * Files the given bytes into a folder the way the Documents app files an
+   * upload: staged in the platform's upload service, then filed at once as
+   * the user.
+   *
+   * @param parentFolderId the folder
+   * @param fileName the file name, with its extension
+   * @param bytes the file's bytes
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @return the filed document
+   * @throws IllegalArgumentException when the file is empty or over the upload
+   *           size limit, or a new version is asked of a folder, a shortcut or a
+   *           file that keeps no versions
+   * @throws IllegalStateException when the file can't be filed
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't add documents to it
    */
-  private DocumentModel importContent(String parentFolderId,
-                                      String fileName,
-                                      byte[] bytes) throws IllegalAccessException, ObjectNotFoundException {
+  private DocumentModel fileContent(String parentFolderId,
+                                    String fileName,
+                                    byte[] bytes,
+                                    UploadConflictAction conflictAction) throws IllegalAccessException, ObjectNotFoundException {
     if (bytes == null || bytes.length == 0) {
       throw new IllegalArgumentException("The document content is empty; there is nothing to create.");
     }
-    // Validate the parent folder exists and is readable before staging anything,
-    // so a bad id fails with a clean ObjectNotFoundException / IllegalAccessException.
-    getNode(parentFolderId);
-    String entryName = sanitizeFileName(fileName);
-    String ownerId = String.valueOf(getOwnerId(parentFolderId));
-    long userIdentityId = getCurrentUserIdentityId();
-    // Snapshot the destination file ids before the import so the created node can
-    // be identified even when a same-name file already exists and the import
-    // creates a renamed ("duplicate") copy with a different, suffixed name.
-    Set<String> beforeFileIds = currentChildFileIds(parentFolderId);
-    String uploadId = null;
+    long maxBytes = DocumentUploadLimit.getMaxBytes();
+    if (bytes.length > maxBytes) {
+      throw new IllegalArgumentException("The file is %d bytes, over the %d MB a file uploaded can be.".formatted(bytes.length,
+                                                                                                                maxBytes / (1024 * 1024)));
+    }
+    String name = sanitizeFileName(fileName);
+    checkUploadFolder(parentFolderId);
+    String uploadId = UploadToolUtils.materialize(uploadService, bytes, name, DEFAULT_UPLOAD_MIME_TYPE);
     try {
-      uploadId = UploadToolUtils.materialize(uploadService,
-                                             zipSingleEntry(entryName, bytes),
-                                             entryName + ".zip",
-                                             "application/zip");
-      // folderPath stays null: parentFolderId already identifies the JCR node
-      // (same rule as createFolder). conflict "duplicate": on a name clash the
-      // import creates a renamed (keep-both) copy. NOT "rename" — the async import
-      // thread only understands "updateAll"/"duplicate", so "rename" would fall
-      // through to ignoredFiles and silently create nothing.
-      documentFileService.importFiles(ownerId,
-                                      parentFolderId,
-                                      null,
-                                      uploadId,
-                                      "duplicate",
-                                      getCurrentUserAclIdentity(),
-                                      userIdentityId);
-      // On success the asynchronous import owns the upload resource and releases
-      // it once the file is created, so it must not be released here.
-      uploadId = null;
-    } catch (IllegalAccessException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new IllegalStateException("Could not create the document '%s': %s".formatted(entryName, e.getMessage()));
+      return fileUpload(parentFolderId, uploadId, name, conflictAction);
     } finally {
-      if (uploadId != null) {
-        UploadToolUtils.release(uploadService, uploadId);
-      }
+      UploadToolUtils.release(uploadService, uploadId);
     }
-    return findImportedDocument(parentFolderId, entryName, beforeFileIds);
   }
 
   /**
-   * The import runs on a background thread, so the created file is polled for in
-   * the destination folder until it appears (or a short timeout elapses). The
-   * newly created node is identified as the file whose id was not present before
-   * the import, so it resolves the just-created (possibly suffixed) file rather
-   * than a pre-existing same-name document.
-   */
-  private DocumentModel findImportedDocument(String parentFolderId,
-                                             String fileName,
-                                             Set<String> beforeFileIds) throws ObjectNotFoundException,
-                                                                        IllegalAccessException {
-    for (int attempt = 0; attempt < IMPORT_POLL_MAX_ATTEMPTS; attempt++) {
-      DocumentModel match = resolveAddedChildFile(parentFolderId, beforeFileIds, fileName);
-      if (match != null) {
-        return match;
-      }
-      sleepQuietly(IMPORT_POLL_INTERVAL_MS);
-    }
-    throw new IllegalStateException("""
-        The document '%s' was uploaded and is being created in the background.
-        Call list_folder_children on folder %s in a few seconds to retrieve it.
-        """.formatted(fileName, parentFolderId));
-  }
-
-  /**
-   * Lists the file ids currently under a folder, used to snapshot a destination
-   * before an import adds a file, so the newly created node can be identified
-   * afterwards.
+   * Files an upload staged in the platform's upload service into a folder.
    *
    * @param folderId the folder
-   * @return the ids of its child files
-   * @throws ObjectNotFoundException when the folder doesn't exist
-   * @throws IllegalAccessException when the user can't read it
+   * @param uploadId the staged upload
+   * @param name the file name
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @return the filed document
+   * @throws IllegalAccessException when the user can't add documents to the
+   *           folder
    */
-  private Set<String> currentChildFileIds(String folderId) throws ObjectNotFoundException, IllegalAccessException {
-    return currentChildIds(folderId, FileNode.class);
+  private DocumentModel fileUpload(String folderId,
+                                   String uploadId,
+                                   String name,
+                                   UploadConflictAction conflictAction) throws IllegalAccessException {
+    try {
+      return toDocumentModel(documentFileService.saveUploadedDocument(folderId,
+                                                                      uploadId,
+                                                                      name,
+                                                                      conflictAction,
+                                                                      getCurrentUserIdentityId()));
+    } catch (ObjectNotFoundException e) {
+      throw new IllegalStateException("The file '%s' couldn't be filed: the folder %s, or the file staged for it, is gone.".formatted(name,
+                                                                                                                                   folderId));
+    }
+  }
+
+  /**
+   * Checks a folder exists, is readable, is a folder, and takes the user's
+   * documents.
+   *
+   * @param folderId the folder
+   * @throws IllegalArgumentException when it is a file
+   * @throws ObjectNotFoundException when it doesn't exist
+   * @throws IllegalAccessException when the user can't read it or add
+   *           documents to it
+   */
+  private void checkUploadFolder(String folderId) throws IllegalAccessException, ObjectNotFoundException {
+    AbstractNode folder = getNode(folderId);
+    if (!(folder instanceof FolderNode)) {
+      throw new IllegalArgumentException(MSG_UPLOAD_NOT_A_FOLDER.formatted(folder.getName(), folderId));
+    }
+    // a shortcut's node is the folder it targets, which is the one written in
+    if (!documentFileService.hasEditPermissionOnDocument(folder.getId(), getCurrentUserIdentityId())) {
+      throw new IllegalAccessException(MSG_UPLOAD_FOLDER_NOT_WRITABLE.formatted(folder.getName(), folderId));
+    }
+  }
+
+  /**
+   * Reads what an upload does when its folder holds a file of its name.
+   *
+   * @param onConflict keep_both or new_version, in any case; blank
+   *          for keep_both
+   * @return the action
+   */
+  static UploadConflictAction toConflictAction(String onConflict) {
+    if (StringUtils.isBlank(onConflict)) {
+      return UploadConflictAction.KEEP_BOTH;
+    }
+    try {
+      return UploadConflictAction.valueOf(onConflict.trim().toUpperCase(java.util.Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("'on_conflict' is keep_both or new_version, not '%s'.".formatted(onConflict));
+    }
   }
 
   /**
@@ -1954,35 +2210,7 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Resolves the file that was just added to a folder by an operation (import /
-   * copy / duplicate) as the child file whose id is not in the pre-operation
-   * snapshot AND whose name matches the expected created name. Narrowing by name
-   * (rather than blindly collapsing the id-diff with {@code reduce((a,b)->b)})
-   * keeps the result correct when the folder gains another, differently-named file
-   * concurrently (a parallel upload, a copy/import by another user, a retry).
-   * <p>
-   * Returns {@code null} when no added file matches yet (so a poller can retry),
-   * and throws an {@link IllegalStateException} when MORE THAN ONE added file
-   * matches the expected name — the operation cannot then be resolved
-   * deterministically, and guessing one would risk returning the wrong document.
-   *
-   * @param folderId the folder to resolve the created file in
-   * @param beforeFileIds the folder's file ids snapshotted before the operation
-   * @param expectedName the name the created file is expected to carry (the source
-   *          name for copy/duplicate, the uploaded file name for import); may be
-   *          blank, in which case any single added file is accepted
-   * @return the resolved created document, or {@code null} if none matches yet
-   */
-  private DocumentModel resolveAddedChildFile(String folderId,
-                                              Set<String> beforeFileIds,
-                                              String expectedName) throws ObjectNotFoundException,
-                                                                   IllegalAccessException {
-    return resolveAddedChild(folderId, beforeFileIds, expectedName, FileNode.class);
-  }
-
-  /**
-   * Resolves the node of one kind just added to a folder, as
-   * {@link #resolveAddedChildFile} does for a file: the child of that kind
+   * Resolves the node of one kind just added to a folder: the child of that kind
    * whose id is not in the pre-operation snapshot and whose name matches the
    * expected created name.
    *
@@ -2113,29 +2341,9 @@ public class DocumentMcpTool implements McpToolPlugin {
     return dot > 0 ? StringUtils.lowerCase(trimmed.substring(dot + 1)) : "";
   }
 
-  private static byte[] zipSingleEntry(String entryName, byte[] content) {
-    ByteArrayOutputStream output = new ByteArrayOutputStream();
-    try (ZipOutputStream zip = new ZipOutputStream(output)) {
-      zip.putNextEntry(new ZipEntry(entryName));
-      zip.write(content);
-      zip.closeEntry();
-    } catch (IOException e) {
-      throw new IllegalStateException("Could not package the document content: " + e.getMessage());
-    }
-    return output.toByteArray();
-  }
-
   private static String sanitizeFileName(String fileName) {
     String cleaned = StringUtils.trimToEmpty(fileName).replaceAll("[/\\\\]", "_");
     return cleaned.isEmpty() ? "document" : cleaned;
-  }
-
-  private static void sleepQuietly(long millis) {
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
   }
 
   private long getCurrentUserIdentityId() {

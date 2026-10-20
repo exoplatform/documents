@@ -123,6 +123,9 @@ public class JCRDocumentFileStorageTest {
 
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
 
+  /** The user's session provider of the last upload folder mocked. */
+  private SessionProvider                uploadSessionProvider;
+
   @AfterClass
   public static void afterRunBare() {
     JCR_DOCUMENTS_UTIL.close();
@@ -2448,4 +2451,348 @@ public class JCRDocumentFileStorageTest {
     when(jcrValue.getString()).thenReturn(value);
     return jcrValue;
   }
+
+  /**
+   * Builds the handler's answer for a filed file: an XML document whose root
+   * names the file's id, as {@code FileUploadHandler#getUploadedFile} writes
+   * it.
+   *
+   * @param rootName the root element's name
+   * @param uuid the id it carries, or null
+   * @return the answer, with the status 200
+   * @throws Exception never
+   */
+  private static javax.ws.rs.core.Response handlerAnswer(String rootName, String uuid) throws Exception {
+    org.w3c.dom.Document document = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+    org.w3c.dom.Element root = document.createElement(rootName);
+    if (uuid != null) {
+      root.setAttribute("UUID", uuid);
+    }
+    document.appendChild(root);
+    javax.ws.rs.core.Response response = mock(javax.ws.rs.core.Response.class);
+    when(response.getStatus()).thenReturn(200);
+    when(response.getEntity()).thenReturn(new javax.xml.transform.dom.DOMSource(document));
+    return response;
+  }
+
+  /**
+   * Mocks the user's session on a folder "1" the user can add documents to,
+   * and stores an upload "up-1"; the user's session provider is kept in
+   * {@link #uploadSessionProvider}.
+   *
+   * @param aclIdentity the user
+   * @param folderNode the folder
+   * @return the user's session
+   * @throws Exception never
+   */
+  private Session uploadFolder(org.exoplatform.services.security.Identity aclIdentity, ExtendedNode folderNode) throws Exception {
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    uploadSessionProvider = sessionProvider;
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity)).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(folderNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(folderNode)).thenReturn(true);
+    AccessControlEntry editEntry = new AccessControlEntry(aclIdentity.getUserId(), PermissionType.ADD_NODE);
+    when(folderNode.getACL()).thenReturn(new AccessControlList(aclIdentity.getUserId(), Arrays.asList(editEntry)));
+    when(uploadService.getUploadResource("up-1")).thenReturn(new org.exoplatform.upload.UploadResource("up-1"));
+    return session;
+  }
+
+  /**
+   * An upload is filed by the handler the Documents app files its uploads
+   * through, under the user's own session, with the app's source and the
+   * user's id, and the file it names is returned; the session is closed. As
+   * the app does, the filing asks the handler to post no stream activity, and
+   * the thread's document context is left as it was found, absent or set.
+   * Mutants: another workspace, folder, upload, name, source, user or action
+   * passed, the file read from another id, the session left open, the skip
+   * not set, or not restored.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void saveUploadedDocumentFilesThroughTheUploadHandler() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    Session session = uploadFolder(aclIdentity, folderNode);
+    org.exoplatform.wcm.connector.FileUploadHandler handler = mock(org.exoplatform.wcm.connector.FileUploadHandler.class);
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(handler).when(storage).getFileUploadHandler();
+    doReturn(List.of()).when(storage).getUploadFileValidators();
+    javax.ws.rs.core.Response answer = handlerAnswer("file", "file-1");
+    List<Object> skipDuringFiling = new ArrayList<>();
+    when(handler.saveAsNTFile("collaboration", folderNode, "up-1", "Report.pdf", "en", "newApp", null, "john", "keepBoth")).thenAnswer(invocation -> {
+      skipDuringFiling.add(org.exoplatform.services.context.DocumentContext.getCurrent()
+                                                                         .getAttributes()
+                                                                         .get(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT));
+      return answer;
+    });
+    Node fileNode = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "file-1")).thenReturn(fileNode);
+    FileNode expected = new FileNode();
+    expected.setId("file-1");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(identityManager, aclIdentity, fileNode, "", spaceService)).thenReturn(expected);
+
+    java.util.Map<String, Object> documentAttributes = org.exoplatform.services.context.DocumentContext.getCurrent().getAttributes();
+    documentAttributes.remove(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT);
+
+    FileNode result = storage.saveUploadedDocument("1", "up-1", "Report.pdf", null, aclIdentity);
+
+    assertSame(expected, result);
+    assertEquals(List.of(true), skipDuringFiling);
+    assertFalse(documentAttributes.containsKey(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT));
+
+    documentAttributes.put(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT, false);
+    storage.saveUploadedDocument("1", "up-1", "Report.pdf", null, aclIdentity);
+    assertEquals(List.of(true, true), skipDuringFiling);
+    assertEquals(false, documentAttributes.remove(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT));
+    verify(handler, times(2)).saveAsNTFile("collaboration", folderNode, "up-1", "Report.pdf", "en", "newApp", null, "john", "keepBoth");
+    verify(uploadSessionProvider, times(2)).close();
+  }
+
+  /**
+   * An upload is refused before the handler runs when it isn't stored, its
+   * folder isn't found, or the user can't add documents to the folder.
+   * Mutants: any of the three checks dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void saveUploadedDocumentIsRefusedBeforeTheHandler() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    Session session = uploadFolder(aclIdentity, folderNode);
+    org.exoplatform.wcm.connector.FileUploadHandler handler = mock(org.exoplatform.wcm.connector.FileUploadHandler.class);
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    lenient().doReturn(handler).when(storage).getFileUploadHandler();
+    lenient().doReturn(List.of()).when(storage).getUploadFileValidators();
+
+    assertThrows(ObjectNotFoundException.class, () -> storage.saveUploadedDocument("1", "up-2", "a.pdf", null, aclIdentity));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "9")).thenReturn(null);
+    assertThrows(ObjectNotFoundException.class, () -> storage.saveUploadedDocument("9", "up-1", "a.pdf", null, aclIdentity));
+    when(folderNode.getACL()).thenReturn(new AccessControlList("john",
+                                                               Arrays.asList(new AccessControlEntry("john", PermissionType.READ))));
+    assertThrows(IllegalAccessException.class, () -> storage.saveUploadedDocument("1", "up-1", "a.pdf", null, aclIdentity));
+    verifyNoInteractions(handler);
+  }
+
+  /**
+   * An upload's name and conflict action are checked before its file is sent
+   * as when it is filed: a folder of that name refuses a new version, keeping
+   * both opens no session, and a missing folder is not found.
+   * Mutants: the check not run, a session opened for keep_both, the folder
+   * unchecked, the session left open.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void checkUploadConflictChecksAsTheFilingDoes() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    Session session = uploadFolder(aclIdentity, folderNode);
+    Node existing = mock(Node.class);
+    when(folderNode.hasNode("report.pdf")).thenReturn(true);
+    doReturn(existing).when(folderNode).getNode("report.pdf");
+
+    jcrDocumentFileStorage.checkUploadConflict("1", "Report.pdf", org.exoplatform.documents.constant.UploadConflictAction.KEEP_BOTH, aclIdentity);
+    verify(uploadSessionProvider, never()).getSession(anyString(), any());
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> jcrDocumentFileStorage.checkUploadConflict("1",
+                                                                  "Report.pdf",
+                                                                  org.exoplatform.documents.constant.UploadConflictAction.NEW_VERSION,
+                                                                  aclIdentity));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "9")).thenReturn(null);
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.checkUploadConflict("9",
+                                                                  "Report.pdf",
+                                                                  org.exoplatform.documents.constant.UploadConflictAction.NEW_VERSION,
+                                                                  aclIdentity));
+    verify(uploadSessionProvider, times(2)).close();
+  }
+
+  /**
+   * The conflict action maps to the handler's, on the node name the handler
+   * computes, lower-cased: a new version of a file that isn't there keeps
+   * both, of a versioned file is passed on, and of a folder or of a file that
+   * keeps no versions is refused, since the handler would overwrite it.
+   * Mutants: the node name not lower-cased, the absence not checked, the
+   * folder or the unversioned file not refused.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void theConflictActionMapsToTheHandlersOnItsNodeName() throws Exception {
+    Node folder = mock(Node.class);
+    Node existing = mock(Node.class);
+    org.exoplatform.documents.constant.UploadConflictAction newVersion =
+                                                                       org.exoplatform.documents.constant.UploadConflictAction.NEW_VERSION;
+
+    assertEquals("keepBoth", JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", null));
+    assertEquals("keepBoth",
+                 JCRDocumentFileStorage.toExistenceAction(folder,
+                                                          "Report.pdf",
+                                                          org.exoplatform.documents.constant.UploadConflictAction.KEEP_BOTH));
+    verifyNoInteractions(folder);
+    when(folder.getNode(anyString())).thenThrow(new PathNotFoundException());
+    assertEquals("keepBoth", JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", newVersion));
+
+    when(folder.hasNode("report.pdf")).thenReturn(true);
+    doReturn(existing).when(folder).getNode("report.pdf");
+    when(existing.isNodeType("nt:file")).thenReturn(true);
+    assertThrows(IllegalArgumentException.class, () -> JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", newVersion));
+    when(existing.isNodeType("mix:versionable")).thenReturn(true);
+    assertEquals("createVersion", JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", newVersion));
+
+    when(existing.isNodeType("nt:file")).thenReturn(false);
+    assertThrows(IllegalArgumentException.class, () -> JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", newVersion));
+  }
+
+  /**
+   * The handler's answer gives the filed file's id; a message document is a
+   * refusal, and a server error a failure whose message doesn't carry the
+   * engine's text.
+   * Mutants: the root element unchecked, the engine's text shown.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void theHandlersAnswerGivesTheFiledFile() throws Exception {
+    assertEquals("file-1", JCRDocumentFileStorage.getSavedFileId(handlerAnswer("file", "file-1"), "a.pdf"));
+    assertThrows(IllegalAccessException.class,
+                 () -> JCRDocumentFileStorage.getSavedFileId(handlerAnswer("Message", null), "a.pdf"));
+
+    javax.ws.rs.core.Response failure = mock(javax.ws.rs.core.Response.class);
+    when(failure.getStatus()).thenReturn(500);
+    when(failure.getEntity()).thenReturn("javax.jcr.AccessDeniedException: /Users/j___/john/Private access denied for john");
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> JCRDocumentFileStorage.getSavedFileId(failure, "a.pdf"));
+    assertFalse(e.getMessage().contains("john"));
+    assertTrue(e.getMessage().contains("a.pdf"));
+  }
+
+
+  /**
+   * An upload is filed into the folder a shortcut targets, as the Documents
+   * app shows a shortcut, and refused before the handler when its id names a
+   * file, whose parent the handler would otherwise file into.
+   * Mutants: the shortcut not resolved, a file accepted as the folder.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIsFiledIntoAFolderOnly() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    Session session = uploadFolder(aclIdentity, folderNode);
+    org.exoplatform.wcm.connector.FileUploadHandler handler = mock(org.exoplatform.wcm.connector.FileUploadHandler.class);
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(handler).when(storage).getFileUploadHandler();
+    doReturn(List.of()).when(storage).getUploadFileValidators();
+    javax.ws.rs.core.Response answer = handlerAnswer("file", "file-1");
+    when(handler.saveAsNTFile("collaboration", folderNode, "up-1", "a.pdf", "en", "newApp", null, "john", "keepBoth")).thenReturn(answer);
+    Node fileNode = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "file-1")).thenReturn(fileNode);
+
+    Node shortcut = mock(Node.class);
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property target = mock(Property.class);
+    when(target.getString()).thenReturn("1");
+    when(shortcut.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(target);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "shortcut")).thenReturn(shortcut);
+    storage.saveUploadedDocument("shortcut", "up-1", "a.pdf", null, aclIdentity);
+    verify(handler).saveAsNTFile("collaboration", folderNode, "up-1", "a.pdf", "en", "newApp", null, "john", "keepBoth");
+
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(fileNode)).thenReturn(false);
+    assertThrows(IllegalArgumentException.class, () -> storage.saveUploadedDocument("file-1", "up-1", "a.pdf", null, aclIdentity));
+    assertThrows(IllegalArgumentException.class,
+                 () -> storage.checkUploadConflict("file-1",
+                                                   "a.pdf",
+                                                   org.exoplatform.documents.constant.UploadConflictAction.NEW_VERSION,
+                                                   aclIdentity));
+    verify(handler, times(1)).saveAsNTFile(any(), any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
+
+  /**
+   * An upload is run through the platform's upload validators before it is
+   * filed, as a browser upload is: a validator that supports the file reads
+   * its bytes from a stream of its own, and its refusal stops the filing with
+   * its message; a validator that doesn't support the file is not run.
+   * Mutants: the validators not run, an unsupporting validator run, the
+   * refusal swallowed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIsValidatedBeforeItIsFiled() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    uploadFolder(aclIdentity, folderNode);
+    java.nio.file.Path stored = java.nio.file.Files.createTempFile("upload-", ".part");
+    java.nio.file.Files.writeString(stored, "<svg onload='alert(1)'/>");
+    org.exoplatform.upload.UploadResource resource = new org.exoplatform.upload.UploadResource("up-1");
+    resource.setStoreLocation(stored.toString());
+    resource.setMimeType("application/octet-stream");
+    when(uploadService.getUploadResource("up-1")).thenReturn(resource);
+    org.exoplatform.wcm.connector.FileUploadHandler handler = mock(org.exoplatform.wcm.connector.FileUploadHandler.class);
+    org.exoplatform.upload.UploadFileValidator refusing = mock(org.exoplatform.upload.UploadFileValidator.class);
+    org.exoplatform.upload.UploadFileValidator other = mock(org.exoplatform.upload.UploadFileValidator.class);
+    when(refusing.supports("x.svg", "application/octet-stream")).thenReturn(true);
+    List<String> read = new ArrayList<>();
+    doAnswer(invocation -> {
+      read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()));
+      throw new org.apache.commons.fileupload2.core.FileUploadException("Infected file detected. Uploading is forbidden");
+    }).when(refusing).validate(eq("x.svg"), eq("application/octet-stream"), any(InputStream.class));
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(handler).when(storage).getFileUploadHandler();
+    doReturn(List.of(other, refusing)).when(storage).getUploadFileValidators();
+    try {
+      IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                      () -> storage.saveUploadedDocument("1", "up-1", "x.svg", null, aclIdentity));
+
+      assertTrue(refusal.getMessage().contains("Infected file detected"));
+      assertEquals(List.of("<svg onload='alert(1)'/>"), read);
+      verify(other, never()).validate(any(), any(), any());
+      verifyNoInteractions(handler);
+    } finally {
+      java.nio.file.Files.deleteIfExists(stored);
+    }
+  }
+
+
+  /**
+   * A file's content held in memory is checked by every validator that
+   * supports it, each reading the whole content from its own stream, and a
+   * refusal carries the validator's message.
+   * Mutants: the content not validated, a validator handed a used stream,
+   * the refusal swallowed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aContentIsValidatedByEveryValidatorThatSupportsIt() throws Exception {
+    org.exoplatform.upload.UploadFileValidator first = mock(org.exoplatform.upload.UploadFileValidator.class);
+    org.exoplatform.upload.UploadFileValidator refusing = mock(org.exoplatform.upload.UploadFileValidator.class);
+    when(first.supports("x.svg", "image/svg+xml")).thenReturn(true);
+    when(refusing.supports("x.svg", "image/svg+xml")).thenReturn(true);
+    List<String> read = new ArrayList<>();
+    doAnswer(invocation -> read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()))).when(first)
+                                                                                                        .validate(any(), any(), any());
+    doAnswer(invocation -> {
+      read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()));
+      throw new org.apache.commons.fileupload2.core.FileUploadException("Infected file detected");
+    }).when(refusing).validate(any(), any(), any());
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(List.of(first, refusing)).when(storage).getUploadFileValidators();
+
+    IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                    () -> storage.validateUploadedContent("x.svg", "image/svg+xml", "<svg/>".getBytes()));
+
+    assertTrue(refusal.getMessage().contains("Infected file detected"));
+    assertEquals(List.of("<svg/>", "<svg/>"), read);
+  }
+
 }
