@@ -2448,4 +2448,46 @@ public class JCRDocumentFileStorageTest {
     when(jcrValue.getString()).thenReturn(value);
     return jcrValue;
   }
+
+  /**
+   * A search sorted by a field reaches the index sorted by it, the latest
+   * changes first for a descending last-change sort; a search with no sort
+   * keeps the relevance order.
+   * Mutants: the filter's sort ignored, its direction ignored, the relevance
+   * order dropped when no sort is set.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchSortsByTheFiltersFieldOrByRelevance() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity)).thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getSortField(any(), anyBoolean())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getSortDirection(any())).thenCallRealMethod();
+    ManageableRepository repository = mock(ManageableRepository.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration().getDefaultWorkspaceName()).thenReturn("collaboration");
+    Session session = mock(Session.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+    when(sessionProvider.getSession("collaboration", repository)).thenReturn(session);
+    Node folder = mock(Node.class);
+    when(folder.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "folder")).thenReturn(folder);
+
+    DocumentTimelineFilter latestFirst = new DocumentTimelineFilter();
+    latestFirst.setParentFolderId("folder");
+    latestFirst.setSortField(org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE);
+    latestFirst.setAscending(false);
+    jcrDocumentFileStorage.search(latestFirst, aclIdentity, 0, 10);
+    DocumentTimelineFilter relevance = new DocumentTimelineFilter();
+    relevance.setParentFolderId("folder");
+    relevance.setQuery("contract");
+    jcrDocumentFileStorage.search(relevance, aclIdentity, 0, 10);
+
+    verify(documentSearchServiceConnector).search(eq(aclIdentity), eq("collaboration"), anyList(), eq(latestFirst), eq(0), eq(10),
+                                                  eq("lastUpdatedDate"), eq("DESC"));
+    verify(documentSearchServiceConnector).search(eq(aclIdentity), eq("collaboration"), anyList(), eq(relevance), eq(0), eq(10),
+                                                  eq("_score"), eq("DESC"));
+  }
+
 }
