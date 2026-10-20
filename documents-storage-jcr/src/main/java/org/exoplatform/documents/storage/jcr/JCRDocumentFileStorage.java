@@ -179,9 +179,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private volatile DocumentTextExtractor            textExtractor;
 
-  /** Files larger than this many MB are not read part by part. */
-  public static final String                        PAGED_TEXT_MAX_SIZE_MB_PROPERTY          =
-                                                                                         "exo.documents.textExtraction.paged.maxFileSizeMb";
+  /**
+   * Files larger than this many MB are not read part by part: the largest
+   * file a user can attach in the UI, so any file attached there can be read.
+   */
+  public static final String                        PAGED_TEXT_MAX_SIZE_MB_PROPERTY          = "exo.social.composer.maxFileSizeInMB";
 
   /** The text read part by part is cut at this many characters. */
   public static final String                        PAGED_TEXT_MAX_CHARS_PROPERTY            =
@@ -199,6 +201,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public static final String                        PAGED_TEXT_CACHE_MAX_MB_PROPERTY         =
                                                                                          "exo.documents.textExtraction.paged.cacheMaxMb";
 
+  /** The UI's own default for the largest file attached. */
   private static final long                         DEFAULT_PAGED_TEXT_MAX_SIZE_MB           = 200;
 
   private static final long                         DEFAULT_PAGED_TEXT_MAX_CHARS             = 20_000_000;
