@@ -259,7 +259,7 @@
     {
       "name": "list_folder_children",
       "title": "List DMS folder children",
-      "description": "Lists the direct child files and folders of a folder, folders first. Each child gives its updated_date and whether you can edit it (for a folder: add or upload documents in it) or delete it (can_edit, can_delete). With updated_since, lists only the children changed since that date, the most recent first; a folder holding more than 1000 documents is refused, then use search_documents with parent_folder_id and updated_since. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
+      "description": "Lists the direct child files and folders of a folder, folders first. Each child gives its updated_date and whether you can edit it (for a folder: add or upload documents in it) or delete it (can_edit, can_delete). With updated_since, lists only the children changed since that date, the most recent first; a folder whose listing returns more than 1000 documents is refused, then use search_documents with parent_folder_id and updated_since. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
