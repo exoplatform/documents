@@ -669,7 +669,8 @@ public class DocumentMcpTool implements McpToolPlugin {
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
     List<AbstractNode> children;
     if (updatedSinceTime == null) {
-      children = documentFileService.getFolderChildNodes(filter, 0, first + size, getCurrentUserIdentityId());
+      int end = (int) Math.min((long) first + size, Integer.MAX_VALUE);
+      children = documentFileService.getFolderChildNodes(filter, 0, end, getCurrentUserIdentityId());
     } else {
       children = documentFileService.getFolderChildNodes(filter, 0, MAX_SCANNED_CHILDREN + 1, getCurrentUserIdentityId());
       if (children.size() > MAX_SCANNED_CHILDREN) {
@@ -688,7 +689,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * as the repository checks it for the user; the delete right as the
    * storage computes it (the document's permission entries, and any document
    * of the user's own drive), plus the owner's, whom the repository grants
-   * every right although that computation leaves the owner out.
+   * every right although that computation leaves the owner out. For a
+   * shortcut, the rights are its target's, named in the answer, and the delete
+   * right is left out: deleting the shortcut removes only the shortcut.
    *
    * @param documentId the folder or file id
    * @return the user's rights on it
@@ -702,14 +705,18 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (document == null) {
       throw new ObjectNotFoundException("No document has the id %s.".formatted(documentId));
     }
-    boolean canEdit = documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId());
+    // a shortcut's id resolves to its target: the rights are the target's, but
+    // deleting the shortcut removes only the shortcut, so its delete right isn't the target's
+    boolean shortcut = !StringUtils.equals(documentId, document.getId());
+    boolean canEdit = documentFileService.hasEditPermissionOnDocument(document.getId(), getCurrentUserIdentityId());
     NodePermission acl = document.getAcl();
-    return new DocumentPermissionsModel(document.getId(),
+    return new DocumentPermissionsModel(documentId,
                                         document.getName(),
                                         document.isFolder(),
+                                        shortcut ? document.getId() : null,
                                         true,
                                         canEdit,
-                                        isOwner(document) || (acl != null && acl.isCanDelete()));
+                                        shortcut ? null : isOwner(document) || (acl != null && acl.isCanDelete()));
   }
 
   public List<BreadcrumbItemModel> getFolderBreadcrumb(String folderId) throws ObjectNotFoundException,

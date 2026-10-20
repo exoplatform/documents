@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.mcp.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.AllArgsConstructor;
@@ -28,6 +30,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @AllArgsConstructor
+@JsonInclude(Include.NON_NULL)
 @NoArgsConstructor
 public class DocumentPermissionsModel {
 
@@ -38,6 +41,10 @@ public class DocumentPermissionsModel {
 
   @JsonProperty("is_folder")
   private boolean folder;
+
+  /** The id of the target when the document asked is a shortcut, null otherwise. */
+  @JsonProperty("shortcut_target_id")
+  private String  shortcutTargetId;
 
   /** Always true: a document the user can't read is refused instead. */
   @JsonProperty("can_read")
@@ -50,7 +57,8 @@ public class DocumentPermissionsModel {
   @JsonProperty("can_edit")
   private boolean canEdit;
 
+  /** Null for a shortcut: deleting it removes only the shortcut, whatever its target's rights. */
   @JsonProperty("can_delete")
-  private boolean canDelete;
+  private Boolean canDelete;
 
 }

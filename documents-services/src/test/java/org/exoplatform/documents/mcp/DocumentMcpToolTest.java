@@ -2075,6 +2075,9 @@ public class DocumentMcpToolTest {
     List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, 2, 2, null);
 
     assertEquals(List.of("c", "d"), models.stream().map(DocumentModel::getId).toList());
+    // an offset near the largest int never overflows the storage's limit into a negative one
+    documentMcpTool.listFolderChildren(FOLDER_ID, Integer.MAX_VALUE - 1, 10, null);
+    verify(documentFileService).getFolderChildNodes(any(), eq(0), eq(Integer.MAX_VALUE), anyLong());
   }
 
   /**
@@ -2251,7 +2254,7 @@ public class DocumentMcpToolTest {
     assertTrue(permissions.isFolder());
     assertTrue(permissions.isCanRead());
     assertFalse(permissions.isCanEdit());
-    assertTrue(permissions.isCanDelete());
+    assertEquals(Boolean.TRUE, permissions.getCanDelete());
   }
 
   /**
@@ -2273,7 +2276,7 @@ public class DocumentMcpToolTest {
     org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(DOCUMENT_ID);
 
     assertTrue(permissions.isCanEdit());
-    assertTrue(permissions.isCanDelete());
+    assertEquals(Boolean.TRUE, permissions.getCanDelete());
   }
 
   /**
@@ -2296,6 +2299,33 @@ public class DocumentMcpToolTest {
     assertTrue(error.getMessage().contains("get_document_permissions"));
     assertTrue(error.getMessage().contains("Projects"));
     verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+  }
+
+  /**
+   * get_document_permissions on a shortcut answers for the id asked, names
+   * the target its rights are read on, checks the edit right on the target,
+   * and leaves the delete right out, deleting the shortcut removing only the
+   * shortcut.
+   * Mutants: the target's id returned as the one asked, the edit right
+   * checked on the shortcut, the target's delete right given.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentPermissionsOnAShortcutTellsTheTargetsEditRightAndNoDeleteRight() throws Exception {
+    String shortcutId = "de0688cd7f00010134384ab7e1b15a40";
+    FileNode target = fileNode(DOCUMENT_ID, "application/pdf");
+    target.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
+    when(documentFileService.getDocumentById(shortcutId, USERNAME)).thenReturn(target);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(shortcutId);
+
+    assertEquals(shortcutId, permissions.getId());
+    assertEquals(DOCUMENT_ID, permissions.getShortcutTargetId());
+    assertTrue(permissions.isCanEdit());
+    assertEquals(null, permissions.getCanDelete());
+    verify(documentFileService, never()).hasEditPermissionOnDocument(eq(shortcutId), anyLong());
   }
 
 }
