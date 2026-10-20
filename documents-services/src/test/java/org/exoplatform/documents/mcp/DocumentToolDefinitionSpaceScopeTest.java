@@ -82,9 +82,10 @@ public class DocumentToolDefinitionSpaceScopeTest {
                                                                 "get_document_content_by_id", List.of("document_id"),
                                                                 "get_document_transcription_by_id", List.of("document_id"),
                                                                 "list_document_versions", List.of("document_id"),
+                                                                "get_document_permissions", List.of("document_id"),
                                                                 "get_documents_by_folder_id",
                                                                 List.of("folder_id", "files_only", "folders_only", "offset", "limit"),
-                                                                "list_folder_children", List.of("folder_id", "offset", "limit"));
+                                                                "list_folder_children", List.of("folder_id", "offset", "limit", "updated_since"));
 
   /**
    * Writes by node id, whose whole effect stays in the space of that node.
