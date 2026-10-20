@@ -128,7 +128,7 @@
     {
       "name": "get_document_outline",
       "title": "Get the outline of a DMS file",
-      "description": "Lists the headings of a document: a Word document's headings, a PDF's bookmarks, a presentation's slide titles, a spreadsheet's sheets. Each heading gives its index, level (1 for a top-level heading), title, the offset and end_offset of its section in the document's text, and its page, slide or sheet number when the document has them. Read one section with read_document_text and its section index, instead of reading the whole document. Works on large files, up to the largest file a user can attach (200 MB by default): the first call on a large file may answer that it is being read, then call it again a minute later. An empty list means the document has no heading; read it by offset then.",
+      "description": "Lists the headings of a document: a Word document's headings, a PDF's bookmarks, a presentation's slide titles, a spreadsheet's sheets (a spreadsheet is read as the text of its rows, one line a row: not its cells' positions or formulas). Each heading gives its index, level (1 for a top-level heading), title, the offset and end_offset of its section in the document's text, and its page, slide or sheet number when the document has them. Read one section with read_document_text and its section index, instead of reading the whole document. Works on large files, up to the largest file a user can attach (200 MB by default): the first call on a large file may answer that it is being read, then call it again a minute later. An empty list means the document has no heading; read it by offset then.",
       "input_schema": {
         "type": "object",
         "properties": {

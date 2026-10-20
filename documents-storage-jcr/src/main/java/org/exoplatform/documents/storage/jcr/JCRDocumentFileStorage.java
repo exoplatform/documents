@@ -145,7 +145,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public static final String                        PAGED_TEXT_MAX_CHARS_PROPERTY            =
                                                                                          "exo.documents.textExtraction.paged.maxChars";
 
-  /** Extracting a file read part by part is abandoned after this many seconds. */
+  /**
+   * Extracting a file read part by part is abandoned after this many seconds.
+   * A file read by a platform reader that builds its whole text before giving
+   * any, an older Office, an Outlook or an OpenDocument file for instance, is
+   * not stopped: it keeps the one extraction thread until it ends.
+   */
   public static final String                        PAGED_TEXT_TIMEOUT_SECONDS_PROPERTY      =
                                                                                          "exo.documents.textExtraction.paged.timeoutSeconds";
 

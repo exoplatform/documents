@@ -85,7 +85,9 @@ import org.exoplatform.services.log.Log;
  * platform's document readers, without an outline; most of them load the
  * whole file, so reading one takes a heap of at least the file's size, up to
  * the largest file read, the same limit as the largest file a user can attach
- * in the UI. One file is extracted at a time; a caller waits for its extraction a bounded time, the
+ * in the UI; and the one that builds its whole text before giving any is not
+ * stopped at the timeout, which is checked as the text is written: it keeps
+ * the extraction thread until it ends. One file is extracted at a time; a caller waits for its extraction a bounded time, the
  * extraction going on after it so a later call finds the text. The text is
  * stored as UTF-16, two bytes a character, so a part is read at its offset
  * without reading what comes before it. The cache is a node's own: another
