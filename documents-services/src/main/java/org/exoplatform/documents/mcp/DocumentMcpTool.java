@@ -474,19 +474,39 @@ public class DocumentMcpTool implements McpToolPlugin {
     documentFileService.updateDocumentDescription(ownerId, documentId, htmlDescription, getCurrentUserIdentityId());
   }
 
+  /**
+   * Lists a page of a folder's children, folders first. A negative limit
+   * lists nothing, as list_folder_children does: the storage would read every
+   * child.
+   *
+   * @param folderId the folder
+   * @param filesOnly whether only the files are kept
+   * @param foldersOnly whether only the folders are kept
+   * @param offset the first child listed, 0 by default
+   * @param limit the most children listed, the default page size when null
+   *          or 0
+   * @return the folder's children on that page
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read the folder
+   */
   public List<DocumentModel> getDocumentsByFolderId(String folderId,
                                                     Boolean filesOnly,
                                                     Boolean foldersOnly,
                                                     Integer offset,
                                                     Integer limit) throws ObjectNotFoundException,
                                                                    IllegalAccessException {
+    int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
+    if (size == 0) {
+      // a negative limit; the storage reads every child when given none
+      return List.of();
+    }
     List<? extends AbstractNode> documentItems = documentFileService.getDocumentItems(FileListingType.FOLDER,
                                                                                       new DocumentFolderFilter(folderId,
                                                                                                                null,
                                                                                                                null,
                                                                                                                null),
                                                                                       getInteger(offset, DEFAULT_OFFSET),
-                                                                                      getInteger(limit, DEFAULT_LIMIT),
+                                                                                      size,
                                                                                       getCurrentUserIdentityId(),
                                                                                       true);
     return documentItems.stream()
