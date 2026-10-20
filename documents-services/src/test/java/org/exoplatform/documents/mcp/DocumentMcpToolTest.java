@@ -2253,8 +2253,9 @@ public class DocumentMcpToolTest {
 
   /**
    * A shortcut listed in a folder carries no rights, its own not being its
-   * target's, and names its target, so the agent asks get_document_permissions
-   * before writing through it; the other children keep theirs. The same for
+   * target's, and names its target, whose id the agent uses to add documents
+   * to the shortcut's folder, asking get_document_permissions for its rights
+   * there; the other children keep theirs. The same for
    * get_documents_by_folder_id, which lists the same children.
    * Mutants: the shortcut's own rights copied, the target not named, the
    * rights of a plain child dropped.
