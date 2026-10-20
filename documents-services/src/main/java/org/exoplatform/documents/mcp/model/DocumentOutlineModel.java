@@ -37,25 +37,5 @@ public record DocumentOutlineModel(@JsonProperty("document_id") String id,
                                    String name,
                                    @JsonProperty("total_chars") long totalChars,
                                    boolean truncated,
-                                   List<HeadingModel> headings) {
-
-  /**
-   * One heading.
-   *
-   * @param index its number, to read its section with read_document_text
-   * @param level its depth, 1 for a top-level heading
-   * @param title its text
-   * @param offset where its section starts in the text
-   * @param endOffset where its section ends: the next heading of the same or a
-   *          higher level, or the end of the text
-   * @param page the PDF page or the slide it is on, null for a Word document
-   */
-  @JsonInclude(Include.NON_NULL)
-  public record HeadingModel(int index,
-                             int level,
-                             String title,
-                             long offset,
-                             @JsonProperty("end_offset") long endOffset,
-                             Integer page) {
-  }
+                                   List<DocumentHeadingModel> headings) {
 }

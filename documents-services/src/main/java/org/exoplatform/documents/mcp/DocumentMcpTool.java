@@ -59,7 +59,7 @@ import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
 import org.exoplatform.documents.mcp.model.DocumentPermissionsModel;
 import org.exoplatform.documents.mcp.model.DocumentOutlineModel;
-import org.exoplatform.documents.mcp.model.DocumentOutlineModel.HeadingModel;
+import org.exoplatform.documents.mcp.model.DocumentHeadingModel;
 import org.exoplatform.documents.mcp.model.DocumentPublicLinkModel;
 import org.exoplatform.documents.mcp.model.DocumentTextPartModel;
 import org.exoplatform.documents.mcp.model.DocumentTreeItemModel;
@@ -628,10 +628,10 @@ public class DocumentMcpTool implements McpToolPlugin {
     AbstractNode document = checkCanAccessDocument(documentId);
     int size = Math.clamp(maxChars == null ? DEFAULT_TEXT_PART_CHARS : maxChars, 1, MAX_TEXT_PART_CHARS);
     long start = offset == null ? 0 : Math.max(0, offset);
-    HeadingModel heading = null;
+    DocumentHeadingModel heading = null;
     long end = Long.MAX_VALUE;
     if (section != null) {
-      List<HeadingModel> headings = toHeadings(getTextPage(documentId, 0, 0));
+      List<DocumentHeadingModel> headings = toHeadings(getTextPage(documentId, 0, 0));
       if (section < 0 || section >= headings.size()) {
         throw new IllegalArgumentException(MSG_NO_SUCH_SECTION.formatted(section, documentId, headings.size()));
       }
@@ -701,9 +701,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param page a part of the text, carrying the outline
    * @return the headings
    */
-  private static List<HeadingModel> toHeadings(DocumentTextPage page) {
+  private static List<DocumentHeadingModel> toHeadings(DocumentTextPage page) {
     List<DocumentOutlineEntry> outline = page.outline();
-    List<HeadingModel> headings = new ArrayList<>(outline.size());
+    List<DocumentHeadingModel> headings = new ArrayList<>(outline.size());
     for (int i = 0; i < outline.size(); i++) {
       DocumentOutlineEntry entry = outline.get(i);
       long end = page.totalChars();
@@ -714,7 +714,7 @@ public class DocumentMcpTool implements McpToolPlugin {
           break;
         }
       }
-      headings.add(new HeadingModel(i, entry.level(), entry.title(), entry.offset(), end, entry.page()));
+      headings.add(new DocumentHeadingModel(i, entry.level(), entry.title(), entry.offset(), end, entry.page()));
     }
     return headings;
   }

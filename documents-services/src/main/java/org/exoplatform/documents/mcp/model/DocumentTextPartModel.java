@@ -39,7 +39,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @JsonInclude(Include.NON_NULL)
 public record DocumentTextPartModel(@JsonProperty("document_id") String id,
                                     String name,
-                                    DocumentOutlineModel.HeadingModel section,
+                                    DocumentHeadingModel section,
                                     long offset,
                                     @JsonProperty("end_offset") long endOffset,
                                     @JsonProperty("total_chars") long totalChars,
