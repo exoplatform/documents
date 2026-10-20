@@ -51,19 +51,28 @@ public abstract class DocumentModel {
   /**
    * Whether the current user can change the document: for a file, edit it or
    * add a version; for a folder, create, upload or rename documents in it.
-   * Null when the rights weren't computed for the listing that returned it.
+   * Null when the rights weren't computed for the listing that returned it,
+   * or for a listed shortcut.
    */
   @JsonProperty("can_edit")
   private Boolean   canEdit;
 
   /**
    * Whether the current user can delete the document, null when the rights
-   * weren't computed for the listing that returned it, or for a shortcut asked
-   * by its id, which resolves to its target: deleting the shortcut removes
-   * only the shortcut.
+   * weren't computed for the listing that returned it, for a listed shortcut,
+   * or for a shortcut asked by its id, which resolves to its target: deleting
+   * the shortcut removes only the shortcut.
    */
   @JsonProperty("can_delete")
   private Boolean   canDelete;
+
+  /**
+   * The id of the document a listed shortcut points to, null for any other
+   * document. A listed shortcut carries no rights: the shortcut's own aren't
+   * its target's, which the target's id tells.
+   */
+  @JsonProperty("shortcut_target_id")
+  private String    shortcutTargetId;
 
   /**
    * Builds the document's common fields, its rights left unknown.
