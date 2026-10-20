@@ -685,10 +685,10 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Tells what the current user may do on a folder or a file: the edit right
-   * as the repository checks it for the user; the delete right from the
-   * document's permission entries, plus the owner's, whom the repository
-   * grants every right although the Documents app's own computation leaves
-   * the owner out.
+   * as the repository checks it for the user; the delete right as the
+   * storage computes it (the document's permission entries, and any document
+   * of the user's own drive), plus the owner's, whom the repository grants
+   * every right although that computation leaves the owner out.
    *
    * @param documentId the folder or file id
    * @return the user's rights on it
@@ -1892,7 +1892,8 @@ public class DocumentMcpTool implements McpToolPlugin {
   /**
    * Copies the user's edit and delete rights the storage computed on a
    * document into its model, leaving them unknown when it computed none. The
-   * storage reads them from the document's permission entries only, while the
+   * storage computes them from the document's permission entries, and a
+   * delete right on any document of the user's own drive, while the
    * repository grants every right to the document's owner: the owner's rights
    * are added here, as {@link #getDocumentPermissions} adds them.
    *
