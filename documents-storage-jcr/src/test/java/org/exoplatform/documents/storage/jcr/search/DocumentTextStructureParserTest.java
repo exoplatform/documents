@@ -78,10 +78,11 @@ class DocumentTextStructureParserTest {
     File file = directory.resolve("thesis.docx").toFile();
     try (XWPFDocument document = new XWPFDocument(); FileOutputStream out = new FileOutputStream(file)) {
       XWPFStyles styles = document.createStyles();
-      styles.addStyle(paragraphStyle("Heading1", "heading 1"));
-      styles.addStyle(paragraphStyle("Titre2", "Titre 2"));
+      // ids that say nothing: the level must come from the style's name
+      styles.addStyle(paragraphStyle("Style7", "heading 1"));
+      styles.addStyle(paragraphStyle("StyleFr", "Titre 2"));
       document.createParagraph().createRun().setText("Introduction");
-      document.getParagraphs().get(0).setStyle("Heading1");
+      document.getParagraphs().get(0).setStyle("Style7");
       document.createParagraph().createRun().setText("Why this thesis exists.");
       var direct = document.createParagraph();
       direct.createRun().setText("Context");
@@ -91,7 +92,7 @@ class DocumentTextStructureParserTest {
       table.getRow(0).getCell(1).setText("Weight");
       var french = document.createParagraph();
       french.createRun().setText("Méthode");
-      french.setStyle("Titre2");
+      french.setStyle("StyleFr");
       document.createParagraph().createRun().setText("We read everything.");
       document.write(out);
     }

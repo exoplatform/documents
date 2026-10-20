@@ -233,9 +233,10 @@ class DocumentPagedTextExtractorTest {
    */
   @Test
   void extractsANewVersionAgain() throws Exception {
-    storeText(DOCUMENT_ID, "first version", 1L);
+    storeText(DOCUMENT_ID, "first version.", 1L);
     assertEquals("first", extractor.getPage(DOCUMENT_ID, 0, 5).text());
 
+    // the same size: only the date of the change tells the versions apart
     storeText(DOCUMENT_ID, "second version", 2L);
 
     assertEquals("second", extractor.getPage(DOCUMENT_ID, 0, 6).text());
@@ -366,6 +367,23 @@ class DocumentPagedTextExtractorTest {
     assertEquals(2, extractions.get());
     extractor.getPage(DOCUMENT_ID, 0, 1);
     assertEquals(3, extractions.get());
+  }
+
+  /**
+   * A text larger than the whole cache is kept for the call waiting for it,
+   * read from one extraction.
+   * Mutants: the text just extracted evicted at once.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void keepsATextLargerThanTheCacheForItsRead() throws Exception {
+    extractor.shutdown();
+    extractor = newExtractor(100, 2000, 50);
+    storeText(DOCUMENT_ID, "c".repeat(60), 1L);
+
+    assertEquals("ccc", extractor.getPage(DOCUMENT_ID, 0, 3).text());
+    assertEquals(1, extractions.get());
   }
 
   /**
