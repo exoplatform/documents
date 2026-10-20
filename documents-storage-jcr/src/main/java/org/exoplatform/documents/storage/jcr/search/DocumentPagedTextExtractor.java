@@ -59,6 +59,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.documents.model.DocumentOutlineEntry;
 import org.exoplatform.documents.model.DocumentTextContent.Status;
 import org.exoplatform.documents.model.DocumentTextPage;
+import org.exoplatform.documents.storage.jcr.model.PagedTextExtraction;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.document.AdvancedDocumentReader;
@@ -132,36 +133,14 @@ public class DocumentPagedTextExtractor {
 
   private final ExecutorService      executor;
 
-  private final Map<String, Future<Extraction>> running = new ConcurrentHashMap<>();
+  private final Map<String, Future<PagedTextExtraction>> running = new ConcurrentHashMap<>();
 
   /** The extracted texts by file version, the least recently read first. */
-  private final LinkedHashMap<String, Extraction> cache = new LinkedHashMap<>(16, 0.75f, true);
+  private final LinkedHashMap<String, PagedTextExtraction> cache = new LinkedHashMap<>(16, 0.75f, true);
 
   private long                       cacheBytes;
 
   private int                        maxCachedVersions      = MAX_CACHED_VERSIONS;
-
-  /**
-   * The text of one version of a file, as extracted.
-   *
-   * @param file the cache file holding the text as UTF-16BE, null without text
-   * @param totalChars the length of the text
-   * @param truncated true when the text was cut at the most characters read
-   * @param outline the file's headings
-   * @param status {@link Status#EXTRACTED}, else why there is no text
-   */
-  record Extraction(Path file, long totalChars, boolean truncated, List<DocumentOutlineEntry> outline, Status status) {
-
-    /**
-     * Builds the extraction of a file that gave no text.
-     *
-     * @param status why
-     * @return the extraction
-     */
-    static Extraction none(Status status) {
-      return new Extraction(null, 0, false, List.of(), status);
-    }
-  }
 
   /**
    * Builds the extractor.
@@ -225,15 +204,22 @@ public class DocumentPagedTextExtractor {
    */
   public DocumentTextPage getPage(String documentId, long offset, int length) {
     for (int attempt = 0; attempt < 2; attempt++) {
-      Extraction extraction = getExtraction(documentId);
+      PagedTextExtraction extraction = getExtraction(documentId);
       if (extraction.status() != Status.EXTRACTED) {
         return DocumentTextPage.none(extraction.status());
       }
       long start = Math.max(0, Math.min(offset, extraction.totalChars()));
       int count = (int) Math.max(0, Math.min(length, extraction.totalChars() - start));
       try {
-        String text = readChars(extraction.file(), start, count);
-        return new DocumentTextPage(text, start, extraction.totalChars(), extraction.truncated(), extraction.outline(), Status.EXTRACTED);
+        String stored = readStoredChars(extraction.file(), start, count);
+        // a part starting on a pair's second half starts after it: the next part follows the text given
+        long textStart = !stored.isEmpty() && Character.isLowSurrogate(stored.charAt(0)) ? start + 1 : start;
+        return new DocumentTextPage(withoutHalfPairs(stored),
+                                    textStart,
+                                    extraction.totalChars(),
+                                    extraction.truncated(),
+                                    extraction.outline(),
+                                    Status.EXTRACTED);
       } catch (IOException e) {
         // the cache file was evicted between the lookup and the read: extracted again once
         LOG.debug("The cached text of document {} could not be read, extracting it again", documentId, e);
@@ -267,28 +253,28 @@ public class DocumentPagedTextExtractor {
    * @return the extraction, {@link Status#BUSY} when it isn't over in time or
    *         can't be queued
    */
-  Extraction getExtraction(String documentId) {
+  PagedTextExtraction getExtraction(String documentId) {
     String key;
     try {
       key = versionKey(documentId);
     } catch (RepositoryException e) {
       LOG.warn("Could not read the version of document {}", documentId, e);
-      return Extraction.none(Status.UNREADABLE);
+      return PagedTextExtraction.none(Status.UNREADABLE);
     }
     if (key == null) {
-      return Extraction.none(Status.NOT_A_FILE);
+      return PagedTextExtraction.none(Status.NOT_A_FILE);
     }
-    Future<Extraction> future;
+    Future<PagedTextExtraction> future;
     // the cache and the running extractions are looked up, and an extraction started, under
     // one lock its end takes too: a version is never extracted twice into its one cache file
     synchronized (cache) {
-      Extraction cached = cache.get(key);
+      PagedTextExtraction cached = cache.get(key);
       if (cached != null) {
         return cached;
       }
       try {
         future = running.computeIfAbsent(key, k -> executor.submit(() -> {
-          Extraction extraction = null;
+          PagedTextExtraction extraction = null;
           try {
             extraction = extract(documentId, k);
             return extraction;
@@ -303,20 +289,20 @@ public class DocumentPagedTextExtractor {
         }));
       } catch (RejectedExecutionException e) {
         LOG.warn("Too many large documents are being read, the text of document {} is not extracted", documentId);
-        return Extraction.none(Status.BUSY);
+        return PagedTextExtraction.none(Status.BUSY);
       }
     }
     try {
       return future.get(waitMillis, TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
       // the extraction goes on: a later call finds its text
-      return Extraction.none(Status.BUSY);
+      return PagedTextExtraction.none(Status.BUSY);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      return Extraction.none(Status.UNREADABLE);
+      return PagedTextExtraction.none(Status.UNREADABLE);
     } catch (ExecutionException e) {
       LOG.warn("Error extracting the text of document {}", documentId, e.getCause());
-      return Extraction.none(Status.UNREADABLE);
+      return PagedTextExtraction.none(Status.UNREADABLE);
     }
   }
 
@@ -370,31 +356,31 @@ public class DocumentPagedTextExtractor {
    * @return the extraction
    * @throws Exception when the repository fails
    */
-  protected Extraction extract(String documentId, String key) throws Exception { // NOSONAR
+  protected PagedTextExtraction extract(String documentId, String key) throws Exception { // NOSONAR
     Session session = openSystemSession();
     File binary = null;
     Path textFile = cacheDirectory.resolve(DigestUtils.sha256Hex(key) + ".txt");
     try {
       Node content = getContent(session, documentId);
       if (content == null) {
-        return Extraction.none(Status.NOT_A_FILE);
+        return PagedTextExtraction.none(Status.NOT_A_FILE);
       }
       Node node = content.getParent();
       Property data = content.getProperty(NodeTypeConstants.JCR_DATA);
       if (data.getLength() > maxFileSizeBytes) {
-        return Extraction.none(Status.TOO_LARGE);
+        return PagedTextExtraction.none(Status.TOO_LARGE);
       }
       String mimeType = DocumentTextExtractor.resolveMimeType(node, content);
       boolean structured = DocumentTextStructureParser.isStructured(mimeType);
       DocumentReader reader = null;
       if (!structured) {
         if (!formats.isSupported(mimeType)) {
-          return Extraction.none(Status.UNSUPPORTED_FORMAT);
+          return PagedTextExtraction.none(Status.UNSUPPORTED_FORMAT);
         }
         try {
           reader = documentReaderService.getDocumentReader(mimeType);
         } catch (HandlerNotFoundException e) {
-          return Extraction.none(Status.UNSUPPORTED_FORMAT);
+          return PagedTextExtraction.none(Status.UNSUPPORTED_FORMAT);
         }
       }
       binary = File.createTempFile("documents-paged-text-", ".bin");
@@ -419,17 +405,17 @@ public class DocumentPagedTextExtractor {
       } catch (InterruptedIOException e) {
         Files.deleteIfExists(textFile);
         LOG.warn("Reading the text of document {} took more than {} ms, abandoned", documentId, timeoutMillis);
-        return Extraction.none(Status.TIMED_OUT);
+        return PagedTextExtraction.none(Status.TIMED_OUT);
       } catch (IOException | RuntimeException e) {
         Files.deleteIfExists(textFile);
         LOG.warn("Could not read the text of document {}", documentId, e);
-        return Extraction.none(Status.UNREADABLE);
+        return PagedTextExtraction.none(Status.UNREADABLE);
       }
       if (writer.count() == 0 || isBlank(textFile, writer.count())) {
         Files.deleteIfExists(textFile);
-        return Extraction.none(Status.NO_TEXT);
+        return PagedTextExtraction.none(Status.NO_TEXT);
       }
-      return new Extraction(textFile, writer.count(), writer.isTruncated(), List.copyOf(outline), Status.EXTRACTED);
+      return new PagedTextExtraction(textFile, writer.count(), writer.isTruncated(), List.copyOf(outline), Status.EXTRACTED);
     } finally {
       session.logout();
       if (binary != null) {
@@ -481,7 +467,8 @@ public class DocumentPagedTextExtractor {
   /**
    * Reads characters of a cache file at an offset, a surrogate pair cut at
    * either end being left out whole: the part is then one character shorter
-   * than asked, and the next part starts after the pair's first half.
+   * than asked, and starts one character later when the offset falls on a
+   * pair's second half.
    *
    * @param file the cache file
    * @param offset the first character
@@ -490,6 +477,20 @@ public class DocumentPagedTextExtractor {
    * @throws IOException when the file can't be read
    */
   static String readChars(Path file, long offset, int count) throws IOException {
+    return withoutHalfPairs(readStoredChars(file, offset, count));
+  }
+
+  /**
+   * Reads characters of a cache file at an offset as they are stored, a half
+   * pair at either end included.
+   *
+   * @param file the cache file
+   * @param offset the first character
+   * @param count how many characters
+   * @return the characters
+   * @throws IOException when the file can't be read
+   */
+  private static String readStoredChars(Path file, long offset, int count) throws IOException {
     if (count <= 0) {
       return "";
     }
@@ -499,7 +500,19 @@ public class DocumentPagedTextExtractor {
       in.readFully(bytes);
     }
     // the chars as stored, a half pair kept as it is, never decoded into a replacement character
-    String text = ByteBuffer.wrap(bytes).asCharBuffer().toString();
+    return ByteBuffer.wrap(bytes).asCharBuffer().toString();
+  }
+
+  /**
+   * Leaves out a surrogate pair's half at either end of a text.
+   *
+   * @param text the text
+   * @return the text without a half pair at its ends
+   */
+  private static String withoutHalfPairs(String text) {
+    if (text.isEmpty()) {
+      return text;
+    }
     int start = Character.isLowSurrogate(text.charAt(0)) ? 1 : 0;
     int end = Character.isHighSurrogate(text.charAt(text.length() - 1)) ? text.length() - 1 : text.length();
     return start >= end ? "" : text.substring(start, end);
@@ -512,13 +525,13 @@ public class DocumentPagedTextExtractor {
    * @param key the version key
    * @param extraction the extraction
    */
-  private void remember(String key, Extraction extraction) {
+  private void remember(String key, PagedTextExtraction extraction) {
     synchronized (cache) {
       cache.put(key, extraction);
       cacheBytes += extraction.totalChars() * 2;
-      Iterator<Map.Entry<String, Extraction>> eldest = cache.entrySet().iterator();
+      Iterator<Map.Entry<String, PagedTextExtraction>> eldest = cache.entrySet().iterator();
       while ((cacheBytes > maxCacheBytes || cache.size() > maxCachedVersions) && eldest.hasNext()) {
-        Map.Entry<String, Extraction> entry = eldest.next();
+        Map.Entry<String, PagedTextExtraction> entry = eldest.next();
         if (entry.getValue() == extraction) {
           // the text just extracted stays, however large, for the call waiting for it
           continue;
@@ -535,7 +548,7 @@ public class DocumentPagedTextExtractor {
    *
    * @param extraction the extraction
    */
-  private void forget(Extraction extraction) {
+  private void forget(PagedTextExtraction extraction) {
     // under the lock an extraction starts under: no new extraction of the version writes the file meanwhile
     synchronized (cache) {
       if (cache.values().removeIf(cached -> cached == extraction)) {
@@ -550,7 +563,7 @@ public class DocumentPagedTextExtractor {
    *
    * @param extraction the extraction
    */
-  private void deleteQuietly(Extraction extraction) {
+  private void deleteQuietly(PagedTextExtraction extraction) {
     if (extraction.file() != null) {
       try {
         Files.deleteIfExists(extraction.file());

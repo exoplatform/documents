@@ -55,6 +55,7 @@ import org.mockito.quality.Strictness;
 
 import org.exoplatform.documents.model.DocumentTextContent.Status;
 import org.exoplatform.documents.model.DocumentTextPage;
+import org.exoplatform.documents.storage.jcr.model.PagedTextExtraction;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.document.AdvancedDocumentReader;
 import org.exoplatform.services.document.DocumentReaderService;
@@ -136,7 +137,7 @@ class DocumentPagedTextExtractorTest {
       }
 
       @Override
-      protected Extraction extract(String documentId, String key) throws Exception {
+      protected PagedTextExtraction extract(String documentId, String key) throws Exception {
         extractions.incrementAndGet();
         return super.extract(documentId, key);
       }
@@ -468,6 +469,26 @@ class DocumentPagedTextExtractorTest {
     assertEquals("ab\uD83D\uDE00", DocumentPagedTextExtractor.readChars(file, 0, 4));
     assertEquals("c", DocumentPagedTextExtractor.readChars(file, 3, 2));
     assertNull(DocumentTextPage.none(Status.BUSY).text());
+  }
+
+  /**
+   * A part asked from inside a surrogate pair starts after it, at the offset
+   * its text really starts at, so the next part, at its offset plus its
+   * length, follows it without a gap or an overlap.
+   * Mutants: the asked offset returned.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void aPartAskedInsideAPairStartsWhereItsTextDoes() throws Exception {
+    storeText(DOCUMENT_ID, "ab😀cdef", 1L);
+
+    DocumentTextPage page = extractor.getPage(DOCUMENT_ID, 3, 3);
+
+    assertEquals("cd", page.text());
+    assertEquals(4, page.offset());
+    assertEquals("ef", extractor.getPage(DOCUMENT_ID, page.offset() + page.text().length(), 10).text());
+    assertEquals(2, extractor.getPage(DOCUMENT_ID, 2, 3).offset());
   }
 
 }
