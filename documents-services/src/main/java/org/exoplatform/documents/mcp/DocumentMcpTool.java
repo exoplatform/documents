@@ -500,7 +500,12 @@ public class DocumentMcpTool implements McpToolPlugin {
   public DocumentModel getDocumentById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
     AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
-    return toDocumentModel(document);
+    DocumentModel model = toDocumentModel(document);
+    if (!StringUtils.equals(documentId, document.getId())) {
+      // a shortcut resolves to its target: deleting the shortcut removes only the shortcut
+      model.setCanDelete(null);
+    }
+    return model;
   }
 
   /**
@@ -1902,7 +1907,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * storage computes them from the document's permission entries, and a
    * delete right on any document of the user's own drive, while the
    * repository grants every right to the document's owner: the owner's rights
-   * are added here, as {@link #getDocumentPermissions} adds them.
+   * are added here, as {@link #getDocumentPermissions} adds them. The rights
+   * are the node's the storage returned: a shortcut listed in a folder is the
+   * shortcut itself, a shortcut asked by its id resolves to its target.
    *
    * @param model the model to complete
    * @param document the document it maps

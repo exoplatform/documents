@@ -2317,6 +2317,7 @@ public class DocumentMcpToolTest {
     FileNode target = fileNode(DOCUMENT_ID, "application/pdf");
     target.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
     when(documentFileService.getDocumentById(shortcutId, USERNAME)).thenReturn(target);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(target);
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
 
     org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(shortcutId);
@@ -2326,6 +2327,9 @@ public class DocumentMcpToolTest {
     assertTrue(permissions.isCanEdit());
     assertEquals(null, permissions.getCanDelete());
     verify(documentFileService, never()).hasEditPermissionOnDocument(eq(shortcutId), anyLong());
+    // get_document_by_id on the shortcut leaves its delete right out the same way
+    assertEquals(null, documentMcpTool.getDocumentById(shortcutId).getCanDelete());
+    assertEquals(Boolean.TRUE, documentMcpTool.getDocumentById(DOCUMENT_ID).getCanDelete());
   }
 
 }
