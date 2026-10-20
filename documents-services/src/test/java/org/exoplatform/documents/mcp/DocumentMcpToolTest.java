@@ -124,7 +124,7 @@ public class DocumentMcpToolTest {
   private boolean                        scopeUnreadable;
 
   @Before
-  public void setUp() {
+  public void setUp() throws Exception {
     documentFileService = Mockito.mock(DocumentFileService.class);
     attachmentService = Mockito.mock(AttachmentService.class);
     socialAttachmentService = Mockito.mock(org.exoplatform.social.attachment.AttachmentService.class);
@@ -143,6 +143,8 @@ public class DocumentMcpToolTest {
     org.exoplatform.social.core.identity.model.Identity socialIdentity =
                                                                        new org.exoplatform.social.core.identity.model.Identity(String.valueOf(USER_IDENTITY_ID));
     lenient().when(identityManager.getOrCreateUserIdentity(USERNAME)).thenReturn(socialIdentity);
+    // A folder a test writes into is writable unless the test says otherwise
+    lenient().when(documentFileService.hasEditPermissionOnDocument(eq(FOLDER_ID), anyLong())).thenReturn(true);
 
     documentMcpTool = new DocumentMcpTool(documentFileService,
                                           attachmentService,
@@ -604,7 +606,7 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    List<DocumentFileModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null, null);
+    List<DocumentFileModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null, null, null);
 
     assertNotNull(models);
     assertEquals(1, models.size());
@@ -616,7 +618,7 @@ public class DocumentMcpToolTest {
     when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(null);
 
     assertThrows(ObjectNotFoundException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null, null));
   }
 
   @Test
@@ -628,7 +630,7 @@ public class DocumentMcpToolTest {
     when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(false);
 
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null, null));
   }
 
   @Test
@@ -682,7 +684,7 @@ public class DocumentMcpToolTest {
                                                                                                                     "application/pdf"),
                                                                                                            folderNode(FOLDER_ID)));
 
-    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null);
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
 
     assertNotNull(models);
     assertEquals(2, models.size());
@@ -690,7 +692,7 @@ public class DocumentMcpToolTest {
 
   @Test
   public void listFolderChildrenBlankFolderFails() {
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.listFolderChildren(" ", null, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.listFolderChildren(" ", null, null, null));
   }
 
   @Test
@@ -1960,7 +1962,7 @@ public class DocumentMcpToolTest {
                                             () -> documentMcpTool.getRootFolderBySpace(null, "Marketing"));
     assertTrue(e.getMessage(), e.getMessage().contains("limited to the space with id 6"));
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.searchDocuments("report", null, "Marketing", null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", null, "Marketing", null, null, null, null, null));
     verify(documentFileService, never()).getSpaceRootFolder(eq(5L), any());
 
     scopeSpaceId = null;
@@ -1985,14 +1987,14 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    assertEquals(1, documentMcpTool.searchDocuments("report", null, "legal", null, null, null, null).size());
+    assertEquals(1, documentMcpTool.searchDocuments("report", null, "legal", null, null, null, null, null).size());
 
     verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> Long.valueOf(306L).equals(filter.getOwnerId())),
                                        eq(currentIdentity),
                                        anyInt(),
                                        anyInt());
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.searchDocuments("report", 6L, "legal", null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", 6L, "legal", null, null, null, null, null));
   }
 
   /**
@@ -2035,6 +2037,222 @@ public class DocumentMcpToolTest {
     marketing.setPrettyName("marketing");
     when(spaceService.getMemberSpaces(USERNAME)).thenReturn(SpaceNameResolverTest.listAccessOf(marketing, legal));
     return legal;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rights on a document, and the documents changed since a date
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Builds a child of a folder last changed at the given time.
+   *
+   * @param id the child id
+   * @param folder true for a folder, false for a file
+   * @param modifiedDate the last change, in milliseconds
+   * @return the child
+   */
+  private AbstractNode childChangedAt(String id, boolean folder, long modifiedDate) {
+    AbstractNode node = folder ? folderNode(id) : fileNode(id, "application/pdf");
+    node.setModifiedDate(modifiedDate);
+    return node;
+  }
+
+  /**
+   * A page past the first is read from the first child up to the page's end
+   * and cut here, because the storage restarts its files at the first one
+   * whatever the offset: asking the storage for the offset would repeat files.
+   * Mutants: the offset passed to the storage, the page not cut.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenReadsFromTheFirstChildAndCutsThePage() throws Exception {
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(4), anyLong())).thenReturn(List.of(childChangedAt("a", true, 1L),
+                                                                                                    childChangedAt("b", false, 1L),
+                                                                                                    childChangedAt("c", false, 1L),
+                                                                                                    childChangedAt("d", false, 1L)));
+
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, 2, 2, null);
+
+    assertEquals(List.of("c", "d"), models.stream().map(DocumentModel::getId).toList());
+  }
+
+  /**
+   * With updated_since, only the children changed since then are listed,
+   * folders and files alike, the most recent first, the page cut after the
+   * sort. A date alone, without a time, is the start of that day in UTC.
+   * Mutants: the filter dropped or inverted, the sort dropped or reversed,
+   * the page cut before the sort, the date read in another zone.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenUpdatedSinceKeepsTheChangedOnesMostRecentFirst() throws Exception {
+    long since = java.time.LocalDate.parse("2026-10-01").atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli();
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(List.of(childChangedAt("old-folder", true, since - 1),
+                            childChangedAt("new-folder", true, since + 10),
+                            childChangedAt("same-time", false, since),
+                            childChangedAt("newest", false, since + 50)));
+
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, 2, "2026-10-01");
+
+    assertEquals(List.of("newest", "new-folder"), models.stream().map(DocumentModel::getId).toList());
+  }
+
+  /**
+   * A folder holding more children than the scan reads is refused with
+   * updated_since, rather than answered with part of its changes, and the
+   * refusal names the search to use instead.
+   * Mutants: the bound check dropped, or applied at the bound itself.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenUpdatedSinceRefusesAFolderTooLargeToScan() throws Exception {
+    List<AbstractNode> children = new java.util.ArrayList<>();
+    for (int i = 0; i <= DocumentMcpTool.MAX_SCANNED_CHILDREN; i++) {
+      children.add(childChangedAt("child-" + i, false, 1L));
+    }
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(children)
+        .thenReturn(children.subList(0, DocumentMcpTool.MAX_SCANNED_CHILDREN));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "2026-10-01"));
+    assertTrue(error.getMessage().contains("search_documents"));
+    assertEquals(0, documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "2026-10-01").size());
+  }
+
+  /**
+   * A date the tool can't read is refused with the accepted forms, never
+   * taken as no date; a date-time with an offset is read with it.
+   * Mutants: an unreadable date ignored, the offset dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void updatedSinceIsReadAsAnIsoDateOrRefused() throws Exception {
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "last week"));
+    assertTrue(error.getMessage().contains("ISO-8601"));
+
+    long since = java.time.OffsetDateTime.parse("2026-10-01T10:00:00+02:00").toInstant().toEpochMilli();
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(List.of(childChangedAt("before", false, since - 1), childChangedAt("after", false, since)));
+    assertEquals(List.of("after"),
+                 documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "2026-10-01T10:00:00+02:00")
+                                .stream()
+                                .map(DocumentModel::getId)
+                                .toList());
+  }
+
+  /**
+   * search_documents with updated_since and no query searches the files
+   * changed since then, the most recent first; with neither, it is refused
+   * before the search runs.
+   * Mutants: the date not set on the filter, the sort not set or ascending,
+   * the query still required, the refusal dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsUpdatedSinceSearchesTheChangedFilesMostRecentFirst() throws Exception {
+    long since = java.time.Instant.parse("2026-10-01T00:00:00Z").toEpochMilli();
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                    eq(currentIdentity),
+                                    anyInt(),
+                                    anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
+
+    assertEquals(1, documentMcpTool.searchDocuments(null, null, null, FOLDER_ID, null, null, null, "2026-10-01").size());
+
+    verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> Long.valueOf(since)
+                                                                                                                       .equals(filter.getAfterDate())
+        && filter.getSortField() == org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE
+        && !filter.isAscending()
+        && FOLDER_ID.equals(filter.getParentFolderId())), eq(currentIdentity), anyInt(), anyInt());
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.searchDocuments(" ", null, null, FOLDER_ID, null, null, null, null));
+    verify(documentFileService, Mockito.times(1)).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                                         any(),
+                                                         anyInt(),
+                                                         anyInt());
+  }
+
+  /**
+   * The listed folders and files carry the rights the storage computed for
+   * the user, and a folder its last change; a document whose rights weren't
+   * computed leaves them unknown rather than false.
+   * Mutants: the rights not copied, edit and delete swapped, unknown rights
+   * reported as false, the folder's date dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listedDocumentsCarryTheUsersRightsAndTheFoldersLastChange() throws Exception {
+    AbstractNode folder = childChangedAt(FOLDER_ID, true, 1_000L);
+    folder.setAcl(new NodePermission(true, true, false, false, null, null, null, null));
+    AbstractNode file = childChangedAt(DOCUMENT_ID, false, 1L);
+    file.setAcl(new NodePermission(true, false, true, false, null, null, null, null));
+    AbstractNode unknown = childChangedAt("unknown", false, 1L);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(folder, file, unknown));
+
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
+
+    assertEquals(Boolean.TRUE, models.get(0).getCanEdit());
+    assertEquals(Boolean.FALSE, models.get(0).getCanDelete());
+    assertNotNull(((DocumentFolderModel) models.get(0)).getUpdatedDate());
+    assertEquals(Boolean.FALSE, models.get(1).getCanEdit());
+    assertEquals(Boolean.TRUE, models.get(1).getCanDelete());
+    assertEquals(null, models.get(2).getCanEdit());
+    assertEquals(null, models.get(2).getCanDelete());
+  }
+
+  /**
+   * get_document_permissions takes the edit right from the repository's
+   * check for the user, not from the listing's computed flag, and the
+   * delete right from the computed one.
+   * Mutants: the edit right taken from the acl, the delete right dropped,
+   * the folder flag dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentPermissionsTellsTheEditRightTheRepositoryChecks() throws Exception {
+    FolderNode folder = folderNode(FOLDER_ID);
+    folder.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(FOLDER_ID);
+
+    assertEquals(FOLDER_ID, permissions.getId());
+    assertTrue(permissions.isFolder());
+    assertTrue(permissions.isCanRead());
+    assertFalse(permissions.isCanEdit());
+    assertTrue(permissions.isCanDelete());
+  }
+
+  /**
+   * A document added to a folder the user can only read is refused before
+   * anything is staged or imported, with a reason naming the folder and the
+   * tool that tells the rights, instead of failing later in the background.
+   * Mutants: the check dropped, or run after the import.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void createDocumentInAReadOnlyFolderIsRefusedBeforeTheImport() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    IllegalAccessException error = assertThrows(IllegalAccessException.class,
+                                                () -> documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "body"));
+
+    assertTrue(error.getMessage().contains("get_document_permissions"));
+    assertTrue(error.getMessage().contains("Projects"));
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
   }
 
 }
