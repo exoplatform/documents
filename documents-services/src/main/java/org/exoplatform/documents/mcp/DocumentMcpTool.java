@@ -20,7 +20,10 @@ import static io.meeds.mcp.server.tool.util.McpToolPluginUtils.getInteger;
 import static io.meeds.mcp.server.util.McpToolUtils.formatDate;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -214,18 +217,19 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * The refusal of a base64 file too long for one upload_document call: a
-   * larger one is sent in pieces.
+   * larger one is sent through an upload link, or in pieces without a shell.
    */
   private static final String      MSG_UPLOAD_BASE64_TOO_LONG =
-                                                              "'base64' is at most %d characters in one upload_document call, and this one is %d. Send a larger file in pieces: start_document_upload, then append_document_upload_chunk for each piece of at most %d characters.";
+                                                              "'base64' is at most %d characters in one upload_document call, and this one is %d. For a file on your machine, open an upload link with start_upload, run its curl command in your shell, then call upload_document with its upload_id. With no shell, send a small file in pieces: start_document_upload, then append_document_upload_chunk for each piece of at most %d characters.";
 
   /**
    * The refusal of a base64 new version too long for one add_document_version
-   * call: a larger one is sent in pieces into the file's folder, under the
-   * file's name, as a new version of the file of that name.
+   * call: a larger one is sent through an upload link, or, without a shell,
+   * in pieces into the file's folder, under the file's name, as a new version
+   * of the file of that name.
    */
   private static final String      MSG_VERSION_BASE64_TOO_LONG =
-                                                               "'base64' is at most %d characters in one add_document_version call, and this one is %d. Send a larger new version in pieces: start_document_upload into the file's folder (its parent_folder_id), with the file's exact name and on_conflict=new_version, then append_document_upload_chunk for each piece of at most %d characters. That adds a version to the file of that name in that folder (a new file if the folder holds none of that name), without a version_summary.";
+                                                               "'base64' is at most %d characters in one add_document_version call, and this one is %d. For a file on your machine, open an upload link with start_upload, run its curl command in your shell, then call add_document_version with its upload_id. With no shell, send a small new version in pieces: start_document_upload into the file's folder (its parent_folder_id), with the file's exact name and on_conflict=new_version, then append_document_upload_chunk for each piece of at most %d characters. That adds a version to the file of that name in that folder (a new file if the folder holds none of that name), without a version_summary.";
 
   /**
    * The refusal of a base64 new version too long for one add_document_version
@@ -241,7 +245,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    * limit when it is lower: what to do with a larger file.
    */
   private static final String      MSG_URL_TOO_LARGE_HINT =
-                                                          " A file is read from a URL up to %d MB. For a larger file, ask the user to attach it in the conversation, or, if you hold its bytes, send it in pieces with start_document_upload then append_document_upload_chunk.";
+                                                          " A file is read from a URL up to %d MB. For a larger file on your machine, open an upload link with start_upload, run its curl command in your shell, then pass its upload_id; otherwise ask the user to attach it in the conversation.";
 
   /**
    * How mcp-server's shared fetcher words its refusal of a body over the
@@ -250,6 +254,32 @@ public class DocumentMcpTool implements McpToolPlugin {
    * instead.
    */
   private static final String      FETCH_TOO_LARGE_MARKER = "exceeds the maximum allowed size";
+
+  /**
+   * The refusal of an upload id that names no upload of the user's on this
+   * node, worded alike whether the id is unknown or another user's.
+   */
+  private static final String      MSG_UPLOAD_ID_UNKNOWN  =
+                                                          "No upload '%s' of yours is waiting on this server: it expired, a tool already consumed it, or its curl command reached another server node. Check it with get_upload, or open a new one with start_upload and run its curl command again.";
+
+  /** The refusal of an upload still being sent, left for a later call. */
+  private static final String      MSG_UPLOAD_ID_UPLOADING =
+                                                           "The upload '%s' is still being sent: wait for its curl command to answer {\"status\":\"uploaded\"} (get_upload tells where it stands), then call this tool again with it.";
+
+  /** The refusal of an upload that failed, or whose file is gone. */
+  private static final String      MSG_UPLOAD_ID_FAILED   =
+                                                          "The upload '%s' did not complete, and is dropped: open a new one with start_upload and run its curl command again.";
+
+  /**
+   * The refusal of an upload id in a call limited to a space, where
+   * start_upload is not offered.
+   */
+  private static final String      MSG_UPLOAD_ID_IN_SPACE =
+                                                          "While this run is limited to a space, a file sent through an upload link can't be used: start_upload isn't available in it. Ask the user to add the file from the Documents app.";
+
+  /** The refusal of an attached file over the upload size limit. */
+  private static final String      MSG_ATTACHMENT_TOO_LARGE =
+                                                            "The attached file is %d bytes, over the %d MB a file uploaded can be.";
 
   /** The type an upload is staged under: the filing resolves the file's own from its name. */
   private static final String      DEFAULT_UPLOAD_MIME_TYPE = "application/octet-stream";
@@ -907,11 +937,12 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Uploads a real / binary document (PDF, image, office file…) from exactly one
-   * of three sources: a file/image the user attached in the chat conversation
+   * of four sources: a file/image the user attached in the chat conversation
    * (resolved server-side as the current user via
    * <code>attachment_object_type</code> / <code>attachment_object_id</code>), a
-   * base64 payload, or an http(s) URL (fetched server-side behind an SSRF
-   * guard).
+   * file the user sent through an upload link (<code>upload_id</code>, filed
+   * from its staged file, never read into memory), a base64 payload, or an
+   * http(s) URL (fetched server-side behind an SSRF guard).
    *
    * @param parentFolderId the destination folder id (get it from
    *          get_root_folder_for_user / get_root_folder_by_space /
@@ -934,13 +965,18 @@ public class DocumentMcpTool implements McpToolPlugin {
    *          model
    * @param onConflict what to do when the folder holds a file of that name:
    *          keep_both (the default) or new_version
+   * @param uploadId the id start_upload returned, once its curl command sent
+   *          the file: one of the user's own uploads, consumed by this call
+   *          once read, whether it succeeds or fails (mutually exclusive with
+   *          the other sources)
    * @return the created document
    * @throws IllegalArgumentException when a parameter is missing or wrong (the
    *           folder id, the source, the name, the conflict action), the file
-   *           is empty or over the upload size limit, or a new version is
-   *           asked of a folder, a shortcut or a file that keeps no versions
+   *           is empty or over the upload size limit, the upload id names no
+   *           upload of the user's, or a new version is asked of a folder, a
+   *           shortcut or a file that keeps no versions
    * @throws IllegalStateException when the file can't be read from its source
-   *           or filed
+   *           or filed, or the upload is still being sent or failed
    * @throws ObjectNotFoundException when the folder or the attachment doesn't
    *           exist
    * @throws IllegalAccessException when the user can't read the attachment,
@@ -952,21 +988,26 @@ public class DocumentMcpTool implements McpToolPlugin {
                                       String url,
                                       String attachmentObjectType,
                                       String attachmentObjectId,
-                                      String onConflict) throws IllegalAccessException, ObjectNotFoundException {
+                                      String onConflict,
+                                      String uploadId) throws IllegalAccessException, ObjectNotFoundException {
     checkFolderIdParameter(parentFolderId);
     UploadConflictAction conflictAction = toConflictAction(onConflict);
     boolean hasAttachment = StringUtils.isNotBlank(attachmentObjectId);
     boolean hasBase64 = StringUtils.isNotBlank(base64);
     boolean hasUrl = StringUtils.isNotBlank(url);
-    int sources = (hasAttachment ? 1 : 0) + (hasBase64 ? 1 : 0) + (hasUrl ? 1 : 0);
+    boolean hasUploadId = StringUtils.isNotBlank(uploadId);
+    int sources = (hasAttachment ? 1 : 0) + (hasBase64 ? 1 : 0) + (hasUrl ? 1 : 0) + (hasUploadId ? 1 : 0);
     if (sources == 0) {
       throw new IllegalArgumentException("""
           Provide a file to upload from exactly one source:
-          a file/image the user attached in the conversation, a 'base64' payload, or an http(s) 'url'.
+          a file/image the user attached in the conversation, an 'upload_id' from start_upload, a 'base64' payload, or an http(s) 'url'.
           """);
     }
     if (sources > 1) {
-      throw new IllegalArgumentException("Provide the file to upload from only one source: the chat attachment, 'base64' or 'url' — not several.");
+      throw new IllegalArgumentException("Provide the file to upload from only one source: the chat attachment, 'upload_id', 'base64' or 'url' — not several.");
+    }
+    if (hasUploadId) {
+      return fileStagedUpload(parentFolderId, uploadId.trim(), name, conflictAction);
     }
     if (hasBase64) {
       checkBase64Length(base64, MSG_UPLOAD_BASE64_TOO_LONG);
@@ -975,18 +1016,9 @@ public class DocumentMcpTool implements McpToolPlugin {
     String fileName = name;
     try {
       if (hasAttachment) {
-        // Reuse UploadToolUtils.resolveImage's attachment branch: it resolves the
-        // referenced file to its raw bytes as the current user (ACL enforced) and,
-        // unlike its base64/url branches, does NOT constrain to image mime types —
-        // so any attached file works. Pass null url/base64 to stay on that branch.
-        UploadToolUtils.FetchedContent fetched = UploadToolUtils.resolveImage(socialAttachmentService,
-                                                                            fileService,
-                                                                            getCurrentUserAclIdentity(),
-                                                                            new UploadToolUtils.ImageSource(null,
-                                                                                                            null,
-                                                                                                            attachmentObjectType,
-                                                                                                            attachmentObjectId),
-                                                                            DocumentUploadLimit.getMaxBytes());
+        UploadToolUtils.FetchedContent fetched = readChatAttachment(attachmentObjectType,
+                                                                    attachmentObjectId,
+                                                                    DocumentUploadLimit.getMaxBytes());
         bytes = fetched.bytes();
         if (StringUtils.isBlank(fileName)) {
           fileName = fetched.fileName();
@@ -1423,8 +1455,10 @@ public class DocumentMcpTool implements McpToolPlugin {
    * (the previous content stays retrievable via list_document_versions /
    * restore_document_version). The new bytes come from exactly one source: a
    * chat-authored text <code>content</code> string, a <code>base64</code>
-   * payload, an http(s) <code>url</code>, or a file the user attached in the
-   * conversation. The file's name and type are unchanged; only its content and
+   * payload, an http(s) <code>url</code>, a file the user attached in the
+   * conversation, or a file the user sent through an upload link
+   * (<code>upload_id</code>, streamed from its staged file, never read into
+   * memory). The file's name and type are unchanged; only its content and
    * version history are updated.
    *
    * @param documentId the id of the existing file to add a version to (get it
@@ -1443,7 +1477,20 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param attachmentObjectId the object id of the file the user attached in
    *          chat; set automatically by the client — do not fill it from the model
    * @param versionSummary an optional change note stored on the new version
+   * @param uploadId the id start_upload returned, once its curl command sent
+   *          the file: one of the user's own uploads, consumed by this call
+   *          once read, whether it succeeds or fails; refused in a call
+   *          limited to a space
    * @return the updated document (with its refreshed size / modification info)
+   * @throws IllegalArgumentException when not exactly one source is given,
+   *           the document is a folder, the content is over the upload size
+   *           limit or refused by a validator, or the upload id names no
+   *           upload of the user's
+   * @throws IllegalStateException when the content can't be read from its
+   *           source, or the upload is still being sent or failed
+   * @throws IllegalAccessException when the user can't edit the document, or
+   *           an upload id is given in a call limited to a space
+   * @throws ObjectNotFoundException when the document doesn't exist
    */
   public DocumentModel addDocumentVersion(String documentId,
                                           String content,
@@ -1451,7 +1498,8 @@ public class DocumentMcpTool implements McpToolPlugin {
                                           String url,
                                           String attachmentObjectType,
                                           String attachmentObjectId,
-                                          String versionSummary) throws IllegalAccessException, ObjectNotFoundException {
+                                          String versionSummary,
+                                          String uploadId) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode node = checkCanAccessDocument(documentId);
     if (!(node instanceof FileNode)) {
       throw new IllegalArgumentException("Only a file can have versions; the id %s points to a folder. Provide a file document_id."
@@ -1463,10 +1511,15 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot add a new version to it."
           .formatted(documentId));
     }
-    byte[] bytes = resolveContentBytes(content, base64, url, attachmentObjectType, attachmentObjectId);
-    // checked as a new file uploaded from a browser is, before it replaces the file's content
-    documentFileService.validateUploadedContent(node.getName(), ((FileNode) node).getMimeType(), bytes);
-    documentFileService.createNewVersion(fileId, getCurrentUserName(), new ByteArrayInputStream(bytes));
+    checkOneVersionSource(content, base64, url, attachmentObjectId, uploadId);
+    if (StringUtils.isNotBlank(uploadId)) {
+      addVersionFromStagedUpload((FileNode) node, fileId, uploadId.trim());
+    } else {
+      byte[] bytes = resolveContentBytes(content, base64, url, attachmentObjectType, attachmentObjectId);
+      // checked as a new file uploaded from a browser is, before it replaces the file's content
+      documentFileService.validateUploadedContent(node.getName(), ((FileNode) node).getMimeType(), bytes);
+      documentFileService.createNewVersion(fileId, getCurrentUserName(), new ByteArrayInputStream(bytes));
+    }
     if (StringUtils.isNotBlank(versionSummary)) {
       applyVersionSummary(fileId, versionSummary);
     }
@@ -1744,8 +1797,39 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Resolves the raw bytes for a new file version from exactly one of the
-   * supported sources (chat text, base64, url or a chat attachment), reusing
+   * Checks a new file version names exactly one source: chat text, base64, a
+   * url, a chat attachment or an upload id.
+   *
+   * @param content chat text
+   * @param base64 base64-encoded bytes
+   * @param url an http(s) url
+   * @param attachmentObjectId the chat attachment's object id
+   * @param uploadId the id of one of the user's uploads
+   * @throws IllegalArgumentException when no source, or several, are given
+   */
+  private static void checkOneVersionSource(String content,
+                                            String base64,
+                                            String url,
+                                            String attachmentObjectId,
+                                            String uploadId) {
+    int sources = (StringUtils.isNotBlank(content) ? 1 : 0) + (StringUtils.isNotBlank(base64) ? 1 : 0)
+        + (StringUtils.isNotBlank(url) ? 1 : 0) + (StringUtils.isNotBlank(attachmentObjectId) ? 1 : 0)
+        + (StringUtils.isNotBlank(uploadId) ? 1 : 0);
+    if (sources == 0) {
+      throw new IllegalArgumentException("""
+          Provide the new version content from exactly one source:
+          a text 'content' string, an 'upload_id' from start_upload, a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation.
+          """);
+    }
+    if (sources > 1) {
+      throw new IllegalArgumentException("Provide the new version content from only one source: 'content', 'upload_id', 'base64', 'url' or the chat attachment — not several.");
+    }
+  }
+
+  /**
+   * Resolves the raw bytes for a new file version from the one source given
+   * (chat text, base64, url or a chat attachment), {@link #checkOneVersionSource}
+   * having checked there is exactly one, reusing
    * {@code upload_document}'s attachment/url resolution so the same ACL and SSRF
    * guards apply. Every source is capped at the upload size limit,
    * {@link DocumentUploadLimit#getMaxBytes()}, as a new file is; base64 at
@@ -1761,8 +1845,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param attachmentObjectType the chat attachment's object type
    * @param attachmentObjectId the chat attachment's object id
    * @return the bytes
-   * @throws IllegalArgumentException when not exactly one source is given, or
-   *           the content is over the limit
+   * @throws IllegalArgumentException when the content is over the limit
    * @throws IllegalAccessException when the attachment can't be read
    * @throws ObjectNotFoundException when the attachment doesn't exist
    */
@@ -1773,18 +1856,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                      String attachmentObjectId) throws IllegalAccessException, ObjectNotFoundException {
     boolean hasContent = StringUtils.isNotBlank(content);
     boolean hasBase64 = StringUtils.isNotBlank(base64);
-    boolean hasUrl = StringUtils.isNotBlank(url);
     boolean hasAttachment = StringUtils.isNotBlank(attachmentObjectId);
-    int sources = (hasContent ? 1 : 0) + (hasBase64 ? 1 : 0) + (hasUrl ? 1 : 0) + (hasAttachment ? 1 : 0);
-    if (sources == 0) {
-      throw new IllegalArgumentException("""
-          Provide the new version content from exactly one source:
-          a text 'content' string, a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation.
-          """);
-    }
-    if (sources > 1) {
-      throw new IllegalArgumentException("Provide the new version content from only one source: 'content', 'base64', 'url' or the chat attachment — not several.");
-    }
     if (hasBase64) {
       checkBase64Length(base64, isLimitedToASpace() ? MSG_VERSION_BASE64_TOO_LONG_IN_SPACE : MSG_VERSION_BASE64_TOO_LONG);
     }
@@ -1800,20 +1872,7 @@ public class DocumentMcpTool implements McpToolPlugin {
         // within the limit: checkBase64Length bounds it far below the smallest one, 1 MB
         return UploadToolUtils.decodeBase64(base64);
       } else if (hasAttachment) {
-        // the attachment is not bounded where it is read
-        byte[] bytes = UploadToolUtils.resolveImage(socialAttachmentService,
-                                                    fileService,
-                                                    getCurrentUserAclIdentity(),
-                                                    new UploadToolUtils.ImageSource(null,
-                                                                                    null,
-                                                                                    attachmentObjectType,
-                                                                                    attachmentObjectId),
-                                                    maxBytes)
-                                      .bytes();
-        if (bytes.length > maxBytes) {
-          throw new IllegalArgumentException(MSG_CONTENT_TOO_LARGE.formatted(bytes.length, maxBytes));
-        }
-        return bytes;
+        return readChatAttachment(attachmentObjectType, attachmentObjectId, maxBytes).bytes();
       } else {
         return fetchUrl(url, null).bytes();
       }
@@ -1822,6 +1881,63 @@ public class DocumentMcpTool implements McpToolPlugin {
     } catch (RuntimeException e) {
       throw new IllegalStateException("Could not read the new version content from the given source: " + e.getMessage());
     }
+  }
+
+  /**
+   * Reads the first file attached to a platform object, as the current user
+   * (the attachment's ACL is enforced), whatever its type: any attached file
+   * can be filed or versioned, not only an image. Its size is checked on the
+   * stored size before the file is read, and on the bytes read.
+   *
+   * @param attachmentObjectType the type of the object holding the attachment
+   * @param attachmentObjectId the id of the object holding the attachment
+   * @param maxBytes the most bytes accepted
+   * @return the file's bytes, its stored type and its name
+   * @throws IllegalArgumentException when the object type is missing, or the
+   *           file is over the limit
+   * @throws IllegalStateException when the file can't be read
+   * @throws IllegalAccessException when the user can't read the object
+   * @throws ObjectNotFoundException when the object has no file, or its file
+   *           is empty
+   */
+  private UploadToolUtils.FetchedContent readChatAttachment(String attachmentObjectType,
+                                                            String attachmentObjectId,
+                                                            long maxBytes) throws IllegalAccessException,
+                                                                           ObjectNotFoundException {
+    if (StringUtils.isBlank(attachmentObjectType)) {
+      throw new IllegalArgumentException("attachment_object_type is required together with attachment_object_id.");
+    }
+    List<String> fileIds = socialAttachmentService.getAttachmentFileIds(attachmentObjectType,
+                                                                        attachmentObjectId,
+                                                                        getCurrentUserAclIdentity());
+    if (fileIds == null || fileIds.isEmpty()) {
+      throw new ObjectNotFoundException("No file attachment found for %s/%s.".formatted(attachmentObjectType, attachmentObjectId));
+    }
+    org.exoplatform.commons.file.model.FileItem file;
+    try {
+      file = fileService.getFile(Long.parseLong(fileIds.get(0)));
+    } catch (Exception e) {
+      throw new IllegalStateException("Could not read the referenced attachment file: " + e.getMessage());
+    }
+    org.exoplatform.commons.file.model.FileInfo fileInfo = file == null ? null : file.getFileInfo();
+    if (fileInfo != null && fileInfo.getSize() > maxBytes) {
+      throw new IllegalArgumentException(MSG_ATTACHMENT_TOO_LARGE.formatted(fileInfo.getSize(), maxBytes / (1024 * 1024)));
+    }
+    byte[] bytes;
+    try {
+      bytes = file == null ? null : file.getAsByte();
+    } catch (Exception e) {
+      throw new IllegalStateException("Could not read the referenced attachment file: " + e.getMessage());
+    }
+    if (bytes == null || bytes.length == 0) {
+      throw new ObjectNotFoundException("The referenced attachment file is empty or could not be read.");
+    }
+    if (bytes.length > maxBytes) {
+      throw new IllegalArgumentException(MSG_ATTACHMENT_TOO_LARGE.formatted((long) bytes.length, maxBytes / (1024 * 1024)));
+    }
+    return new UploadToolUtils.FetchedContent(bytes,
+                                              fileInfo == null ? null : fileInfo.getMimetype(),
+                                              fileInfo == null ? null : fileInfo.getName());
   }
 
   /**
@@ -2226,6 +2342,155 @@ public class DocumentMcpTool implements McpToolPlugin {
     } finally {
       UploadToolUtils.release(uploadService, uploadId);
     }
+  }
+
+  /**
+   * Files one of the user's uploads, sent through an upload link, into a
+   * folder: its staged file is handed to the filing as it is, never read into
+   * memory, under the name given or, when none is, the name it was uploaded
+   * under; the upload takes the name it is filed under, which the filing
+   * types the file from. The folder is checked first, which leaves the upload in place
+   * when it is refused; once read, the upload is consumed, whether the filing
+   * succeeds or fails.
+   *
+   * @param parentFolderId the folder
+   * @param uploadId the upload
+   * @param name the file name, blank for the upload's own
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @return the filed document
+   * @throws IllegalArgumentException when the upload id names no upload of
+   *           the user's, the file is empty, over the upload size limit or
+   *           refused by a validator, it has no name, or a new version is
+   *           asked of a folder, a shortcut or a file that keeps no versions
+   * @throws IllegalStateException when the upload is still being sent or
+   *           failed, or the file can't be read or filed
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't add documents to it,
+   *           or the call is limited to a space
+   */
+  private DocumentModel fileStagedUpload(String parentFolderId,
+                                         String uploadId,
+                                         String name,
+                                         UploadConflictAction conflictAction) throws IllegalAccessException,
+                                                                              ObjectNotFoundException {
+    checkUploadFolder(parentFolderId);
+    UploadResource upload = readStagedUpload(uploadId);
+    try {
+      checkStagedFile(upload, uploadId);
+      String fileName = StringUtils.isBlank(name) ? upload.getFileName() : name;
+      if (StringUtils.isBlank(fileName)) {
+        throw new IllegalArgumentException("The upload '%s' carries no file name: pass 'name', the document file name with its extension (e.g. 'report.pdf')."
+            .formatted(uploadId));
+      }
+      fileName = sanitizeFileName(fileName);
+      // the filing types the file from the upload's own name: the upload is the user's, and consumed by this call
+      upload.setFileName(fileName);
+      // the filing reads the staged file, runs the upload validators on it and removes the upload once filed
+      return fileUpload(parentFolderId, uploadId, fileName, conflictAction);
+    } finally {
+      uploadService.removeUploadResource(uploadId, getCurrentUserName());
+    }
+  }
+
+  /**
+   * Adds a new version to a file from one of the user's uploads, sent through
+   * an upload link: its staged file is checked by the upload validators under
+   * the file's name and type, as the other sources are, then streamed into
+   * the version, never read into memory. The file is checked by the caller
+   * before, which leaves the upload in place when it is refused; once read,
+   * the upload is consumed, whether the version is added or not.
+   *
+   * @param file the file versioned
+   * @param fileId the id of the file versioned, a shortcut's target
+   * @param uploadId the upload
+   * @throws IllegalArgumentException when the upload id names no upload of
+   *           the user's, or the file is empty, over the upload size limit or
+   *           refused by a validator
+   * @throws IllegalStateException when the upload is still being sent or
+   *           failed, or its file can't be read
+   * @throws IllegalAccessException when the call is limited to a space
+   */
+  private void addVersionFromStagedUpload(FileNode file, String fileId, String uploadId) throws IllegalAccessException {
+    UploadResource upload = readStagedUpload(uploadId);
+    try {
+      Path stagedFile = checkStagedFile(upload, uploadId);
+      documentFileService.validateUploadedFile(file.getName(), file.getMimeType(), stagedFile);
+      try (InputStream content = Files.newInputStream(stagedFile)) {
+        documentFileService.createNewVersion(fileId, getCurrentUserName(), content);
+      } catch (IOException e) {
+        throw new IllegalStateException("The file of the upload '%s' can't be read: open a new one with start_upload.".formatted(uploadId),
+                                        e);
+      }
+    } finally {
+      uploadService.removeUploadResource(uploadId, getCurrentUserName());
+    }
+  }
+
+  /**
+   * Reads one of the user's uploads through the owner-checked accessor: an
+   * id that is unknown on this node and one owned by another user are
+   * refused alike, so the refusal tells nothing of another user's uploads.
+   * An upload still being sent is refused and left in place, for its curl
+   * command to complete and a later call to consume: removing it would delete
+   * a file still being written. An upload id is refused in a call limited to
+   * a space, where start_upload is not offered.
+   *
+   * @param uploadId the upload
+   * @return the upload, sent or failed
+   * @throws IllegalArgumentException when the id names no upload of the
+   *           user's on this node
+   * @throws IllegalStateException when the upload is still being sent
+   * @throws IllegalAccessException when the call is limited to a space
+   */
+  private UploadResource readStagedUpload(String uploadId) throws IllegalAccessException {
+    if (isLimitedToASpace()) {
+      throw new IllegalAccessException(MSG_UPLOAD_ID_IN_SPACE);
+    }
+    UploadResource upload = uploadService.getUploadResource(uploadId, getCurrentUserName());
+    if (upload == null) {
+      throw new IllegalArgumentException(MSG_UPLOAD_ID_UNKNOWN.formatted(uploadId));
+    }
+    if (upload.getStatus() == UploadResource.UPLOADING_STATUS) {
+      throw new IllegalStateException(MSG_UPLOAD_ID_UPLOADING.formatted(uploadId));
+    }
+    return upload;
+  }
+
+  /**
+   * Checks an upload read for this call is complete, and that its file is
+   * on disk, not empty and within the upload size limit, measured on the file
+   * itself.
+   *
+   * @param upload the upload
+   * @param uploadId its id
+   * @return its file
+   * @throws IllegalArgumentException when the file is empty or over the upload
+   *           size limit
+   * @throws IllegalStateException when the upload failed, or its file is
+   *           missing or can't be read
+   */
+  private static Path checkStagedFile(UploadResource upload, String uploadId) {
+    if (upload.getStatus() != UploadResource.UPLOADED_STATUS || StringUtils.isBlank(upload.getStoreLocation())) {
+      throw new IllegalStateException(MSG_UPLOAD_ID_FAILED.formatted(uploadId));
+    }
+    Path stagedFile = Path.of(upload.getStoreLocation());
+    long size;
+    try {
+      size = Files.size(stagedFile);
+    } catch (IOException e) {
+      throw new IllegalStateException(MSG_UPLOAD_ID_FAILED.formatted(uploadId), e);
+    }
+    if (size == 0) {
+      throw new IllegalArgumentException("The upload '%s' holds an empty file; there is nothing to file.".formatted(uploadId));
+    }
+    long maxBytes = DocumentUploadLimit.getMaxBytes();
+    if (size > maxBytes) {
+      throw new IllegalArgumentException("The upload '%s' is %d bytes, over the %d MB a document can be, and is dropped: only a file within that size can be filed, through a new start_upload.".formatted(uploadId,
+                                                                                                                      size,
+                                                                                                                      maxBytes
+                                                                                                                          / (1024 * 1024)));
+    }
+    return stagedFile;
   }
 
   /**
