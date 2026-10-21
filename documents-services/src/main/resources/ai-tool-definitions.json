@@ -28,7 +28,7 @@
     {
       "name": "get_documents_by_folder_id",
       "title": "Get DMS files and/or folders under a given folder",
-      "description": "Retrieves the files (and/or folders) located under a folder stored in the DMS.",
+      "description": "Retrieves the files (and/or folders) located under a folder stored in the DMS. Each gives whether you can edit or delete it (can_edit, can_delete); a shortcut gives shortcut_target_id and no rights: to add documents to a shortcut's folder, use shortcut_target_id as the folder id; get_document_permissions tells your rights there.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -80,7 +80,7 @@
     {
       "name": "get_document_by_id",
       "title": "Get DMS folder or file by its id",
-      "description": "Fetches the metadata of a document given its unique identifier.",
+      "description": "Fetches the metadata of a document given its unique identifier, with can_edit and can_delete, your rights on it. A shortcut's id gives its target's metadata and edit right; can_delete is then left out, deleting a shortcut removing only the shortcut.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -210,13 +210,17 @@
     {
       "name": "search_documents",
       "title": "Search for files",
-      "description": "Searches for documents matching the specified query and optional filters.",
+      "description": "Searches for documents matching the specified query and optional filters. With updated_since, returns the files changed since that date, the most recent first, with or without a query: use it to keep a folder in sync instead of opening each document. It searches the whole tree under the folder or the space, files only, as the search index holds them (a change can take a moment to show). Each file says whether you can edit or delete it (can_edit, can_delete); a shortcut the search finds is answered as its target, with the target's id and rights.",
       "input_schema": {
         "type": "object",
         "properties": {
           "query": {
             "type": "string",
-            "description": "Full-text search query string."
+            "description": "Full-text search query string. Optional when you pass updated_since."
+          },
+          "updated_since": {
+            "type": "string",
+            "description": "Optional ISO-8601 date or date-time, such as 2026-10-01 or 2026-10-01T08:00:00Z (a date or a date-time without an offset is taken in UTC): only the files changed since then, the most recent first."
           },
           "space_id": {
             "type": "integer",
@@ -243,9 +247,7 @@
             "description": "If true, restricts results to favorite documents."
           }
         },
-        "required": [
-          "query"
-        ]
+        "required": []
       },
       "annotations": {
         "readOnlyHint": true,
@@ -257,7 +259,7 @@
     {
       "name": "list_folder_children",
       "title": "List DMS folder children",
-      "description": "Lists the direct child files and folders of a folder. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
+      "description": "Lists the direct child files and folders of a folder, folders first. Each child gives its updated_date and whether you can edit it (for a folder: add or upload documents in it) or delete it (can_edit, can_delete); a shortcut gives shortcut_target_id and no rights: to add documents to a shortcut's folder, use shortcut_target_id as the folder id; get_document_permissions tells your rights there. With updated_since, lists only the children changed since that date, the most recent first; a folder whose listing returns more than 1000 documents is refused, then use search_documents with parent_folder_id and updated_since. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -272,6 +274,10 @@
           "limit": {
             "type": "integer",
             "description": "Maximum number of results to return."
+          },
+          "updated_since": {
+            "type": "string",
+            "description": "Optional ISO-8601 date or date-time, such as 2026-10-01 or 2026-10-01T08:00:00Z (a date or a date-time without an offset is taken in UTC): only the children changed since then."
           }
         },
         "required": [
@@ -284,7 +290,31 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["offset", "limit"] }
+      "space_scope": { "object_arg": "folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["offset", "limit", "updated_since"] }
+    },
+    {
+      "name": "get_document_permissions",
+      "title": "Get your rights on a DMS folder or file",
+      "description": "Tells what you may do on a folder or a file before you try: can_read, can_edit (for a folder: create, upload or rename documents in it; for a file: edit it or add a version) and can_delete. Call it before writing into a folder you didn't create. For a shortcut, the rights are its target's (shortcut_target_id) and can_delete is left out: deleting a shortcut removes only the shortcut. A document you can't read is refused.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the folder or the file."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32" }
     },
     {
       "name": "get_folder_breadcrumb",

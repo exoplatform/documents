@@ -222,6 +222,20 @@ public class JCRDocumentsUtil {
     return fileNodes;
   }
 
+  /**
+   * Converts query rows to the folders and files they list, as
+   * {@link #toNodesInRowOrder} does, then sorts them, folders first, by the
+   * filter's sort field and direction.
+   *
+   * @param identityManager the identity manager
+   * @param session the user's session
+   * @param nodeIterator the rows
+   * @param aclIdentity the user's identity
+   * @param spaceService the space service
+   * @param includeHiddenFiles whether hidden children are listed
+   * @param filter the filter holding the sort field and direction
+   * @return the folders and files, sorted
+   */
   public static List<AbstractNode> toNodes(IdentityManager identityManager,
                                            Session session,
                                            NodeIterator nodeIterator,
@@ -229,35 +243,12 @@ public class JCRDocumentsUtil {
                                            SpaceService spaceService,
                                            boolean includeHiddenFiles,
                                            DocumentFolderFilter filter) {
-    List<AbstractNode> fileNodes = new ArrayList<>();
-    while (nodeIterator.hasNext()) {
-      Node node = nodeIterator.nextNode();
-      String sourceID = "";
-      Node sourceNode = node;
-      try {
-        if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-          sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-          sourceNode = getNodeByIdentifier(session, sourceID);
-          if (sourceNode == null) {
-            continue;
-          }
-        }
-        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED))
-            && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
-          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
-          fileNodes.add(folderNode);
-        }
-        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE))
-            && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
-          FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
-          fileNode.setMimeType(getMimeType(sourceNode));
-          fileNodes.add(fileNode);
-        }
-      } catch (RepositoryException e) {
-        LOG.warn("Error getting Folder Node for search result with path {}", node, e);
-      }
-    }
-
+    List<AbstractNode> fileNodes = toNodesInRowOrder(identityManager,
+                                                     session,
+                                                     nodeIterator,
+                                                     aclIdentity,
+                                                     spaceService,
+                                                     includeHiddenFiles);
     fileNodes.sort((o1, o2) -> {
       if ((o1.isFolder() && o2.isFolder()) || (!o1.isFolder() && !o2.isFolder())) {
         if (filter.getSortField().equals(DocumentSortField.MODIFIED_DATE)) {
@@ -289,6 +280,59 @@ public class JCRDocumentsUtil {
         return 1;
       }
     });
+    return fileNodes;
+  }
+
+  /**
+   * Converts the rows of a folder query to the folders and files they list,
+   * in the order the rows come in: a shortcut is converted with its target's
+   * kind, and a shortcut whose target is gone or can't be read, a hidden child
+   * when hidden children are not listed, and a node neither a folder nor a
+   * file are left out. A listing paged over the rows of a sorted query keeps
+   * that query's order, so that a longer read extends a shorter one.
+   *
+   * @param identityManager the identity manager
+   * @param session the user's session
+   * @param nodeIterator the rows
+   * @param aclIdentity the user's identity
+   * @param spaceService the space service
+   * @param includeHiddenFiles whether hidden children are listed
+   * @return the folders and files, in the rows' order
+   */
+  public static List<AbstractNode> toNodesInRowOrder(IdentityManager identityManager,
+                                                     Session session,
+                                                     NodeIterator nodeIterator,
+                                                     Identity aclIdentity,
+                                                     SpaceService spaceService,
+                                                     boolean includeHiddenFiles) {
+    List<AbstractNode> fileNodes = new ArrayList<>();
+    while (nodeIterator.hasNext()) {
+      Node node = nodeIterator.nextNode();
+      String sourceID = "";
+      Node sourceNode = node;
+      try {
+        if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+          sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          sourceNode = getNodeByIdentifier(session, sourceID);
+          if (sourceNode == null) {
+            continue;
+          }
+        }
+        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED))
+            && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
+          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
+          fileNodes.add(folderNode);
+        }
+        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE))
+            && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
+          FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
+          fileNode.setMimeType(getMimeType(sourceNode));
+          fileNodes.add(fileNode);
+        }
+      } catch (RepositoryException e) {
+        LOG.warn("Error getting Folder Node for search result with path {}", node, e);
+      }
+    }
     return fileNodes;
   }
 
