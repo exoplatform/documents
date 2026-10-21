@@ -2426,15 +2426,22 @@ public class DocumentMcpToolTest {
    */
   @Test
   public void aCallLimitedToASpaceRefusesAFolderShortcutAsAShortcut() throws Exception {
-    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    String shortcutId = "00000000000000000000000000000005";
+    when(documentFileService.getDocumentById(shortcutId, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     lenient().when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
-    lenient().when(documentFileService.getDocumentSpaceGroupId("shortcut-id")).thenReturn(null);
+    // reached only if the space were checked first: a shortcut node belongs to no space drive
+    lenient().when(documentFileService.getDocumentSpaceGroupId(shortcutId)).thenReturn(null);
     scopeSpaceId = 12L;
 
-    assertRefusedAsAShortcut(() -> documentMcpTool.moveDocument(DOCUMENT_ID, "shortcut-id", null), "destination_folder_id");
-    assertRefusedAsAShortcut(() -> documentMcpTool.copyDocument(DOCUMENT_ID, "shortcut-id"), "destination_folder_id");
-    assertRefusedAsAShortcut(() -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, "shortcut-id", null),
-                             "destination_folder_id");
+    for (ThrowingRunnable call : List.<ThrowingRunnable> of(() -> documentMcpTool.moveDocument(DOCUMENT_ID, shortcutId, null),
+                                                            () -> documentMcpTool.copyDocument(DOCUMENT_ID, shortcutId),
+                                                            () -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID,
+                                                                                                         shortcutId,
+                                                                                                         null))) {
+      IllegalArgumentException error = assertThrows(IllegalArgumentException.class, call);
+      assertTrue(error.getMessage(), error.getMessage().contains(shortcutId + " is a shortcut to the folder " + FOLDER_ID));
+      assertTrue(error.getMessage(), error.getMessage().contains("destination_folder_id"));
+    }
     scopeSpaceId = null;
   }
 
