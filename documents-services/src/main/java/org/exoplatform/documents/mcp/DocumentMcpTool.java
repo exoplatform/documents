@@ -290,8 +290,52 @@ public class DocumentMcpTool implements McpToolPlugin {
   /** The argument of the tools that move, copy or link a document to a folder. */
   private static final String      DESTINATION_FOLDER_ID_ARG = "destination_folder_id";
 
-  /** The most children of a folder listed at once. */
-  private static final int         IMPORT_POLL_PAGE_SIZE  = 200;
+  /**
+   * The children of a folder read in one page when a tool looks a child
+   * folder up by name, or lists a folder's children before and after a copy
+   * or a duplicate to find the one added: only that first page is read, so a
+   * folder holding more children is searched in its first ones only.
+   */
+  private static final int         FOLDER_PAGE_SIZE       = 200;
+
+  /**
+   * The refusal of a base64 file too long for one upload_document call: a
+   * larger one is sent in pieces.
+   */
+  private static final String      MSG_UPLOAD_BASE64_TOO_LONG =
+                                                              "'base64' is at most %d characters in one upload_document call, and this one is %d. Send a larger file in pieces: start_document_upload, then append_document_upload_chunk for each piece of at most %d characters.";
+
+  /**
+   * The refusal of a base64 new version too long for one add_document_version
+   * call: a larger one is sent in pieces into the file's folder, under the
+   * file's name, as a new version of the file of that name.
+   */
+  private static final String      MSG_VERSION_BASE64_TOO_LONG =
+                                                               "'base64' is at most %d characters in one add_document_version call, and this one is %d. Send a larger new version in pieces: start_document_upload into the file's folder (its parent_folder_id), with the file's exact name and on_conflict=new_version, then append_document_upload_chunk for each piece of at most %d characters. That adds a version to the file of that name in that folder (a new file if the folder holds none of that name), without a version_summary.";
+
+  /**
+   * The refusal of a base64 new version too long for one add_document_version
+   * call in a call limited to a space, where the tools that send a file in
+   * pieces are not offered.
+   */
+  private static final String      MSG_VERSION_BASE64_TOO_LONG_IN_SPACE =
+                                                                        "'base64' is at most %d characters in one add_document_version call, and this one is %d. While this run is limited to a space, a larger new version can't be sent from here: sending a file in pieces isn't available in it. Ask the user to add the new version from the Documents app.";
+
+  /**
+   * Appended to the fetcher's refusal of a URL over
+   * {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES}, or the upload size
+   * limit when it is lower: what to do with a larger file.
+   */
+  private static final String      MSG_URL_TOO_LARGE_HINT =
+                                                          " A file is read from a URL up to %d MB. For a larger file, ask the user to attach it in the conversation, or, if you hold its bytes, send it in pieces with start_document_upload then append_document_upload_chunk.";
+
+  /**
+   * How mcp-server's shared fetcher words its refusal of a body over the
+   * limit asked ({@code UploadToolUtils#fetchInternal}, failure
+   * {@code TOO_LARGE}): the one refusal this tool completes with what to do
+   * instead.
+   */
+  private static final String      FETCH_TOO_LARGE_MARKER = "exceeds the maximum allowed size";
 
   /** The type an upload is staged under: the filing resolves the file's own from its name. */
   private static final String      DEFAULT_UPLOAD_MIME_TYPE = "application/octet-stream";
@@ -1235,10 +1279,13 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param name the document file name including its extension (e.g.
    *          'report.pdf'); when uploading from a URL or a chat attachment it may
    *          be left blank to reuse the source file name
-   * @param base64 the file bytes encoded in base64 (mutually exclusive with url /
-   *          the chat attachment)
-   * @param url an http(s) URL to download the file from (mutually exclusive with
-   *          base64 / the chat attachment)
+   * @param base64 the file bytes encoded in base64, at most
+   *          {@code CHUNK_CHARS} (20000) characters, a larger file being sent in
+   *          pieces (mutually exclusive with url / the chat attachment)
+   * @param url an http(s) URL to download the file from, read up to
+   *          {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES}, or the upload size
+   *          limit when it is lower (mutually exclusive with base64 / the chat
+   *          attachment)
    * @param attachmentObjectType the object type of the file the user attached in
    *          chat; set automatically by the client — do not fill it from the
    *          model
@@ -1281,6 +1328,9 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (sources > 1) {
       throw new IllegalArgumentException("Provide the file to upload from only one source: the chat attachment, 'base64' or 'url' — not several.");
     }
+    if (hasBase64) {
+      checkBase64Length(base64, MSG_UPLOAD_BASE64_TOO_LONG);
+    }
     byte[] bytes;
     String fileName = name;
     try {
@@ -1307,7 +1357,7 @@ public class DocumentMcpTool implements McpToolPlugin {
         }
         bytes = UploadToolUtils.decodeBase64(base64);
       } else {
-        UploadToolUtils.FetchedContent fetched = UploadToolUtils.fetchUrl(url, DocumentUploadLimit.getMaxBytes(), name);
+        UploadToolUtils.FetchedContent fetched = fetchUrl(url, name);
         bytes = fetched.bytes();
         if (StringUtils.isBlank(fileName)) {
           fileName = fetched.fileName();
@@ -1743,9 +1793,12 @@ public class DocumentMcpTool implements McpToolPlugin {
    *          search_documents)
    * @param content plain text / markdown / HTML body to write as the new version
    *          (use for text files)
-   * @param base64 the new file bytes encoded in base64
+   * @param base64 the new file bytes encoded in base64, at most
+   *          {@code CHUNK_CHARS} (20000) characters
    * @param url an http(s) URL to download the new content from (fetched
-   *          server-side behind an SSRF guard)
+   *          server-side behind an SSRF guard, up to
+   *          {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES}, or the upload
+   *          size limit when it is lower)
    * @param attachmentObjectType the object type of the file the user attached in
    *          chat; set automatically by the client — do not fill it from the model
    * @param attachmentObjectId the object id of the file the user attached in
@@ -2056,11 +2109,15 @@ public class DocumentMcpTool implements McpToolPlugin {
    * supported sources (chat text, base64, url or a chat attachment), reusing
    * {@code upload_document}'s attachment/url resolution so the same ACL and SSRF
    * guards apply. Every source is capped at the upload size limit,
-   * {@link DocumentUploadLimit#getMaxBytes()}, as a new file is; a url within
-   * the shared fetcher's own ceiling.
+   * {@link DocumentUploadLimit#getMaxBytes()}, as a new file is; base64 at
+   * {@link #CHUNK_CHARS} characters, checked before it is decoded; a url read up to
+   * {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES} at most. A base64 one
+   * too long names the tools that send it in pieces, which a call limited to
+   * a space does not offer.
    *
    * @param content chat text
-   * @param base64 base64-encoded bytes
+   * @param base64 base64-encoded bytes, at most {@link #CHUNK_CHARS}
+   *          characters
    * @param url an http(s) url
    * @param attachmentObjectType the chat attachment's object type
    * @param attachmentObjectId the chat attachment's object id
@@ -2089,14 +2146,20 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (sources > 1) {
       throw new IllegalArgumentException("Provide the new version content from only one source: 'content', 'base64', 'url' or the chat attachment — not several.");
     }
+    if (hasBase64) {
+      checkBase64Length(base64, isLimitedToASpace() ? MSG_VERSION_BASE64_TOO_LONG_IN_SPACE : MSG_VERSION_BASE64_TOO_LONG);
+    }
     long maxBytes = DocumentUploadLimit.getMaxBytes();
     try {
-      if (hasContent || hasBase64) {
-        byte[] bytes = hasContent ? content.getBytes(StandardCharsets.UTF_8) : UploadToolUtils.decodeBase64(base64);
+      if (hasContent) {
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
         if (bytes.length > maxBytes) {
           throw new IllegalArgumentException(MSG_CONTENT_TOO_LARGE.formatted(bytes.length, maxBytes));
         }
         return bytes;
+      } else if (hasBase64) {
+        // within the limit: checkBase64Length bounds it far below the smallest one, 1 MB
+        return UploadToolUtils.decodeBase64(base64);
       } else if (hasAttachment) {
         // the attachment is not bounded where it is read
         byte[] bytes = UploadToolUtils.resolveImage(socialAttachmentService,
@@ -2113,12 +2176,67 @@ public class DocumentMcpTool implements McpToolPlugin {
         }
         return bytes;
       } else {
-        return UploadToolUtils.fetchUrl(url, maxBytes, null).bytes();
+        return fetchUrl(url, null).bytes();
       }
     } catch (IllegalArgumentException | IllegalStateException e) {
       throw e;
     } catch (RuntimeException e) {
       throw new IllegalStateException("Could not read the new version content from the given source: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Refuses a base64 file longer than one tool call carries, before it is
+   * decoded: a larger file is sent in pieces, which the refusal names.
+   *
+   * @param base64 the base64 file, not blank
+   * @param message the refusal, formatted with the most characters, the
+   *          file's characters and the most characters of a piece
+   * @throws IllegalArgumentException when the file is longer than
+   *           {@link #CHUNK_CHARS} characters
+   */
+  private static void checkBase64Length(String base64, String message) {
+    if (base64.length() > CHUNK_CHARS) {
+      throw new IllegalArgumentException(message.formatted(CHUNK_CHARS, base64.length(), CHUNK_CHARS));
+    }
+  }
+
+  /**
+   * Tells whether this call is limited to a space; a call whose space can't
+   * be read is taken as limited, as the space checks take it.
+   *
+   * @return true when the call is limited to a space, or its space can't be
+   *         read
+   */
+  private boolean isLimitedToASpace() {
+    try {
+      return getScopeSpaceId() != null;
+    } catch (RuntimeException e) {
+      return true;
+    }
+  }
+
+  /**
+   * Downloads a file through mcp-server's guarded fetcher, reading at most
+   * {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES}, or the upload size
+   * limit when it is lower, and completes the refusal of a larger file with
+   * what to do instead.
+   *
+   * @param url the http(s) URL
+   * @param defaultFileName the file name when the URL's path has none
+   * @return the downloaded bytes, type and file name
+   * @throws IllegalArgumentException when the fetcher refuses the URL or its
+   *           answer, the file over the limit included
+   */
+  private static UploadToolUtils.FetchedContent fetchUrl(String url, String defaultFileName) {
+    long maxBytes = Math.min(DocumentUploadLimit.URL_FETCH_MAX_BYTES, DocumentUploadLimit.getMaxBytes());
+    try {
+      return UploadToolUtils.fetchUrl(url, maxBytes, defaultFileName);
+    } catch (IllegalArgumentException e) {
+      if (StringUtils.contains(e.getMessage(), FETCH_TOO_LARGE_MARKER)) {
+        throw new IllegalArgumentException(e.getMessage() + MSG_URL_TOO_LARGE_HINT.formatted(maxBytes / (1024 * 1024)), e);
+      }
+      throw e;
     }
   }
 
@@ -2337,7 +2455,7 @@ public class DocumentMcpTool implements McpToolPlugin {
   private String findChildFolderId(String folderId, String folderName) throws IllegalAccessException,
                                                                        ObjectNotFoundException {
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    return documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE, getCurrentUserIdentityId())
+    return documentFileService.getFolderChildNodes(filter, 0, FOLDER_PAGE_SIZE, getCurrentUserIdentityId())
                               .stream()
                               .filter(FolderNode.class::isInstance)
                               .filter(child -> StringUtils.isBlank(child.getSourceID()))
@@ -2672,7 +2790,7 @@ public class DocumentMcpTool implements McpToolPlugin {
   /**
    * Lists the ids of the children of one kind currently under a folder, used
    * to snapshot a destination before an operation that adds a node of that
-   * kind (import, copy, duplicate) so the newly created node can be identified
+   * kind (copy, duplicate) so the newly created node can be identified
    * afterwards.
    *
    * @param folderId the folder
@@ -2686,7 +2804,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                       Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
                                                                           IllegalAccessException {
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    return documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE, getCurrentUserIdentityId())
+    return documentFileService.getFolderChildNodes(filter, 0, FOLDER_PAGE_SIZE, getCurrentUserIdentityId())
                               .stream()
                               .filter(kind::isInstance)
                               .map(AbstractNode::getId)
@@ -2722,7 +2840,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                           Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
                                                                               IllegalAccessException {
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE,
+    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, FOLDER_PAGE_SIZE,
                                                                           getCurrentUserIdentityId());
     List<AbstractNode> candidates = children.stream()
                                             .filter(kind::isInstance)

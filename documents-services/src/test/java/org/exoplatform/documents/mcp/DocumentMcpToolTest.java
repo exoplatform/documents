@@ -1597,11 +1597,12 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * A new version's inline content, text or base64, is capped at the upload
-   * size limit a new file is capped at, read from the same property: one byte
-   * over is refused before anything is stored, the limit itself is accepted.
-   * Mutants: the cap removed, not the upload limit, applied to the text or to
-   * the base64 only, or off by one.
+   * A new version's text content is capped at the upload size limit a new
+   * file is capped at, read from the same property: one byte over is refused
+   * before anything is stored, the limit itself is accepted. A base64 one is
+   * refused well below, by its length
+   * ({@link #aBase64FileLongerThanOneCallIsRefusedBeforeItIsDecoded}).
+   * Mutants: the cap removed, not the upload limit, or off by one.
    *
    * @throws Exception never
    */
@@ -1611,14 +1612,11 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
     int limit = 1024 * 1024;
     String overText = "a".repeat(limit + 1);
-    String overBase64 = java.util.Base64.getEncoder().encodeToString(new byte[limit + 1]);
 
     org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
     try {
       assertThrows(IllegalArgumentException.class,
                    () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, overText, null, null, null, null, null));
-      assertThrows(IllegalArgumentException.class,
-                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, overBase64, null, null, null, null));
       verify(documentFileService, never()).createNewVersion(any(), any(), any());
 
       documentMcpTool.addDocumentVersion(DOCUMENT_ID, "a".repeat(limit), null, null, null, null, null);
@@ -2833,12 +2831,13 @@ public class DocumentMcpToolTest {
   public void aFileOverTheUploadLimitIsRefused() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     fileUploadsAs(fileNodeNamed("upl-big", "big.bin"));
-    String base64 = java.util.Base64.getEncoder().encodeToString(new byte[1024 * 1024 + 1]);
+    // an attached file, the source that carries a file of that size
+    attachmentHolds("big.bin", new byte[1024 * 1024 + 1]);
     org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
     try {
       assertTrue(assertThrows(IllegalArgumentException.class,
-                              () -> documentMcpTool.uploadDocument(FOLDER_ID, "big.bin", base64, null, null, null, null)).getMessage()
-                                                                                                                      .contains("1 MB"));
+                              () -> documentMcpTool.uploadDocument(FOLDER_ID, "big.bin", null, null, "activity", "77", null)).getMessage()
+                                                                                                                          .contains("1 MB"));
     } finally {
       org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
     }
@@ -3107,6 +3106,149 @@ public class DocumentMcpToolTest {
       org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
     }
     verify(documentFileService, never()).createNewVersion(any(), any(), any());
+  }
+
+  /**
+   * Makes the attachment of the activity 77 the given file, readable by the
+   * current user.
+   *
+   * @param name the file's name
+   * @param bytes the file's bytes
+   * @throws Exception never
+   */
+  private void attachmentHolds(String name, byte[] bytes) throws Exception {
+    when(socialAttachmentService.getAttachmentFileIds(eq("activity"), eq("77"), eq(currentIdentity))).thenReturn(List.of("999"));
+    org.exoplatform.commons.file.model.FileItem fileItem = Mockito.mock(org.exoplatform.commons.file.model.FileItem.class);
+    org.exoplatform.commons.file.model.FileInfo fileInfo = Mockito.mock(org.exoplatform.commons.file.model.FileInfo.class);
+    when(fileItem.getAsByte()).thenReturn(bytes);
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    lenient().when(fileInfo.getMimetype()).thenReturn("application/octet-stream");
+    lenient().when(fileInfo.getName()).thenReturn(name);
+    when(fileService.getFile(999L)).thenReturn(fileItem);
+  }
+
+  /**
+   * A base64 file longer than one call carries is refused before it is
+   * decoded, by upload_document and by add_document_version, each naming the
+   * tool that sends it in pieces; one of exactly that length is filed. The
+   * refused base64 is not valid base64, so a decode would fail with another
+   * message, and the decoder is watched not to be called.
+   * In a call limited to a space, which is not offered those tools, the
+   * refusal of a new version says so instead.
+   * Mutants: the guard removed from either tool, moved after the decode, off
+   * by one, a refusal that names no tool to send the file in pieces, or one
+   * that names them in a call limited to a space.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aBase64FileLongerThanOneCallIsRefusedBeforeItIsDecoded() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    fileUploadsAs(fileNodeNamed("upl-max", "max.bin"));
+    String tooLong = "!".repeat(DocumentMcpTool.CHUNK_CHARS + 1);
+    String longest = "A".repeat(DocumentMcpTool.CHUNK_CHARS);
+
+    try (MockedStatic<UploadToolUtils> utils = Mockito.mockStatic(UploadToolUtils.class, Mockito.CALLS_REAL_METHODS)) {
+      String uploadRefusal = assertThrows(IllegalArgumentException.class,
+                                          () -> documentMcpTool.uploadDocument(FOLDER_ID, "big.bin", tooLong, null, null, null, null))
+                                                                                                                                 .getMessage();
+      assertTrue(uploadRefusal, uploadRefusal.contains("at most " + DocumentMcpTool.CHUNK_CHARS));
+      assertTrue(uploadRefusal, uploadRefusal.contains("start_document_upload"));
+      assertTrue(uploadRefusal, uploadRefusal.contains("append_document_upload_chunk"));
+
+      String versionRefusal = assertThrows(IllegalArgumentException.class,
+                                           () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, tooLong, null, null, null, null))
+                                                                                                                                  .getMessage();
+      assertTrue(versionRefusal, versionRefusal.contains("at most " + DocumentMcpTool.CHUNK_CHARS));
+      assertTrue(versionRefusal, versionRefusal.contains("start_document_upload"));
+      assertTrue(versionRefusal, versionRefusal.contains("on_conflict=new_version"));
+
+      // a call limited to a space isn't offered the tools that send a file in pieces
+      scopeSpaceId = 12L;
+      String scopedRefusal = assertThrows(IllegalArgumentException.class,
+                                          () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, tooLong, null, null, null, null))
+                                                                                                                                 .getMessage();
+      scopeSpaceId = null;
+      assertTrue(scopedRefusal, scopedRefusal.contains("at most " + DocumentMcpTool.CHUNK_CHARS));
+      assertTrue(scopedRefusal, scopedRefusal.contains("limited to a space"));
+      assertFalse(scopedRefusal, scopedRefusal.contains("start_document_upload"));
+
+      utils.verify(() -> UploadToolUtils.decodeBase64(anyString()), never());
+      verify(uploadService, never()).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
+      verify(documentFileService, never()).createNewVersion(any(), any(), any());
+
+      documentMcpTool.uploadDocument(FOLDER_ID, "max.bin", longest, null, null, null, null);
+      documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, longest, null, null, null, null);
+    }
+    verify(documentFileService).saveUploadedDocument(eq(FOLDER_ID), anyString(), eq("max.bin"), any(), eq(USER_IDENTITY_ID));
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
+  }
+
+  /**
+   * A file is read from a URL up to 15 MB, by upload_document and by
+   * add_document_version alike, or up to the upload size limit when it is
+   * lower; the fetcher's refusal of a larger file is completed with what to
+   * do instead, and its other refusals are passed as they are.
+   * Mutants: either tool asking the upload size limit, the limit not 15 MB, a
+   * lower upload size limit not applied, the refusal of a larger file not
+   * completed, or another refusal completed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileIsReadFromAUrlUpTo15MB() throws Exception {
+    assertEquals(15L * 1024 * 1024, DocumentUploadLimit.URL_FETCH_MAX_BYTES);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    fileUploadsAs(fileNodeNamed("upl-url", "report.pdf"));
+    String url = "https://example.com/report.pdf";
+    String bigUrl = "https://example.com/big.pdf";
+    String privateUrl = "https://intranet.example/report.pdf";
+    String tooLarge = "The file exceeds the maximum allowed size (15 MB).";
+    String privateHost = "URL host is not allowed (it points to a private or internal address).";
+
+    try (MockedStatic<UploadToolUtils> utils = Mockito.mockStatic(UploadToolUtils.class, Mockito.CALLS_REAL_METHODS)) {
+      utils.when(() -> UploadToolUtils.fetchUrl(eq(url), anyLong(), any()))
+           .thenReturn(new UploadToolUtils.FetchedContent("PDF".getBytes(), "application/pdf", "report.pdf"));
+      utils.when(() -> UploadToolUtils.fetchUrl(eq(bigUrl), anyLong(), any())).thenThrow(new IllegalArgumentException(tooLarge));
+      utils.when(() -> UploadToolUtils.fetchUrl(eq(privateUrl), anyLong(), any()))
+           .thenThrow(new IllegalArgumentException(privateHost));
+
+      documentMcpTool.uploadDocument(FOLDER_ID, "report.pdf", null, url, null, null, null);
+      documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, url, null, null, null);
+      utils.verify(() -> UploadToolUtils.fetchUrl(eq(url), eq(DocumentUploadLimit.URL_FETCH_MAX_BYTES), any()), Mockito.times(2));
+
+      for (String refusal : List.of(assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, bigUrl, null, null, null))
+                                                                                                                                .getMessage(),
+                                    assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, bigUrl, null, null, null))
+                                                                                                                                    .getMessage())) {
+        assertTrue(refusal, refusal.startsWith(tooLarge));
+        assertTrue(refusal, refusal.contains("up to 15 MB"));
+        assertTrue(refusal, refusal.contains("start_document_upload"));
+      }
+      assertEquals(privateHost,
+                   assertThrows(IllegalArgumentException.class,
+                                () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, privateUrl, null, null, null)).getMessage());
+
+      // an upload size limit below 15 MB bounds the read, for a new version as for a new file
+      org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
+      try {
+        documentMcpTool.uploadDocument(FOLDER_ID, "report.pdf", null, url, null, null, null);
+        documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, url, null, null, null);
+        String refusal = assertThrows(IllegalArgumentException.class,
+                                      () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, bigUrl, null, null, null))
+                                                                                                                              .getMessage();
+        assertTrue(refusal, refusal.contains("up to 1 MB"));
+      } finally {
+        org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
+      }
+      utils.verify(() -> UploadToolUtils.fetchUrl(eq(url), eq(1024L * 1024), any()), Mockito.times(2));
+    }
   }
 
 }
