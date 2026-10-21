@@ -220,6 +220,10 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_FILE_SHORTCUT_IS_NO_FOLDER =
                                                                   "The id %s is a shortcut to the file %s, not a folder: pass a folder's id as %s.";
 
+  /** The refusal of a file's id given as the folder a tool writes in. */
+  private static final String      MSG_FILE_IS_NO_FOLDER   =
+                                                           "The id %s is a file, not a folder: pass a folder's id as %s.";
+
   /** The argument of the tools that add a document or a folder to a folder. */
   private static final String      PARENT_FOLDER_ID_ARG      = "parent_folder_id";
 
@@ -1122,9 +1126,9 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_document_by_id or get_documents_by_folder_id to find the target folder id.");
     }
+    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     checkDestinationInScopeSpace(destinationFolderId);
     checkScopedChange(documentId, false);
-    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     try {
       documentFileService.moveDocument(getOwnerId(documentId),
                                        documentId,
@@ -1155,6 +1159,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_document_by_id or get_documents_by_folder_id to find the target folder id.");
     }
+    getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     checkDestinationInScopeSpace(destinationFolderId);
     checkScopedChange(documentId, false);
     // The storage copyDocument returns the DESTINATION folder node, not the copy,
@@ -1165,7 +1170,6 @@ public class DocumentMcpTool implements McpToolPlugin {
     // matched name-aware: this stays correct even if another node lands in the
     // destination concurrently (a blind folder-diff would otherwise return the
     // wrong document).
-    getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     AbstractNode source = getNode(documentId);
     String expectedName = source.getName();
     Class<? extends AbstractNode> kind = kindOf(source);
@@ -1422,12 +1426,12 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_documents_by_folder_id or get_root_folder_for_user to find the target folder id.");
     }
+    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     checkDestinationInScopeSpace(destinationFolderId);
     checkScopedChange(documentId, false);
-    // Validate the source and the destination folder exist and are readable by
-    // the user before touching the JCR storage.
+    // Validate the source exists and is readable by the user before touching
+    // the JCR storage.
     checkCanAccessDocument(documentId);
-    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     try {
       documentFileService.createShortcut(documentId,
                                          destination.getPath(),
@@ -1747,7 +1751,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * target for the reads and the rights, while the storage writes under the
    * node of the id it is given, the shortcut node itself, which takes no
    * child: the right would be checked on one node and the write attempted on
-   * another. A shortcut to a file is refused as no folder.
+   * another. A file, or a shortcut to one, is refused as no folder: the
+   * storage would otherwise try to write under a file node.
    *
    * @param folderId the folder id the tool was given
    * @param argumentName the tool argument that carries it, named in the
@@ -1755,12 +1760,15 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @return the folder
    * @throws IllegalAccessException when the user can't read the folder
    * @throws ObjectNotFoundException when the folder doesn't exist
-   * @throws IllegalArgumentException when the id is a shortcut's
+   * @throws IllegalArgumentException when the id is a file's or a shortcut's
    */
   private AbstractNode getDestinationFolder(String folderId,
                                             String argumentName) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode folder = getNode(folderId);
     if (StringUtils.equals(folderId, folder.getId())) {
+      if (!(folder instanceof FolderNode)) {
+        throw new IllegalArgumentException(MSG_FILE_IS_NO_FOLDER.formatted(folderId, argumentName));
+      }
       return folder;
     } else if (folder instanceof FolderNode) {
       throw new IllegalArgumentException(MSG_FOLDER_IS_SHORTCUT.formatted(folderId, folder.getId(), argumentName));
