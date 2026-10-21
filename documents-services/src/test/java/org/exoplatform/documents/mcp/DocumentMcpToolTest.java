@@ -210,6 +210,8 @@ public class DocumentMcpToolTest {
     when(spaceService.getSpaceByGroupId("/spaces/hr")).thenReturn(otherSpace);
     lenient().when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     lenient().when(documentFileService.getDocumentById(spaceFolder, USERNAME)).thenReturn(folderNode(spaceFolder));
+    lenient().when(documentFileService.getDocumentById(otherSpaceFolder, USERNAME)).thenReturn(folderNode(otherSpaceFolder));
+    lenient().when(documentFileService.getDocumentById(driveLessFolder, USERNAME)).thenReturn(folderNode(driveLessFolder));
     lenient().when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
 
     scopeSpaceId = 12L;
@@ -2380,6 +2382,60 @@ public class DocumentMcpToolTest {
     assertTrue(error.getMessage(), error.getMessage().contains("destination_folder_id"));
     assertFalse(error.getMessage(), error.getMessage().contains("shortcut to the folder"));
     verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+  }
+
+  /**
+   * A file's own id given as the folder a tool writes in is refused as no
+   * folder before any write: an upload never starts a background import
+   * under a file, and a move never reaches the storage.
+   * Mutant: a node whose id is the one given returned as the folder whatever
+   * its kind.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileGivenAsTheFolderIsRefusedAsNoFolder() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+
+    IllegalArgumentException upload =
+                                    assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.uploadDocument(DOCUMENT_ID,
+                                                                                      "report.pdf",
+                                                                                      "aGVsbG8=",
+                                                                                      null,
+                                                                                      null,
+                                                                                      null));
+    IllegalArgumentException move = assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.moveDocument(DOCUMENT_ID, DOCUMENT_ID, null));
+
+    assertTrue(upload.getMessage(), upload.getMessage().contains("The id " + DOCUMENT_ID + " is a file, not a folder"));
+    assertTrue(upload.getMessage(), upload.getMessage().contains("parent_folder_id"));
+    assertTrue(move.getMessage(), move.getMessage().contains("destination_folder_id"));
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+  }
+
+  /**
+   * In a call limited to a space, a folder shortcut given as the destination
+   * of a move, a copy or a link is refused as a shortcut, naming the folder to
+   * pass, not as a destination outside the space: a shortcut node belongs to
+   * no space drive.
+   * Mutant: the space checked before the destination is resolved.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceRefusesAFolderShortcutAsAShortcut() throws Exception {
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    lenient().when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    lenient().when(documentFileService.getDocumentSpaceGroupId("shortcut-id")).thenReturn(null);
+    scopeSpaceId = 12L;
+
+    assertRefusedAsAShortcut(() -> documentMcpTool.moveDocument(DOCUMENT_ID, "shortcut-id", null), "destination_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.copyDocument(DOCUMENT_ID, "shortcut-id"), "destination_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, "shortcut-id", null),
+                             "destination_folder_id");
+    scopeSpaceId = null;
   }
 
   /**
