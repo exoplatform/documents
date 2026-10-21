@@ -34,6 +34,17 @@ public final class DocumentUploadLimit {
   public static final long   DEFAULT_MAX_SIZE_IN_MB = 200;
 
   /**
+   * The most bytes an upload tool reads from a URL: 15 MB, whatever the upload
+   * size limit, so the 15 MB the tool descriptions promise is the limit the
+   * tools ask for. It is the ceiling of mcp-server's shared fetcher,
+   * {@code UploadToolUtils.MAX_FETCH_BYTES}, which mcp-server's
+   * {@code feature/ai-contribution} carries (EXO-90907) and its
+   * {@code develop} does not yet: once that constant is on {@code develop},
+   * callers use it instead of this one.
+   */
+  public static final long   URL_FETCH_MAX_BYTES    = 15L * 1024 * 1024;
+
+  /**
    * Not instantiated.
    */
   private DocumentUploadLimit() {
