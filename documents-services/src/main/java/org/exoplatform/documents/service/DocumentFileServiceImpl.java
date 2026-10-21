@@ -18,6 +18,7 @@ package org.exoplatform.documents.service;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
@@ -394,6 +395,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public void validateUploadedContent(String fileName, String mimeType, byte[] content) {
     documentFileStorage.validateUploadedContent(fileName, mimeType, content);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void validateUploadedFile(String fileName, String mimeType, Path file) {
+    documentFileStorage.validateUploadedFile(fileName, mimeType, file);
   }
 
   @Override
