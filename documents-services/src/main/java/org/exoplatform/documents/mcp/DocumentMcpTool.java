@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
@@ -57,14 +58,19 @@ import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
 import org.exoplatform.documents.mcp.model.DocumentPermissionsModel;
+import org.exoplatform.documents.mcp.model.DocumentOutlineModel;
+import org.exoplatform.documents.mcp.model.DocumentHeadingModel;
 import org.exoplatform.documents.mcp.model.DocumentPublicLinkModel;
+import org.exoplatform.documents.mcp.model.DocumentTextPartModel;
 import org.exoplatform.documents.mcp.model.DocumentTreeItemModel;
 import org.exoplatform.documents.mcp.model.DocumentVersionModel;
 import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentOutlineEntry;
 import org.exoplatform.documents.model.DocumentTextContent;
+import org.exoplatform.documents.model.DocumentTextPage;
 import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.model.FileNode;
@@ -126,6 +132,12 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
 
+  /** The characters {@code read_document_text} returns when the caller sets no number. */
+  static final int                 DEFAULT_TEXT_PART_CHARS = 40_000;
+
+  /** The most characters {@code read_document_text} returns in one call. */
+  static final int                 MAX_TEXT_PART_CHARS     = 200_000;
+
   /**
    * The most children {@code list_folder_children} reads to keep those changed
    * since a date.
@@ -159,6 +171,38 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private static final String      MSG_HIDE_FOLDER_ONLY   =
                                                           "Only a folder can be hidden or shown; %s is a file.";
+
+  /**
+   * The note ending a text cut at the most characters read on the fly. It
+   * gives no offset: read_document_text lays out a Word document, a
+   * presentation, a PDF or a spreadsheet its own way, so this text's length is no position
+   * in that one.
+   */
+  private static final String      MSG_TEXT_CONTINUES      =
+                                                           "\n\n[The text continues past this point. To read the rest, call get_document_outline and read_document_text with the sections that follow, or read_document_text by offset from the start: its text is laid out its own way, so this text's length is not an offset in it.]";
+
+  /** The answer while a large document's text is being extracted, or others' fill the queue. */
+  private static final String      MSG_TEXT_BEING_READ     =
+                                                           "The document with id %s is being read, or other large documents are, which takes a while. Call the same tool again in a minute.";
+
+  /** The note ending the first part of a document too large to be read in one go: its length, where to read on. */
+  private static final String      MSG_FIRST_PART_CONTINUES =
+                                                            "\n\n[This is the first part of a large document, whose text is %d characters long%s. To read the rest, call read_document_text with offset=%d, or get_document_outline to find a chapter.]";
+
+  /** Said of a text read part by part that was cut at the most characters read from one document. */
+  private static final String      MSG_TEXT_CUT_AT_MOST     = " once cut at the most characters read from one document, so its end is missing";
+
+  /** The note ending a text read part by part that was cut at the most characters read from one document. */
+  private static final String      MSG_PAGED_TEXT_CUT       =
+                                                            "\n\n[The document's text stops here: it was cut at the most characters read from one document.]";
+
+  /** The refusal of a document too large even to be read part by part. */
+  private static final String      MSG_TOO_LARGE_FOR_PARTS =
+                                                           "The document with id %s is over the largest size whose text is read, even part by part.";
+
+  /** The refusal of a section the outline doesn't have. */
+  private static final String      MSG_NO_SUCH_SECTION     =
+                                                           "There is no section %d in the document %s: its outline has %d headings, numbered from 0. Call get_document_outline to list them.";
 
   private static final String      MSG_CONTENT_TOO_LARGE  =
                                                           "The new version content is %d bytes, over the %d bytes limit.";
@@ -563,6 +607,10 @@ public class DocumentMcpTool implements McpToolPlugin {
    * service exposes no way to know whether an indexing operation is pending for
    * a file, and the file itself was just read without success. Only a busy
    * extractor, a fact known for certain, is worded as worth another attempt.
+   * <p>
+   * A file too large to be read in one go is read as {@code read_document_text}
+   * reads it, up to the largest file a user can attach: its first part is
+   * returned, with the length of its text and the offset to read on.
    *
    * @param documentId the document identifier
    * @return the text of the document
@@ -574,11 +622,32 @@ public class DocumentMcpTool implements McpToolPlugin {
     checkCanAccessDocument(documentId);
     DocumentTextContent content = documentFileService.getFileTextContent(documentId);
     if (content != null && content.hasText()) {
-      return content.text();
+      return content.truncated() ? content.text() + MSG_TEXT_CONTINUES : content.text();
+    }
+    if (content != null && content.status() == DocumentTextContent.Status.TOO_LARGE) {
+      return readFirstPart(documentId);
     }
     throw new IllegalStateException(getNoTextMessage(documentId,
                                                      content == null ? DocumentTextContent.Status.UNREADABLE
                                                                      : content.status()));
+  }
+
+  /**
+   * Reads the first part of a document too large to be read in one go, as
+   * {@code read_document_text} reads it, ending with how to read on.
+   *
+   * @param documentId the document id
+   * @return the first part, with its note
+   * @throws IllegalStateException when the document has no readable text, with
+   *           the reason
+   */
+  private String readFirstPart(String documentId) {
+    DocumentTextPage page = getTextPage(documentId, 0, MAX_TEXT_PART_CHARS);
+    long partEnd = page.offset() + page.text().length();
+    if (partEnd < page.totalChars()) {
+      return page.text() + MSG_FIRST_PART_CONTINUES.formatted(page.totalChars(), page.truncated() ? MSG_TEXT_CUT_AT_MOST : "", partEnd);
+    }
+    return page.truncated() ? page.text() + MSG_PAGED_TEXT_CUT : page.text();
   }
 
   /**
@@ -592,13 +661,133 @@ public class DocumentMcpTool implements McpToolPlugin {
     String prefix = "The text of the document with id %s could not be extracted: ".formatted(documentId);
     return switch (status) {
     case UNSUPPORTED_FORMAT -> prefix + "its format is not supported for text extraction.";
-    case TOO_LARGE -> prefix + "the file is too large for its text to be read.";
     case NO_TEXT -> prefix + "no text was found in the file (a scanned document or an image, for instance).";
     case NOT_A_FILE -> "The document with id %s is not a file with a content, so it has no text.".formatted(documentId);
     case BUSY -> prefix + "too many documents are being read at the moment; asking again in a little while may succeed.";
     case TIMED_OUT -> prefix + "reading the file took too long.";
     default -> prefix + "the file could not be read.";
     };
+  }
+
+  /**
+   * Reads a part of a document's text: from an offset, or the section of one
+   * heading of {@code get_document_outline}, at most a given number of
+   * characters, and says where the next part starts. A document too large to
+   * be read in one go is read this way, part by part.
+   *
+   * @param documentId the document id
+   * @param offset the first character, from 0, in the whole text, as
+   *          next_offset gives it; within a section, brought into it: the
+   *          section's start when before it
+   * @param maxChars the most characters returned
+   * @param section the index of the heading whose section is read, null to
+   *          read by offset
+   * @return the part read
+   * @throws IllegalAccessException when the user cannot access the document
+   * @throws ObjectNotFoundException when the document does not exist
+   * @throws IllegalStateException when the document has no readable text, with
+   *           the reason
+   * @throws IllegalArgumentException when the section isn't one of the outline
+   */
+  public DocumentTextPartModel readDocumentText(String documentId,
+                                                Long offset,
+                                                Integer maxChars,
+                                                Integer section) throws IllegalAccessException, ObjectNotFoundException {
+    checkDocumentIdParameter(documentId);
+    AbstractNode document = checkCanAccessDocument(documentId);
+    int size = Math.clamp(maxChars == null ? DEFAULT_TEXT_PART_CHARS : maxChars, 1, MAX_TEXT_PART_CHARS);
+    long start = offset == null ? 0 : Math.max(0, offset);
+    DocumentHeadingModel heading = null;
+    long end = Long.MAX_VALUE;
+    if (section != null) {
+      List<DocumentHeadingModel> headings = toHeadings(getTextPage(documentId, 0, 0));
+      if (section < 0 || section >= headings.size()) {
+        throw new IllegalArgumentException(MSG_NO_SUCH_SECTION.formatted(section, documentId, headings.size()));
+      }
+      heading = headings.get(section);
+      end = heading.endOffset();
+      start = Math.clamp(start, heading.offset(), Math.max(heading.offset(), end));
+    }
+    DocumentTextPage page = getTextPage(documentId, start, (int) Math.max(0, Math.min(size, end - start)));
+    end = Math.min(end, page.totalChars());
+    long partEnd = page.offset() + page.text().length();
+    return new DocumentTextPartModel(documentId,
+                                     document.getName(),
+                                     heading,
+                                     page.offset(),
+                                     partEnd,
+                                     page.totalChars(),
+                                     partEnd < end ? partEnd : null,
+                                     page.truncated(),
+                                     page.text());
+  }
+
+  /**
+   * Lists a document's headings: a Word document's headings, a PDF's bookmarks,
+   * a presentation's slide titles, a spreadsheet's sheets, each with where its
+   * section starts and ends in the text {@code read_document_text} reads.
+   *
+   * @param documentId the document id
+   * @return the outline, empty when the document has no heading
+   * @throws IllegalAccessException when the user cannot access the document
+   * @throws ObjectNotFoundException when the document does not exist
+   * @throws IllegalStateException when the document has no readable text, with
+   *           the reason
+   */
+  public DocumentOutlineModel getDocumentOutline(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+    checkDocumentIdParameter(documentId);
+    AbstractNode document = checkCanAccessDocument(documentId);
+    DocumentTextPage page = getTextPage(documentId, 0, 0);
+    return new DocumentOutlineModel(documentId, document.getName(), page.totalChars(), page.truncated(), toHeadings(page));
+  }
+
+  /**
+   * Reads a part of a document's text, raising why when it has none.
+   *
+   * @param documentId the document id
+   * @param offset the first character
+   * @param maxChars the most characters
+   * @return the part, with the text's length and outline
+   * @throws IllegalStateException when the document has no readable text
+   */
+  private DocumentTextPage getTextPage(String documentId, long offset, int maxChars) {
+    DocumentTextPage page = documentFileService.getFileTextPage(documentId, offset, maxChars);
+    if (page == null || !page.hasText()) {
+      DocumentTextContent.Status status = page == null ? DocumentTextContent.Status.UNREADABLE : page.status();
+      throw new IllegalStateException(switch (status) {
+      case BUSY -> MSG_TEXT_BEING_READ.formatted(documentId);
+      case TOO_LARGE -> MSG_TOO_LARGE_FOR_PARTS.formatted(documentId);
+      default -> getNoTextMessage(documentId, status);
+      });
+    }
+    return page;
+  }
+
+  /**
+   * Turns a document's outline into headings, each section ending at the next
+   * heading of the same or a higher level that starts after it, or at the end
+   * of the text: a heading sharing its start with the next one, two bookmarks
+   * on one PDF page, covers that page too.
+   *
+   * @param page a part of the text, carrying the outline
+   * @return the headings
+   */
+  private static List<DocumentHeadingModel> toHeadings(DocumentTextPage page) {
+    List<DocumentOutlineEntry> outline = page.outline();
+    List<DocumentHeadingModel> headings = new ArrayList<>(outline.size());
+    for (int i = 0; i < outline.size(); i++) {
+      DocumentOutlineEntry entry = outline.get(i);
+      long end = page.totalChars();
+      for (int j = i + 1; j < outline.size(); j++) {
+        DocumentOutlineEntry next = outline.get(j);
+        if (next.level() <= entry.level() && next.offset() > entry.offset()) {
+          end = next.offset();
+          break;
+        }
+      }
+      headings.add(new DocumentHeadingModel(i, entry.level(), entry.title(), entry.offset(), end, entry.page()));
+    }
+    return headings;
   }
 
   public String getDocumentTranscriptionById(String documentId) throws IllegalAccessException, ObjectNotFoundException {

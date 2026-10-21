@@ -238,8 +238,13 @@ public class DocumentTextExtractor {
       try (InputStream stream = data.getStream()) {
         text = readUpToMaxChars(reader, stream);
       }
-      return StringUtils.isBlank(text) ? DocumentTextContent.none(Status.NO_TEXT)
-                                       : DocumentTextContent.of(text, Status.EXTRACTED);
+      if (StringUtils.isBlank(text)) {
+        return DocumentTextContent.none(Status.NO_TEXT);
+      } else if (text.length() > maxChars) {
+        return DocumentTextContent.truncated(text.substring(0, maxChars));
+      } else {
+        return DocumentTextContent.of(text, Status.EXTRACTED);
+      }
     } finally {
       session.logout();
     }
@@ -255,7 +260,7 @@ public class DocumentTextExtractor {
    * @return the type to extract the text with
    * @throws RepositoryException when the node cannot be read
    */
-  private String resolveMimeType(Node node, Node content) throws RepositoryException {
+  static String resolveMimeType(Node node, Node content) throws RepositoryException {
     String mimeType = content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)
         ? content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString()
         : null;
@@ -300,12 +305,13 @@ public class DocumentTextExtractor {
   }
 
   /**
-   * Reads at most {@code maxChars} characters of text: streamed when the reader
-   * can stream, else cut once the reader has built the whole text.
+   * Reads at most one character past {@code maxChars}, so a text longer than
+   * the limit is known to be cut: streamed when the reader can stream, else
+   * cut once the reader has built the whole text.
    *
    * @param reader the extractor for the file's format
    * @param stream the file's binary
-   * @return the text, cut at {@code maxChars}
+   * @return the text, cut at {@code maxChars} plus one
    * @throws Exception when the file cannot be parsed
    */
   private String readUpToMaxChars(DocumentReader reader, InputStream stream) throws Exception {
@@ -314,23 +320,24 @@ public class DocumentTextExtractor {
         return read(textReader);
       }
     } else {
-      return StringUtils.truncate(reader.getContentAsText(stream), maxChars);
+      return StringUtils.truncate(reader.getContentAsText(stream), maxChars + 1);
     }
   }
 
   /**
-   * Reads a character stream up to {@code maxChars}.
+   * Reads a character stream up to one character past {@code maxChars}.
    *
    * @param textReader the text of the file
-   * @return what was read, at most {@code maxChars} characters
+   * @return what was read, at most {@code maxChars} plus one characters
    * @throws IOException when the stream fails
    */
   private String read(Reader textReader) throws IOException {
     StringBuilder text = new StringBuilder();
     char[] buffer = new char[8192];
     int read;
-    while (text.length() < maxChars
-        && (read = textReader.read(buffer, 0, Math.min(buffer.length, maxChars - text.length()))) != -1) {
+    int limit = maxChars + 1;
+    while (text.length() < limit
+        && (read = textReader.read(buffer, 0, Math.min(buffer.length, limit - text.length()))) != -1) {
       if (Thread.currentThread().isInterrupted()) {
         throw new IOException("Text extraction interrupted");
       }

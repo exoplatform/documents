@@ -55,6 +55,7 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
+import org.exoplatform.documents.storage.jcr.search.DocumentPagedTextExtractor;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.search.DocumentTextExtractor;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
@@ -142,6 +143,44 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                                                                           "application/vnd.openxmlformats-officedocument.presentationml.presentation");
 
+  /**
+   * Files larger than this many MB are not read part by part: the largest
+   * file a user can attach in the UI, so any file attached there can be read.
+   */
+  public static final String                        PAGED_TEXT_MAX_SIZE_MB_PROPERTY          = "exo.social.composer.maxFileSizeInMB";
+
+  /** The text read part by part is cut at this many characters. */
+  public static final String                        PAGED_TEXT_MAX_CHARS_PROPERTY            =
+                                                                                         "exo.documents.textExtraction.paged.maxChars";
+
+  /**
+   * Extracting a file read part by part is abandoned after this many seconds.
+   * A file read by a platform reader that builds its whole text before giving
+   * any, an older Office, an Outlook or an OpenDocument file for instance, is
+   * not stopped: it keeps the one extraction thread until it ends.
+   */
+  public static final String                        PAGED_TEXT_TIMEOUT_SECONDS_PROPERTY      =
+                                                                                         "exo.documents.textExtraction.paged.timeoutSeconds";
+
+  /** A caller waits this many seconds for a file's extraction before being told to ask again. */
+  public static final String                        PAGED_TEXT_WAIT_SECONDS_PROPERTY         =
+                                                                                         "exo.documents.textExtraction.paged.waitSeconds";
+
+  /** The texts extracted to be read part by part take at most this many MB on disk. */
+  public static final String                        PAGED_TEXT_CACHE_MAX_MB_PROPERTY         =
+                                                                                         "exo.documents.textExtraction.paged.cacheMaxMb";
+
+  /** The UI's own default for the largest file attached. */
+  private static final long                         DEFAULT_PAGED_TEXT_MAX_SIZE_MB           = 200;
+
+  private static final long                         DEFAULT_PAGED_TEXT_MAX_CHARS             = 20_000_000;
+
+  private static final long                         DEFAULT_PAGED_TEXT_TIMEOUT_SECONDS       = 300;
+
+  private static final long                         DEFAULT_PAGED_TEXT_WAIT_SECONDS          = 25;
+
+  private static final long                         DEFAULT_PAGED_TEXT_CACHE_MAX_MB          = 512;
+
   private final SpaceService                        spaceService;
 
   private final RepositoryService                   repositoryService;
@@ -185,6 +224,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final long                         DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS  = 20;
 
   private volatile DocumentTextExtractor            textExtractor;
+
+  private volatile DocumentPagedTextExtractor       pagedTextExtractor;
 
   private final String                              EVENT_DOCUMENT_MOVED        = "exo-document-moved";
 
@@ -3072,6 +3113,52 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       return DocumentTextContent.of(indexedText, DocumentTextContent.Status.INDEXED);
     }
     return getTextExtractor().extract(documentId);
+  }
+
+  /**
+   * {@inheritDoc} The whole text is extracted from the file once per version
+   * of it, on this node, whatever the search index holds, so its parts and its
+   * outline come from one reading.
+   */
+  @Override
+  public DocumentTextPage getFileTextPage(String documentId, long offset, int maxChars) {
+    return getPagedTextExtractor().getPage(documentId, offset, maxChars);
+  }
+
+  /**
+   * The extractor reading a file's text part by part, created on first use
+   * with its limits read from the platform properties.
+   *
+   * @return the paged text extractor
+   */
+  DocumentPagedTextExtractor getPagedTextExtractor() {
+    DocumentPagedTextExtractor extractor = pagedTextExtractor;
+    if (extractor == null) {
+      synchronized (this) {
+        extractor = pagedTextExtractor;
+        if (extractor == null) {
+          try {
+            extractor = new DocumentPagedTextExtractor(repositoryService,
+                                                       CommonsUtils.getService(DocumentReaderService.class),
+                                                       getTextExtractor(),
+                                                       getLongProperty(PAGED_TEXT_MAX_SIZE_MB_PROPERTY,
+                                                                       DEFAULT_PAGED_TEXT_MAX_SIZE_MB) * 1024 * 1024,
+                                                       getLongProperty(PAGED_TEXT_MAX_CHARS_PROPERTY, DEFAULT_PAGED_TEXT_MAX_CHARS),
+                                                       getLongProperty(PAGED_TEXT_TIMEOUT_SECONDS_PROPERTY,
+                                                                       DEFAULT_PAGED_TEXT_TIMEOUT_SECONDS) * 1000,
+                                                       getLongProperty(PAGED_TEXT_WAIT_SECONDS_PROPERTY,
+                                                                       DEFAULT_PAGED_TEXT_WAIT_SECONDS) * 1000,
+                                                       getLongProperty(PAGED_TEXT_CACHE_MAX_MB_PROPERTY,
+                                                                       DEFAULT_PAGED_TEXT_CACHE_MAX_MB) * 1024 * 1024,
+                                                       Path.of(System.getProperty("java.io.tmpdir"), "documents-paged-text"));
+          } catch (IOException e) {
+            throw new IllegalStateException("The cache of the texts read part by part can't be created", e);
+          }
+          pagedTextExtractor = extractor;
+        }
+      }
+    }
+    return extractor;
   }
 
   /**
