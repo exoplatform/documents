@@ -17,6 +17,7 @@
 package org.exoplatform.documents.rest;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -46,7 +47,8 @@ import jakarta.servlet.http.HttpServletRequest;
 /**
  * The transcription of an audio or video file (EXO-92097): its state, its
  * transcript, its timed segments, and a retry. Every answer is read with the
- * caller's own rights: a file the caller cannot open answers 404.
+ * caller's own rights, so none may be stored by a shared cache: a file the
+ * caller cannot open answers 404.
  */
 @RestController
 @RequestMapping("/transcriptions")
@@ -72,8 +74,8 @@ public class TranscriptionRest {
    *
    * @param request the HTTP request, which names the caller
    * @param documentId the file's UUID
-   * @return the state; only {@code available=false} when no transcription
-   *         engine is installed
+   * @return the state, never stored by a shared cache; only
+   *         {@code available=false} when no transcription engine is installed
    */
   @GetMapping(path = "{documentId}", produces = MediaType.APPLICATION_JSON_VALUE)
   @Secured("users")
@@ -83,23 +85,27 @@ public class TranscriptionRest {
     @ApiResponse(responseCode = "403", description = "The file cannot be read by the caller"),
     @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
   })
-  public TranscriptionStateEntity getState(HttpServletRequest request,
+  public ResponseEntity<TranscriptionStateEntity> getState(HttpServletRequest request,
                                            @Parameter(description = "The file's UUID", required = true)
                                            @PathVariable("documentId")
                                            String documentId) {
     if (!documentTranscriptionService.isAvailable()) {
-      return new TranscriptionStateEntity(false, null, null, null, null, null, null, false);
+      return ResponseEntity.ok()
+                           .cacheControl(CacheControl.noStore())
+                           .body(new TranscriptionStateEntity(false, null, null, null, null, null, null, false));
     }
     try {
       TranscriptionState state = documentTranscriptionService.getState(documentId, getCurrentIdentityId(request));
-      return new TranscriptionStateEntity(true,
-                                          state.status() == null ? null : state.status().name(),
-                                          state.progress(),
-                                          state.error(),
-                                          state.language(),
-                                          state.durationSeconds(),
-                                          state.updated(),
-                                          state.hasSegments());
+      return ResponseEntity.ok()
+                           .cacheControl(CacheControl.noStore())
+                           .body(new TranscriptionStateEntity(true,
+                                                              state.status() == null ? null : state.status().name(),
+                                                              state.progress(),
+                                                              state.error(),
+                                                              state.language(),
+                                                              state.durationSeconds(),
+                                                              state.updated(),
+                                                              state.hasSegments()));
     } catch (IllegalAccessException e) {
       throw forbidden(documentId, e);
     } catch (ObjectNotFoundException e) {
@@ -112,7 +118,7 @@ public class TranscriptionRest {
    *
    * @param request the HTTP request, which names the caller
    * @param documentId the file's UUID
-   * @return the transcript
+   * @return the transcript, never stored by a shared cache
    */
   @GetMapping(path = "{documentId}/text", produces = MediaType.TEXT_PLAIN_VALUE)
   @Secured("users")
@@ -122,7 +128,7 @@ public class TranscriptionRest {
     @ApiResponse(responseCode = "403", description = "The file cannot be read by the caller"),
     @ApiResponse(responseCode = "404", description = "No such file, or no transcript yet"),
   })
-  public String getText(HttpServletRequest request,
+  public ResponseEntity<String> getText(HttpServletRequest request,
                         @Parameter(description = "The file's UUID", required = true)
                         @PathVariable("documentId")
                         String documentId) {
@@ -131,7 +137,7 @@ public class TranscriptionRest {
       if (text == null) {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, NO_TRANSCRIPT_MESSAGE);
       }
-      return text;
+      return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(text);
     } catch (IllegalAccessException e) {
       throw forbidden(documentId, e);
     } catch (ObjectNotFoundException e) {
@@ -145,7 +151,7 @@ public class TranscriptionRest {
    *
    * @param request the HTTP request, which names the caller
    * @param documentId the file's UUID
-   * @return the segments
+   * @return the segments, never stored by a shared cache
    */
   @GetMapping(path = "{documentId}/segments", produces = MediaType.APPLICATION_JSON_VALUE)
   @Secured("users")
@@ -155,7 +161,7 @@ public class TranscriptionRest {
     @ApiResponse(responseCode = "403", description = "The file cannot be read by the caller"),
     @ApiResponse(responseCode = "404", description = "No such file, or no segments"),
   })
-  public String getSegments(HttpServletRequest request,
+  public ResponseEntity<String> getSegments(HttpServletRequest request,
                             @Parameter(description = "The file's UUID", required = true)
                             @PathVariable("documentId")
                             String documentId) {
@@ -164,7 +170,7 @@ public class TranscriptionRest {
       if (segments == null) {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, NO_TRANSCRIPT_MESSAGE);
       }
-      return segments;
+      return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(segments);
     } catch (IllegalAccessException e) {
       throw forbidden(documentId, e);
     } catch (ObjectNotFoundException e) {
