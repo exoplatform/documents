@@ -529,7 +529,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * The transcript of an audio or video file, read with the user's rights. When
    * there is none, the answer says why, from the file's transcription state
    * (EXO-92097): queued, in progress with its progress, stopped when its run was
-   * lost, failed with its reason, transcribed with no speech heard; a file never
+   * lost (running, unchanged for {@link TranscriptionState#STALE_MILLIS}), failed
+   * with its reason, transcribed with no speech heard; a file never
    * sent to transcription answers as before.
    *
    * @param documentId the file's UUID
@@ -554,8 +555,9 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (status == null) {
       throw new IllegalStateException("No transcription is available yet for this audio/video file. "
           + "Transcriptions are generated automatically once the media is processed; tell the user to try again later.");
-    } else if ((status == TranscriptionStatus.QUEUED || status == TranscriptionStatus.PROCESSING)
-               && !state.isInProgress(System.currentTimeMillis())) {
+    } else if (status == TranscriptionStatus.PROCESSING && !state.isInProgress(System.currentTimeMillis())) {
+      // A running transcription writes its progress after each piece: unchanged for long, its run was lost.
+      // A queued one may wait that long behind other runs, and is not.
       throw new IllegalStateException("The transcription of this audio/video file stopped without finishing: "
           + "tell the user it did not complete.");
     }
