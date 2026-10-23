@@ -580,6 +580,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public boolean markTranscriptionQueued(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.markTranscriptionQueued(documentId);
+  }
+
+  @Override
   public void completeTranscription(String documentId,
                                     String transcription,
                                     String segments,

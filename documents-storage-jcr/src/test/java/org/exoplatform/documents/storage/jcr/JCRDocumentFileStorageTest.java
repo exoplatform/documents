@@ -3196,6 +3196,31 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
+  public void markTranscriptionQueuedWritesOnlyAFileWithNoStateYet() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    assertFalse(jcrDocumentFileStorage.markTranscriptionQueued("1"));
+    verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS), anyString());
+    verify(session, never()).save();
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(false);
+    assertTrue(jcrDocumentFileStorage.markTranscriptionQueued("1"));
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "QUEUED");
+    verify(session).save();
+  }
+
+  @Test
+  public void markTranscriptionQueuedOfAFileNotSavedYetIsNotFound() throws Exception {
+    Session session = mockSystemSession();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.markTranscriptionQueued("1"));
+  }
+
+  @Test
   public void completeTranscriptionWritesTheTextTheSegmentsAndTheStateInOneSave() throws Exception {
     Session session = mockSystemSession();
     Node node = mockMediaNode(session, "video/mp4");
