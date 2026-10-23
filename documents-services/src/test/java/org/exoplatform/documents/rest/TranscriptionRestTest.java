@@ -36,6 +36,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.server.ResponseStatusException;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
@@ -77,7 +78,7 @@ class TranscriptionRestTest {
   void theStateSaysUnavailableAndReadsNothingWithoutATranscriber() throws Exception {
     when(documentTranscriptionService.isAvailable()).thenReturn(false);
 
-    TranscriptionStateEntity state = rest.getState(request, DOCUMENT_ID);
+    TranscriptionStateEntity state = rest.getState(request, DOCUMENT_ID).getBody();
 
     assertFalse(state.available());
     assertNull(state.status());
@@ -97,8 +98,10 @@ class TranscriptionRestTest {
                                                                                               .hasSegments(true)
                                                                                               .build());
 
-    assertEquals(new TranscriptionStateEntity(true, "FAILED", "2/9", "provider.timeout", "en", 5400L, 1000L, true),
-                 rest.getState(request, DOCUMENT_ID));
+    ResponseEntity<TranscriptionStateEntity> response = rest.getState(request, DOCUMENT_ID);
+
+    assertEquals(new TranscriptionStateEntity(true, "FAILED", "2/9", "provider.timeout", "en", 5400L, 1000L, true), response.getBody());
+    assertEquals("no-store", response.getHeaders().getCacheControl(), "Expected a viewer's read never to be kept by a shared cache");
   }
 
   @Test
@@ -156,6 +159,20 @@ class TranscriptionRestTest {
 
     assertEquals(HttpStatus.BAD_REQUEST, e.getStatusCode());
     assertTrue(e.getReason().equals(DocumentTranscriptionService.ALREADY_DONE_MESSAGE));
+  }
+
+  @Test
+  void theTranscriptAndItsSegmentsAreNeverKeptByASharedCache() throws Exception {
+    when(documentTranscriptionService.getText(DOCUMENT_ID, 7L)).thenReturn("hello");
+    when(documentTranscriptionService.getSegments(DOCUMENT_ID, 7L)).thenReturn("[]");
+
+    ResponseEntity<String> text = rest.getText(request, DOCUMENT_ID);
+    ResponseEntity<String> segments = rest.getSegments(request, DOCUMENT_ID);
+
+    assertEquals("hello", text.getBody());
+    assertEquals("no-store", text.getHeaders().getCacheControl());
+    assertEquals("[]", segments.getBody());
+    assertEquals("no-store", segments.getHeaders().getCacheControl());
   }
 
 }
