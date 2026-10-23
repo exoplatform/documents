@@ -50,6 +50,7 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.commons.utils.IOUtil;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
@@ -2332,6 +2333,111 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public TranscriptionState getTranscriptionState(String documentId,
+                                                  Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return toTranscriptionState(getTranscribedNode(session, documentId));
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the transcription state of media file '%s'".formatted(documentId), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public TranscriptionState getTranscriptionState(String documentId) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return toTranscriptionState(getTranscribedNode(session, documentId));
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the transcription state of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  @Override
+  public void updateTranscriptionState(String documentId, TranscriptionState state) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      writeTranscriptionState(node, state);
+      session.save();
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error writing the transcription state of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  @Override
+  public void completeTranscription(String documentId,
+                                    String transcription,
+                                    String segments,
+                                    TranscriptionState state) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)) {
+        node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION);
+      }
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION,
+                       new ByteArrayInputStream(Objects.toString(transcription, "").getBytes(StandardCharsets.UTF_8)));
+      writeTranscriptionState(node, state.toBuilder().hasSegments(StringUtils.isNotBlank(segments)).build());
+      if (StringUtils.isBlank(segments)) {
+        if (node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)) {
+          node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS).remove();
+        }
+      } else {
+        node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS,
+                         new ByteArrayInputStream(segments.getBytes(StandardCharsets.UTF_8)));
+      }
+      session.save();
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error writing the transcript of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  @Override
+  public String getTranscriptionSegments(String documentId,
+                                         Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)
+          && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)) {
+        try (InputStream stream = node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS).getStream()) {
+          return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+      } else {
+        return null;
+      }
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException | IOException e) {
+      throw new IllegalStateException("Error reading the transcript segments of media file '%s'".formatted(documentId), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
   public void updateDocumentDescription(long ownerId,
                                         String documentId,
                                         String description,
@@ -3269,4 +3375,133 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return targetNode;
   }
 
+
+  /**
+   * The media file a transcription read or write is about.
+   *
+   * @param session the session to read it with, whose rights apply
+   * @param documentId the file's UUID
+   * @return the file's node
+   * @throws ObjectNotFoundException when the file does not exist or the session
+   *           cannot see it
+   */
+  private Node getTranscribedNode(Session session, String documentId) throws ObjectNotFoundException {
+    Node node = getNodeByIdentifier(session, documentId);
+    if (node == null) {
+      throw new ObjectNotFoundException("File with id '%s' wasn't found".formatted(documentId));
+    }
+    return node;
+  }
+
+  /**
+   * Reads the transcription state stored on a file. A file holding a non-empty
+   * transcript but no state, transcribed before the state existed, reads as
+   * done; the empty placeholder an earlier version wrote reads as never
+   * transcribed.
+   *
+   * @param node the file
+   * @return the state
+   * @throws RepositoryException when the file cannot be read
+   */
+  private TranscriptionState toTranscriptionState(Node node) throws RepositoryException {
+    boolean media = isMediaFile(node);
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)) {
+      return TranscriptionState.builder()
+                               .status(toTranscriptionStatus(getStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS)))
+                               .progress(getStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_PROGRESS))
+                               .error(getStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_ERROR))
+                               .language(getStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE))
+                               .durationSeconds(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION) ?
+                                                                                                             node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)
+                                                                                                                 .getLong() :
+                                                                                                             null)
+                               .updated(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED) ?
+                                                                                                    node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)
+                                                                                                        .getDate()
+                                                                                                        .getTimeInMillis() :
+                                                                                                    null)
+                               .hasSegments(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS))
+                               .media(media)
+                               .build();
+    } else if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)
+               && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION)
+               && node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION).getLength() > 0) {
+      return TranscriptionState.builder().status(TranscriptionStatus.DONE).media(media).build();
+    } else {
+      return TranscriptionState.builder().media(media).build();
+    }
+  }
+
+  /**
+   * Writes every field of a transcription state on a file, removing those that
+   * are null, and sets its update time to now. The caller saves the session.
+   *
+   * @param node the file
+   * @param state the state to write
+   * @throws RepositoryException when the file cannot be written
+   */
+  private void writeTranscriptionState(Node node, TranscriptionState state) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)) {
+      node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    }
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, state.status() == null ? null : state.status().name());
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_PROGRESS, state.progress());
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_ERROR, state.error());
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE, state.language());
+    if (state.durationSeconds() == null) {
+      if (node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)) {
+        node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION).remove();
+      }
+    } else {
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION, state.durationSeconds().longValue());
+    }
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED, Calendar.getInstance());
+  }
+
+  /**
+   * Tells whether a node is an audio or a video file, the only files that can
+   * be transcribed.
+   *
+   * @param node the node
+   * @return true for an nt:file whose content has an audio or video type
+   * @throws RepositoryException when the node cannot be read
+   */
+  private boolean isMediaFile(Node node) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.NT_FILE) || !node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+      return false;
+    }
+    Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+    String mimeType = content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE) ?
+                                                                            content.getProperty(NodeTypeConstants.JCR_MIME_TYPE)
+                                                                                   .getString() :
+                                                                            null;
+    return StringUtils.startsWithAny(mimeType, "audio/", "video/");
+  }
+
+  /**
+   * Reads a string property of a node.
+   *
+   * @param node the node
+   * @param name the property's name
+   * @return its value, or null when the node does not have it
+   * @throws RepositoryException when the node cannot be read
+   */
+  private String getStringProperty(Node node, String name) throws RepositoryException {
+    return node.hasProperty(name) ? node.getProperty(name).getString() : null;
+  }
+
+  /**
+   * Reads a stored transcription status.
+   *
+   * @param value the stored value
+   * @return the status, or null when the value is blank or unknown
+   */
+  private TranscriptionStatus toTranscriptionStatus(String value) {
+    try {
+      return StringUtils.isBlank(value) ? null : TranscriptionStatus.valueOf(value);
+    } catch (IllegalArgumentException e) {
+      LOG.debug("Unknown transcription status {}", value, e);
+      return null;
+    }
+  }
 }
