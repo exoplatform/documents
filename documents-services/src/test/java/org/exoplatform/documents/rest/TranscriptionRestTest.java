@@ -78,8 +78,10 @@ class TranscriptionRestTest {
   void theStateSaysUnavailableAndReadsNothingWithoutATranscriber() throws Exception {
     when(documentTranscriptionService.isAvailable()).thenReturn(false);
 
-    TranscriptionStateEntity state = rest.getState(request, DOCUMENT_ID).getBody();
+    ResponseEntity<TranscriptionStateEntity> response = rest.getState(request, DOCUMENT_ID);
+    TranscriptionStateEntity state = response.getBody();
 
+    assertEquals("no-store", response.getHeaders().getCacheControl());
     assertFalse(state.available());
     assertNull(state.status());
     verify(documentTranscriptionService, never()).getState(anyString(), anyLong());
