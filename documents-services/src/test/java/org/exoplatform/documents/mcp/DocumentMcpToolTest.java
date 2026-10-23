@@ -63,6 +63,8 @@ import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.TranscriptionState;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
@@ -571,6 +573,48 @@ public class DocumentMcpToolTest {
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn(null);
 
     assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAQueuedOrRunningTranscription() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .build(),
+                                                                                         TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.PROCESSING)
+                                                                                                   .progress("3/9")
+                                                                                                   .build());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage().contains("queued"));
+    String running = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+    assertTrue(running, running.contains("in progress (3/9 pieces transcribed)"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFailedTranscriptionAndWhy() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.FAILED)
+                                                                                                   .error("ffmpeg.unavailable")
+                                                                                                   .build());
+
+    String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+
+    assertTrue(failed, failed.contains("failed: the server cannot convert a recording this long"));
+    assertFalse("Expected a failed transcription never told as not ready yet", failed.contains("try again later"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsATranscriptWithNoSpeech() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/ogg"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.DONE)
+                                                                                                   .build());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage().contains("no speech"));
   }
 
   @Test
