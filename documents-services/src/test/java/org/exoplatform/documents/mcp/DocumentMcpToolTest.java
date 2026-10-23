@@ -612,6 +612,21 @@ public class DocumentMcpToolTest {
   }
 
   @Test
+  public void getDocumentTranscriptionByIdTellsAFileQueuedForLongAsStillQueued() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .updated(System.currentTimeMillis()
+                                                                                                       - TranscriptionState.STALE_MILLIS
+                                                                                                       - 1000)
+                                                                                                   .build());
+
+    String queued = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+
+    assertTrue("Expected a file waiting behind other runs told queued, not stopped: " + queued, queued.contains("queued"));
+  }
+
+  @Test
   public void getDocumentTranscriptionByIdTellsAFailedTranscriptionAndWhy() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
     when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
