@@ -550,7 +550,81 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
 
-    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  /**
+   * Asked with timestamps, a transcript with segments is given one segment per
+   * line, each starting with its moment in minutes and seconds and in whole
+   * seconds; past an hour the moment carries the hours.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsGivesEachSegmentItsMoment() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("Bonjour. Le pilote démarre.");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
+        [{"start":0.1,"end":3.4,"text":"Bonjour."},{"start":754.6,"end":758,"text":" Le pilote démarre. "},\
+        {"start":3725,"end":3730,"text":"Fin."}]""");
+
+    assertEquals("[00:00 · 0s] Bonjour.\n[12:34 · 754s] Le pilote démarre.\n[1:02:05 · 3725s] Fin.",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Segments with no text or no usable start are left out; when none is left,
+   * the plain transcript is given.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsSkipsUnusableSegments() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
+        [{"start":1,"text":"kept"},{"start":2,"text":"  "},{"text":"no start"},{"start":-1,"text":"negative"},\
+        {"start":"x","text":"not a number"},42]""",
+                                                                                               """
+        [{"text":"no start"},{"start":2,"text":""}]""");
+
+    assertEquals("[00:01 · 1s] kept", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Asked with timestamps, a transcript without segments, or with segments that
+   * cannot be read, is given as without timestamps.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsAndNoSegmentsGivesThePlainTranscript() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn(null, " ", "[]", "{not json");
+
+    for (int i = 0; i < 4; i++) {
+      assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+    }
+  }
+
+  /**
+   * Without timestamps, the plain transcript is given and its segments are
+   * never read.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithoutTimestampsNeverReadsTheSegments() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+
+    verify(documentFileService, never()).getTranscriptionSegments(anyString(), anyLong());
+  }
+
+  @Test
+  public void toMomentWritesMinutesAndSecondsThenHours() {
+    assertEquals("[00:00 · 0s]", DocumentMcpTool.toMoment(0));
+    assertEquals("[00:59 · 59s]", DocumentMcpTool.toMoment(59));
+    assertEquals("[59:59 · 3599s]", DocumentMcpTool.toMoment(3599));
+    assertEquals("[1:00:00 · 3600s]", DocumentMcpTool.toMoment(3600));
+    assertEquals("[10:00:01 · 36001s]", DocumentMcpTool.toMoment(36001));
   }
 
   @Test
@@ -558,7 +632,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn(null);
 
-    assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+    assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
   }
 
   @Test
@@ -575,8 +649,8 @@ public class DocumentMcpToolTest {
                                                                                                    .build());
 
     assertTrue(assertThrows(IllegalStateException.class,
-                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage().contains("queued"));
-    String running = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage().contains("queued"));
+    String running = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
     assertTrue(running, running.contains("in progress (3/9 pieces transcribed)"));
   }
 
@@ -591,7 +665,7 @@ public class DocumentMcpToolTest {
                                                                                                        - 1000)
                                                                                                    .build());
 
-    String stopped = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+    String stopped = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
 
     assertTrue(stopped, stopped.contains("stopped without finishing"));
     assertFalse("Expected a lost run never told as in progress", stopped.contains("in progress"));
@@ -607,7 +681,7 @@ public class DocumentMcpToolTest {
                                                                                                        - 1000)
                                                                                                    .build());
 
-    String queued = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+    String queued = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
 
     assertTrue("Expected a file waiting behind other runs told queued, not stopped: " + queued, queued.contains("queued"));
   }
@@ -621,7 +695,7 @@ public class DocumentMcpToolTest {
                                                                                                    .updated(System.currentTimeMillis())
                                                                                                    .build());
 
-    String retried = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+    String retried = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
 
     assertTrue(retried, retried.contains("failed (the transcription service did not answer in time), and a new attempt is scheduled"));
     assertFalse("Expected a pending retry never told as failed for good", retried.contains("Tell the user it failed"));
@@ -635,7 +709,7 @@ public class DocumentMcpToolTest {
                                                                                                    .error("ffmpeg.unavailable")
                                                                                                    .build());
 
-    String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+    String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
 
     assertTrue(failed, failed.contains("failed: the server has no tool to convert this recording, which its format or its size needs"));
     assertFalse("Expected a failed transcription never told as not ready yet", failed.contains("try again later"));
@@ -649,7 +723,7 @@ public class DocumentMcpToolTest {
                                                                                                    .build());
 
     assertTrue(assertThrows(IllegalStateException.class,
-                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage().contains("no speech"));
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage().contains("no speech"));
   }
 
   @Test

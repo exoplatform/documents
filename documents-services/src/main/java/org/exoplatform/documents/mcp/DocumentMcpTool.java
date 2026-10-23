@@ -35,6 +35,9 @@ import javax.jcr.RepositoryException;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
@@ -73,6 +76,8 @@ import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.attachments.service.AttachmentService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
@@ -122,6 +127,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * Same password policy DocumentFileRest applies to public-link passwords
    * (min length 9), so a link created here is openable with the given password.
    */
+  private static final Log        LOG = ExoLogger.getLogger(DocumentMcpTool.class);
+
   private static final UserFieldValidator PASSWORD_VALIDATOR = new UserFieldValidator("password", false, false, 9, 255);
 
   /**
@@ -531,20 +538,27 @@ public class DocumentMcpTool implements McpToolPlugin {
    * (EXO-92097): queued, in progress with its progress, stopped when its run was
    * lost (running, unchanged for {@link TranscriptionState#STALE_MILLIS}), failed
    * with its reason, transcribed with no speech heard; a file never
-   * sent to transcription answers as before.
+   * sent to transcription answers as before. Asked with timestamps, a transcript
+   * that has timed segments is given one segment per line, each starting with
+   * the moment it was said, {@code [mm:ss · Ns]} ({@code [h:mm:ss · Ns]} past an
+   * hour), where N is that moment in whole seconds (EXO-92112); without
+   * segments, the plain transcript is given, as without timestamps.
    *
    * @param documentId the file's UUID
+   * @param timestamps true to have each segment start with its moment
    * @return the transcript
    * @throws IllegalAccessException when the user may not read the file
    * @throws ObjectNotFoundException when the file does not exist
    * @throws IllegalStateException when the file has no transcript, saying why
    */
-  public String getDocumentTranscriptionById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+  public String getDocumentTranscriptionById(String documentId,
+                                             Boolean timestamps) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode document = checkCanAccessDocument(documentId);
     long identityId = getCurrentUserIdentityId();
     String audioTranscription = documentFileService.getAudioTranscription(documentId, identityId);
     if (StringUtils.isNotBlank(audioTranscription)) {
-      return audioTranscription;
+      String timedTranscription = Boolean.TRUE.equals(timestamps) ? toTimedTranscription(documentId, identityId) : null;
+      return timedTranscription == null ? audioTranscription : timedTranscription;
     } else if (!(document instanceof FileNode fileNode)
                || !StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
       throw new IllegalStateException("The document with id %s isn't an audio nor a video file, so it has no transcription."
@@ -572,6 +586,57 @@ public class DocumentMcpTool implements McpToolPlugin {
         .formatted(toTranscriptionFailure(state.error()));
     case DONE -> "This audio/video file was transcribed, but no speech was heard in it.";
     });
+  }
+
+  /**
+   * Writes a transcript's timed segments one per line, each starting with the
+   * moment it was said.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the timed transcript, or null when the file has no segment, or none
+   *         that can be read
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private String toTimedTranscription(String documentId, long identityId) throws IllegalAccessException,
+                                                                             ObjectNotFoundException {
+    String segments = documentFileService.getTranscriptionSegments(documentId, identityId);
+    if (StringUtils.isBlank(segments)) {
+      return null;
+    }
+    StringBuilder timedTranscription = new StringBuilder();
+    try {
+      JSONArray segmentsArray = new JSONArray(segments);
+      for (int i = 0; i < segmentsArray.length(); i++) {
+        JSONObject segment = segmentsArray.optJSONObject(i);
+        String text = segment == null ? null : StringUtils.trimToNull(segment.optString("text", null));
+        double start = segment == null ? Double.NaN : segment.optDouble("start", Double.NaN);
+        if (text != null && Double.isFinite(start) && start >= 0) {
+          if (!timedTranscription.isEmpty()) {
+            timedTranscription.append('\n');
+          }
+          timedTranscription.append(toMoment((long) start)).append(' ').append(text);
+        }
+      }
+    } catch (JSONException e) {
+      LOG.debug("The timed segments of media file {} cannot be read, its plain transcript is given", documentId, e);
+      return null;
+    }
+    return timedTranscription.isEmpty() ? null : timedTranscription.toString();
+  }
+
+  /**
+   * @param seconds a moment, in whole seconds from the beginning of the media
+   * @return the moment as a marker: {@code [mm:ss · Ns]}, or
+   *         {@code [h:mm:ss · Ns]} past an hour
+   */
+  static String toMoment(long seconds) {
+    long hours = seconds / 3600;
+    long minutes = (seconds % 3600) / 60;
+    long remainder = seconds % 60;
+    String time = hours > 0 ? "%d:%02d:%02d".formatted(hours, minutes, remainder) : "%02d:%02d".formatted(minutes, remainder);
+    return "[%s · %ds]".formatted(time, seconds);
   }
 
   /**
