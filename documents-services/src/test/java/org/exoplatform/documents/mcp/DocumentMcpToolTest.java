@@ -566,16 +566,35 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
     when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
                                                                                                    .status(TranscriptionStatus.QUEUED)
+                                                                                                   .updated(System.currentTimeMillis())
                                                                                                    .build(),
                                                                                          TranscriptionState.builder()
                                                                                                    .status(TranscriptionStatus.PROCESSING)
                                                                                                    .progress("3/9")
+                                                                                                   .updated(System.currentTimeMillis())
                                                                                                    .build());
 
     assertTrue(assertThrows(IllegalStateException.class,
                             () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage().contains("queued"));
     String running = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
     assertTrue(running, running.contains("in progress (3/9 pieces transcribed)"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsARunLostLongAgoAsStopped() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.PROCESSING)
+                                                                                                   .progress("3/9")
+                                                                                                   .updated(System.currentTimeMillis()
+                                                                                                       - TranscriptionState.STALE_MILLIS
+                                                                                                       - 1000)
+                                                                                                   .build());
+
+    String stopped = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+
+    assertTrue(stopped, stopped.contains("stopped without finishing"));
+    assertFalse("Expected a lost run never told as in progress", stopped.contains("in progress"));
   }
 
   @Test

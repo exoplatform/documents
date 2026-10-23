@@ -528,9 +528,9 @@ public class DocumentMcpTool implements McpToolPlugin {
   /**
    * The transcript of an audio or video file, read with the user's rights. When
    * there is none, the answer says why, from the file's transcription state
-   * (EXO-92097): queued, in progress with its progress, failed with its reason,
-   * transcribed with no speech heard; a file never sent to transcription answers
-   * as before.
+   * (EXO-92097): queued, in progress with its progress, stopped when its run was
+   * lost, failed with its reason, transcribed with no speech heard; a file never
+   * sent to transcription answers as before.
    *
    * @param documentId the file's UUID
    * @return the transcript
@@ -554,13 +554,17 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (status == null) {
       throw new IllegalStateException("No transcription is available yet for this audio/video file. "
           + "Transcriptions are generated automatically once the media is processed; tell the user to try again later.");
+    } else if ((status == TranscriptionStatus.QUEUED || status == TranscriptionStatus.PROCESSING)
+               && !state.isInProgress(System.currentTimeMillis())) {
+      throw new IllegalStateException("The transcription of this audio/video file stopped without finishing: "
+          + "tell the user it did not complete.");
     }
     throw new IllegalStateException(switch (status) {
     case QUEUED -> "The transcription of this audio/video file is queued and has not started yet: "
         + "tell the user it is on its way and to ask again later.";
     case PROCESSING -> "The transcription of this audio/video file is in progress%s: tell the user it is being produced and to ask again in a few minutes."
         .formatted(StringUtils.isBlank(state.progress()) ? "" : " (" + state.progress() + " pieces transcribed)");
-    case FAILED -> "The transcription of this audio/video file failed: %s. Tell the user it failed, and that a new attempt can be asked from the file in Documents."
+    case FAILED -> "The transcription of this audio/video file failed: %s. Tell the user it failed, and why."
         .formatted(toTranscriptionFailure(state.error()));
     case DONE -> "This audio/video file was transcribed, but no speech was heard in it.";
     });
