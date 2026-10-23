@@ -70,6 +70,8 @@ import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
+import org.mockito.ArgumentCaptor;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDocumentFileStorageTest {
@@ -3189,6 +3191,185 @@ public class JCRDocumentFileStorageTest {
       java.nio.file.Files.deleteIfExists(file);
     }
     assertThrows(IllegalStateException.class, () -> storage.validateUploadedFile("x.svg", "image/svg+xml", file));
+  }
+
+  @Test
+  public void getTranscriptionStateReadsTheStoredStateWithTheViewersRights() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "PROCESSING");
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_PROGRESS, "3/9");
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE, "en");
+    Property duration = mock(Property.class);
+    when(duration.getLong()).thenReturn(5400L);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)).thenReturn(duration);
+    Calendar updated = Calendar.getInstance();
+    Property updatedProperty = mock(Property.class);
+    when(updatedProperty.getDate()).thenReturn(updated);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(updatedProperty);
+
+    TranscriptionState state = jcrDocumentFileStorage.getTranscriptionState("1", viewer);
+
+    assertEquals(TranscriptionStatus.PROCESSING, state.status());
+    assertEquals("3/9", state.progress());
+    assertEquals("en", state.language());
+    assertEquals(Long.valueOf(5400L), state.durationSeconds());
+    assertEquals(Long.valueOf(updated.getTimeInMillis()), state.updated());
+    assertNull(state.error());
+    assertFalse(state.hasSegments());
+    assertTrue(state.media());
+  }
+
+  @Test
+  public void getTranscriptionStateReadsAnOldTranscriptAsDoneAndAnEmptyPlaceholderAsNeverTranscribed() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "audio/ogg");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION)).thenReturn(true);
+    Property transcript = mock(Property.class);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION)).thenReturn(transcript);
+
+    when(transcript.getLength()).thenReturn(42L);
+    assertEquals(TranscriptionStatus.DONE, jcrDocumentFileStorage.getTranscriptionState("1", viewer).status());
+
+    when(transcript.getLength()).thenReturn(0L);
+    TranscriptionState placeholder = jcrDocumentFileStorage.getTranscriptionState("1", viewer);
+    assertNull("Expected the empty placeholder of the former listener to read as never transcribed", placeholder.status());
+    assertTrue(placeholder.media());
+  }
+
+  @Test
+  public void getTranscriptionStateTellsAFileThatIsNoMedia() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "application/pdf");
+
+    assertFalse(jcrDocumentFileStorage.getTranscriptionState("1", viewer).media());
+    when(node.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(false);
+    assertFalse(jcrDocumentFileStorage.getTranscriptionState("1", viewer).media());
+  }
+
+  @Test
+  public void getTranscriptionStateOfAFileTheViewerCannotSeeIsNotFound() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getTranscriptionState("1", viewer));
+  }
+
+  @Test
+  public void updateTranscriptionStateWritesEveryFieldAsTheSystem() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(false);
+    Property duration = mock(Property.class);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)).thenReturn(duration);
+
+    jcrDocumentFileStorage.updateTranscriptionState("1",
+                                                    TranscriptionState.builder()
+                                                                      .status(TranscriptionStatus.FAILED)
+                                                                      .error("provider.timeout")
+                                                                      .build());
+
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "FAILED");
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_ERROR, "provider.timeout");
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_PROGRESS, (String) null);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE, (String) null);
+    verify(duration).remove();
+    verify(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED), any(Calendar.class));
+    verify(session).save();
+  }
+
+  @Test
+  public void completeTranscriptionWritesTheTextTheSegmentsAndTheStateInOneSave() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+
+    jcrDocumentFileStorage.completeTranscription("1",
+                                                 "bonjour à tous",
+                                                 "[{\"start\":0.0,\"end\":2.0,\"text\":\"bonjour\"}]",
+                                                 TranscriptionState.builder()
+                                                                   .status(TranscriptionStatus.DONE)
+                                                                   .language("fr")
+                                                                   .durationSeconds(5400L)
+                                                                   .build());
+
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION);
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    ArgumentCaptor<InputStream> text = ArgumentCaptor.forClass(InputStream.class);
+    verify(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION), text.capture());
+    assertEquals("bonjour à tous", new String(text.getValue().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+    verify(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS), any(InputStream.class));
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE, "fr");
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION, 5400L);
+    verify(session, times(1)).save();
+  }
+
+  @Test
+  public void completeTranscriptionWithoutSegmentsRemovesThePreviousOnes() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    Property segments = mock(Property.class);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(segments);
+
+    jcrDocumentFileStorage.completeTranscription("1",
+                                                 "hello",
+                                                 null,
+                                                 TranscriptionState.builder().status(TranscriptionStatus.DONE).build());
+
+    verify(segments).remove();
+    verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS), any(InputStream.class));
+  }
+
+  private Session mockViewerSession(org.exoplatform.services.security.Identity viewer) throws Exception {
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, viewer)).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    return session;
+  }
+
+  private Session mockSystemSession() throws Exception {
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(SessionProvider.createSystemProvider()).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    return session;
+  }
+
+  private Node mockMediaNode(Session session, String mimeType) throws Exception {
+    Node node = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    Node content = mock(Node.class);
+    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(content);
+    when(content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
+    Property mimeTypeProperty = mock(Property.class);
+    when(mimeTypeProperty.getString()).thenReturn(mimeType);
+    when(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
+    return node;
+  }
+
+  private void mockStringProperty(Node node, String name, String value) throws Exception {
+    Property property = mock(Property.class);
+    when(property.getString()).thenReturn(value);
+    when(node.hasProperty(name)).thenReturn(true);
+    when(node.getProperty(name)).thenReturn(property);
   }
 
 }

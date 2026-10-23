@@ -27,6 +27,7 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.portal.config.UserACL;
@@ -515,6 +516,81 @@ public interface DocumentFileService {
    * @return the transcription text
    */
   default String getAudioTranscription(String documentId) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The transcription state of a media file, read with the rights of the given
+   * user. A file transcribed before the state existed, which holds a transcript
+   * but no state, reads as {@link TranscriptionStatus#DONE}; a file never sent
+   * to transcription reads with a null status.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user reading it
+   * @return the state, never null
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default TranscriptionState getTranscriptionState(String documentId,
+                                                   long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The transcription state of a media file, read as the system.
+   *
+   * @param documentId the file's UUID
+   * @return the state, never null
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default TranscriptionState getTranscriptionState(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Writes the transcription state of a media file as the system: every field
+   * of the state is written, a null one removed, and the update time set to now.
+   *
+   * @param documentId the file's UUID
+   * @param state the state to write
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default void updateTranscriptionState(String documentId, TranscriptionState state) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Writes, as the system and in one save, the transcript of a media file, its
+   * timed segments and its final state.
+   *
+   * @param documentId the file's UUID
+   * @param transcription the transcript's text
+   * @param segments the timed segments as a JSON list, or null when there are
+   *          none
+   * @param state the state to write, {@link TranscriptionStatus#DONE}
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default void completeTranscription(String documentId,
+                                     String transcription,
+                                     String segments,
+                                     TranscriptionState state) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The timed segments of a media file's transcript, read with the rights of
+   * the given user.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user reading it
+   * @return the segments as a JSON list, or null when there are none
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default String getTranscriptionSegments(String documentId,
+                                          long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     throw new UnsupportedOperationException();
   }
 
