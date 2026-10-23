@@ -123,12 +123,12 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
 
+  private static final Log        LOG                    = ExoLogger.getLogger(DocumentMcpTool.class);
+
   /**
    * Same password policy DocumentFileRest applies to public-link passwords
    * (min length 9), so a link created here is openable with the given password.
    */
-  private static final Log        LOG = ExoLogger.getLogger(DocumentMcpTool.class);
-
   private static final UserFieldValidator PASSWORD_VALIDATOR = new UserFieldValidator("password", false, false, 9, 255);
 
   /**
