@@ -247,12 +247,16 @@
     {
       "name": "get_document_transcription_by_id",
       "title": "Transcript an Audio DMS file",
-      "description": "Get the file transcription when it's an audio/video media content. When the transcript is grouped into chapters, the answer starts with the chapters, each with the moment it starts, its title and a short summary, then gives the transcript.",
+      "description": "Get the file transcription when it's an audio/video media content. With timestamps true, a transcript that has time positions is given one segment per line, each starting with the moment it was said, as [mm:ss · Ns] ([h:mm:ss · Ns] past an hour), N being that moment in whole seconds; without time positions, the plain transcript is given. When the transcript is grouped into chapters, the answer starts with the chapters, each with the moment it starts, its title and a short summary, then gives the transcript.",
       "input_schema": {
         "type": "object",
         "properties": {
           "document_id": {
             "type": "string"
+          },
+          "timestamps": {
+            "type": "boolean",
+            "description": "true to have each segment start with the moment it was said, when the transcript has time positions"
           }
         },
         "required": [
@@ -265,7 +269,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32" }
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["timestamps"] }
     },
     {
       "name": "search_documents",
