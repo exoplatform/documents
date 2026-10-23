@@ -17,4 +17,82 @@
       </propertyDefinition>
     </propertyDefinitions>
   </nodeType>
+  <nodeType
+    name="exo:transcriptionState"
+    isMixin="true"
+    hasOrderableChildNodes="false"
+    primaryItemName="">
+    <propertyDefinitions>
+      <propertyDefinition
+        name="exo:transcriptionStatus"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:transcriptionProgress"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:transcriptionError"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:transcriptionLanguage"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:transcriptionDuration"
+        requiredType="Long"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:transcriptionUpdated"
+        requiredType="Date"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:transcriptionSegments"
+        requiredType="Binary"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+    </propertyDefinitions>
+  </nodeType>
 </nodeTypes>

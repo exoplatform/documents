@@ -156,4 +156,20 @@ public class NodeTypeConstants {
 
   public static final String EXO_TRANSCRIPTION         = "exo:transcription";
 
+  public static final String EXO_TRANSCRIPTION_STATE           = "exo:transcriptionState";
+
+  public static final String EXO_TRANSCRIPTION_STATUS          = "exo:transcriptionStatus";
+
+  public static final String EXO_TRANSCRIPTION_PROGRESS        = "exo:transcriptionProgress";
+
+  public static final String EXO_TRANSCRIPTION_ERROR           = "exo:transcriptionError";
+
+  public static final String EXO_TRANSCRIPTION_LANGUAGE        = "exo:transcriptionLanguage";
+
+  public static final String EXO_TRANSCRIPTION_DURATION        = "exo:transcriptionDuration";
+
+  public static final String EXO_TRANSCRIPTION_UPDATED         = "exo:transcriptionUpdated";
+
+  public static final String EXO_TRANSCRIPTION_SEGMENTS        = "exo:transcriptionSegments";
+
 }
