@@ -580,7 +580,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   private String toTranscriptionFailure(String error) {
     return switch (StringUtils.defaultString(error)) {
-    case "ffmpeg.unavailable" -> "the server cannot convert a recording this long";
+    case "ffmpeg.unavailable" -> "the server has no tool to convert this recording, which its format or its length needs";
     case "media.unreadable" -> "the file could not be read";
     case "transcription.disabled" -> "transcription is switched off";
     case "attempts.exhausted" -> "every attempt failed";
