@@ -928,20 +928,29 @@ public class DocumentMcpTool implements McpToolPlugin {
    * chapters (EXO-92122) is given after the list of its chapters, each with the
    * moment it starts, its title and its summary, so that the assistant can say
    * where in the recording a subject was discussed.
+   * Asked with timestamps, a transcript that has timed segments is given one
+   * segment per line, each starting with the moment it was said,
+   * {@code [mm:ss · Ns]} ({@code [h:mm:ss · Ns]} past an hour), where N is that
+   * moment in whole seconds (EXO-92112); without segments, the plain transcript
+   * is given, as without timestamps.
    *
    * @param documentId the file's UUID
+   * @param timestamps true to have each segment start with its moment
    * @return the transcript
    * @throws IllegalAccessException when the user may not read the file
    * @throws ObjectNotFoundException when the file does not exist
    * @throws IllegalStateException when the file has no transcript, saying why
    */
-  public String getDocumentTranscriptionById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+  public String getDocumentTranscriptionById(String documentId,
+                                             Boolean timestamps) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode document = checkCanAccessDocument(documentId);
     long identityId = getCurrentUserIdentityId();
     String audioTranscription = documentFileService.getAudioTranscription(documentId, identityId);
     if (StringUtils.isNotBlank(audioTranscription)) {
       String chapters = toChaptersOutline(documentId, identityId);
-      return chapters == null ? audioTranscription : chapters + "\n\nTranscript:\n" + audioTranscription;
+      String timedTranscription = Boolean.TRUE.equals(timestamps) ? toTimedTranscription(documentId, identityId) : null;
+      String transcription = timedTranscription == null ? audioTranscription : timedTranscription;
+      return chapters == null ? transcription : chapters + "\n\nTranscript:\n" + transcription;
     } else if (!(document instanceof FileNode fileNode)
                || !StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
       throw new IllegalStateException("The document with id %s isn't an audio nor a video file, so it has no transcription."
@@ -1004,7 +1013,7 @@ public class DocumentMcpTool implements McpToolPlugin {
         double start = chapter == null ? Double.NaN : chapter.optDouble("start", Double.NaN);
         if (title != null && Double.isFinite(start) && start >= 0) {
           String summary = StringUtils.trimToNull(chapter.optString("summary", null));
-          outline.append("\n- ").append(toChapterMoment((long) start)).append(' ').append(title);
+          outline.append("\n- ").append(toMoment((long) start)).append(' ').append(title);
           if (summary != null) {
             outline.append(": ").append(summary);
           }
@@ -1018,12 +1027,50 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
+   * Writes a transcript's timed segments one per line, each starting with the
+   * moment it was said.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the timed transcript, or null when the file has no segment, or none
+   *         that can be read
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private String toTimedTranscription(String documentId, long identityId) throws IllegalAccessException,
+                                                                             ObjectNotFoundException {
+    String segments = documentFileService.getTranscriptionSegments(documentId, identityId);
+    if (StringUtils.isBlank(segments)) {
+      return null;
+    }
+    StringBuilder timedTranscription = new StringBuilder();
+    try {
+      JSONArray segmentsArray = new JSONArray(segments);
+      for (int i = 0; i < segmentsArray.length(); i++) {
+        JSONObject segment = segmentsArray.optJSONObject(i);
+        String text = segment == null ? null : StringUtils.trimToNull(segment.optString("text", null));
+        double start = segment == null ? Double.NaN : segment.optDouble("start", Double.NaN);
+        if (text != null && Double.isFinite(start) && start >= 0) {
+          if (!timedTranscription.isEmpty()) {
+            timedTranscription.append('\n');
+          }
+          timedTranscription.append(toMoment((long) start)).append(' ').append(text);
+        }
+      }
+    } catch (JSONException e) {
+      LOG.debug("The timed segments of media file {} cannot be read, its plain transcript is given", documentId, e);
+      return null;
+    }
+    return timedTranscription.isEmpty() ? null : timedTranscription.toString();
+  }
+
+  /**
    * @param seconds a moment, in whole seconds from the beginning of the media
    * @return the moment as a marker: {@code [mm:ss · Ns]}, or
    *         {@code [h:mm:ss · Ns]} past an hour, N being the moment in seconds
    *         so that the assistant links to it without converting
    */
-  static String toChapterMoment(long seconds) {
+  static String toMoment(long seconds) {
     long hours = seconds / 3600;
     long minutes = (seconds % 3600) / 60;
     long remainder = seconds % 60;
