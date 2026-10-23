@@ -636,7 +636,7 @@ public class DocumentMcpToolTest {
 
     String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
 
-    assertTrue(failed, failed.contains("failed: the server cannot convert a recording this long"));
+    assertTrue(failed, failed.contains("failed: the server has no tool to convert this recording, which its format or its length needs"));
     assertFalse("Expected a failed transcription never told as not ready yet", failed.contains("try again later"));
   }
 
