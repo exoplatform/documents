@@ -45,12 +45,8 @@ public class DocumentTranscriptionService {
 
   public static final String                   ALREADY_DONE_MESSAGE                = "documents.transcription.alreadyDone";
 
-  /**
-   * How long a queued or running transcription may go without its state
-   * changing before a retry hands it to the transcriber again: twice the AI
-   * queue's default run ceiling, a run that writes its progress after each piece.
-   */
-  static final long                            STALE_TRANSCRIPTION_MILLIS          = 3600_000L;
+  /** How long a queued or running transcription may go unchanged before its run is taken as lost. */
+  static final long                            STALE_TRANSCRIPTION_MILLIS          = TranscriptionState.STALE_MILLIS;
 
   @Autowired
   private DocumentFileService                  documentFileService;
@@ -144,7 +140,7 @@ public class DocumentTranscriptionService {
       throw new IllegalArgumentException(NOT_MEDIA_MESSAGE);
     } else if (state.status() == TranscriptionStatus.DONE) {
       throw new IllegalArgumentException(ALREADY_DONE_MESSAGE);
-    } else if (isInProgress(state)) {
+    } else if (state.isInProgress(System.currentTimeMillis())) {
       return false;
     }
     try {
@@ -153,19 +149,6 @@ public class DocumentTranscriptionService {
       throw new IllegalStateException("Error asking to transcribe media file '%s' again".formatted(documentId), e);
     }
     return true;
-  }
-
-  /**
-   * Tells whether a transcription is queued or running, and still moving.
-   *
-   * @param state the file's transcription state
-   * @return true when it is queued or running and its state changed recently
-   */
-  private boolean isInProgress(TranscriptionState state) {
-    if (state.status() != TranscriptionStatus.QUEUED && state.status() != TranscriptionStatus.PROCESSING) {
-      return false;
-    }
-    return state.updated() != null && System.currentTimeMillis() - state.updated() < STALE_TRANSCRIPTION_MILLIS;
   }
 
 }
