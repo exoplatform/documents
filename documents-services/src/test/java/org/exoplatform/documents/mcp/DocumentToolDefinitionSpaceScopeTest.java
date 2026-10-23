@@ -82,7 +82,7 @@ public class DocumentToolDefinitionSpaceScopeTest {
                                                                 "get_document_content_by_id", List.of("document_id"),
                                                                 "get_document_outline", List.of("document_id"),
                                                                 "read_document_text", List.of("document_id", "offset", "max_chars", "section"),
-                                                                "get_document_transcription_by_id", List.of("document_id"),
+                                                                "get_document_transcription_by_id", List.of("document_id", "timestamps"),
                                                                 "list_document_versions", List.of("document_id"),
                                                                 "get_document_permissions", List.of("document_id"),
                                                                 "get_documents_by_folder_id",
