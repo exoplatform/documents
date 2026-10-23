@@ -2772,6 +2772,25 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public boolean markTranscriptionQueued(String documentId) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)) {
+        return false;
+      }
+      writeTranscriptionState(node, TranscriptionState.builder().status(TranscriptionStatus.QUEUED).build());
+      session.save();
+      return true;
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error queueing the transcription of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  @Override
   public void completeTranscription(String documentId,
                                     String transcription,
                                     String segments,
