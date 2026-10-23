@@ -479,6 +479,20 @@ public interface DocumentFileStorage {
   }
 
   /**
+   * Marks a media file QUEUED as the system, only when it has no transcription
+   * state yet: the read and the write are made in one session, so a run's state is
+   * never written over.
+   *
+   * @param documentId the file's UUID
+   * @return true when the state was written, false when the file had one
+   * @throws ObjectNotFoundException when the file does not exist, or the session
+   *           creating it is not saved yet
+   */
+  default boolean markTranscriptionQueued(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Writes, as the system and in one save, the transcript of a media file, its
    * timed segments and its final state.
    *
