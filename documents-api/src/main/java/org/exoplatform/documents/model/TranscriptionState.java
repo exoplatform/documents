@@ -46,4 +46,25 @@ public record TranscriptionState(TranscriptionStatus status,
                                  Long updated,
                                  boolean hasSegments,
                                  boolean media) {
+
+  /**
+   * How long a queued or running transcription may go without its state changing
+   * before its run is taken as lost: twice the AI queue's default run ceiling, a
+   * run writing its progress after each piece.
+   */
+  public static final long STALE_MILLIS = 3600_000L;
+
+  /**
+   * Tells whether the transcription is queued or running, and still moving.
+   *
+   * @param now the current time, in milliseconds since the epoch
+   * @return true when it is queued or running and its state changed less than
+   *         {@link #STALE_MILLIS} ago
+   */
+  public boolean isInProgress(long now) {
+    return (status == TranscriptionStatus.QUEUED || status == TranscriptionStatus.PROCESSING)
+           && updated != null
+           && now - updated < STALE_MILLIS;
+  }
+
 }
