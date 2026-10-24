@@ -93,16 +93,12 @@ export default {
         .catch(() => this.available = false);
     },
     /**
-     * Opens the transcript drawer of the file; from the preview, the drawer is
-     * told a player already shows the file, so it shows none of its own.
+     * Opens the transcript drawer of the file.
      * @returns {void}
      */
     openTranscript() {
       document.dispatchEvent(new CustomEvent('documents-open-transcript', {
-        detail: {
-          documentId: this.documentId,
-          besidePlayer: this.previewAction,
-        },
+        detail: {documentId: this.documentId},
         cancelable: true,
       }));
     },
