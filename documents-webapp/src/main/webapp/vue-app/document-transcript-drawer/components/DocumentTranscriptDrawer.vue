@@ -230,10 +230,16 @@ export default {
           }
         })
         .catch(() => {
-          this.state = null;
-          this.unreadable = true;
+          if (documentId === this.documentId) {
+            this.state = null;
+            this.unreadable = true;
+          }
         })
-        .finally(() => this.loading = false);
+        .finally(() => {
+          if (documentId === this.documentId) {
+            this.loading = false;
+          }
+        });
     },
     /**
      * Reads the transcript, as timed segments when it has some, else as text.
