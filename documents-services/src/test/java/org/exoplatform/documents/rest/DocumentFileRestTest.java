@@ -1875,34 +1875,34 @@ public class DocumentFileRestTest {
             documentWebDavService);
     Request request = mock(Request.class);
     UriInfo uriInfo = mock(UriInfo.class);
-    Response response = documentFileRest.getDocumentContent(uriInfo, request, null, "imageThumbnail", null, null);
+    Response response = documentFileRest.getDocumentContent(uriInfo, request, null, "imageThumbnail", null, null, null);
     assertEquals(400, response.getStatus());
-    documentFileRest.getDocumentContent(uriInfo, request, "docId", null, null, null);
+    documentFileRest.getDocumentContent(uriInfo, request, "docId", null, null, null, null);
     assertEquals(400, response.getStatus());
     FileContent fileThumbnail = new FileContent(null, "testThumbnail", "image/mpeg", null, new Date());
     String userName = "user";
     org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(userName);
     ConversationState.setCurrent(new ConversationState(root));
     when(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", userName, 250, 250)).thenReturn(fileThumbnail);
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", null, "250x250");
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", null, "250x250", null);
     assertEquals(200, response.getStatus());
     javax.ws.rs.core.CacheControl previewCacheControl =
                                                     (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
     assertTrue(previewCacheControl.isPrivate());
     when(request.evaluatePreconditions(any(EntityTag.class))).thenReturn(Response.notModified());
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", "1", "250x250");
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", "1", "250x250", null);
     assertEquals(304, response.getStatus());
     previewCacheControl = (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
     assertNotNull(previewCacheControl);
     assertTrue(previewCacheControl.isPrivate());
     when(request.evaluatePreconditions(any(EntityTag.class))).thenReturn(null);
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250", null);
     assertEquals(404, response.getStatus());
     when(documentFileService.getDocumentContent("docId", userName)).thenReturn(fileThumbnail);
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250", null);
     assertEquals(200, response.getStatus());
     when(documentFileService.getImageThumbnailContent("file", "12", userName, 0, 0)).thenThrow(IllegalAccessException.class);
-    response = documentFileRest.getDocumentContent(uriInfo, request, "12", "file", null, "0x0");
+    response = documentFileRest.getDocumentContent(uriInfo, request, "12", "file", null, "0x0", null);
     assertEquals(403, response.getStatus());
   }
 
@@ -1996,5 +1996,50 @@ public class DocumentFileRestTest {
     assertNotNull(cacheControl);
     assertTrue(cacheControl.isNoStore());
     assertTrue(cacheControl.isPrivate());
+  }
+
+  /**
+   * The content of a file is served whole with Accept-Ranges, or in the single
+   * byte range the Range header asks for, so that a player can start a
+   * recording anywhere; a range beyond the content answers 416.
+   */
+  @Test
+  public void testGetDocumentContentRange() throws Exception {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
+            spaceService,
+            identityManager,
+            metadataService,
+            settingService,
+            publicDocumentAccessService,
+            externalDownloadService,
+            documentWebDavService);
+    Request request = mock(Request.class);
+    UriInfo uriInfo = mock(UriInfo.class);
+    String userName = "user";
+    ConversationState.setCurrent(new ConversationState(new org.exoplatform.services.security.Identity(userName)));
+    when(documentFileService.getDocumentContent("docId", userName)).thenAnswer(invocation -> new DocumentFileContent("docId",
+                                                                                                                        "meeting.mp4",
+                                                                                                                        "video/mp4",
+                                                                                                                        new ByteArrayInputStream("0123456789".getBytes()),
+                                                                                                                        new Date(),
+                                                                                                                        10));
+
+    Response response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", null);
+    assertEquals(200, response.getStatus());
+    assertEquals("bytes", response.getMetadata().getFirst("Accept-Ranges"));
+
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=2-5");
+    assertEquals(206, response.getStatus());
+    assertEquals("bytes 2-5/10", response.getMetadata().getFirst("Content-Range"));
+    assertEquals("2345", new String(((InputStream) response.getEntity()).readAllBytes()));
+
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=-3");
+    assertEquals(206, response.getStatus());
+    assertEquals("789", new String(((InputStream) response.getEntity()).readAllBytes()));
+
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=10-");
+    assertEquals(416, response.getStatus());
+    assertEquals("bytes */10", response.getMetadata().getFirst("Content-Range"));
   }
 }
