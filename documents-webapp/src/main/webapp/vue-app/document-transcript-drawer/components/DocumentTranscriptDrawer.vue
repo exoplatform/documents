@@ -20,6 +20,7 @@
     v-model="drawer"
     :loading="loading"
     :filter-placeholder="$t('documents.transcript.search')"
+    :class="aboveDialog && 'z-index-snackbar'"
     class="documentTranscriptDrawer"
     allow-expand
     use-filter
@@ -87,6 +88,7 @@ export default {
     segments: null,
     term: '',
     pollingTimer: null,
+    aboveDialog: false,
   }),
   computed: {
     done() {
@@ -101,9 +103,13 @@ export default {
   },
   created() {
     document.addEventListener('documents-transcript-drawer-open', this.open);
+    document.addEventListener('modalOpened', this.raiseAboveDialog);
+    document.addEventListener('modalClosed', this.followDialogs);
   },
   beforeDestroy() {
     document.removeEventListener('documents-transcript-drawer-open', this.open);
+    document.removeEventListener('modalOpened', this.raiseAboveDialog);
+    document.removeEventListener('modalClosed', this.followDialogs);
     this.stopPolling();
   },
   methods: {
@@ -127,6 +133,7 @@ export default {
       }
       const seconds = ['number', 'string'].includes(typeof detail.seconds) && detail.seconds !== '' ? Number(detail.seconds) : NaN;
       this.seconds = Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+      this.followDialogs();
       this.$refs.drawer.open();
       this.refresh();
     },
@@ -169,7 +176,7 @@ export default {
           this.state = state;
           if (state.status === 'DONE') {
             return this.loadTranscript(documentId, state.hasSegments);
-          } else if (this.isRunning(state)) {
+          } else if (this.drawer && this.isRunning(state)) {
             this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
           }
         })
@@ -217,6 +224,25 @@ export default {
     isRunning(state) {
       return state.status === 'QUEUED'
         || (state.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
+    },
+    /**
+     * Keeps the drawer above a preview dialog opened while it is open, such as
+     * the one a sentence click opens: the drawer computes its own layer only
+     * when it opens.
+     *
+     * @returns {void}
+     */
+    raiseAboveDialog() {
+      this.aboveDialog = true;
+    },
+    /**
+     * Keeps the drawer above the dialogs still open, and back at its own
+     * layer once none is.
+     *
+     * @returns {void}
+     */
+    followDialogs() {
+      this.aboveDialog = !!document.querySelector('.v-dialog--active');
     },
     /**
      * Stops reading the state again.
@@ -268,7 +294,10 @@ export default {
     openPreview(seconds) {
       const documentId = this.documentId;
       const file = this.file && Promise.resolve(this.file) || this.$attachmentService.getDocumentDetails(documentId);
-      file.then(details => {
+      // the Documents preview item carries the seek and the start time; a page
+      // that does not load it otherwise would preview the recording without them
+      const previewExtension = new Promise(resolve => window.require(['SHARED/documentsPreviewExtension'], resolve, resolve));
+      Promise.all([file, previewExtension]).then(([details]) => {
         document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {
           attachments: [{
             id: documentId,
