@@ -30,20 +30,18 @@
     <template #title>
       {{ $t('documents.transcript.title') }}
     </template>
-    <template v-if="transcript || documentsUrl" #titleIcons>
-      <v-tooltip v-if="documentsUrl" bottom>
+    <template v-if="transcript || detailsShown" #titleIcons>
+      <v-tooltip v-if="detailsShown" bottom>
         <template #activator="{on, bind}">
           <v-btn
-            :href="documentsUrl"
-            target="_blank"
-            rel="noopener"
             icon
             v-on="on"
-            v-bind="bind">
-            <v-icon size="18">fas fa-folder-open</v-icon>
+            v-bind="bind"
+            @click.stop="showDetails">
+            <v-icon size="18">fas fa-info-circle</v-icon>
           </v-btn>
         </template>
-        <span>{{ $t('documents.transcript.openInDocuments') }}</span>
+        <span>{{ $t('documents.transcript.details') }}</span>
       </v-tooltip>
       <v-tooltip v-if="transcript" bottom>
         <template #activator="{on, bind}">
@@ -155,19 +153,14 @@ export default {
       return (this.segments?.length && this.segments.map(segment => segment.text).join('\n') || this.text || '').trim();
     },
     /**
-     * The file's folder in Documents, showing the file's preview, for a
-     * drawer opened outside Documents; empty beside a preview, in the
-     * Documents application, or when the file's folder has no Documents page.
+     * Offers the file's details, from which Documents opens, to a drawer
+     * opened outside Documents, once the file is known to be readable; never
+     * beside a preview or in the Documents application, which show them.
      *
-     * @returns {string} the link, or an empty string
+     * @returns {boolean} true when the details button shows
      */
-    documentsUrl() {
-      if (this.inDocuments || !this.file?.id || !this.file.path) {
-        return '';
-      }
-      const folderUrl = this.$documentsUtils.getParentFolderUrl(this.file);
-      return folderUrl && folderUrl !== window.location.pathname
-        && `${folderUrl}?documentPreviewId=${this.documentId}` || '';
+    detailsShown() {
+      return !this.inDocuments && !!this.file;
     },
   },
   created() {
@@ -318,6 +311,16 @@ export default {
     isRunning(state) {
       return state.status === 'QUEUED'
         || (state.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
+    },
+    /**
+     * Opens the details drawer of the file, as the details button of a file
+     * card does. The click is stopped: the details drawer closes on any click
+     * outside it that reaches the page.
+     *
+     * @returns {void}
+     */
+    showDetails() {
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.documentId}));
     },
     /**
      * Closes the drawer opened beside a preview when the preview's mask is
