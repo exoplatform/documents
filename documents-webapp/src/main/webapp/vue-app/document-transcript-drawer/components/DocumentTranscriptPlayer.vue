@@ -15,11 +15,22 @@
  * along with this program. If not, see <gnu.org/licenses>.
 -->
 <template>
-  <video
+  <audio
+    v-if="audio"
     ref="player"
     :src="`${url}#t=${start || 0.001}`"
+    :autoplay="autoplay"
     controls="controls"
-    autoplay
+    class="full-width"
+    @timeupdate="$emit('time', $event.target.currentTime)">
+  </audio>
+  <video
+    v-else
+    ref="player"
+    :src="`${url}#t=${start || 0.001}`"
+    :autoplay="autoplay"
+    :style="compact && {maxHeight: '30vh'}"
+    controls="controls"
     class="black full-width documentTranscriptPlayer"
     @timeupdate="$emit('time', $event.target.currentTime)">
   </video>
@@ -34,6 +45,18 @@ export default {
     start: {
       type: Number,
       default: 0,
+    },
+    autoplay: {
+      type: Boolean,
+      default: false,
+    },
+    audio: {
+      type: Boolean,
+      default: false,
+    },
+    compact: {
+      type: Boolean,
+      default: false,
     },
   },
   methods: {
