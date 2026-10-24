@@ -30,8 +30,22 @@
     <template #title>
       {{ $t('documents.transcript.title') }}
     </template>
-    <template v-if="transcript" #titleIcons>
-      <v-tooltip bottom>
+    <template v-if="transcript || documentsUrl" #titleIcons>
+      <v-tooltip v-if="documentsUrl" bottom>
+        <template #activator="{on, bind}">
+          <v-btn
+            :href="documentsUrl"
+            target="_blank"
+            rel="noopener"
+            icon
+            v-on="on"
+            v-bind="bind">
+            <v-icon size="18">fas fa-folder-open</v-icon>
+          </v-btn>
+        </template>
+        <span>{{ $t('documents.transcript.openInDocuments') }}</span>
+      </v-tooltip>
+      <v-tooltip v-if="transcript" bottom>
         <template #activator="{on, bind}">
           <v-btn
             icon
@@ -122,6 +136,7 @@ export default {
     playerUrl: null,
     playerStart: 0,
     playerSeconds: null,
+    inDocuments: false,
   }),
   computed: {
     sideBySide() {
@@ -138,6 +153,21 @@ export default {
         return '';
       }
       return (this.segments?.length && this.segments.map(segment => segment.text).join('\n') || this.text || '').trim();
+    },
+    /**
+     * The file's folder in Documents, showing the file's preview, for a
+     * drawer opened outside Documents; empty beside a preview, in the
+     * Documents application, or when the file's folder has no Documents page.
+     *
+     * @returns {string} the link, or an empty string
+     */
+    documentsUrl() {
+      if (this.inDocuments || !this.file?.id || !this.file.path) {
+        return '';
+      }
+      const folderUrl = this.$documentsUtils.getParentFolderUrl(this.file);
+      return folderUrl && folderUrl !== window.location.pathname
+        && `${folderUrl}?documentPreviewId=${this.documentId}` || '';
     },
   },
   created() {
@@ -175,6 +205,7 @@ export default {
         detail: {documentId: this.documentId},
         cancelable: true,
       }));
+      this.inDocuments = besidePlayer || !!document.querySelector('.documents-application');
       if (besidePlayer) {
         this.playerUrl = null;
         window.addEventListener('click', this.closeOnPreviewMask, true);
