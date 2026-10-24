@@ -1862,22 +1862,6 @@ public class DocumentFileRest implements ResourceContainer {
    *         when the range starts beyond the content
    * @throws IOException when the content cannot be skipped to the range
    */
-  /**
-   * Tells whether an If-Range header names the current version of the
-   * content; a weak tag or a date never does, so the whole content is served.
-   *
-   * @param ifRange the If-Range header
-   * @param eTag the entity tag of the content
-   * @return true when the header is the strong tag of the content
-   */
-  private boolean isSameEntityTag(String ifRange, EntityTag eTag) {
-    String value = ifRange.trim();
-    if (value.startsWith("W/")) {
-      return false;
-    }
-    return value.equals("\"" + eTag.getValue() + "\"");
-  }
-
   private Response.ResponseBuilder buildContentResponse(InputStream inputStream, long size, String range) throws IOException {
     ByteRange byteRange = ByteRange.parse(range, size);
     if (byteRange == null) {
@@ -1901,6 +1885,22 @@ public class DocumentFileRest implements ResourceContainer {
                    .header(CONTENT_RANGE_HEADER,
                            BYTES_UNIT + " " + byteRange.start() + "-" + byteRange.end() + "/" + size)
                    .header(HttpHeaders.CONTENT_LENGTH, byteRange.length());
+  }
+
+  /**
+   * Tells whether an If-Range header names the current version of the
+   * content; a weak tag or a date never does, so the whole content is served.
+   *
+   * @param ifRange the If-Range header
+   * @param eTag the entity tag of the content
+   * @return true when the header is the strong tag of the content
+   */
+  private boolean isSameEntityTag(String ifRange, EntityTag eTag) {
+    String value = ifRange.trim();
+    if (value.startsWith("W/")) {
+      return false;
+    }
+    return value.equals("\"" + eTag.getValue() + "\"");
   }
 
   @POST
