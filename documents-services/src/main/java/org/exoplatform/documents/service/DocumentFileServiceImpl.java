@@ -563,27 +563,50 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getAudioTranscription(documentId);
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public TranscriptionState getTranscriptionState(String documentId,
                                                   long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     return documentFileStorage.getTranscriptionState(documentId, getAclUserIdentity(aclIdentity));
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public TranscriptionState getTranscriptionState(String documentId) throws ObjectNotFoundException {
     return documentFileStorage.getTranscriptionState(documentId);
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void updateTranscriptionState(String documentId, TranscriptionState state) throws ObjectNotFoundException {
     documentFileStorage.updateTranscriptionState(documentId, state);
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public boolean markTranscriptionQueued(String documentId) throws ObjectNotFoundException {
     return documentFileStorage.markTranscriptionQueued(documentId);
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean clearTranscriptionState(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.clearTranscriptionState(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void completeTranscription(String documentId,
                                     String transcription,
@@ -592,6 +615,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     documentFileStorage.completeTranscription(documentId, transcription, segments, state);
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public String getTranscriptionSegments(String documentId,
                                          long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
