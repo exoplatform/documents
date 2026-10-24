@@ -2048,5 +2048,7 @@ public class DocumentFileRestTest {
     assertEquals(200, response.getStatus());
     response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=2-5", "W/\"1000-0x0\"");
     assertEquals(200, response.getStatus());
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=2-5", "Thu, 01 Jan 1970 00:00:01 GMT");
+    assertEquals(200, response.getStatus());
   }
 }
