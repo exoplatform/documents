@@ -338,10 +338,11 @@ export default {
     /**
      * Opens the details drawer of the file, as the details button of a file
      * card does. When the details drawer is already open under this one, as
-     * when the transcript was opened from it, the drawers above it are closed
-     * first, this one included: opening it again would leave it under them.
-     * The click is stopped: the details drawer closes on any click outside it
-     * that reaches the page.
+     * when the transcript was opened from it, it is closed first: opening it
+     * again would leave it under this one, while closed then opened it comes
+     * above it, and closing it returns to the transcript. The click is
+     * stopped: the details drawer closes on any click outside it that reaches
+     * the page.
      *
      * @returns {void}
      */
@@ -349,7 +350,7 @@ export default {
       const openedDrawers = eXo.openedDrawers || [];
       const detailsIndex = openedDrawers.findIndex(drawer => drawer.$el?.classList?.contains('documentInfoDrawer'));
       if (detailsIndex >= 0 && detailsIndex < openedDrawers.indexOf(this.$refs.drawer)) {
-        openedDrawers.slice(detailsIndex + 1).reverse().forEach(drawer => drawer.close());
+        openedDrawers[detailsIndex].close();
       }
       document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.documentId}));
     },
