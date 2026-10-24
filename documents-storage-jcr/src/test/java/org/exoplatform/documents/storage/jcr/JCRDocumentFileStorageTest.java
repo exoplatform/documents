@@ -35,6 +35,8 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.TranscriptionStatus;
+import io.meeds.portal.thumbnail.model.FileContent;
+
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
@@ -2673,5 +2675,33 @@ public class JCRDocumentFileStorageTest {
     when(property.getString()).thenReturn(value);
     when(node.hasProperty(name)).thenReturn(true);
     when(node.getProperty(name)).thenReturn(property);
+  }
+
+  /**
+   * The content of a document carries the size of its binary, which the
+   * content endpoint needs to serve a byte range of it.
+   */
+  @Test
+  public void getDocumentContentCarriesTheSizeOfItsBinary() throws Exception {
+    org.exoplatform.services.security.Identity identity = new org.exoplatform.services.security.Identity("john");
+    when(identityRegistry.getIdentity("john")).thenReturn(identity);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Node node = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "doc1")).thenReturn(node);
+    Node content = mock(Node.class);
+    when(node.getNode("jcr:content")).thenReturn(content);
+    Property data = mock(Property.class);
+    when(content.getProperty("jcr:data")).thenReturn(data);
+    when(data.getLength()).thenReturn(22890488L);
+
+    FileContent fileContent = jcrDocumentFileStorage.getDocumentContent("doc1", "john");
+
+    assertTrue(fileContent instanceof DocumentFileContent);
+    assertEquals(22890488L, ((DocumentFileContent) fileContent).getSize());
   }
 }
