@@ -38,3 +38,8 @@ extensionRegistry.registerComponent('PreviewAction', 'previewActionExtensions', 
   vueComponent: Vue.options.components['attachment-preview-info-action'],
   rank: 30,
 });
+extensionRegistry.registerComponent('PreviewAction', 'previewActionExtensions', {
+  id: 'preview-transcript-action',
+  vueComponent: Vue.options.components['attachment-preview-transcript-action'],
+  rank: 25,
+});
