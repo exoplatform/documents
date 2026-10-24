@@ -49,11 +49,25 @@
         <div
           v-if="playerUrl"
           :class="sideBySide && 'flex-grow-1 me-4' || 'mb-4'"
-          :style="sideBySide && {position: 'sticky', top: 0}">
+          :style="{position: 'sticky', top: 0, zIndex: 1}"
+          class="white">
+          <div v-if="!sideBySide" class="d-flex justify-end">
+            <v-btn
+              :title="playerCollapsed && $t('documents.transcript.showPlayer') || $t('documents.transcript.hidePlayer')"
+              icon
+              small
+              @click="playerCollapsed = !playerCollapsed">
+              <v-icon size="16">{{ playerCollapsed && 'fa-chevron-down' || 'fa-chevron-up' }}</v-icon>
+            </v-btn>
+          </div>
           <document-transcript-player
+            v-show="sideBySide || !playerCollapsed"
             ref="player"
             :url="playerUrl"
             :start="playerStart"
+            :autoplay="playerAutoplay"
+            :audio="audioFile"
+            :compact="!sideBySide"
             @time="playerSeconds = $event" />
         </div>
         <div :style="sideBySide && {flex: '0 0 40%', minWidth: 0}">
@@ -102,13 +116,19 @@ export default {
     term: '',
     pollingTimer: null,
     expanded: false,
+    besidePlayer: false,
+    playerCollapsed: false,
+    playerAutoplay: false,
     playerUrl: null,
     playerStart: 0,
     playerSeconds: null,
   }),
   computed: {
     sideBySide() {
-      return !!this.playerUrl && !this.$vuetify.breakpoint.smAndDown;
+      return !!this.playerUrl && this.expanded && !this.$vuetify.breakpoint.smAndDown;
+    },
+    audioFile() {
+      return /^audio\//.test(this.file?.mimeType || '');
     },
     done() {
       return this.state?.status === 'DONE' && (this.text !== null || this.segments !== null);
@@ -149,6 +169,10 @@ export default {
       }
       const seconds = ['number', 'string'].includes(typeof detail.seconds) && detail.seconds !== '' ? Number(detail.seconds) : NaN;
       this.seconds = Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+      this.besidePlayer = !!detail.besidePlayer;
+      if (!this.besidePlayer && !this.playerUrl) {
+        this.openPlayer(this.seconds || 0, false);
+      }
       this.$refs.drawer.open();
       this.refresh();
     },
@@ -263,8 +287,8 @@ export default {
     },
     /**
      * Moves the recording to a moment: the preview's when one shows the file,
-     * else the drawer's own player, which the first click opens beside the
-     * transcript.
+     * else the drawer's own player, opened by this click when the preview the
+     * drawer was opened beside has closed since.
      *
      * @param {number} seconds the moment, in seconds from the start
      * @returns {void}
@@ -282,12 +306,22 @@ export default {
       } else if (this.playerUrl) {
         this.$refs.player.seek(seconds);
       } else {
-        this.playerStart = seconds;
-        this.playerUrl = this.$documentsUtils.getDownloadUrl(this.documentId, this.file?.modifiedDate);
-        if (!this.expanded) {
-          this.$refs.drawer.toogleExpand();
-        }
+        this.openPlayer(seconds, true);
       }
+    },
+    /**
+     * Shows the drawer's own player above the transcript, or beside it once
+     * the drawer is expanded.
+     *
+     * @param {number} seconds the moment to start at, in seconds
+     * @param {boolean} autoplay whether to play at once
+     * @returns {void}
+     */
+    openPlayer(seconds, autoplay) {
+      this.playerStart = seconds;
+      this.playerAutoplay = autoplay;
+      this.playerCollapsed = false;
+      this.playerUrl = this.$documentsUtils.getDownloadUrl(this.documentId, this.file?.modifiedDate);
     },
     /**
      * Stops the drawer's own player and the polling once the drawer closes.
