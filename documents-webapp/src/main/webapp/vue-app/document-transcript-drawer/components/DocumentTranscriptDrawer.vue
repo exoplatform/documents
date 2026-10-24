@@ -242,7 +242,8 @@ export default {
      * @returns {void}
      */
     followDialogs() {
-      this.aboveDialog = !!document.querySelector('.v-dialog--active');
+      // a dialog announces its closing before it renders it: read the dialogs once rendered
+      this.$nextTick(() => this.aboveDialog = !!document.querySelector('.v-dialog--active'));
     },
     /**
      * Stops reading the state again.

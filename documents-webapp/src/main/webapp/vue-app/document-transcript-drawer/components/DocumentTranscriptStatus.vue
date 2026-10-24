@@ -18,6 +18,7 @@
   <div class="d-flex flex-column">
     <div class="text-body-1">{{ message }}</div>
     <div v-if="reason" class="text-subtitle mt-1">{{ reason }}</div>
+    <div v-if="longQueued" class="text-subtitle mt-1">{{ $t('documents.transcript.status.longQueued') }}</div>
     <v-progress-linear
       v-if="running"
       :value="progressValue"
@@ -61,6 +62,10 @@ export default {
       return this.status === 'PROCESSING'
         && (!this.state.updated || Date.now() - this.state.updated >= STALE_MILLIS);
     },
+    longQueued() {
+      return this.status === 'QUEUED' && !this.state.error
+        && (!this.state.updated || Date.now() - this.state.updated >= STALE_MILLIS);
+    },
     rescheduled() {
       return this.status === 'QUEUED' && !!this.state.error;
     },
@@ -68,7 +73,7 @@ export default {
       return this.status === 'QUEUED' || (this.status === 'PROCESSING' && !this.stale);
     },
     canRetry() {
-      return !this.unreadable && (!this.status || this.status === 'FAILED' || this.stale);
+      return !this.unreadable && (!this.status || this.status === 'FAILED' || this.stale || this.longQueued);
     },
     progressParts() {
       const parts = (this.state?.progress || '').split('/').map(Number);
