@@ -195,8 +195,10 @@ export default {
           }
         })
         .catch(() => {
-          this.file = null;
-          this.fileUnknown = documentId === this.documentId;
+          if (documentId === this.documentId) {
+            this.file = null;
+            this.fileUnknown = true;
+          }
         });
     },
     /**
