@@ -27,7 +27,7 @@
   </v-btn>
   <v-btn
     v-else-if="available && card"
-    :title="$t('documents.transcript.open')"
+    :title="$t('attachments.transcript.open')"
     small
     icon
     class="white--text my-auto mx-0"
@@ -117,8 +117,10 @@ export default {
   methods: {
     /**
      * Shows the button only for an audio or video file of a server that can
-     * transcribe it, once the Documents labels it shows are loaded; they are
-     * loaded only then, so a page that offers no transcript keeps its own.
+     * transcribe it, once the label it shows is loaded. An attachment card
+     * reads its label from the attachments bundle its application loads, and
+     * never merges the Documents bundle, whose keys would override the
+     * attachments' ones on the page.
      * @returns {void}
      */
     checkAvailability() {
@@ -128,8 +130,13 @@ export default {
         return;
       }
       readAvailability(documentId)
-        .then(available => available && exoi18n.loadLanguageAsync(lang, `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`)
-          .then(() => true, () => true))
+        .then(available => {
+          if (!available || this.card) {
+            return available;
+          }
+          return exoi18n.loadLanguageAsync(lang, `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`)
+            .then(() => true, () => true);
+        })
         .then(available => this.available = documentId === this.documentId && !!available)
         .catch(() => this.available = false);
     },
