@@ -18,6 +18,8 @@
 
 import AudioVideoPreviewItem from './components/AudioVideoPreviewItem.vue';
 import AttachmentsPreviewInfoAction from './components/AttachmentsPreviewInfoAction.vue';
+import AttachmentsPreviewTranscriptAction from './components/AttachmentsPreviewTranscriptAction.vue';
+import DocumentTranscriptButton from '../document-transcript-drawer/components/DocumentTranscriptButton.vue';
 
 
 
@@ -25,6 +27,8 @@ const components = {
 
   'documents-audio-video-preview': AudioVideoPreviewItem,
   'attachment-preview-info-action': AttachmentsPreviewInfoAction,
+  'attachment-preview-transcript-action': AttachmentsPreviewTranscriptAction,
+  'document-transcript-button': DocumentTranscriptButton,
 };
 
 for (const key in components) {

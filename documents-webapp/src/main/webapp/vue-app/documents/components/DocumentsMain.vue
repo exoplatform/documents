@@ -1634,9 +1634,10 @@ export default {
         this.loading = true;
         this.previewMode = true;
         const documentPreviewId = queryParams.get('documentPreviewId');
+        const startSeconds = /^\d+$/.test(queryParams.get('t') || '') && Number(queryParams.get('t')) || null;
         this.selectedView = 'folder';
         this.showHidden = true;
-        return this.showPreview(documentPreviewId)
+        return this.showPreview(documentPreviewId, startSeconds)
           .then(attachment => {
             if (attachment?.path) {
               this.openFile(attachment);
@@ -1723,7 +1724,7 @@ export default {
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
-    showPreview(documentPreviewId) {
+    showPreview(documentPreviewId, startSeconds) {
       return this.$attachmentService.getDocumentDetails(documentPreviewId,'')
         .then(attachment => {
           if (this.isFileReadable(attachment)){
@@ -1734,7 +1735,7 @@ export default {
 
             }
           } else {
-            const file = {'id': attachment.id,'filename': attachment.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${attachment.id}`, 'icon': this.getFileIcon(attachment)};
+            const file = {'id': attachment.id,'filename': attachment.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${attachment.id}`, 'icon': this.getFileIcon(attachment), 'startSeconds': startSeconds};
             document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [file],'id': documentPreviewId }}));
             return attachment;
           }
