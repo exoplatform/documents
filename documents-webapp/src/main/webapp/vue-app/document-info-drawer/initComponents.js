@@ -20,11 +20,13 @@
 import DocumentInfoDrawer from './components/DocumentInfoDrawer.vue';
 import Breadcrumb from './components/Breadcrumb.vue';
 import DocumentCategories from './components/DocumentCategories.vue';
+import DocumentTranscriptButton from '../document-transcript-drawer/components/DocumentTranscriptButton.vue';
 
 const components = {
   'document-info-drawer': DocumentInfoDrawer,
   'document-categories': DocumentCategories,
   'breadcrumb': Breadcrumb,
+  'document-transcript-button': DocumentTranscriptButton,
 };
 
 for (const key in components) {
