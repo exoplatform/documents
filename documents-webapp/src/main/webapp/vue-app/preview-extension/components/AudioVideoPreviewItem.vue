@@ -64,9 +64,11 @@ export default {
 
   created() {
     document.addEventListener('document-preview-seek', this.seek);
+    document.addEventListener('document-preview-showing', this.answerShowing);
   },
   beforeDestroy() {
     document.removeEventListener('document-preview-seek', this.seek);
+    document.removeEventListener('document-preview-showing', this.answerShowing);
   },
   methods: {
     /**
@@ -88,6 +90,18 @@ export default {
       player.play()?.catch(() => {
         // a browser that refuses to play without a user gesture still shows the moment
       });
+    },
+    /**
+     * Tells whoever asks that this preview plays the file the event names, by
+     * marking the event handled.
+     *
+     * @param {CustomEvent} event its detail holds documentId
+     * @returns {void}
+     */
+    answerShowing(event) {
+      if (this.$refs.player && event?.detail?.documentId === this.attachment?.id) {
+        event.preventDefault();
+      }
     },
     playError(event){
       const video = event.target;
