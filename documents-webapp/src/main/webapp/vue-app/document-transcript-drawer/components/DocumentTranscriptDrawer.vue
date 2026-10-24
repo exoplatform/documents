@@ -145,6 +145,7 @@ export default {
   },
   beforeDestroy() {
     document.removeEventListener('documents-transcript-drawer-open', this.open);
+    window.removeEventListener('click', this.closeOnPreviewMask, true);
     this.stopPolling();
   },
   methods: {
@@ -176,8 +177,12 @@ export default {
       }));
       if (besidePlayer) {
         this.playerUrl = null;
-      } else if (!this.playerUrl) {
-        this.openPlayer(this.seconds || 0, false);
+        window.addEventListener('click', this.closeOnPreviewMask, true);
+      } else {
+        window.removeEventListener('click', this.closeOnPreviewMask, true);
+        if (!this.playerUrl) {
+          this.openPlayer(this.seconds || 0, false);
+        }
       }
       this.$refs.drawer.open();
       this.refresh();
@@ -284,6 +289,21 @@ export default {
         || (state.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
     },
     /**
+     * Closes the drawer opened beside a preview when the preview's mask is
+     * clicked, as any drawer closes on its mask, and keeps the preview open:
+     * the click is stopped before the dialog sees it.
+     *
+     * @param {MouseEvent} event a click anywhere in the page
+     * @returns {void}
+     */
+    closeOnPreviewMask(event) {
+      const target = event?.target;
+      if (target?.classList?.contains('v-dialog__content') || target?.closest?.('.v-overlay')) {
+        event.stopPropagation();
+        this.$refs.drawer.close();
+      }
+    },
+    /**
      * Stops reading the state again.
      * @returns {void}
      */
@@ -348,6 +368,7 @@ export default {
      * @returns {void}
      */
     closePlayer() {
+      window.removeEventListener('click', this.closeOnPreviewMask, true);
       this.stopPolling();
       this.playerUrl = null;
       this.playerSeconds = null;
