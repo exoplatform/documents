@@ -25,6 +25,15 @@
     @click="openTranscript">
     <i class="fas fa-closed-captioning"></i>
   </v-btn>
+  <v-btn
+    v-else-if="available && card"
+    :title="$t('documents.transcript.open')"
+    small
+    icon
+    class="white--text my-auto mx-0"
+    @click.stop="openTranscript">
+    <v-icon size="20">fa-closed-captioning</v-icon>
+  </v-btn>
   <v-tooltip v-else-if="available" bottom>
     <template #activator="{on, bind}">
       <v-btn
@@ -59,6 +68,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    card: {
+      type: Boolean,
+      default: false,
+    },
   },
   data: () => ({
     available: false,
@@ -67,6 +80,10 @@ export default {
     media() {
       return /^(audio|video)\//.test(this.mimetype || '');
     },
+  },
+  created() {
+    const lang = eXo?.env?.portal?.language || 'en';
+    exoi18n.loadLanguageAsync(lang, `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`);
   },
   watch: {
     documentId: {
