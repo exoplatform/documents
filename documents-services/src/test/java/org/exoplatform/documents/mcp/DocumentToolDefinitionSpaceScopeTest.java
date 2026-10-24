@@ -80,7 +80,7 @@ public class DocumentToolDefinitionSpaceScopeTest {
    */
   private static final Map<String, List<String>> READS = Map.of("get_document_by_id", List.of("document_id"),
                                                                 "get_document_content_by_id", List.of("document_id"),
-                                                                "get_document_transcription_by_id", List.of("document_id"),
+                                                                "get_document_transcription_by_id", List.of("document_id", "timestamps"),
                                                                 "list_document_versions", List.of("document_id"),
                                                                 "get_documents_by_folder_id",
                                                                 List.of("folder_id", "files_only", "folders_only", "offset", "limit"),
@@ -167,6 +167,34 @@ public class DocumentToolDefinitionSpaceScopeTest {
                                                     "share_document",
                                                     "favorite_document",
                                                     "unfavorite_document");
+
+  /**
+   * The transcript tool's schema names, in camelCase, exactly the parameters of
+   * its method, in order: a property with no parameter of that name would reach
+   * the method as null.
+   */
+  @Test
+  public void theTranscriptToolSchemaNamesItsMethodParameters() throws Exception {
+    JsonNode properties = JsonMapper.builder()
+                                    .build()
+                                    .readTree(shippedTools().get("get_document_transcription_by_id").getInputSchema())
+                                    .get("properties");
+    List<String> schemaNames = properties.propertyNames()
+                                         .stream()
+                                         .map(name -> java.util.regex.Pattern.compile("_([a-z])")
+                                                                             .matcher(name)
+                                                                             .replaceAll(m -> m.group(1).toUpperCase()))
+                                         .toList();
+    List<String> parameterNames = java.util.Arrays.stream(DocumentMcpTool.class.getMethod("getDocumentTranscriptionById",
+                                                                                          String.class,
+                                                                                          Boolean.class)
+                                                                               .getParameters())
+                                                  .map(java.lang.reflect.Parameter::getName)
+                                                  .toList();
+    assertEquals(List.of("documentId", "timestamps"), parameterNames);
+    assertEquals(parameterNames, schemaNames);
+    assertEquals("boolean", properties.get("timestamps").get("type").asString());
+  }
 
   /**
    * Exactly the root folder of a space and the tools above declare a space
