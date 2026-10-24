@@ -613,6 +613,21 @@ public class DocumentMcpToolTest {
   }
 
   @Test
+  public void getDocumentTranscriptionByIdTellsAFailedAttemptAsScheduledAgain() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .error("provider.timeout")
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build());
+
+    String retried = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+
+    assertTrue(retried, retried.contains("failed (the transcription service did not answer in time), and a new attempt is scheduled"));
+    assertFalse("Expected a pending retry never told as failed for good", retried.contains("Tell the user it failed"));
+  }
+
+  @Test
   public void getDocumentTranscriptionByIdTellsAFailedTranscriptionAndWhy() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
     when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()

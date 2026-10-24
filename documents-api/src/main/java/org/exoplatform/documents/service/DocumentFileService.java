@@ -465,6 +465,19 @@ public interface DocumentFileService {
   }
 
   /**
+   * Removes, as the system, the transcription state of a media file not
+   * transcribed yet, so that the file reads as never transcribed and can be
+   * queued again; a transcribed file, or one with no state, is left as it is.
+   *
+   * @param documentId the file's UUID
+   * @return true when a state was removed
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default boolean clearTranscriptionState(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Writes, as the system and in one save, the transcript of a media file, its
    * timed segments and its final state.
    *

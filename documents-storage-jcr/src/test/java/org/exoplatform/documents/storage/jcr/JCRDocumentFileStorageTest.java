@@ -2564,6 +2564,26 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
+  public void clearTranscriptionStateRemovesOnlyTheStateOfAFileNotTranscribedYet() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(false);
+    assertFalse(jcrDocumentFileStorage.clearTranscriptionState("1"));
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    assertFalse(jcrDocumentFileStorage.clearTranscriptionState("1"));
+    verify(node, never()).removeMixin(anyString());
+    verify(session, never()).save();
+
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "QUEUED");
+    assertTrue(jcrDocumentFileStorage.clearTranscriptionState("1"));
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    verify(session).save();
+  }
+
+  @Test
   public void markTranscriptionQueuedOfAFileNotSavedYetIsNotFound() throws Exception {
     Session session = mockSystemSession();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(null);
