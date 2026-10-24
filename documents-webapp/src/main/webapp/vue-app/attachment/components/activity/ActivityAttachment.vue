@@ -75,6 +75,10 @@
                 v-text="attachment.name" />
             </v-card>
             <v-spacer />
+            <document-transcript-button
+              :document-id="attachment.id"
+              :mimetype="attachment.mimetype"
+              card />
             <v-btn
               id="attachment-info"
               @click="showInfo()"

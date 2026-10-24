@@ -15,6 +15,7 @@ import AttachmentCreateDocumentInput from './components/attachment-document-crea
 import AttachmentCreateDocumentDrawer from './components/attachment-document-creator/AttachmentCreateDocumentDrawer.vue';
 import TaskAttachment from './components/task/TaskAttachment.vue';
 import AnalyticsTableCellDocumentTitleValue from './components/analytics/AnalyticsTableCellDocumentTitleValue.vue';
+import DocumentTranscriptButton from '../document-transcript-drawer/components/DocumentTranscriptButton.vue';
 import AnalyticsTableCellDocumentSizeValue from './components/analytics/AnalyticsTableCellDocumentSizeValue.vue';
 import AnalyticsTableCellDocumentOriginValue from './components/analytics/AnalyticsTableCellDocumentOriginValue.vue';
 import ContentAttachmentList from './components/content/ContentAttachmentList.vue';
@@ -38,6 +39,7 @@ import DocumentItemCard from '../documents/components/body/views/DocumentItemCar
 import DocumentsFileEditNameCell from '../documents/components/body/table/cells/DocumentsFileEditNameCell.vue';
 
 const components = {
+  'document-transcript-button': DocumentTranscriptButton,
   'attachments-drawer': AttachmentsDrawer,
   'attachment': Attachment,
   'attachment-item': AttachmentItem,
