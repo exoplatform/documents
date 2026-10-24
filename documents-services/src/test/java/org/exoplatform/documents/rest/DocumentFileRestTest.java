@@ -1874,21 +1874,21 @@ public class DocumentFileRestTest {
             documentWebDavService);
     Request request = mock(Request.class);
     UriInfo uriInfo = mock(UriInfo.class);
-    Response response = documentFileRest.getDocumentContent(uriInfo, request, null, "imageThumbnail", null, null, null);
+    Response response = documentFileRest.getDocumentContent(uriInfo, request, null, "imageThumbnail", null, null, null, null);
     assertEquals(400, response.getStatus());
-    documentFileRest.getDocumentContent(uriInfo, request, "docId", null, null, null, null);
+    documentFileRest.getDocumentContent(uriInfo, request, "docId", null, null, null, null, null);
     assertEquals(400, response.getStatus());
     FileContent fileThumbnail = new FileContent(null, "testThumbnail", "image/mpeg", null, new Date());
     String userName = "user";
     org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(userName);
     ConversationState.setCurrent(new ConversationState(root));
     when(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", userName, 250, 250)).thenReturn(fileThumbnail);
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", null, "250x250", null);
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", null, "250x250", null, null);
     assertEquals(200, response.getStatus());
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250", null);
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250", null, null);
     assertEquals(404, response.getStatus());
     when(documentFileService.getDocumentContent("docId", userName)).thenReturn(fileThumbnail);
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250", null);
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250", null, null);
     assertEquals(200, response.getStatus());
   }
 
@@ -1916,24 +1916,31 @@ public class DocumentFileRestTest {
                                                                                                                         "meeting.mp4",
                                                                                                                         "video/mp4",
                                                                                                                         new ByteArrayInputStream("0123456789".getBytes()),
-                                                                                                                        new Date(),
+                                                                                                                        new Date(1000L),
                                                                                                                         10));
 
-    Response response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", null);
+    Response response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", null, null);
     assertEquals(200, response.getStatus());
     assertEquals("bytes", response.getMetadata().getFirst("Accept-Ranges"));
 
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=2-5");
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=2-5", null);
     assertEquals(206, response.getStatus());
     assertEquals("bytes 2-5/10", response.getMetadata().getFirst("Content-Range"));
     assertEquals("2345", new String(((InputStream) response.getEntity()).readAllBytes()));
 
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=-3");
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=-3", null);
     assertEquals(206, response.getStatus());
     assertEquals("789", new String(((InputStream) response.getEntity()).readAllBytes()));
 
-    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=10-");
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=10-", null);
     assertEquals(416, response.getStatus());
     assertEquals("bytes */10", response.getMetadata().getFirst("Content-Range"));
+
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=2-5", "\"1000-0x0\"");
+    assertEquals(206, response.getStatus());
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=2-5", "\"999-0x0\"");
+    assertEquals(200, response.getStatus());
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "0x0", "bytes=2-5", "W/\"1000-0x0\"");
+    assertEquals(200, response.getStatus());
   }
 }
