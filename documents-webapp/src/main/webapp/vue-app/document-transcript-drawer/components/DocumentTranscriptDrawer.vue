@@ -55,7 +55,6 @@
             <v-btn
               :title="playerCollapsed && $t('documents.transcript.showPlayer') || $t('documents.transcript.hidePlayer')"
               icon
-              small
               @click="playerCollapsed = !playerCollapsed">
               <v-icon size="16">{{ playerCollapsed && 'fa-chevron-down' || 'fa-chevron-up' }}</v-icon>
             </v-btn>
@@ -169,8 +168,13 @@ export default {
       }
       const seconds = ['number', 'string'].includes(typeof detail.seconds) && detail.seconds !== '' ? Number(detail.seconds) : NaN;
       this.seconds = Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
-      this.besidePlayer = !!detail.besidePlayer;
-      if (!this.besidePlayer && !this.playerUrl) {
+      this.besidePlayer = !document.dispatchEvent(new CustomEvent('document-preview-showing', {
+        detail: {documentId: this.documentId},
+        cancelable: true,
+      }));
+      if (this.besidePlayer) {
+        this.playerUrl = null;
+      } else if (!this.playerUrl) {
         this.openPlayer(this.seconds || 0, false);
       }
       this.$refs.drawer.open();
