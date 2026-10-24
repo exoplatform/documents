@@ -114,6 +114,7 @@ export default {
     segments: null,
     term: '',
     pollingTimer: null,
+    lastRead: 0,
     expanded: false,
     fileUnknown: false,
     playerCollapsed: false,
@@ -203,17 +204,19 @@ export default {
     },
     /**
      * Reads the transcription state of the file and, once transcribed, its
-     * transcript; while it is queued or running, reads it again later.
+     * transcript; while it is queued or running, reads it again later. Only
+     * the latest read changes what the drawer shows.
      *
      * @returns {Promise} resolved once read
      */
     refresh() {
       this.stopPolling();
       const documentId = this.documentId;
+      const read = ++this.lastRead;
       this.loading = true;
       return this.$transcriptionService.getState(documentId)
         .then(state => {
-          if (documentId !== this.documentId) {
+          if (read !== this.lastRead) {
             return;
           }
           if (!state?.available) {
@@ -230,13 +233,13 @@ export default {
           }
         })
         .catch(() => {
-          if (documentId === this.documentId) {
+          if (read === this.lastRead) {
             this.state = null;
             this.unreadable = true;
           }
         })
         .finally(() => {
-          if (documentId === this.documentId) {
+          if (read === this.lastRead) {
             this.loading = false;
           }
         });
