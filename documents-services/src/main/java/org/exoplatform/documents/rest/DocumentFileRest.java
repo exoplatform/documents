@@ -51,7 +51,6 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.input.BoundedInputStream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -1789,7 +1788,10 @@ public class DocumentFileRest implements ResourceContainer {
                                      String size,
                                      @Parameter(description = "A single byte range of the content, as bytes=start-end")
                                      @HeaderParam("Range")
-                                     String range) {
+                                     String range,
+                                     @Parameter(description = "The entity tag the byte range must belong to; another one serves the whole content")
+                                     @HeaderParam("If-Range")
+                                     String ifRange) {
 
     if (StringUtils.isBlank(documentId)) {
       return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
@@ -1822,7 +1824,8 @@ public class DocumentFileRest implements ResourceContainer {
           mimeType = MediaType.APPLICATION_OCTET_STREAM;
         }
         if (file instanceof DocumentFileContent documentFileContent) {
-          builder = buildContentResponse(inputStream, documentFileContent.getSize(), range).type(mimeType);
+          String servedRange = ifRange == null || isSameEntityTag(ifRange, eTag) ? range : null;
+          builder = buildContentResponse(inputStream, documentFileContent.getSize(), servedRange).type(mimeType);
         } else {
           builder = Response.ok(inputStream).type(mimeType);
         }
@@ -1859,6 +1862,22 @@ public class DocumentFileRest implements ResourceContainer {
    *         when the range starts beyond the content
    * @throws IOException when the content cannot be skipped to the range
    */
+  /**
+   * Tells whether an If-Range header names the current version of the
+   * content; a weak tag or a date never does, so the whole content is served.
+   *
+   * @param ifRange the If-Range header
+   * @param eTag the entity tag of the content
+   * @return true when the header is the strong tag of the content
+   */
+  private boolean isSameEntityTag(String ifRange, EntityTag eTag) {
+    String value = ifRange.trim();
+    if (value.startsWith("W/")) {
+      return false;
+    }
+    return value.equals("\"" + eTag.getValue() + "\"");
+  }
+
   private Response.ResponseBuilder buildContentResponse(InputStream inputStream, long size, String range) throws IOException {
     ByteRange byteRange = ByteRange.parse(range, size);
     if (byteRange == null) {
@@ -1869,7 +1888,12 @@ public class DocumentFileRest implements ResourceContainer {
                      .header(ACCEPT_RANGES_HEADER, BYTES_UNIT)
                      .header(CONTENT_RANGE_HEADER, BYTES_UNIT + " */" + size);
     }
-    IOUtils.skipFully(inputStream, byteRange.start());
+    try {
+      inputStream.skipNBytes(byteRange.start());
+    } catch (IOException e) {
+      inputStream.close();
+      throw e;
+    }
     InputStream part = BoundedInputStream.builder().setInputStream(inputStream).setMaxCount(byteRange.length()).get();
     return Response.status(PARTIAL_CONTENT_STATUS)
                    .entity(part)
