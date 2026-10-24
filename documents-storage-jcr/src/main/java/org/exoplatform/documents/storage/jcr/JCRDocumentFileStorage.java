@@ -2849,6 +2849,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public TranscriptionState getTranscriptionState(String documentId,
                                                   Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
@@ -2868,6 +2871,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public TranscriptionState getTranscriptionState(String documentId) throws ObjectNotFoundException {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
@@ -2881,6 +2887,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void updateTranscriptionState(String documentId, TranscriptionState state) throws ObjectNotFoundException {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
@@ -2896,6 +2905,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public boolean markTranscriptionQueued(String documentId) throws ObjectNotFoundException {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
@@ -2915,6 +2927,32 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean clearTranscriptionState(String documentId) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)
+          || toTranscriptionState(node).status() == TranscriptionStatus.DONE) {
+        return false;
+      }
+      node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+      session.save();
+      return true;
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error removing the transcription state of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public void completeTranscription(String documentId,
                                     String transcription,
@@ -2946,6 +2984,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
   @Override
   public String getTranscriptionSegments(String documentId,
                                          Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
