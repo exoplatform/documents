@@ -584,7 +584,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     return switch (StringUtils.defaultString(error)) {
     case "ffmpeg.unavailable" -> "the server has no tool to convert this recording, which its format or its size needs";
     case "media.unreadable" -> "the file could not be read";
-    case "transcription.disabled" -> "transcription is switched off, or the transcription assistant refused this recording";
+    case "transcription.disabled" -> "transcription is switched off, or its transcription assistant is not available";
     case "attempts.exhausted" -> "every attempt failed";
     case "provider.timeout" -> "the transcription service did not answer in time";
     case "provider.rejected" -> "the transcription service refused it";

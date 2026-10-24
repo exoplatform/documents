@@ -642,7 +642,7 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void getDocumentTranscriptionByIdTellsADisabledTranscriptionAsSwitchedOffOrRefused() throws Exception {
+  public void getDocumentTranscriptionByIdTellsADisabledTranscriptionAsSwitchedOffOrUnavailable() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/ogg"));
     when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
                                                                                                    .status(TranscriptionStatus.FAILED)
@@ -651,7 +651,7 @@ public class DocumentMcpToolTest {
 
     String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
 
-    assertTrue(failed, failed.contains("transcription is switched off, or the transcription assistant refused this recording"));
+    assertTrue(failed, failed.contains("transcription is switched off, or its transcription assistant is not available"));
   }
 
   @Test
