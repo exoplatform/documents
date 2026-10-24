@@ -72,6 +72,10 @@ export default {
       type: Number,
       default: null,
     },
+    playingSeconds: {
+      type: Number,
+      default: null,
+    },
   },
   computed: {
     hasSegments() {
@@ -88,16 +92,10 @@ export default {
       return texts.reduce((count, text) => count + countOccurrences(text, this.term), 0);
     },
     activeIndex() {
-      if (!this.hasSegments || this.seconds === null) {
-        return -1;
-      }
-      let index = -1;
-      this.segments.forEach((segment, position) => {
-        if (segment.start <= this.seconds) {
-          index = position;
-        }
-      });
-      return index;
+      return this.indexAt(this.playingSeconds === null ? this.seconds : this.playingSeconds);
+    },
+    shownIndex() {
+      return this.indexAt(this.seconds);
     },
   },
   watch: {
@@ -105,7 +103,7 @@ export default {
       // the highlighted occurrences exist in the DOM only once the new term is rendered
       this.$nextTick(() => this.$el?.querySelector?.('mark')?.scrollIntoView({block: 'center'}));
     },
-    activeIndex() {
+    shownIndex() {
       this.showActiveSegment();
     },
   },
@@ -121,13 +119,33 @@ export default {
      */
     formatMoment,
     /**
-     * Scrolls the sentence of the moment asked for into view, once rendered.
+     * Finds the sentence a moment of the recording falls in.
+     *
+     * @param {number} seconds the moment, in seconds, or null
+     * @returns {number} the sentence's index, or -1
+     */
+    indexAt(seconds) {
+      if (!this.hasSegments || seconds === null) {
+        return -1;
+      }
+      let index = -1;
+      this.segments.forEach((segment, position) => {
+        if (segment.start <= seconds) {
+          index = position;
+        }
+      });
+      return index;
+    },
+    /**
+     * Scrolls the sentence of the moment asked for into view, once rendered;
+     * the playing sentence is only highlighted, so reading or searching
+     * elsewhere is never pulled back.
      * @returns {void}
      */
     showActiveSegment() {
-      if (this.activeIndex >= 0) {
+      if (this.shownIndex >= 0) {
         // the sentence exists in the DOM only once the segments are rendered
-        this.$nextTick(() => this.$refs[`segment-${this.activeIndex}`]?.[0]?.scrollIntoView({block: 'center'}));
+        this.$nextTick(() => this.$refs[`segment-${this.shownIndex}`]?.[0]?.scrollIntoView({block: 'center'}));
       }
     },
   },
