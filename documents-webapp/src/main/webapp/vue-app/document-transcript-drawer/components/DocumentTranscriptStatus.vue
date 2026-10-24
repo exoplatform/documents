@@ -58,14 +58,14 @@ export default {
       return this.state?.status || null;
     },
     stale() {
-      return (this.status === 'QUEUED' || this.status === 'PROCESSING')
+      return this.status === 'PROCESSING'
         && (!this.state.updated || Date.now() - this.state.updated >= STALE_MILLIS);
     },
     rescheduled() {
-      return this.status === 'QUEUED' && !this.stale && !!this.state.error;
+      return this.status === 'QUEUED' && !!this.state.error;
     },
     running() {
-      return (this.status === 'QUEUED' || this.status === 'PROCESSING') && !this.stale;
+      return this.status === 'QUEUED' || (this.status === 'PROCESSING' && !this.stale);
     },
     canRetry() {
       return !this.unreadable && (!this.status || this.status === 'FAILED' || this.stale);
