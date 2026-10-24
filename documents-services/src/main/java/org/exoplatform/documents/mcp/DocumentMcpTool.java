@@ -948,8 +948,10 @@ public class DocumentMcpTool implements McpToolPlugin {
           + "tell the user it did not complete.");
     }
     throw new IllegalStateException(switch (status) {
-    case QUEUED -> "The transcription of this audio/video file is queued and has not started yet: "
-        + "tell the user it is on its way and to ask again later.";
+    case QUEUED -> StringUtils.isBlank(state.error()) ? "The transcription of this audio/video file is queued and has not started yet: "
+        + "tell the user it is on its way and to ask again later."
+                                                      : "The last attempt to transcribe this audio/video file failed (%s), and a new attempt is scheduled: tell the user it will be tried again and to ask later."
+                                                          .formatted(toTranscriptionFailure(state.error()));
     case PROCESSING -> "The transcription of this audio/video file is in progress%s: tell the user it is being produced and to ask again in a few minutes."
         .formatted(StringUtils.isBlank(state.progress()) ? "" : " (" + state.progress() + " pieces transcribed)");
     case FAILED -> "The transcription of this audio/video file failed: %s. Tell the user it failed, and why."
