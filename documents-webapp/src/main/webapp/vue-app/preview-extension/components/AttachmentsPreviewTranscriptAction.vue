@@ -23,8 +23,6 @@
     preview-action />
 </template>
 <script>
-const lang = eXo?.env?.portal?.language || 'en';
-
 export default {
   props: {
     attachment: {
@@ -35,9 +33,6 @@ export default {
       type: Boolean,
       default: false,
     },
-  },
-  created() {
-    exoi18n.loadLanguageAsync(lang, `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`);
   },
 };
 </script>
