@@ -49,8 +49,10 @@ public record TranscriptionState(TranscriptionStatus status,
 
   /**
    * How long a queued or running transcription may go without its state changing
-   * before its run is taken as lost: twice the AI queue's default run ceiling, a
-   * run writing its progress after each piece.
+   * before a user may ask for it again: twice the AI queue's default run ceiling,
+   * a run writing its progress after each piece. A running one that old has lost
+   * its run; a queued one may still be waiting behind other runs, and asking
+   * again only makes its row due again.
    */
   public static final long STALE_MILLIS = 3600_000L;
 
