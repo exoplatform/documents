@@ -52,7 +52,9 @@ import {getState} from '../../../js/TranscriptionService.js';
 
 const lang = eXo?.env?.portal?.language || 'en';
 
-const availability = new Map();
+// One map for the page: the preview extension and the details drawer each
+// bundle this component, and the copy loaded last owns the global tag.
+const availability = window.documentsTranscriptAvailability || (window.documentsTranscriptAvailability = new Map());
 
 /**
  * Tells whether a file can be transcribed, reading its state once per page:
