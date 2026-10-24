@@ -182,7 +182,8 @@ export default {
      */
     open(event) {
       const detail = event?.detail || {};
-      if (this.documentId !== detail.documentId) {
+      const sameFile = this.documentId === detail.documentId;
+      if (!sameFile) {
         this.documentId = detail.documentId;
         this.file = null;
         this.state = null;
@@ -208,8 +209,30 @@ export default {
           this.openPlayer(this.seconds || 0, false);
         }
       }
-      this.$refs.drawer.open();
+      if (this.drawer) {
+        this.bringToFront(sameFile);
+      } else {
+        this.$refs.drawer.open();
+      }
       this.refresh();
+    },
+    /**
+     * Shows the drawer, already open, above the drawers opened over it, such
+     * as the file's details opened from its header, by closing those: opening
+     * it again would leave it under them. The search is kept on the same file.
+     *
+     * @param {boolean} sameFile whether the drawer already shows the file
+     * @returns {void}
+     */
+    bringToFront(sameFile) {
+      const openedDrawers = eXo.openedDrawers || [];
+      const index = openedDrawers.indexOf(this.$refs.drawer);
+      if (index >= 0) {
+        openedDrawers.slice(index + 1).reverse().forEach(drawer => drawer.close());
+      }
+      if (!sameFile) {
+        this.$refs.drawer.resetFilter();
+      }
     },
     /**
      * Reads the name and type of the file, to title the drawer and to open its
