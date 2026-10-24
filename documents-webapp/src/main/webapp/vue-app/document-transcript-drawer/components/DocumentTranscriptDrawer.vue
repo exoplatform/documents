@@ -68,7 +68,8 @@
             :segments="segments"
             :text="text"
             :term="term"
-            :seconds="playerUrl && playerSeconds || seconds"
+            :seconds="seconds"
+            :playing-seconds="playerUrl && playerSeconds"
             @seek="seek" />
           <document-transcript-status
             v-else-if="state || unreadable"
