@@ -322,7 +322,7 @@ export default {
       }));
       if (handled) {
         return;
-      } else if (this.playerUrl) {
+      } else if (this.$refs.player) {
         this.$refs.player.seek(seconds);
       } else {
         this.openPlayer(seconds, true);
