@@ -47,7 +47,7 @@
     <template v-if="drawer" #content>
       <div :class="sideBySide && 'd-flex align-start'" class="pa-4">
         <div
-          v-if="playerUrl"
+          v-if="playerUrl && (file || fileUnknown)"
           :class="sideBySide && 'flex-grow-1 me-4' || 'mb-4'"
           :style="{position: 'sticky', top: 0, zIndex: 1}"
           class="white">
@@ -115,7 +115,7 @@ export default {
     term: '',
     pollingTimer: null,
     expanded: false,
-    besidePlayer: false,
+    fileUnknown: false,
     playerCollapsed: false,
     playerAutoplay: false,
     playerUrl: null,
@@ -164,15 +164,16 @@ export default {
         this.text = null;
         this.segments = null;
         this.playerUrl = null;
+        this.fileUnknown = false;
         this.loadFile();
       }
       const seconds = ['number', 'string'].includes(typeof detail.seconds) && detail.seconds !== '' ? Number(detail.seconds) : NaN;
       this.seconds = Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
-      this.besidePlayer = !document.dispatchEvent(new CustomEvent('document-preview-showing', {
+      const besidePlayer = !document.dispatchEvent(new CustomEvent('document-preview-showing', {
         detail: {documentId: this.documentId},
         cancelable: true,
       }));
-      if (this.besidePlayer) {
+      if (besidePlayer) {
         this.playerUrl = null;
       } else if (!this.playerUrl) {
         this.openPlayer(this.seconds || 0, false);
@@ -193,7 +194,10 @@ export default {
             this.file = file;
           }
         })
-        .catch(() => this.file = null);
+        .catch(() => {
+          this.file = null;
+          this.fileUnknown = documentId === this.documentId;
+        });
     },
     /**
      * Reads the transcription state of the file and, once transcribed, its
