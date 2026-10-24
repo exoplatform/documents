@@ -50,6 +50,31 @@
 <script>
 import {getState} from '../../../js/TranscriptionService.js';
 
+const lang = eXo?.env?.portal?.language || 'en';
+
+const availability = new Map();
+
+/**
+ * Tells whether a file can be transcribed, reading its state once per page:
+ * the answer depends on the edition and on the viewer's access to the file,
+ * neither of which changes while the page is open. A failed read is not kept,
+ * so the next button reads it again.
+ *
+ * @param {string} documentId the file's id
+ * @returns {Promise<boolean>} true when the transcript can be offered
+ */
+function readAvailability(documentId) {
+  if (!availability.has(documentId)) {
+    availability.set(documentId, getState(documentId)
+      .then(state => !!state?.available)
+      .catch(() => {
+        availability.delete(documentId);
+        return false;
+      }));
+  }
+  return availability.get(documentId);
+}
+
 export default {
   props: {
     documentId: {
@@ -81,10 +106,6 @@ export default {
       return /^(audio|video)\//.test(this.mimetype || '');
     },
   },
-  created() {
-    const lang = eXo?.env?.portal?.language || 'en';
-    exoi18n.loadLanguageAsync(lang, `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`);
-  },
   watch: {
     documentId: {
       immediate: true,
@@ -96,7 +117,8 @@ export default {
   methods: {
     /**
      * Shows the button only for an audio or video file of a server that can
-     * transcribe it.
+     * transcribe it, once the Documents labels it shows are loaded; they are
+     * loaded only then, so a page that offers no transcript keeps its own.
      * @returns {void}
      */
     checkAvailability() {
@@ -105,8 +127,10 @@ export default {
       if (!documentId || !this.media) {
         return;
       }
-      getState(documentId)
-        .then(state => this.available = documentId === this.documentId && !!state?.available)
+      readAvailability(documentId)
+        .then(available => available && exoi18n.loadLanguageAsync(lang, `/documents-portlet/i18n/locale.portlet.Documents?lang=${lang}`)
+          .then(() => true, () => true))
+        .then(available => this.available = documentId === this.documentId && !!available)
         .catch(() => this.available = false);
     },
     /**
