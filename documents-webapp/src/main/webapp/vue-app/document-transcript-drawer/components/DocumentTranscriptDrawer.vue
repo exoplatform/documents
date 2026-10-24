@@ -280,14 +280,12 @@ export default {
         return;
       } else if (this.playerUrl) {
         this.$refs.player.seek(seconds);
-      } else if (this.file) {
+      } else {
         this.playerStart = seconds;
-        this.playerUrl = this.$documentsUtils.getDownloadUrl(this.documentId, this.file.modifiedDate);
+        this.playerUrl = this.$documentsUtils.getDownloadUrl(this.documentId, this.file?.modifiedDate);
         if (!this.expanded) {
           this.$refs.drawer.toogleExpand();
         }
-      } else {
-        this.openPreview(seconds);
       }
     },
     /**
