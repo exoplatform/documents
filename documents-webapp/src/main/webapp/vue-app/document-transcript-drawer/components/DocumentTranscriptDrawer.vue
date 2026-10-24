@@ -330,10 +330,7 @@ export default {
      * @returns {void}
      */
     alert(message, type) {
-      document.dispatchEvent(new CustomEvent('alert-message', {detail: {
-        alertMessage: message,
-        alertType: type,
-      }}));
+      this.$root.$emit('alert-message', message, type);
     },
   },
 };
