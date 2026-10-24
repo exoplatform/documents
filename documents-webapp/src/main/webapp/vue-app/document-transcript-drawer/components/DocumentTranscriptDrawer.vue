@@ -20,13 +20,13 @@
     v-model="drawer"
     :loading="loading"
     :filter-placeholder="$t('documents.transcript.search')"
-    :class="aboveDialog && 'z-index-snackbar'"
     class="documentTranscriptDrawer"
     allow-expand
     use-filter
     right
     @filter-updated="term = $event"
-    @closed="stopPolling">
+    @expand-updated="expanded = $event"
+    @closed="closePlayer">
     <template #title>
       {{ $t('documents.transcript.title') }}
     </template>
@@ -45,26 +45,38 @@
       </v-tooltip>
     </template>
     <template v-if="drawer" #content>
-      <div class="pa-4">
+      <div :class="sideBySide && 'd-flex align-start'" class="pa-4">
         <div
-          v-if="file"
-          :title="file.name"
-          class="text-subtitle text-truncate mb-4">
-          {{ file.name }}
+          v-if="playerUrl"
+          :class="sideBySide && 'flex-grow-1 me-4' || 'mb-4'"
+          :style="sideBySide && {position: 'sticky', top: 0}">
+          <document-transcript-player
+            ref="player"
+            :url="playerUrl"
+            :start="playerStart"
+            @time="playerSeconds = $event" />
         </div>
-        <document-transcript-content
-          v-if="done"
-          :segments="segments"
-          :text="text"
-          :term="term"
-          :seconds="seconds"
-          @seek="seek" />
-        <document-transcript-status
-          v-else-if="state || unreadable"
-          :state="state"
-          :unreadable="unreadable"
-          :retrying="retrying"
-          @retry="retry" />
+        <div :style="sideBySide && {flex: '0 0 40%', minWidth: 0}">
+          <div
+            v-if="file"
+            :title="file.name"
+            class="text-subtitle text-truncate mb-4">
+            {{ file.name }}
+          </div>
+          <document-transcript-content
+            v-if="done"
+            :segments="segments"
+            :text="text"
+            :term="term"
+            :seconds="playerUrl && playerSeconds || seconds"
+            @seek="seek" />
+          <document-transcript-status
+            v-else-if="state || unreadable"
+            :state="state"
+            :unreadable="unreadable"
+            :retrying="retrying"
+            @retry="retry" />
+        </div>
       </div>
     </template>
   </exo-drawer>
@@ -88,9 +100,15 @@ export default {
     segments: null,
     term: '',
     pollingTimer: null,
-    aboveDialog: false,
+    expanded: false,
+    playerUrl: null,
+    playerStart: 0,
+    playerSeconds: null,
   }),
   computed: {
+    sideBySide() {
+      return !!this.playerUrl && !this.$vuetify.breakpoint.smAndDown;
+    },
     done() {
       return this.state?.status === 'DONE' && (this.text !== null || this.segments !== null);
     },
@@ -103,13 +121,9 @@ export default {
   },
   created() {
     document.addEventListener('documents-transcript-drawer-open', this.open);
-    document.addEventListener('modalOpened', this.raiseAboveDialog);
-    document.addEventListener('modalClosed', this.followDialogs);
   },
   beforeDestroy() {
     document.removeEventListener('documents-transcript-drawer-open', this.open);
-    document.removeEventListener('modalOpened', this.raiseAboveDialog);
-    document.removeEventListener('modalClosed', this.followDialogs);
     this.stopPolling();
   },
   methods: {
@@ -129,11 +143,11 @@ export default {
         this.state = null;
         this.text = null;
         this.segments = null;
+        this.playerUrl = null;
         this.loadFile();
       }
       const seconds = ['number', 'string'].includes(typeof detail.seconds) && detail.seconds !== '' ? Number(detail.seconds) : NaN;
       this.seconds = Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
-      this.followDialogs();
       this.$refs.drawer.open();
       this.refresh();
     },
@@ -226,26 +240,6 @@ export default {
         || (state.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
     },
     /**
-     * Keeps the drawer above a preview dialog opened while it is open, such as
-     * the one a sentence click opens: the drawer computes its own layer only
-     * when it opens.
-     *
-     * @returns {void}
-     */
-    raiseAboveDialog() {
-      this.aboveDialog = true;
-    },
-    /**
-     * Keeps the drawer above the dialogs still open, and back at its own
-     * layer once none is.
-     *
-     * @returns {void}
-     */
-    followDialogs() {
-      // a dialog announces its closing before it renders it: read the dialogs once rendered
-      this.$nextTick(() => this.aboveDialog = !!document.querySelector('.v-dialog--active'));
-    },
-    /**
      * Stops reading the state again.
      * @returns {void}
      */
@@ -267,8 +261,9 @@ export default {
         .finally(() => this.retrying = false);
     },
     /**
-     * Moves the playing recording to a moment; when no preview of the file is
-     * open, opens it there.
+     * Moves the recording to a moment: the preview's when one shows the file,
+     * else the drawer's own player, which the first click opens beside the
+     * transcript.
      *
      * @param {number} seconds the moment, in seconds from the start
      * @returns {void}
@@ -281,9 +276,29 @@ export default {
         },
         cancelable: true,
       }));
-      if (!handled) {
+      if (handled) {
+        return;
+      } else if (this.playerUrl) {
+        this.$refs.player.seek(seconds);
+      } else if (this.file) {
+        this.playerStart = seconds;
+        this.playerUrl = this.$documentsUtils.getDownloadUrl(this.documentId, this.file.modifiedDate);
+        if (!this.expanded) {
+          this.$refs.drawer.toogleExpand();
+        }
+      } else {
         this.openPreview(seconds);
       }
+    },
+    /**
+     * Stops the drawer's own player and the polling once the drawer closes.
+     *
+     * @returns {void}
+     */
+    closePlayer() {
+      this.stopPolling();
+      this.playerUrl = null;
+      this.playerSeconds = null;
     },
     /**
      * Opens the preview of the file, its recording starting at a moment.
