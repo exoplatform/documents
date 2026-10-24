@@ -207,15 +207,16 @@ export default {
       });
     },
     /**
-     * Tells whether a transcription is queued or running and still moving.
+     * Tells whether a transcription is waiting in the queue, or running and
+     * still moving; a queued one may wait long behind other runs.
      *
      * @param {Object} state the transcription state
-     * @returns {boolean} true when it changed less than an hour ago
+     * @returns {boolean} true when queued, or running and changed less than an
+     *          hour ago
      */
     isRunning(state) {
-      return (state.status === 'QUEUED' || state.status === 'PROCESSING')
-        && !!state.updated
-        && Date.now() - state.updated < STALE_MILLIS;
+      return state.status === 'QUEUED'
+        || (state.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
     },
     /**
      * Stops reading the state again.
