@@ -22,6 +22,10 @@
         :small="false"
         @added="favoriteAdded"
         @removed="favoriteRemoved" />
+      <document-transcript-button
+        v-if="!file.folder"
+        :document-id="fileId"
+        :mimetype="file.mimeType" />
       <v-tooltip bottom>
         <template #activator="{on, bind}">
           <div v-on="on" v-bind="bind">

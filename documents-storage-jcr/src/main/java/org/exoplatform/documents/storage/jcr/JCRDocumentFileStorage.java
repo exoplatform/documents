@@ -2808,11 +2808,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         mimeType = content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString();
       }
 
-      return new FileContent(documentId,
-                             JCRDocumentsUtil.getTitle(node),
-                             mimeType,
-                             content.getProperty(NodeTypeConstants.JCR_DATA).getStream(),
-                             new Date(lastModified));
+      Property data = content.getProperty(NodeTypeConstants.JCR_DATA);
+      return new DocumentFileContent(documentId,
+                                     JCRDocumentsUtil.getTitle(node),
+                                     mimeType,
+                                     data.getStream(),
+                                     new Date(lastModified),
+                                     data.getLength());
     } catch (ItemNotFoundException e) {
       throw new ObjectNotFoundException("Document with id : " + documentId + " isn't found");
     } catch (RepositoryException e) {
