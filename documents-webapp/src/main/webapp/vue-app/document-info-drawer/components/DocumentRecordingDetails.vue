@@ -172,14 +172,12 @@ export default {
         .finally(() => this.retrying = false);
     },
     /**
-     * Opens the transcript drawer of the file.
+     * Asks the drawer showing these rows to show the transcript: in its tab
+     * when expanded, else in the transcript drawer.
      * @returns {void}
      */
     openTranscript() {
-      document.dispatchEvent(new CustomEvent('documents-open-transcript', {
-        detail: {documentId: this.documentId},
-        cancelable: true,
-      }));
+      this.$emit('transcript');
     },
   },
 };
