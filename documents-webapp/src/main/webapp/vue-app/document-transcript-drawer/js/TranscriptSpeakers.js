@@ -33,14 +33,16 @@ export function speakerColor(speaker) {
 /**
  * Tells whether a sentence opens a run of sentences of its speaker: the first
  * one, the first under a heading, or one whose speaker is not the previous
- * sentence's.
+ * sentence's. Two numbers named after one person are one speaker.
  *
  * @param {Array<object>} segments the sentences
  * @param {number} index the sentence's index
  * @param {boolean} firstOfGroup whether the sentence is the first under a heading
+ * @param {Function} keyOf who a speaker number is, the number itself by default
  * @returns {boolean} true when the sentence shows its speaker
  */
-export function opensSpeakerRun(segments, index, firstOfGroup) {
+export function opensSpeakerRun(segments, index, firstOfGroup, keyOf = speaker => speaker) {
   const speaker = segments[index]?.speaker;
-  return !!speaker && (firstOfGroup || index === 0 || segments[index - 1]?.speaker !== speaker);
+  const previous = index > 0 && segments[index - 1]?.speaker;
+  return !!speaker && (firstOfGroup || index === 0 || !previous || keyOf(previous) !== keyOf(speaker));
 }
