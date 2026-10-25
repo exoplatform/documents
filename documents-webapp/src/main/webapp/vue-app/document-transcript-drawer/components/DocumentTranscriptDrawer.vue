@@ -34,6 +34,7 @@
       <v-tooltip v-if="detailsShown" bottom>
         <template #activator="{on, bind}">
           <v-btn
+            :aria-label="detailsLabel"
             icon
             v-on="on"
             v-bind="bind"
@@ -41,7 +42,7 @@
             <v-icon size="18">fas fa-info-circle</v-icon>
           </v-btn>
         </template>
-        <span>{{ $t('documents.transcript.details') }}</span>
+        <span>{{ detailsLabel }}</span>
       </v-tooltip>
       <v-tooltip v-if="transcript" bottom>
         <template #activator="{on, bind}">
@@ -62,16 +63,7 @@
           v-if="playerUrl && (file || fileUnknown)"
           :style="{position: 'sticky', top: 0, zIndex: 1}"
           class="white mb-4">
-          <div class="d-flex justify-end">
-            <v-btn
-              :title="playerCollapsed && $t('documents.transcript.showPlayer') || $t('documents.transcript.hidePlayer')"
-              icon
-              @click="playerCollapsed = !playerCollapsed">
-              <v-icon size="16">{{ playerCollapsed && 'fa-chevron-down' || 'fa-chevron-up' }}</v-icon>
-            </v-btn>
-          </div>
           <document-transcript-player
-            v-show="!playerCollapsed"
             ref="player"
             :url="playerUrl"
             :start="playerStart"
@@ -81,12 +73,6 @@
             @time="playerSeconds = $event" />
         </div>
         <div>
-          <div
-            v-if="file"
-            :title="file.name"
-            class="text-subtitle text-truncate mb-4">
-            {{ file.name }}
-          </div>
           <document-transcript-content
             v-if="done"
             :segments="segments"
@@ -127,7 +113,6 @@ export default {
     pollingTimer: null,
     lastRead: 0,
     fileUnknown: false,
-    playerCollapsed: false,
     playerAutoplay: false,
     playerUrl: null,
     playerStart: 0,
@@ -135,6 +120,14 @@ export default {
     inDocuments: false,
   }),
   computed: {
+    /**
+     * Names the file whose details the header's button opens, for its hover
+     * and for screen readers, since the drawer does not show the name.
+     * @returns {string} the label
+     */
+    detailsLabel() {
+      return this.file?.name && this.$t('documents.transcript.detailsOf', {0: this.file.name}) || this.$t('documents.transcript.details');
+    },
     audioFile() {
       return /^audio\//.test(this.file?.mimeType || '');
     },
@@ -160,9 +153,13 @@ export default {
   },
   created() {
     document.addEventListener('documents-transcript-drawer-open', this.open);
+    document.addEventListener('documents-transcript-sync', this.syncFromDetails);
+    document.addEventListener('documents-transcript-close', this.closeFromDetails);
   },
   beforeDestroy() {
     document.removeEventListener('documents-transcript-drawer-open', this.open);
+    document.removeEventListener('documents-transcript-sync', this.syncFromDetails);
+    document.removeEventListener('documents-transcript-close', this.closeFromDetails);
     window.removeEventListener('click', this.closeOnPreviewMask, true);
     this.stopPolling();
   },
@@ -208,6 +205,11 @@ export default {
         this.bringToFront(sameFile);
       } else {
         this.$refs.drawer.open();
+      }
+      if (typeof detail.term === 'string' && detail.term) {
+        // the drawer's search keeps its text once its field closes: set after
+        // the opening, which empties it, the search shows as applied
+        this.$refs.drawer.filterText = detail.term;
       }
       this.refresh();
     },
@@ -342,12 +344,21 @@ export default {
      * @returns {void}
      */
     showDetails() {
+      this.closeDetailsUnder();
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.documentId}));
+    },
+    /**
+     * Closes the details drawer when it is open under this one, so that it
+     * opens again above this one, drawn and closed as the top drawer.
+     *
+     * @returns {void}
+     */
+    closeDetailsUnder() {
       const openedDrawers = eXo.openedDrawers || [];
       const detailsIndex = openedDrawers.findIndex(drawer => drawer.$el?.classList?.contains('documentInfoDrawer'));
       if (detailsIndex >= 0 && detailsIndex < openedDrawers.indexOf(this.$refs.drawer)) {
         openedDrawers[detailsIndex].close();
       }
-      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.documentId}));
     },
     /**
      * Closes the drawer opened beside a preview when the preview's mask is
@@ -419,15 +430,15 @@ export default {
     openPlayer(seconds, autoplay) {
       this.playerStart = seconds;
       this.playerAutoplay = autoplay;
-      this.playerCollapsed = false;
       this.playerUrl = this.$documentsUtils.getDownloadUrl(this.documentId, this.file?.modifiedDate);
     },
     /**
-     * Expanding the drawer opens the file's full view instead, on its
+     * Expanding the drawer opens the file's full view above it, on its
      * Transcript tab, at the moment the recording reached and with the same
      * search: one full-screen view serves both the details and the
-     * transcript. The drawer closes, so collapsing the full view returns to
-     * the details.
+     * transcript, playing on when this drawer's recording was playing.
+     * This drawer stays open underneath, narrow, its player paused, so
+     * collapsing the full view reveals it in place.
      *
      * @param {boolean} expanded whether the drawer was expanded
      * @returns {void}
@@ -436,16 +447,74 @@ export default {
       if (!expanded) {
         return;
       }
+      this.$refs.drawer.toogleExpand();
+      const media = this.playerMedia();
       const moment = this.playerSeconds ?? this.seconds;
-      const detail = {
+      const playing = !!media && !media.paused;
+      media?.pause?.();
+      this.closeDetailsUnder();
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: {
         documentId: this.documentId,
         expanded: true,
         tab: 'transcript',
         seconds: Number.isFinite(moment) ? Math.floor(moment) : null,
         term: this.term,
-      };
-      this.$refs.drawer.close();
-      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail}));
+        origin: 'transcript',
+        playing,
+      }}));
+    },
+    /**
+     * Takes back the moment and the search the full view reached when it
+     * collapses onto this drawer, playing on only when the full view played.
+     *
+     * @param {CustomEvent} event its detail holds documentId, seconds, term
+     *          and playing
+     * @returns {void}
+     */
+    syncFromDetails(event) {
+      const detail = event?.detail || {};
+      if (!this.drawer || detail.documentId !== this.documentId) {
+        return;
+      }
+      this.$refs.drawer.filterText = detail.term || '';
+      const media = this.playerMedia();
+      if (media && Number.isFinite(detail.seconds)) {
+        media.currentTime = detail.seconds;
+        this.playerSeconds = detail.seconds;
+        this.seconds = detail.seconds;
+        if (detail.playing) {
+          const play = () => media.play()?.catch(() => {
+            // a browser that refuses to play without a gesture still shows the moment
+          });
+          // a play started while the seek runs may be interrupted by it
+          if (media.seeking) {
+            media.addEventListener('seeked', play, {once: true});
+          } else {
+            play();
+          }
+        }
+      }
+    },
+    /**
+     * Finds the drawer's own audio or video element, whichever the player
+     * renders.
+     * @returns {HTMLMediaElement} the element, or null when no player shows
+     */
+    playerMedia() {
+      const element = this.$refs.player?.$el;
+      return element?.matches?.('video, audio') && element || element?.querySelector?.('video, audio') || null;
+    },
+    /**
+     * Closes the drawer when the full view opened from it is closed, so one
+     * click leaves both.
+     *
+     * @param {CustomEvent} event its detail holds documentId
+     * @returns {void}
+     */
+    closeFromDetails(event) {
+      if (this.drawer && event?.detail?.documentId === this.documentId) {
+        this.$refs.drawer.close();
+      }
     },
     /**
      * Stops the drawer's own player and the polling once the drawer closes.
