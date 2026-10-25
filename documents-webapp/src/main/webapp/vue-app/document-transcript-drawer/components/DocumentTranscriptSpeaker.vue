@@ -22,6 +22,7 @@
     <user-avatar
       v-if="person"
       :profile-id="person.username"
+      :identity="avatarIdentity"
       :size="20"
       extra-class="text-subtitle-2" />
     <v-menu
@@ -128,6 +129,24 @@ export default {
     chosen: null,
   }),
   computed: {
+    /**
+     * The person as the avatar reads them, built from what the speakers' answer
+     * already holds, so that no header fetches the user again.
+     *
+     * @returns {object} the identity, or null for an unnamed speaker
+     */
+    avatarIdentity() {
+      return this.person && {
+        id: this.person.identityId,
+        username: this.person.username,
+        fullname: this.person.fullName,
+        avatar: this.person.avatarUrl,
+        enabled: true,
+        deleted: false,
+        primaryProperty: null,
+        external: false,
+      } || null;
+    },
     color() {
       return speakerColor(this.speaker);
     },
