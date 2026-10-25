@@ -26,8 +26,8 @@
         v-bind="attrs"
         :title="canEdit && $t('documents.transcript.speaker.name') || ''"
         :class="canEdit && 'clickable'"
-        :role="canEdit && 'button' || null"
-        :tabindex="canEdit && 0 || null"
+        :role="canEdit ? 'button' : null"
+        :tabindex="canEdit ? 0 : null"
         class="d-inline-flex align-center mb-1"
         v-on="on"
         @click.stop
