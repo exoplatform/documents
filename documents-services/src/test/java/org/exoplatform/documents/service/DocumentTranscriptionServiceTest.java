@@ -30,6 +30,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -60,7 +63,7 @@ class DocumentTranscriptionServiceTest {
   private ListenerService                      listenerService;
 
   @Spy
-  private TranscriptChaptersRequesterRegistry  chaptersRequesters = new TranscriptChaptersRequesterRegistry();
+  private List<TranscriptChaptersRequester>    chaptersRequesters = new ArrayList<>();
 
   @Mock
   private TranscriptChaptersRequester          requester;
@@ -163,7 +166,7 @@ class DocumentTranscriptionServiceTest {
    */
   @Test
   void aTranscriptReadWithNoChaptersAsksForThemAndTellsWhetherTheyAreComing() throws Exception {
-    chaptersRequesters.register(requester);
+    chaptersRequesters.add(requester);
     mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).media(true).build());
 
     when(requester.requestChapters(DOCUMENT_ID)).thenReturn(true);
@@ -174,7 +177,7 @@ class DocumentTranscriptionServiceTest {
   }
 
   /**
-   * With nothing registered to make chapters, none are coming (EXO-92122).
+   * With nothing to make chapters, none are coming (EXO-92122).
    */
   @Test
   void noChaptersAreComingWithoutAnythingToMakeThem() throws Exception {
@@ -184,18 +187,19 @@ class DocumentTranscriptionServiceTest {
   }
 
   /**
-   * Every registered requester is asked, whatever an earlier one answered, and
+   * Every requester is asked, whatever an earlier one answered, and
    * the chapters are coming when one of them says so (EXO-92122).
    */
   @Test
   void everyRequesterIsAskedAndOneComingIsEnough() throws Exception {
     TranscriptChaptersRequester other = mock(TranscriptChaptersRequester.class);
-    chaptersRequesters.register(requester);
-    chaptersRequesters.register(other);
+    chaptersRequesters.add(requester);
+    chaptersRequesters.add(other);
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).media(true).build());
     when(requester.requestChapters(DOCUMENT_ID)).thenReturn(true);
     when(other.requestChapters(DOCUMENT_ID)).thenReturn(false);
 
-    assertTrue(chaptersRequesters.requestChapters(DOCUMENT_ID));
+    assertTrue(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
 
     verify(requester).requestChapters(DOCUMENT_ID);
     verify(other).requestChapters(DOCUMENT_ID);
@@ -207,7 +211,7 @@ class DocumentTranscriptionServiceTest {
    */
   @Test
   void noChaptersAreAskedForATranscriptThatCannotGetThem() throws Exception {
-    chaptersRequesters.register(requester);
+    chaptersRequesters.add(requester);
     mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).hasChapters(true).media(true).build());
     assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
     mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).media(true).build());
