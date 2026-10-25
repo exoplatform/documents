@@ -16,12 +16,13 @@
  */
 
 /**
- * The naming of a transcript's speakers, shared by the transcript drawer and
- * the details' Transcript tab (EXO-92123): the component using it has a
- * documentId and an alert(message, type) method. A view saves one speaker at
- * a time, the server running the saves of a file one after the other, and
- * shows only its latest read of the names. A user who can name the speakers
- * also reads the proposals of who they are (EXO-92126).
+ * The naming of a transcript's speakers, shared by the transcript drawer, the
+ * details' Transcript tab (EXO-92123) and the full view's timeline
+ * (EXO-92127): the component using it has a documentId and an alert(message,
+ * type) method. A view saves one speaker at a time, the server running the
+ * saves of a file one after the other, shows only its latest read of the
+ * names, and reads them again when another view names a speaker. A user who
+ * can name the speakers also reads the proposals of who they are (EXO-92126).
  */
 export default {
   data: () => ({
@@ -149,14 +150,16 @@ export default {
     },
     /**
      * Reads the names again once another view of the same file's transcript
-     * named a speaker, when this view shows its speakers.
+     * named a speaker, once this view has read or reset the names of the
+     * file it shows (speakersRead only grows): a read started before that
+     * naming may answer the former names, and an extra read costs one request.
      *
      * @param {CustomEvent} event its detail holds the file's documentId and the view that named
      * @returns {void}
      */
     followSpeakers(event) {
       const detail = event?.detail;
-      if (this.speakers && detail?.documentId === this.documentId && detail.source !== this._uid) {
+      if ((this.speakers || this.speakersRead) && detail?.documentId === this.documentId && detail.source !== this._uid) {
         this.reloadSpeakers(this.documentId);
       }
     },
