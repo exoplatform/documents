@@ -22,6 +22,7 @@
       :url="downloadUrl"
       :audio="mediaKind === 'audio'"
       :start="start"
+      :autoplay="autoplay"
       class="documentInfoContentMedia"
       @time="$emit('time', $event)" />
     <button
@@ -79,6 +80,10 @@ export default {
     start: {
       type: Number,
       default: 0,
+    },
+    autoplay: {
+      type: Boolean,
+      default: false,
     },
     subtitle: {
       type: String,
