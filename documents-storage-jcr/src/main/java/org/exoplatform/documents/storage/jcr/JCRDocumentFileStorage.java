@@ -28,10 +28,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.jcr.*;
 import javax.jcr.query.Query;
@@ -232,6 +234,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final long                         DEFAULT_TEXT_EXTRACTION_MAX_SIZE_MB      = 10;
 
   private static final long                         DEFAULT_TEXT_EXTRACTION_MAX_CHARS        = 1_000_000;
+
+  /**
+   * The locks that serialize the naming of a file's speakers on this server, by
+   * file (EXO-92123): a save rewrites all the names of the file from what it
+   * read, so two at once would drop one.
+   */
+  private static final ReentrantLock[]              SPEAKER_LOCKS                            =
+                                                                  Stream.generate(ReentrantLock::new)
+                                                                        .limit(64)
+                                                                        .toArray(ReentrantLock[]::new);
 
   private static final long                         DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS  = 20;
 
@@ -3016,6 +3028,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                       String identityId,
                                       Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     SessionProvider sessionProvider = null;
+    ReentrantLock lock = speakerLock(documentId);
+    lock.lock();
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -3047,7 +3061,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
+      lock.unlock();
     }
+  }
+
+  /**
+   * The lock that serializes the naming of a file's speakers on this server.
+   *
+   * @param documentId the file's UUID
+   * @return the file's lock, shared with the files of the same stripe
+   */
+  static ReentrantLock speakerLock(String documentId) {
+    return SPEAKER_LOCKS[Math.floorMod(Objects.hashCode(documentId), SPEAKER_LOCKS.length)];
   }
 
   @Override

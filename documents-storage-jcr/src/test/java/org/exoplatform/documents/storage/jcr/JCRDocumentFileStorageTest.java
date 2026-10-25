@@ -3415,8 +3415,16 @@ public class JCRDocumentFileStorageTest {
     Node node = mockMediaNode(session, "video/mp4");
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
     mockSpeakers(node, "1=42");
+    java.util.concurrent.atomic.AtomicBoolean lockedWhileWriting = new java.util.concurrent.atomic.AtomicBoolean();
+    doAnswer(invocation -> {
+      lockedWhileWriting.set(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+      return null;
+    }).when(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
 
     jcrDocumentFileStorage.setTranscriptionSpeaker("1", "2", "43", viewer);
+
+    assertTrue("Expected the file's names rewritten under its lock, so that two saves never drop one", lockedWhileWriting.get());
+    assertFalse("Expected the lock released after the save", JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
 
     verify(node, never()).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
     verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=42", "2=43" });
@@ -3461,6 +3469,7 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(false);
 
     assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", "42", viewer));
+    assertFalse("Expected the lock released after a refusal", JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
 
     verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
     verify(session, never()).save();
