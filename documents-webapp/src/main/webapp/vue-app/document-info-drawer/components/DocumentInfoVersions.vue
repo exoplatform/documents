@@ -23,18 +23,30 @@
     <div v-else-if="!versions.length" class="text-sub-title pa-4">
       {{ $t('documents.drawer.details.versions.empty') }}
     </div>
-    <version-card
-      v-for="version in versions"
-      :key="version.id"
-      :version="version"
-      :can-manage="canManage"
-      :enable-edit-description="canManage"
-      class="documentInfoVersion py-3"
-      @restore-version="restoreVersion"
-      @version-update-description="updateSummary" />
+    <v-list dense class="pa-0">
+      <v-list-item
+        v-for="version in versions"
+        :key="version.id"
+        :title="$t('documents.drawer.details.versions.open')"
+        class="documentInfoVersion px-0"
+        link
+        @click="openVersion(version)">
+        <v-list-item-content class="py-3">
+          <version-card
+            :version="version"
+            :can-manage="canManage"
+            :enable-edit-description="canManage"
+            @keydown.native.enter.stop
+            @restore-version="restoreVersion"
+            @version-update-description="updateSummary" />
+        </v-list-item-content>
+      </v-list-item>
+    </v-list>
   </div>
 </template>
 <script>
+import {openFileVersion} from '../../../js/DocumentVersionUtils.js';
+
 export default {
   props: {
     file: {
@@ -91,8 +103,27 @@ export default {
         .finally(() => this.loading = false);
     },
     /**
+     * Opens a version read only, as the Documents version history does.
+     * @param {Object} version the version
+     * @returns {Promise} resolved once opened
+     */
+    openVersion(version) {
+      return openFileVersion(version, this.$supportedDocuments, file => this.iconOf(file))
+        .catch(() => this.alert(this.$t('documents.drawer.details.versions.openError'), 'error'));
+    },
+    /**
+     * Gives the icon of a file's type, as the Documents list shows it.
+     * @param {Object} file the file
+     * @returns {Object} the icon
+     */
+    iconOf(file) {
+      const extension = this.$documentsIconsExtension?.[0];
+      return extension?.get(file?.mimeType) || extension?.get('file');
+    },
+    /**
      * Restores a version as the file's current content, then reads the
-     * versions again and tells the drawer the file changed.
+     * versions again and tells the drawer, and the Documents list behind it
+     * when the page shows one, that the file changed.
      * @param {Object} version the version to restore
      * @returns {Promise} resolved once done
      */
@@ -103,6 +134,7 @@ export default {
           this.alert(this.$t('documents.restore.version.success'), 'success');
           this.load();
           this.$emit('restored');
+          document.dispatchEvent(new CustomEvent('document-version-restored', {detail: {fileId: this.file.id}}));
         })
         .catch(() => {
           this.$root.$emit('version-restore-error');
