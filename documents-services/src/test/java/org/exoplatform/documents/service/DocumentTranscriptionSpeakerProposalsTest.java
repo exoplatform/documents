@@ -289,12 +289,14 @@ class DocumentTranscriptionSpeakerProposalsTest {
     verify(documentFileService).removeTranscriptionSpeakerSuggestion(DOCUMENT_ID, "1", EDITOR_ID);
   }
 
+  /** Lets the given user name the speakers of the done test transcript. */
   private void mockNameableBy(long identityId) throws Exception {
     when(documentFileService.getTranscriptionState(DOCUMENT_ID, identityId)).thenReturn(done());
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, identityId)).thenReturn(true);
     when(documentFileService.getTranscriptionSegments(DOCUMENT_ID, identityId)).thenReturn(SEGMENTS);
   }
 
+  /** Makes the given identity id a user, enabled or not. */
   private void mockUser(String identityId, boolean enabled) {
     Identity identity = mock(Identity.class);
     lenient().when(identity.getId()).thenReturn(identityId);
@@ -303,6 +305,7 @@ class DocumentTranscriptionSpeakerProposalsTest {
     when(identityManager.getIdentity(identityId)).thenReturn(identity);
   }
 
+  /** Makes the given username resolve to a user identity, enabled or not. */
   private void mockUsername(String username, String identityId, boolean enabled) {
     Identity identity = mock(Identity.class);
     when(identity.getId()).thenReturn(identityId);
@@ -310,12 +313,14 @@ class DocumentTranscriptionSpeakerProposalsTest {
     mockUser(identityId, enabled);
   }
 
+  /** Sets the attendees plugins the service collects. */
   private void setPlugins(TranscriptionAttendeesPlugin... plugins) throws Exception {
     Field field = DocumentTranscriptionService.class.getDeclaredField("attendeesPlugins");
     field.setAccessible(true);
     field.set(service, List.of(plugins));
   }
 
+  /** A done transcription state of a media file. */
   private static TranscriptionState done() {
     return TranscriptionState.builder().status(TranscriptionStatus.DONE).media(true).build();
   }
