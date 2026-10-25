@@ -31,6 +31,20 @@ export default {
     savingSpeaker: null,
     speakersRead: 0,
   }),
+  /**
+   * Follows the names given in the other views of the transcript.
+   * @returns {void}
+   */
+  created() {
+    document.addEventListener('documents-transcript-speakers-changed', this.followSpeakers);
+  },
+  /**
+   * Stops following the names given elsewhere.
+   * @returns {void}
+   */
+  beforeDestroy() {
+    document.removeEventListener('documents-transcript-speakers-changed', this.followSpeakers);
+  },
   methods: {
     /**
      * Reads the named speakers of a transcript whose sentences tell their
@@ -124,13 +138,27 @@ export default {
     /**
      * Tells the page that the speakers of a file were named again, so that the
      * other views of its transcript, as the full view's timeline, read the
-     * names again (EXO-92127).
+     * names again (EXO-92127). The view that named tells it is the source,
+     * having read the names already.
      *
      * @param {string} documentId the file's UUID
      * @returns {void}
      */
     announceSpeakers(documentId) {
-      document.dispatchEvent(new CustomEvent('documents-transcript-speakers-changed', {detail: {documentId}}));
+      document.dispatchEvent(new CustomEvent('documents-transcript-speakers-changed', {detail: {documentId, source: this._uid}}));
+    },
+    /**
+     * Reads the names again once another view of the same file's transcript
+     * named a speaker, when this view shows its speakers.
+     *
+     * @param {CustomEvent} event its detail holds the file's documentId and the view that named
+     * @returns {void}
+     */
+    followSpeakers(event) {
+      const detail = event?.detail;
+      if (this.speakers && detail?.documentId === this.documentId && detail.source !== this._uid) {
+        this.reloadSpeakers(this.documentId);
+      }
     },
     /**
      * Reads the named speakers again, whatever the sentences say, and for a
