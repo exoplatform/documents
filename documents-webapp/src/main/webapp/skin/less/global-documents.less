@@ -173,7 +173,9 @@
     // absolutely in that grid area, it takes none of the tracks' cells
     .documentTimelineNow {
       grid-column: 2;
-      grid-row: 2 / -1;
+      // two properties: LESS would compute « 2 / -1 » as a division
+      grid-row-start: 2;
+      grid-row-end: -1;
       position: absolute;
       inset: 0;
       pointer-events: none;

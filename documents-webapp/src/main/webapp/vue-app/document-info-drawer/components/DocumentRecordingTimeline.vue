@@ -80,7 +80,7 @@
   </section>
 </template>
 <script>
-import {chapterSpans, itemAt, speakerLanes, speakerTurns, talkShares, timelineDuration, timelineTicks} from '../js/RecordingTimeline.js';
+import {chapterItems, chapterSpans, itemAt, speakerLanes, speakerTurns, talkShares, timelineDuration, timelineTicks, turnItems, turnKey} from '../js/RecordingTimeline.js';
 import {speakerColor} from '../../document-transcript-drawer/js/TranscriptSpeakers.js';
 import RecordingTimelineReader from '../js/RecordingTimelineReader.js';
 import {formatMoment} from '../../document-transcript-drawer/js/TranscriptSearch.js';
@@ -102,21 +102,27 @@ export default {
   },
   mixins: [RecordingTimelineReader],
   computed: {
+    /** @returns {number} how long the recording lasts on the timeline, in seconds */
     duration() {
       return timelineDuration(this.segments, this.mediaDuration);
     },
+    /** @returns {Array<Object>} the chapters as spans of the timeline, none when the transcript shows none */
     chapters() {
       return this.duration && chapterSpans(this.segments, this.rawChapters, this.duration) || [];
     },
+    /** @returns {Array<Object>} the turns of speech, consecutive segments of one speaker merged */
     turns() {
       return speakerTurns(this.segments);
     },
+    /** @returns {Array<Object>} the speakers' lanes, the least active grouped beyond five */
     lanes() {
       return speakerLanes(this.turns);
     },
+    /** @returns {Object} each lane's share of the speaking time, in percents, by its key */
     shares() {
       return talkShares(this.lanes);
     },
+    /** @returns {Array<number>} the moments the time scale marks */
     ticks() {
       return timelineTicks(this.duration);
     },
@@ -129,40 +135,35 @@ export default {
     rows() {
       return 1 + (this.chapters.length ? 1 : 0) + this.lanes.length;
     },
+    /** @returns {boolean} true when the recording has chapters or speakers to show */
     shown() {
       return this.duration > 0 && (this.chapters.length > 0 || this.lanes.length > 0);
     },
-    speakersByNumber() {
-      return Object.fromEntries((this.speakers || []).map(person => [person.speaker, person]));
-    },
-    /**
-     * The blocks of the chapters, in the colours the transcript gives them:
-     * every other block is a light tint of its colour with dark text, so two
-     * chapters side by side differ by lightness and not by hue alone.
-     * @returns {Array<Object>} the chapters' items
-     */
+    /** @returns {Array<Object>} the chapters' blocks, in the transcript's colours */
     chapterItems() {
-      return this.chapters.map(chapter => ({
-        ...chapter,
-        text: chapter.position % 2 === 0 && 'white--text' || null,
-        style: {backgroundColor: chapter.position % 2 === 0 ? chapter.color : `${chapter.color}33`},
-        key: `chapter-${chapter.position}`,
-        caption: chapter.title,
-        title: `${chapter.title} · ${formatMoment(chapter.from)}–${formatMoment(chapter.to)}`,
-        label: this.$t('documents.timeline.chapter', {0: chapter.title, 1: formatMoment(chapter.from), 2: formatMoment(chapter.to)}),
-      }));
+      return chapterItems(this.chapters, chapter => this.describe(chapter.title, this.$t('documents.timeline.chapter', {
+        0: chapter.title,
+        1: formatMoment(chapter.from),
+        2: formatMoment(chapter.to),
+      }), chapter.from, chapter.to));
     },
     /**
      * The bars of each lane, computed once per change of the transcript or of
-     * the names rather than on each time update of the player.
+     * the names rather than on each time update of the player; the shared
+     * lane's bars are grey, each named in its label.
      * @returns {Object} the items of each lane, by its key
      */
     laneItems() {
-      return Object.fromEntries(this.lanes.map(lane => [lane.key, this.turnItems(lane)]));
+      return Object.fromEntries(this.lanes.map(lane => [lane.key, turnItems(lane, lane.speaker && speakerColor(lane.speaker) || 'grey', turn => {
+        const name = this.speakerName(turn.speaker);
+        return this.describe(name, this.$t('documents.timeline.turn', {0: name, 1: formatMoment(turn.start), 2: formatMoment(turn.end)}), turn.start, turn.end);
+      })]));
     },
+    /** @returns {Object} the chapter at the current moment, or null */
     currentChapter() {
       return itemAt(this.chapters, this.playingSeconds);
     },
+    /** @returns {Object} the turn of speech at the current moment, or null */
     currentTurn() {
       return itemAt(this.turns, this.playingSeconds);
     },
@@ -185,59 +186,17 @@ export default {
   },
   methods: {
     formatMoment,
+    turnKey,
     /**
-     * The person a lane's speaker is, once someone named them.
-     * @param {Object} lane the lane
-     * @returns {Object} the person, or null for an unnamed speaker or « Others »
+     * The tooltip and the accessible label of a block or a bar.
+     * @param {string} name what it shows: a chapter's title or a speaker's name
+     * @param {string} label its accessible label
+     * @param {number} from where it begins, in seconds
+     * @param {number} to where it ends, in seconds
+     * @returns {{title: string, label: string}} its tooltip and its label
      */
-    personOf(lane) {
-      return lane.speaker && this.speakersByNumber[lane.speaker] || null;
-    },
-    /**
-     * The name of a speaker: the person someone named, else « Speaker N ».
-     * @param {string} speaker the speaker's number
-     * @returns {string} the name
-     */
-    speakerName(speaker) {
-      return this.speakersByNumber[speaker]?.fullName || this.$t('documents.transcript.speaker.label', {0: speaker});
-    },
-    /**
-     * The name of a lane: its speaker's, or « Others (N) » for the shared one.
-     * @param {Object} lane the lane
-     * @returns {string} the name
-     */
-    laneName(lane) {
-      return lane.speaker && this.speakerName(lane.speaker) || this.$t('documents.timeline.others', {0: lane.speakers.length});
-    },
-    /**
-     * The key of a turn, unique on the timeline.
-     * @param {Object} turn the turn
-     * @returns {string} the key
-     */
-    turnKey(turn) {
-      return `${turn.speaker}-${turn.start}`;
-    },
-    /**
-     * The bars of a lane, one per turn, coloured as their speaker in the
-     * transcript; the shared lane's bars are grey, each named in its label.
-     * @param {Object} lane the lane
-     * @returns {Array<Object>} the lane's items
-     */
-    turnItems(lane) {
-      const background = lane.speaker && speakerColor(lane.speaker) || 'grey';
-      return lane.turns.map(turn => {
-        const name = this.speakerName(turn.speaker);
-        const span = `${formatMoment(turn.start)}–${formatMoment(turn.end)}`;
-        return {
-          key: this.turnKey(turn),
-          start: turn.start,
-          from: turn.start,
-          to: turn.end,
-          background,
-          title: `${name} · ${span}`,
-          label: this.$t('documents.timeline.turn', {0: name, 1: formatMoment(turn.start), 2: formatMoment(turn.end)}),
-        };
-      });
+    describe(name, label, from, to) {
+      return {title: `${name} · ${formatMoment(from)}–${formatMoment(to)}`, label};
     },
   },
 };

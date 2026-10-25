@@ -69,6 +69,10 @@ export default {
     focused: 0,
   }),
   watch: {
+    /**
+     * Brings the track's Tab stop back to its first item when its items change.
+     * @returns {void}
+     */
     items() {
       this.focused = 0;
     },
