@@ -105,3 +105,83 @@
     display: none;
   }
 }
+
+// A transcript's chapters (EXO-92122), in the details and the transcript drawer.
+// A heading is a 20px chevron column, a 44px time column and the title, the
+// summary under the title. An unfolded chapter's lines run along a 2px guide at
+// the chevron's column, in the chapter's colour (lighter for a chapter not being
+// read), each a 44px time column under the heading's time, then the text.
+.documentTranscriptChapterListItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  .documentTranscriptChapterTime {
+    flex: 0 0 40px;
+  }
+}
+.documentTranscriptChapterDot {
+  flex: 0 0 8px;
+  height: 8px;
+  border-radius: 4px;
+  background-color: @primaryColor;
+}
+.documentTranscriptChapter {
+  margin-top: 12px;
+  .documentTranscriptChapterHeading {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    column-gap: 8px;
+    align-items: start;
+  }
+  .documentTranscriptChapterHeadingText {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    column-gap: 8px;
+  }
+  .documentTranscriptChapterTime {
+    font-size: 13px;
+    padding-top: 3px;
+  }
+  .documentTranscriptChapterTitle {
+    font-size: 16px;
+  }
+  .documentTranscriptChapterSummary {
+    grid-column: 2;
+    font-size: 12.5px;
+    line-height: 1.45;
+    margin-top: 2px;
+  }
+  .documentTranscriptChapterLines {
+    position: relative;
+    margin-top: 8px;
+    margin-bottom: 6px;
+    margin-inline-start: 9px;
+    padding: 2px 0 4px;
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      inset-inline-start: 0;
+      width: 2px;
+      background-color: @primaryColor;
+      background-color: var(--documentTranscriptChapterColor, @primaryColor);
+      opacity: 0.4;
+    }
+  }
+  &.documentTranscriptChapterCurrent .documentTranscriptChapterLines::before {
+    opacity: 1;
+  }
+  .documentTranscriptChapterLine {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    column-gap: 8px;
+    margin-inline-start: 18px;
+    padding: 4px 0;
+  }
+  .documentTranscriptLineTime {
+    font-size: 12.5px;
+    padding-top: 2px;
+  }
+}
