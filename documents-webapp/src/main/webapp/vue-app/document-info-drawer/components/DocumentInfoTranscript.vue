@@ -40,6 +40,7 @@
     <document-transcript-content
       v-if="done"
       :segments="segments"
+      :chapters="chapters"
       :text="text"
       :term="term"
       :seconds="seconds"
@@ -55,6 +56,8 @@
   </div>
 </template>
 <script>
+import {awaitsChapters} from '../../document-transcript-drawer/js/TranscriptChapters.js';
+
 const POLLING_MILLIS = 15000;
 
 const STALE_MILLIS = 3600000;
@@ -82,6 +85,7 @@ export default {
     state: null,
     text: null,
     segments: null,
+    chapters: null,
     term: '',
     loading: false,
     retrying: false,
@@ -115,6 +119,7 @@ export default {
         this.state = null;
         this.text = null;
         this.segments = null;
+        this.chapters = null;
         this.term = this.initialTerm || '';
         this.refresh();
       },
@@ -152,13 +157,21 @@ export default {
             }
             return;
           }
-          const segments = state.hasSegments && this.$transcriptionService.getSegments(documentId).catch(() => null) || Promise.resolve(null);
-          return segments.then(timedSegments => {
+          if (awaitsChapters(state)) {
+            this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
+          }
+          // a transcript cannot change while done: the segments already read stay
+          const segments = this.segments && Promise.resolve(this.segments)
+            || state.hasSegments && this.$transcriptionService.getSegments(documentId).catch(() => null)
+            || Promise.resolve(null);
+          const chapters = state.hasChapters && this.$transcriptionService.getChapters(documentId).catch(() => null) || Promise.resolve(null);
+          return Promise.all([segments, chapters]).then(([timedSegments, transcriptChapters]) => {
             if (read !== this.lastRead) {
               return;
             }
             if (Array.isArray(timedSegments) && timedSegments.length) {
               this.segments = timedSegments;
+              this.chapters = Array.isArray(transcriptChapters) && transcriptChapters || null;
               return;
             }
             return this.$transcriptionService.getText(documentId).then(text => {
