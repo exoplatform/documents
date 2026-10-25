@@ -161,8 +161,11 @@ export default {
       return Object.fromEntries((this.speakers || []).map(person => [person.speaker, person]));
     },
     speakerKey() {
-      // one person named for two numbers is one run
-      return speaker => this.speakersByNumber[speaker]?.identityId || speaker;
+      // one person named for two numbers is one run; a person and a number never compare equal
+      return speaker => {
+        const identityId = this.speakersByNumber[speaker]?.identityId;
+        return identityId ? `person:${identityId}` : `speaker:${speaker}`;
+      };
     },
   },
   watch: {
