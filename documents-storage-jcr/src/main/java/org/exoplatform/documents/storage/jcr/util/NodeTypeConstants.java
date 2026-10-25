@@ -199,7 +199,7 @@ public class NodeTypeConstants {
 
   /**
    * One proposal per speaker:
-   * {@code <speaker>=<identity id>|strong|likely|auto|manual|<segment>,<segment>…}.
+   * {@code <speaker>=<identity id>|strong|likely|auto|manual|<segment>,<segment>…|<premise speaker>=<premise identity id>}.
    */
   public static final String EXO_TRANSCRIPTION_SPEAKER_SUGGESTION  = "exo:transcriptionSpeakerSuggestion";
 
