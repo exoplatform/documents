@@ -622,6 +622,53 @@ public interface DocumentFileService {
   }
 
   /**
+   * The timed segments of a media file's transcript, read as the system, for
+   * the platform's own background work on a transcript.
+   *
+   * @param documentId the file's UUID
+   * @return the segments as a JSON list, or null when there are none
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default String getTranscriptionSegments(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Writes, as the system, the chapters a media file's transcript is grouped
+   * into (EXO-92122), only while the transcript they were made from is still
+   * the stored one: done, and with the update time read before making them.
+   *
+   * @param documentId the file's UUID
+   * @param chapters the chapters as a JSON list
+   * @param transcriptUpdated the update time of the transcription state the
+   *          chapters were made from, in milliseconds since the epoch
+   * @return true when written, false when the transcript changed since, or is
+   *         not done
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default boolean saveTranscriptionChapters(String documentId,
+                                            String chapters,
+                                            long transcriptUpdated) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The chapters a media file's transcript is grouped into, read with the
+   * rights of the given user.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user reading it
+   * @return the chapters as a JSON list, or null when there are none
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default String getTranscriptionChapters(String documentId,
+                                          long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Creates a shortcut for a document
    *
    * @param documentId     document id
