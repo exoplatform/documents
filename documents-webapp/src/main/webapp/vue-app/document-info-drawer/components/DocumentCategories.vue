@@ -19,7 +19,7 @@
     <v-fade-transition
       v-for="(c, index) in filteredCategories"
       :key="c.id">
-      <div v-if="!initialized || !loading || loadedCategories[c.id]">
+      <div v-if="!initialized || !loading || loadedCategories[c.id]" :title="c.name">
         <category-chip
           :ref="`category${index}`"
           :category="c"
