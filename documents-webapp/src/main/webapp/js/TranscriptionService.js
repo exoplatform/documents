@@ -93,6 +93,24 @@ export function getChapters(documentId) {
 }
 
 /**
+ * Asks for the chapters of a transcribed file being read, which a transcript
+ * done before they were switched on gets the first time it is opened.
+ *
+ * @param {string} documentId the file's id
+ * @returns {Promise} resolved once the request is accepted
+ */
+export function requestChapters(documentId) {
+  return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/chapters`, {
+    method: 'POST',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw new Error(`Error ${resp?.status} when asking for the transcript chapters of '${documentId}'`);
+    }
+  });
+}
+
+/**
  * Asks to transcribe a file again.
  *
  * @param {string} documentId the file's id
