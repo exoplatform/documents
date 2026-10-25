@@ -24,7 +24,7 @@
       <button
         :disabled="retrying"
         type="button"
-        class="font-weight-bold primary--text"
+        class="font-weight-bold primary--text pa-0"
         @click="$emit('retry')">
         {{ $t('documents.transcript.retry') }}
       </button>
