@@ -10,3 +10,24 @@
 #biggestDocumentsDrawer .uploadedFileDetails .document-time {
   display:inline;
 }
+
+.documentInfoDrawer {
+  .documentMediaThumbnailVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .documentMediaThumbnailPlay {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.85;
+    pointer-events: none;
+  }
+  .documentMediaThumbnailBadge {
+    right: 8px;
+    bottom: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+  }
+}
