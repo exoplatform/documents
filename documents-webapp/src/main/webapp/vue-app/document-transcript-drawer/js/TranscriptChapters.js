@@ -70,19 +70,32 @@ const CHAPTERS_WAIT_MILLIS = 180000;
 const CHAPTERS_MIN_SECONDS = 180;
 
 /**
- * Tells whether a transcribed recording may still get its chapters: they are
- * made right after the transcript, for a recording long enough, and come a
- * little later.
+ * Tells whether a transcribed recording can be grouped into chapters and has
+ * none yet.
  *
  * @param {Object} state the transcription state
- * @returns {boolean} true for a transcript with segments and no chapters yet,
- *          written less than three minutes ago
+ * @returns {boolean} true for a transcript done, with timed segments and no
+ *          chapters, of a recording long enough
  */
-export function awaitsChapters(state) {
+export function lacksChapters(state) {
   return state?.status === 'DONE'
     && !!state.hasSegments
     && !state.hasChapters
-    && (state.durationSeconds || 0) >= CHAPTERS_MIN_SECONDS
-    && !!state.updated
-    && Date.now() - state.updated < CHAPTERS_WAIT_MILLIS;
+    && (state.durationSeconds || 0) >= CHAPTERS_MIN_SECONDS;
+}
+
+/**
+ * Tells whether a transcribed recording may still get its chapters: they are
+ * made right after the transcript, or after they were asked for when it was
+ * opened, and come a little later.
+ *
+ * @param {Object} state the transcription state
+ * @param {number} askedAt when the chapters were asked for, in milliseconds
+ *          since the epoch, or null
+ * @returns {boolean} true for a transcript with no chapters yet, written or
+ *          asked for less than three minutes ago
+ */
+export function awaitsChapters(state, askedAt) {
+  const since = Math.max(state?.updated || 0, askedAt || 0);
+  return lacksChapters(state) && !!since && Date.now() - since < CHAPTERS_WAIT_MILLIS;
 }
