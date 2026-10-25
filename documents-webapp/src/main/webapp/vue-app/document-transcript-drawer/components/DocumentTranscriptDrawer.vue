@@ -77,6 +77,7 @@
             v-if="done"
             :segments="segments"
             :chapters="chapters"
+            :duration-seconds="state && state.durationSeconds"
             :text="text"
             :term="term"
             :seconds="seconds"
