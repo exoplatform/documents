@@ -212,6 +212,7 @@
           <document-info-versions
             v-if="sideBySide && tab === 'versions'"
             :file="file"
+            @restored="refreshFile"
             class="px-4 overflow-y-auto" />
           <document-info-transcript
             v-if="sideBySide && tab === 'transcript'"
@@ -714,6 +715,23 @@ export default {
         const url = this.$documentsUtils.getEditorUrl(await this.getFileInDrive(), mode);
         this.$documentsUtils.openLink(url,'_blank');
       }
+    },
+    /**
+     * Reads the file again after a version was restored, so the header, the
+     * preview and the details show its new current content; the drawer stays
+     * open on the same view and tab.
+     * @returns {Promise} resolved once read
+     */
+    refreshFile() {
+      const fileId = this.fileId;
+      return this.$attachmentService.getDocumentDetails(fileId, 'modifier,creator,owner,metadatas')
+        .then(file => {
+          if (fileId === this.fileId) {
+            this.file = file;
+            this.showIcon = false;
+            this.thumbnailUrl = this.mediaKind ? null : this.getThumbnailUrl();
+          }
+        });
     },
     /**
      * Shows the transcript: in its tab once the drawer is expanded, else in
