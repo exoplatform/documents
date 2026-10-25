@@ -3577,6 +3577,9 @@ public class JCRDocumentFileStorageTest {
     Session session = mockSystemSession();
     Node node = mockMediaNode(session, "video/mp4");
     when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)).thenReturn(true);
+    List<Boolean> lockedWhileForgetting = new ArrayList<>();
+    doAnswer(invocation -> lockedWhileForgetting.add(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread())).when(node)
+                                                                                                                   .removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
 
     jcrDocumentFileStorage.completeTranscription("1", "hello", null, TranscriptionState.builder().status(TranscriptionStatus.DONE).build());
     verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
@@ -3585,6 +3588,49 @@ public class JCRDocumentFileStorageTest {
     mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "FAILED");
     assertTrue(jcrDocumentFileStorage.clearTranscriptionState("1"));
     verify(node, times(2)).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+    assertEquals("Expected the names forgotten under the file's lock, so that a save naming a speaker never brings them back",
+                 List.of(true, true),
+                 lockedWhileForgetting);
+    assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+  }
+
+  /**
+   * A request naming a speaker waits a bounded time for a save of the same
+   * file running on another thread, then gives up without writing.
+   */
+  @Test
+  public void namingASpeakerGivesUpWhenAnotherSaveOfTheFileHoldsItsLock() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    java.util.concurrent.CountDownLatch held = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+    Thread other = new Thread(() -> {
+      JCRDocumentFileStorage.speakerLock("1").lock();
+      try {
+        held.countDown();
+        release.await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } finally {
+        JCRDocumentFileStorage.speakerLock("1").unlock();
+      }
+    });
+    long wait = JCRDocumentFileStorage.speakerLockWaitMillis;
+    JCRDocumentFileStorage.speakerLockWaitMillis = 50;
+    try {
+      other.start();
+      held.await();
+
+      assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", "42", viewer));
+
+      verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
+    } finally {
+      JCRDocumentFileStorage.speakerLockWaitMillis = wait;
+      release.countDown();
+      other.join();
+    }
   }
 
   /**
