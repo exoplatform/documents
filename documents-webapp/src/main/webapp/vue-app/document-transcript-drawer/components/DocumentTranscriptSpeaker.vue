@@ -27,7 +27,7 @@
     <v-menu
       v-if="!person || canEdit"
       v-model="menu"
-      :disabled="!canEdit"
+      :disabled="!canEdit || busy"
       :close-on-content-click="false"
       class="d-flex"
       offset-y
@@ -38,12 +38,13 @@
           v-bind="attrs"
           :title="$t('documents.transcript.speaker.change')"
           :aria-label="$t('documents.transcript.speaker.change')"
+          :disabled="busy"
           class="ms-1"
           icon
-          x-small
+          small
           v-on="on"
           @keydown.space.stop>
-          <v-icon x-small>fas fa-pen</v-icon>
+          <v-icon small>fas fa-pen</v-icon>
         </v-btn>
         <span
           v-else
@@ -116,6 +117,11 @@ export default {
       type: Boolean,
       default: false,
     },
+    /** Another speaker is being saved: this one waits, its controls in place but disabled. */
+    busy: {
+      type: Boolean,
+      default: false,
+    },
   },
   data: () => ({
     menu: false,
@@ -151,7 +157,7 @@ export default {
      * @returns {void}
      */
     openFromKeyboard() {
-      if (this.canEdit) {
+      if (this.canEdit && !this.busy) {
         this.menu = true;
       }
     },
