@@ -3165,17 +3165,60 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
-  public void saveTranscriptionSpeakerSuggestions(String documentId,
-                                                  List<TranscriptionSpeakerSuggestion> suggestions) throws ObjectNotFoundException {
+  public boolean saveTranscriptionSpeakerSuggestions(String documentId,
+                                                     List<TranscriptionSpeakerSuggestion> suggestions,
+                                                     long transcriptUpdated) throws ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    // the same lock as a new transcript's, which forgets the proposals: never a stale one written after it
+    lock.lock();
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!isTranscriptAt(node, transcriptUpdated)) {
+        return false;
+      }
+      writeTranscriptionSpeakerSuggestions(node, suggestions);
+      session.save();
+      return true;
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error writing the speaker proposals of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+      lock.unlock();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean markTranscriptionSpeakerSuggestionApplied(String documentId,
+                                                           String speaker,
+                                                           long identityId,
+                                                           long transcriptUpdated) throws ObjectNotFoundException {
     ReentrantLock lock = speakerLock(documentId);
     lock.lock();
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
     try {
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
-      writeTranscriptionSpeakerSuggestions(getTranscribedNode(session, documentId), suggestions);
-      session.save();
+      Node node = getTranscribedNode(session, documentId);
+      if (!isTranscriptAt(node, transcriptUpdated)) {
+        return false;
+      }
+      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
+      for (int i = 0; i < suggestions.size(); i++) {
+        TranscriptionSpeakerSuggestion suggestion = suggestions.get(i);
+        if (suggestion.speaker().equals(speaker) && suggestion.identityId() == identityId) {
+          suggestions.set(i, suggestion.withAutoApplied(true));
+          writeTranscriptionSpeakerSuggestions(node, suggestions);
+          session.save();
+          return true;
+        }
+      }
+      return false;
     } catch (RepositoryException e) {
-      throw new IllegalStateException("Error writing the speaker proposals of media file '%s'".formatted(documentId), e);
+      throw new IllegalStateException("Error marking a speaker proposal of media file '%s' as applied".formatted(documentId), e);
     } finally {
       sessionProvider.close();
       lock.unlock();
@@ -3248,6 +3291,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public boolean nameTranscriptionSpeakerIfUnnamed(String documentId,
                                                    String speaker,
                                                    String identityId,
+                                                   long transcriptUpdated,
                                                    Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     ReentrantLock lock = speakerLock(documentId);
     if (!acquireOnRequest(lock)) {
@@ -3262,7 +3306,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         throw new IllegalAccessException("User may not edit file '%s'".formatted(documentId));
       }
       Map<String, String> speakers = new TreeMap<>(readTranscriptionSpeakers(node));
-      if (speakers.containsKey(speaker) || speakers.containsValue(identityId)) {
+      if (!isTranscriptAt(node, transcriptUpdated) || speakers.containsKey(speaker) || speakers.containsValue(identityId)) {
         return false;
       }
       speakers.put(speaker, identityId);
@@ -4511,15 +4555,35 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   /**
+   * Tells whether a file's transcript is done and still the one of the given
+   * update time.
+   *
+   * @param node the file
+   * @param transcriptUpdated an update time of its transcription state, in
+   *          milliseconds since the epoch
+   * @return true when its state is done and was last updated then
+   * @throws RepositoryException when the file cannot be read
+   */
+  private boolean isTranscriptAt(Node node, long transcriptUpdated) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)) {
+      return false;
+    }
+    TranscriptionState state = toTranscriptionState(node);
+    return state.status() == TranscriptionStatus.DONE && Long.valueOf(transcriptUpdated).equals(state.updated());
+  }
+
+  /**
    * @param suggestion a proposal
    * @return its stored value:
-   *         {@code <speaker>=<identity id>|strong|likely|auto|manual|<segment>,<segment>…}
+   *         {@code <speaker>=<identity id>|strong|likely|auto|manual|<segment>,<segment>…|<premise speaker>=<premise identity id>},
+   *         the premise empty for a proposal that follows from no other voice
    */
   static String toSuggestionValue(TranscriptionSpeakerSuggestion suggestion) {
     return suggestion.speaker() + "=" + suggestion.identityId()
         + "|" + (suggestion.strong() ? SUGGESTION_STRONG : SUGGESTION_LIKELY)
         + "|" + (suggestion.autoApplied() ? SUGGESTION_AUTO : SUGGESTION_MANUAL)
-        + "|" + suggestion.evidence().stream().map(String::valueOf).collect(Collectors.joining(","));
+        + "|" + suggestion.evidence().stream().map(String::valueOf).collect(Collectors.joining(","))
+        + "|" + (suggestion.premiseSpeaker() == null ? "" : suggestion.premiseSpeaker() + "=" + suggestion.premiseIdentityId());
   }
 
   /**
@@ -4528,7 +4592,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    */
   static TranscriptionSpeakerSuggestion toSuggestion(String value) {
     String[] parts = StringUtils.splitPreserveAllTokens(value, '|');
-    if (parts == null || parts.length != 4) {
+    if (parts == null || parts.length != 5) {
+      return null;
+    }
+    String premiseSpeaker = StringUtils.trimToNull(StringUtils.substringBefore(parts[4], "="));
+    String premiseIdentityId = StringUtils.substringAfter(parts[4], "=");
+    if (premiseSpeaker != null && !StringUtils.isNumeric(premiseIdentityId)) {
       return null;
     }
     String speaker = StringUtils.substringBefore(parts[0], "=");
@@ -4547,7 +4616,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                               Long.parseLong(identityId),
                                               SUGGESTION_STRONG.equals(parts[1]),
                                               SUGGESTION_AUTO.equals(parts[2]),
-                                              evidence);
+                                              evidence,
+                                              premiseSpeaker,
+                                              premiseSpeaker == null ? null : Long.valueOf(premiseIdentityId));
   }
 
   /**

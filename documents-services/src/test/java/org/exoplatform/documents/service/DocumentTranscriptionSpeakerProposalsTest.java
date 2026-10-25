@@ -21,11 +21,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,6 +67,8 @@ class DocumentTranscriptionSpeakerProposalsTest {
   private static final long                    EDITOR_ID   = 7L;
 
   private static final long                    OWNER_ID    = 9L;
+
+  private static final long                    UPDATED     = 1_700_000_000_000L;
 
   private static final String                  SEGMENTS    = "[{\"start\":0.0,\"end\":2.0,\"text\":\"Julien, à toi.\",\"speaker\":\"1\"},"
       + "{\"start\":2.5,\"end\":3.0,\"text\":\"Oui.\",\"speaker\":\"2\"},"
@@ -158,7 +160,8 @@ class DocumentTranscriptionSpeakerProposalsTest {
 
   /**
    * Every proposal is kept before any speaker is named; then a strong one names
-   * its speaker as the owner, and is kept again marked as applied.
+   * its speaker as the owner, on the transcript it was made from, and its stored
+   * proposal is marked applied; a likely one is never applied.
    */
   @Test
   void aStrongProposalNamesItsSpeakerAsTheOwner_afterAllAreKept() throws Exception {
@@ -168,41 +171,92 @@ class DocumentTranscriptionSpeakerProposalsTest {
     lenient().when(other.isUser()).thenReturn(true);
     lenient().when(other.isEnable()).thenReturn(true);
     lenient().when(identityManager.getIdentity("43")).thenReturn(other);
-    when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", OWNER_ID)).thenReturn(true);
-    lenient().when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "2", "43", OWNER_ID)).thenReturn(true);
+    when(documentFileService.saveTranscriptionSpeakerSuggestions(eq(DOCUMENT_ID), any(), eq(UPDATED))).thenReturn(true);
+    when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", UPDATED, OWNER_ID)).thenReturn(true);
+    lenient().when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "2", "43", UPDATED, OWNER_ID)).thenReturn(true);
+    when(documentFileService.markTranscriptionSpeakerSuggestionApplied(DOCUMENT_ID, "1", 42, UPDATED)).thenReturn(true);
+    lenient().when(documentFileService.markTranscriptionSpeakerSuggestionApplied(DOCUMENT_ID, "2", 43, UPDATED)).thenReturn(true);
     TranscriptionSpeakerSuggestion strong = new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(0, 2));
     TranscriptionSpeakerSuggestion likely = new TranscriptionSpeakerSuggestion("2", 43, false, false, List.of(0));
 
-    List<TranscriptionSpeakerSuggestion> kept = service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong, likely), OWNER_ID);
+    List<TranscriptionSpeakerSuggestion> kept = service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong, likely), OWNER_ID, UPDATED);
 
     assertEquals(List.of(strong.withAutoApplied(true), likely), kept);
     InOrder order = inOrder(documentFileService);
-    order.verify(documentFileService).saveTranscriptionSpeakerSuggestions(DOCUMENT_ID, List.of(strong, likely));
-    order.verify(documentFileService).nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", OWNER_ID);
-    order.verify(documentFileService).saveTranscriptionSpeakerSuggestions(DOCUMENT_ID, kept);
-    verify(documentFileService, never()).nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "2", "43", OWNER_ID);
+    order.verify(documentFileService).saveTranscriptionSpeakerSuggestions(DOCUMENT_ID, List.of(strong, likely), UPDATED);
+    order.verify(documentFileService).nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", UPDATED, OWNER_ID);
+    order.verify(documentFileService).markTranscriptionSpeakerSuggestionApplied(DOCUMENT_ID, "1", 42, UPDATED);
+    verify(documentFileService, never()).nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "2", "43", UPDATED, OWNER_ID);
+  }
+
+  /**
+   * Nothing is kept nor named when the transcript changed since the proposals
+   * were made from it.
+   */
+  @Test
+  void proposalsForATranscriptMadeSinceAreDropped() throws Exception {
+    TranscriptionSpeakerSuggestion strong = new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(0, 2));
+    when(documentFileService.saveTranscriptionSpeakerSuggestions(DOCUMENT_ID, List.of(strong), UPDATED)).thenReturn(false);
+
+    assertEquals(List.of(), service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong), OWNER_ID, UPDATED));
+    verify(documentFileService, never()).nameTranscriptionSpeakerIfUnnamed(anyString(), anyString(), anyString(), anyLong(), anyLong());
   }
 
   /**
    * A strong proposal stays a proposal when the owner cannot edit the file,
-   * when the speaker or the person is already named, or when the owner is
-   * unknown; nothing is then saved twice.
+   * when the speaker or the person is already named, when it was dismissed
+   * while its speaker was being named, or when the owner is unknown.
    */
   @Test
   void aStrongProposalWaitsWhenItCannotBeApplied() throws Exception {
     TranscriptionSpeakerSuggestion strong = new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(0, 2));
+    when(documentFileService.saveTranscriptionSpeakerSuggestions(DOCUMENT_ID, List.of(strong), UPDATED)).thenReturn(true);
     when(documentFileService.getTranscriptionState(DOCUMENT_ID, OWNER_ID)).thenReturn(done());
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, OWNER_ID)).thenReturn(false);
 
-    assertEquals(List.of(strong), service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong), OWNER_ID));
-    assertEquals(List.of(strong), service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong), null));
-    verify(documentFileService, never()).nameTranscriptionSpeakerIfUnnamed(anyString(), anyString(), anyString(), anyLong());
+    assertEquals(List.of(strong), service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong), OWNER_ID, UPDATED));
+    assertEquals(List.of(strong), service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong), null, UPDATED));
+    verify(documentFileService, never()).nameTranscriptionSpeakerIfUnnamed(anyString(), anyString(), anyString(), anyLong(), anyLong());
 
     mockNameableBy(OWNER_ID);
     mockUser("42", true);
-    when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", OWNER_ID)).thenReturn(false);
-    assertEquals(List.of(strong), service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong), OWNER_ID));
-    verify(documentFileService, times(3)).saveTranscriptionSpeakerSuggestions(DOCUMENT_ID, List.of(strong));
+    when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", UPDATED, OWNER_ID)).thenReturn(false);
+    assertEquals(List.of(strong), service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong), OWNER_ID, UPDATED));
+    verify(documentFileService, never()).markTranscriptionSpeakerSuggestionApplied(anyString(), anyString(), anyLong(), anyLong());
+
+    when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", UPDATED, OWNER_ID)).thenReturn(true);
+    when(documentFileService.markTranscriptionSpeakerSuggestionApplied(DOCUMENT_ID, "1", 42, UPDATED)).thenReturn(false);
+    assertEquals(List.of(strong), service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong), OWNER_ID, UPDATED));
+  }
+
+  /**
+   * A proposal made by elimination is applied after the others, and only while
+   * the voice it follows from is named after the person it was taken to be.
+   */
+  @Test
+  void aProposalByEliminationIsAppliedOnlyWhileItsPremiseHolds() throws Exception {
+    mockNameableBy(OWNER_ID);
+    mockUser("42", true);
+    mockUser("43", true);
+    TranscriptionSpeakerSuggestion eliminated = new TranscriptionSpeakerSuggestion("2", 43, true, false, List.of(0), "1", 42L);
+    TranscriptionSpeakerSuggestion found = new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(0, 2));
+    when(documentFileService.saveTranscriptionSpeakerSuggestions(eq(DOCUMENT_ID), any(), eq(UPDATED))).thenReturn(true);
+    when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", UPDATED, OWNER_ID)).thenReturn(true);
+    when(documentFileService.markTranscriptionSpeakerSuggestionApplied(DOCUMENT_ID, "1", 42, UPDATED)).thenReturn(true);
+    when(documentFileService.getTranscriptionSpeakers(DOCUMENT_ID, OWNER_ID)).thenReturn(Map.of("1", "42"));
+    when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "2", "43", UPDATED, OWNER_ID)).thenReturn(true);
+    when(documentFileService.markTranscriptionSpeakerSuggestionApplied(DOCUMENT_ID, "2", 43, UPDATED)).thenReturn(true);
+
+    assertEquals(List.of(eliminated.withAutoApplied(true), found.withAutoApplied(true)),
+                 service.applySpeakerSuggestions(DOCUMENT_ID, List.of(eliminated, found), OWNER_ID, UPDATED));
+    InOrder order = inOrder(documentFileService);
+    order.verify(documentFileService).nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", UPDATED, OWNER_ID);
+    order.verify(documentFileService).nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "2", "43", UPDATED, OWNER_ID);
+
+    when(documentFileService.getTranscriptionSpeakers(DOCUMENT_ID, OWNER_ID)).thenReturn(Map.of("1", "44"));
+    assertEquals(List.of(eliminated, found.withAutoApplied(true)),
+                 service.applySpeakerSuggestions(DOCUMENT_ID, List.of(eliminated, found), OWNER_ID, UPDATED));
+    verify(documentFileService).nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "2", "43", UPDATED, OWNER_ID);
   }
 
   /**
@@ -215,7 +269,7 @@ class DocumentTranscriptionSpeakerProposalsTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, EDITOR_ID)).thenReturn(true);
     when(documentFileService.getTranscriptionSpeakerSuggestions(DOCUMENT_ID, EDITOR_ID)).thenReturn(List.of(
         new TranscriptionSpeakerSuggestion("1", 42, true, true, List.of(0, 2)),
-        new TranscriptionSpeakerSuggestion("2", 43, false, false, List.of(1, 9)),
+        new TranscriptionSpeakerSuggestion("2", 43, false, false, List.of(1, 9), "1", 42L),
         new TranscriptionSpeakerSuggestion("3", 44, false, false, List.of(0)),
         new TranscriptionSpeakerSuggestion("4", 45, true, true, List.of(0)),
         new TranscriptionSpeakerSuggestion("6", 47, false, false, List.of(0))));
@@ -227,8 +281,9 @@ class DocumentTranscriptionSpeakerProposalsTest {
                                                           true,
                                                           true,
                                                           List.of(new TranscriptionQuote(0, "1", "Julien, à toi."),
-                                                                  new TranscriptionQuote(4, "1", "Merci Julien."))),
-                         new TranscriptionSpeakerProposal("2", 43, false, false, List.of(new TranscriptionQuote(2.5, "2", "Oui.")))),
+                                                                  new TranscriptionQuote(4, "1", "Merci Julien.")),
+                                                          null),
+                         new TranscriptionSpeakerProposal("2", 43, false, false, List.of(new TranscriptionQuote(2.5, "2", "Oui.")), "1")),
                  service.getSpeakerProposals(DOCUMENT_ID, EDITOR_ID));
   }
 

@@ -3699,32 +3699,47 @@ public class JCRDocumentFileStorageTest {
 
   /**
    * Proposals are written as the system, under the file's lock, one value per
-   * speaker; saving none removes their mixin.
+   * speaker, a proposal made by elimination with its premise; saving none
+   * removes their mixin; nothing is written over a transcript made since.
    */
   @Test
   public void speakerProposalsAreSavedAsTheSystem_andNoneRemovesThem() throws Exception {
     Session session = mockSystemSession();
     Node node = mockMediaNode(session, "video/mp4");
+    mockDoneTranscript(node, 1000L);
     java.util.concurrent.atomic.AtomicBoolean lockedWhileWriting = new java.util.concurrent.atomic.AtomicBoolean();
     doAnswer(invocation -> {
       lockedWhileWriting.set(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
       return null;
     }).when(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION), any(String[].class));
 
-    jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1",
-                                                               List.of(new TranscriptionSpeakerSuggestion("1", 42, true, true, List.of(3, 7)),
-                                                                       new TranscriptionSpeakerSuggestion("2", 43, false, false, List.of())));
+    assertTrue(jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1",
+                                                                          List.of(new TranscriptionSpeakerSuggestion("1", 42, true, true, List.of(3, 7)),
+                                                                                  new TranscriptionSpeakerSuggestion("2",
+                                                                                                                     43,
+                                                                                                                     false,
+                                                                                                                     false,
+                                                                                                                     List.of(),
+                                                                                                                     "1",
+                                                                                                                     42L)),
+                                                                          1000L));
 
     verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
     verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION,
-                             new String[] { "1=42|strong|auto|3,7", "2=43|likely|manual|" });
+                             new String[] { "1=42|strong|auto|3,7|", "2=43|likely|manual||1=42" });
     verify(session).save();
     assertTrue("Expected the proposals written under the file's lock", lockedWhileWriting.get());
 
     when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)).thenReturn(true);
-    jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1", List.of());
+    assertTrue(jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1", List.of(), 1000L));
 
     verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+
+    assertFalse("Expected nothing written over a transcript made since",
+                jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1",
+                                                                           List.of(new TranscriptionSpeakerSuggestion("1", 44, true, false, List.of())),
+                                                                           999L));
+    verify(session, times(2)).save();
     assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
   }
 
@@ -3737,10 +3752,17 @@ public class JCRDocumentFileStorageTest {
     org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
     Session session = mockViewerSession(viewer);
     Node node = mockMediaNode(session, "video/mp4");
-    mockSuggestions(node, "1=42|strong|auto|3,7", "broken", "2=x|likely|manual|", "3=44|likely|manual|1,a", "2=43|likely|manual|");
+    mockSuggestions(node,
+                    "1=42|strong|auto|3,7|",
+                    "broken",
+                    "1=42|strong|auto|3,7",
+                    "2=x|likely|manual||",
+                    "3=44|likely|manual|1,a|",
+                    "4=45|strong|manual||1=x",
+                    "2=43|likely|manual||1=42");
 
     assertEquals(List.of(new TranscriptionSpeakerSuggestion("1", 42, true, true, List.of(3, 7)),
-                         new TranscriptionSpeakerSuggestion("2", 43, false, false, List.of())),
+                         new TranscriptionSpeakerSuggestion("2", 43, false, false, List.of(), "1", 42L)),
                  jcrDocumentFileStorage.getTranscriptionSpeakerSuggestions("1", viewer));
 
     when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)).thenReturn(false);
@@ -3756,7 +3778,7 @@ public class JCRDocumentFileStorageTest {
     org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
     Session session = mockViewerSession(viewer);
     Node node = mockMediaNode(session, "video/mp4");
-    mockSuggestions(node, "1=42|strong|manual|3", "2=43|likely|manual|5");
+    mockSuggestions(node, "1=42|strong|manual|3|", "2=43|likely|manual|5|");
 
     assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "1", viewer));
     verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION), any(String[].class));
@@ -3764,10 +3786,10 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
     jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "1", viewer);
 
-    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION, new String[] { "2=43|likely|manual|5" });
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION, new String[] { "2=43|likely|manual|5|" });
     verify(session).save();
 
-    mockSuggestions(node, "2=43|likely|manual|5");
+    mockSuggestions(node, "2=43|likely|manual|5|");
     jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "2", viewer);
     verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
     assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
@@ -3775,7 +3797,8 @@ public class JCRDocumentFileStorageTest {
 
   /**
    * A speaker is named after a proposal only when neither the speaker nor the
-   * person is named yet, and only by a user who can edit the file.
+   * person is named yet, only on the transcript it was proposed from, and only
+   * by a user who can edit the file.
    */
   @Test
   public void namingIfUnnamedNamesOnlyAFreeSpeakerAfterAFreePerson() throws Exception {
@@ -3783,16 +3806,19 @@ public class JCRDocumentFileStorageTest {
     Session session = mockViewerSession(owner);
     Node node = mockMediaNode(session, "video/mp4");
     mockSpeakers(node, "1=42");
+    mockDoneTranscript(node, 1000L);
 
-    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.nameTranscriptionSpeakerIfUnnamed("1", "2", "43", owner));
+    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.nameTranscriptionSpeakerIfUnnamed("1", "2", "43", 1000L, owner));
 
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
-    assertFalse(jcrDocumentFileStorage.nameTranscriptionSpeakerIfUnnamed("1", "1", "43", owner));
-    assertFalse(jcrDocumentFileStorage.nameTranscriptionSpeakerIfUnnamed("1", "2", "42", owner));
+    assertFalse(jcrDocumentFileStorage.nameTranscriptionSpeakerIfUnnamed("1", "1", "43", 1000L, owner));
+    assertFalse(jcrDocumentFileStorage.nameTranscriptionSpeakerIfUnnamed("1", "2", "42", 1000L, owner));
+    assertFalse("Expected no voice of a transcript made since named",
+                jcrDocumentFileStorage.nameTranscriptionSpeakerIfUnnamed("1", "2", "43", 999L, owner));
     verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
     verify(session, never()).save();
 
-    assertTrue(jcrDocumentFileStorage.nameTranscriptionSpeakerIfUnnamed("1", "2", "43", owner));
+    assertTrue(jcrDocumentFileStorage.nameTranscriptionSpeakerIfUnnamed("1", "2", "43", 1000L, owner));
     verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=42", "2=43" });
     verify(session).save();
     assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
@@ -3850,6 +3876,46 @@ public class JCRDocumentFileStorageTest {
     when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
     when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(false);
     assertNull(jcrDocumentFileStorage.getTranscriptionSegments("1"));
+  }
+
+  /**
+   * Marking a proposal applied re-reads the stored ones under the file's lock:
+   * a proposal dismissed meanwhile, or another person's, is not brought back,
+   * and nothing is marked on a transcript made since.
+   */
+  @Test
+  public void markingAProposalAppliedRereadsTheStoredOnes() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    mockDoneTranscript(node, 1000L);
+    mockSuggestions(node, "2=43|strong|manual|1|");
+    java.util.concurrent.atomic.AtomicBoolean lockedWhileWriting = new java.util.concurrent.atomic.AtomicBoolean();
+    doAnswer(invocation -> {
+      lockedWhileWriting.set(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+      return null;
+    }).when(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION), any(String[].class));
+
+    assertFalse("Expected a dismissed proposal not brought back", jcrDocumentFileStorage.markTranscriptionSpeakerSuggestionApplied("1", "1", 42, 1000L));
+    assertFalse(jcrDocumentFileStorage.markTranscriptionSpeakerSuggestionApplied("1", "2", 44, 1000L));
+    assertFalse(jcrDocumentFileStorage.markTranscriptionSpeakerSuggestionApplied("1", "2", 43, 999L));
+    verify(session, never()).save();
+
+    assertTrue(jcrDocumentFileStorage.markTranscriptionSpeakerSuggestionApplied("1", "2", 43, 1000L));
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION, new String[] { "2=43|strong|auto|1|" });
+    verify(session).save();
+    assertTrue("Expected the mark written under the file's lock", lockedWhileWriting.get());
+    assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+  }
+
+  private void mockDoneTranscript(Node node, long updated) throws Exception {
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    Property updatedProperty = mock(Property.class);
+    Calendar date = Calendar.getInstance();
+    date.setTimeInMillis(updated);
+    when(updatedProperty.getDate()).thenReturn(date);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(updatedProperty);
   }
 
   private void mockSuggestions(Node node, String... values) throws Exception {
