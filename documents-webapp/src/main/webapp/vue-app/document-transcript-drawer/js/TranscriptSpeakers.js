@@ -15,8 +15,12 @@
  * along with this program. If not, see <gnu.org/licenses>.
  */
 
-/** The theme colours speakers take in turn, by their number (EXO-92123). */
-const SPEAKER_COLORS = ['primary', 'teal', 'orange darken-2', 'purple', 'red darken-1', 'blue-grey', 'green darken-1', 'pink'];
+/**
+ * The colours speakers take in turn, by their number (EXO-92123). No
+ * 'primary': the platform skin gives an element of that class white text,
+ * which empties an outlined chip.
+ */
+const SPEAKER_COLORS = ['blue darken-2', 'teal', 'orange darken-2', 'purple', 'red darken-1', 'blue-grey', 'green darken-1', 'pink'];
 
 /**
  * The colour of a speaker: the same for a speaker everywhere, taken in turn
