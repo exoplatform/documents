@@ -36,6 +36,7 @@
         :src="imageUrl"
         :alt="file.name"
         class="documentInfoContentImage"
+        @load="checkBlank"
         @error="imageFailed = true">
       <v-icon
         v-else
@@ -46,6 +47,8 @@
   </div>
 </template>
 <script>
+import {isBlankImage} from '../js/BlankImage.js';
+
 const PREVIEW_SIZE = '1200x1200';
 
 export default {
@@ -100,6 +103,18 @@ export default {
     },
   },
   methods: {
+    /**
+     * Shows the file's icon instead of the blank page the server rendered for
+     * an office document or a PDF it could not render; an image keeps its
+     * own look, however pale.
+     * @param {Event} event the image's load event
+     * @returns {void}
+     */
+    checkBlank(event) {
+      if (this.readable && isBlankImage(event.target)) {
+        this.imageFailed = true;
+      }
+    },
     /**
      * Moves the recording to a moment and plays it from there.
      * @param {number} seconds the moment, in seconds from the start

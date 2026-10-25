@@ -59,7 +59,7 @@
     .documentInfoRowLabel {
       width: 112px;
       text-align: start;
-      margin-right: 12px;
+      margin-inline-end: 12px;
     }
     .documentInfoRowValue {
       min-width: 0;
@@ -94,6 +94,14 @@
     width: 460px;
     flex: 0 0 460px;
     min-height: 0;
-    border-left: 1px solid @borderColor;
+    border-inline-start: 1px solid @borderColor;
+  }
+}
+
+// the menu's content is rendered at the application's root, outside the drawer
+.documentInfoMenu {
+  .documentInfoMenuDivider:first-child,
+  .documentInfoMenuContributions:first-child:not(:has(.v-list-item)) + .documentInfoMenuDivider {
+    display: none;
   }
 }
