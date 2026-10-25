@@ -31,7 +31,8 @@
         class="d-inline-flex align-center mb-1"
         v-on="on"
         @click.stop
-        @keydown.enter.stop.prevent="openFromKeyboard">
+        @keydown.enter.stop.prevent="openFromKeyboard"
+        @keydown.space.stop.prevent="openFromKeyboard">
         <user-avatar
           v-if="person"
           :profile-id="person.username"
@@ -130,8 +131,8 @@ export default {
   },
   methods: {
     /**
-     * Opens the menu from the keyboard, which the menu's activator does not
-     * do for an element that is no button.
+     * Opens the menu from the keyboard, Enter or Space as on a button, which
+     * the menu's activator does not do for an element that is no button.
      * @returns {void}
      */
     openFromKeyboard() {
