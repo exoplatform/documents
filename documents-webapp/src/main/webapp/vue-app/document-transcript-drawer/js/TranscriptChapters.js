@@ -37,14 +37,15 @@ export const CHAPTER_COLORS = ['#2f6db5', '#c4622d', '#7a5a8c', '#2e7d4f'];
  *          and text
  * @param {Array<Object>} chapters the chapters, each with start, index, title
  *          and summary, or null
+ * @param {number} durationSeconds the recording's stored duration, or null
  * @returns {Array<Object>} the groups in order, each with its key, its chapter
  *          or null, its colour (null without chapter), and its rows; a row holds its segment, the segment's index
  *          in the transcript, and whether it is the first row of its group,
  *          where a speaker's name shows again however the previous group ended
  */
-export function groupByChapters(segments, chapters) {
+export function groupByChapters(segments, chapters, durationSeconds) {
   const rows = (segments || []).map((segment, index) => ({segment, index, firstOfChapter: index === 0}));
-  if (!showsChapters(segments, chapters)) {
+  if (!showsChapters(segments, chapters, durationSeconds)) {
     return [{key: 'all', chapter: null, color: null, rows}];
   }
   return chapters.map((chapter, position) => {
@@ -62,21 +63,24 @@ export function groupByChapters(segments, chapters) {
 /**
  * Tells whether a transcript shows chapters: a recording of at least five
  * minutes, with at least two titled chapters whose first segments follow each
- * other within the transcript. The recording's length is where its last
- * segment ends, rounded to the second as the server's duration is, never the
- * span from its first words: a recording of exactly five minutes whose speech
- * starts after 0:00 still shows the chapters the server made for it.
+ * other within the transcript. The recording's length is its stored duration,
+ * the one the server measures before making chapters and lacksChapters reads,
+ * so a recording the server made chapters for shows them, trailing silence or
+ * speech starting after 0:00 included. Without a stored duration, it is where
+ * the last segment ends, rounded to the second as the stored duration is.
  *
  * @param {Array<Object>} segments the transcript's segments, each with start
  *          and end, or null
  * @param {Array<Object>} chapters the chapters, or null
+ * @param {number} durationSeconds the recording's stored duration, or null
  * @returns {boolean} true when the chapters are shown
  */
-export function showsChapters(segments, chapters) {
+export function showsChapters(segments, chapters, durationSeconds) {
   const count = segments?.length || 0;
-  return count > 0
-    && Math.round(segments[count - 1].end || segments[count - 1].start || 0) >= CHAPTERS_MIN_SECONDS
-    && fitChapters(count, chapters);
+  const length = Number.isFinite(durationSeconds)
+    ? durationSeconds
+    : Math.round(count && (segments[count - 1].end || segments[count - 1].start) || 0);
+  return count > 0 && length >= CHAPTERS_MIN_SECONDS && fitChapters(count, chapters);
 }
 
 /**
