@@ -4369,15 +4369,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
 
   /**
-   * The media file a transcription read or write is about.
-   *
-   * @param session the session to read it with, whose rights apply
-   * @param documentId the file's UUID
-   * @return the file's node
-   * @throws ObjectNotFoundException when the file does not exist or the session
-   *           cannot see it
-   */
-  /**
    * Reads the person each named speaker of a file's transcript is.
    *
    * @param node the file
@@ -4412,6 +4403,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  /**
+   * The media file a transcription read or write is about.
+   *
+   * @param session the session to read it with, whose rights apply
+   * @param documentId the file's UUID
+   * @return the file's node
+   * @throws ObjectNotFoundException when the file does not exist or the session
+   *           cannot see it
+   */
   private Node getTranscribedNode(Session session, String documentId) throws ObjectNotFoundException {
     Node node = getNodeByIdentifier(session, documentId);
     if (node == null) {
