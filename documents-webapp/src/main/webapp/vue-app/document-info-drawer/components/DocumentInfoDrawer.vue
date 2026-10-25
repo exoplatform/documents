@@ -273,6 +273,8 @@ export default {
     transcriptTerm: '',
     origin: null,
     returning: false,
+    clickUnderDrawer: false,
+    narrowScroll: null,
     file: null,
     fileName: null,
     displayEditor: false,
@@ -387,11 +389,15 @@ export default {
     document.addEventListener('document-category-selected', this.close);
     document.addEventListener('mousedown', this.notePress, true);
     document.addEventListener('click', this.closeOnClickOutside);
+    window.addEventListener('click', this.noteClickUnderDrawer, true);
+    document.addEventListener('documents-transcript-expand', this.expandFromTranscript);
     document.addEventListener('closeDisplayedDrawer', this.collapseOnMaskOrEscape, true);
   },
   methods: {
     /**
-     * Follows the drawer's expansion. Collapsing the full view opened from
+     * Follows the drawer's expansion. A full view the transcript drawer opened
+     * from these details expanded in place collapses to the narrow details as
+     * they were, scrolled where they were. Collapsing the full view opened from
      * the transcript drawer closes it onto that drawer, still open underneath
      * with its mask: the moment and the search go back to it, and the full
      * view's player pauses. Opened from the details, it collapses to them,
@@ -401,6 +407,18 @@ export default {
      */
     updateExpanded(expanded) {
       this.expanded = expanded;
+      if (!expanded && this.narrowScroll !== null) {
+        const scroll = this.narrowScroll;
+        this.narrowScroll = null;
+        this.tab = 'details';
+        // the narrow layout renders on the next tick, then takes its scroll back
+        this.$nextTick(() => {
+          const content = this.drawerContent();
+          if (content) {
+            content.scrollTop = scroll;
+          }
+        });
+      }
       if (!expanded && this.origin === 'transcript' && this.fileId) {
         // synced now: the full view's player leaves the page with the re-render
         this.syncTranscript();
@@ -480,7 +498,10 @@ export default {
     closeOnClickOutside(event) {
       const pressedInside = this.pressedInside;
       this.pressedInside = false;
-      if (!event.isTrusted || pressedInside) {
+      if (this.clickUnderDrawer) {
+        this.clickUnderDrawer = false;
+        return;
+      } else if (!event.isTrusted || pressedInside) {
         return;
       }
       if (!this.isInside(event)) {
@@ -527,6 +548,53 @@ export default {
         component = component.$parent;
       }
       return !!component;
+    },
+    /**
+     * Notes, before the click is handled, whether another drawer is open above
+     * this one, as the transcript drawer opened from the details: a click in
+     * it, on its close button or on the mask is that drawer's, and leaves the
+     * details open underneath as they were. Read now, since the drawer it
+     * closes has left the opened drawers by the time the click reaches the
+     * page.
+     * @returns {void}
+     */
+    noteClickUnderDrawer() {
+      const openedDrawers = eXo.openedDrawers || [];
+      const index = openedDrawers.indexOf(this.$refs.documentInfoDrawer);
+      this.clickUnderDrawer = this.drawer && index >= 0 && index < openedDrawers.length - 1;
+    },
+    /**
+     * Expanding the transcript drawer opened from these details expands them
+     * in place, on the Transcript tab, at the moment the recording reached and
+     * with the same search, playing on when the drawer played; the transcript
+     * drawer then closes. The narrow details' scroll is kept for the collapse.
+     * The event is marked handled for the transcript drawer.
+     * @param {CustomEvent} event its detail holds documentId, seconds, term
+     *          and playing
+     * @returns {void}
+     */
+    expandFromTranscript(event) {
+      const detail = event?.detail || {};
+      if (!this.drawer || !this.fileId || detail.documentId !== this.fileId) {
+        return;
+      }
+      event.preventDefault();
+      this.transcriptMoment = Number.isFinite(detail.seconds) ? detail.seconds : null;
+      this.transcriptPlaying = !!detail.playing;
+      this.transcriptTerm = detail.term || '';
+      this.playerSeconds = null;
+      this.tab = 'transcript';
+      if (!this.expanded) {
+        this.narrowScroll = this.drawerContent()?.scrollTop || 0;
+        this.$refs.documentInfoDrawer.toogleExpand();
+      }
+    },
+    /**
+     * The drawer's scrolling content.
+     * @returns {HTMLElement} the element, or null before the drawer renders
+     */
+    drawerContent() {
+      return this.$refs.documentInfoDrawer?.$el?.querySelector?.('.drawerContent') || null;
     },
     /**
      * Falls back to the compact header when the browser cannot load the
@@ -692,6 +760,7 @@ export default {
      */
     close() {
       this.origin = null;
+      this.narrowScroll = null;
       this.transcriptPlaying = false;
       this.file = null;
       this.displayEditor = false;
@@ -838,13 +907,17 @@ export default {
     /**
      * Asks the transcript drawer to open the player of an audio or video file
      * with its transcript, as the header's transcript button does; called only
-     * once the transcription state says the transcript can be offered.
+     * once the transcription state says the transcript can be offered. The
+     * transcript drawer opens above these details, which stay open underneath.
      * @returns {boolean} true when nothing on the page answered, so the
      *          preview opens instead
      */
     openPlayerWithTranscript() {
       return document.dispatchEvent(new CustomEvent('documents-open-transcript', {
-        detail: {documentId: this.fileId},
+        detail: {
+          documentId: this.fileId,
+          origin: 'info',
+        },
         cancelable: true,
       }));
     },
