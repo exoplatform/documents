@@ -43,7 +43,7 @@
         parent-element="div"
         element="div"
         class="documentInfoMenuContributions" />
-      <v-divider class="my-1" />
+      <v-divider class="documentInfoMenuDivider my-1" />
       <documents-info-menu-item
         :label="$t('documents.label.copy.link')"
         icon="fas fa-link"
@@ -104,11 +104,15 @@ export default {
   methods: {
     /**
      * Opens the file's folder in the Documents application, the file
-     * previewed.
+     * previewed; a folder opens itself.
      * @returns {void}
      */
     openInDocuments() {
-      this.$documentsUtils.openLink(this.folderUrl, '_self');
+      if (this.file.folder) {
+        this.$root.$emit('open-folder', this.file);
+      } else {
+        this.$documentsUtils.openLink(this.folderUrl, '_self');
+      }
     },
   },
 };
