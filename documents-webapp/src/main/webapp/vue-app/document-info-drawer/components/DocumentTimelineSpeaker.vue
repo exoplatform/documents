@@ -18,6 +18,7 @@
   <div class="d-flex align-center text-caption font-weight-bold overflow-hidden">
     <user-avatar
       v-if="person"
+      :key="person.username"
       :profile-id="person.username"
       :size="22"
       :popover="false"
