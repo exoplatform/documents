@@ -34,6 +34,8 @@ import lombok.Builder;
  * @param updated when the state last changed, in milliseconds since the epoch,
  *          or null
  * @param hasSegments whether the transcript has timed segments
+ * @param hasChapters whether the transcript is grouped into chapters
+ *          (EXO-92122)
  * @param media whether the file is an audio or a video, the only files that
  *          can be transcribed
  */
@@ -45,6 +47,7 @@ public record TranscriptionState(TranscriptionStatus status,
                                  Long durationSeconds,
                                  Long updated,
                                  boolean hasSegments,
+                                 boolean hasChapters,
                                  boolean media) {
 
   /**
