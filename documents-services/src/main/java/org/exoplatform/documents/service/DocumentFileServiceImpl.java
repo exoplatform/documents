@@ -704,17 +704,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    * {@inheritDoc}
    */
   @Override
-  public boolean markTranscriptionSpeakerSuggestionApplied(String documentId,
-                                                           String speaker,
-                                                           long identityId,
-                                                           long transcriptUpdated) throws ObjectNotFoundException {
-    return documentFileStorage.markTranscriptionSpeakerSuggestionApplied(documentId, speaker, identityId, transcriptUpdated);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
   public List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
                                                                                  long aclIdentity) throws IllegalAccessException,
                                                                                                    ObjectNotFoundException {
@@ -735,16 +724,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    * {@inheritDoc}
    */
   @Override
-  public boolean nameTranscriptionSpeakerIfUnnamed(String documentId,
-                                                   String speaker,
-                                                   String identityId,
-                                                   long transcriptUpdated,
-                                                   long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
-    return documentFileStorage.nameTranscriptionSpeakerIfUnnamed(documentId,
-                                                                 speaker,
-                                                                 identityId,
-                                                                 transcriptUpdated,
-                                                                 getAclUserIdentity(aclIdentity));
+  public boolean applyTranscriptionSpeakerSuggestion(String documentId,
+                                                     TranscriptionSpeakerSuggestion suggestion,
+                                                     long transcriptUpdated,
+                                                     long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.applyTranscriptionSpeakerSuggestion(documentId, suggestion, transcriptUpdated, getAclUserIdentity(aclIdentity));
   }
 
   @Override
