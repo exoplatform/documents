@@ -90,9 +90,17 @@ export default {
     pollingTimer: null,
   }),
   computed: {
+    /**
+     * Tells whether the transcript is read and can show.
+     * @returns {boolean} true once transcribed and read
+     */
     done() {
       return this.state?.status === 'DONE' && (this.text !== null || this.segments !== null);
     },
+    /**
+     * Joins the transcript into one text, for the copy.
+     * @returns {string} the text, or an empty string
+     */
     transcript() {
       return this.done && (this.segments?.length && this.segments.map(segment => segment.text).join('\n') || this.text || '').trim() || '';
     },
@@ -198,7 +206,7 @@ export default {
       this.retrying = true;
       this.$transcriptionService.retry(this.documentId)
         .then(() => this.refresh())
-        .catch(() => this.$root.$emit('alert-message', this.$t('documents.transcript.retryError'), 'error'))
+        .catch(() => this.alert(this.$t('documents.transcript.retryError'), 'error'))
         .finally(() => this.retrying = false);
     },
     /**
@@ -207,8 +215,17 @@ export default {
      */
     copy() {
       navigator.clipboard.writeText(this.transcript)
-        .then(() => this.$root.$emit('alert-message', this.$t('documents.transcript.copied'), 'success'))
-        .catch(() => this.$root.$emit('alert-message', this.$t('documents.transcript.copyError'), 'error'));
+        .then(() => this.alert(this.$t('documents.transcript.copied'), 'success'))
+        .catch(() => this.alert(this.$t('documents.transcript.copyError'), 'error'));
+    },
+    /**
+     * Shows a message in the page's alert area.
+     * @param {string} message the message
+     * @param {string} type success or error
+     * @returns {void}
+     */
+    alert(message, type) {
+      document.dispatchEvent(new CustomEvent('alert-message', {detail: {alertMessage: message, alertType: type}}));
     },
   },
 };

@@ -27,8 +27,11 @@
       v-for="version in versions"
       :key="version.id"
       :version="version"
+      :can-manage="canManage"
+      :enable-edit-description="canManage"
       class="documentInfoVersion py-3"
-      disable-restore-version />
+      @restore-version="restoreVersion"
+      @version-update-description="updateSummary" />
   </div>
 </template>
 <script>
@@ -44,6 +47,17 @@ export default {
     loading: false,
     failed: false,
   }),
+  computed: {
+    /**
+     * Lets a viewer who may edit the file restore a version and write its
+     * summary, as the Documents version history does; the server checks it
+     * again.
+     * @returns {boolean} true when the viewer may edit the file
+     */
+    canManage() {
+      return !!this.file?.acl?.canEdit;
+    },
+  },
   watch: {
     file: {
       immediate: true,
@@ -75,6 +89,57 @@ export default {
         })
         .catch(() => this.failed = true)
         .finally(() => this.loading = false);
+    },
+    /**
+     * Restores a version as the file's current content, then reads the
+     * versions again and tells the drawer the file changed.
+     * @param {Object} version the version to restore
+     * @returns {Promise} resolved once done
+     */
+    restoreVersion(version) {
+      return this.$documentFileService.restoreVersion(version.id)
+        .then(newVersion => {
+          this.$root.$emit('version-restored', newVersion || version);
+          this.alert(this.$t('documents.restore.version.success'), 'success');
+          this.load();
+          this.$emit('restored');
+        })
+        .catch(() => {
+          this.$root.$emit('version-restore-error');
+          this.alert(this.$t('documents.restore.version.error'), 'error');
+        });
+    },
+    /**
+     * Saves a version's summary, as the Documents version history does.
+     * @param {Object} version the version
+     * @param {string} summary its new summary
+     * @returns {Promise} resolved once saved
+     */
+    updateSummary(version, summary) {
+      if (!summary) {
+        this.$root.$emit('version-description-update-error', version);
+        this.alert(this.$t('document.summary.add.empty.error'), 'warning');
+        return Promise.resolve();
+      }
+      const cleanSummary = summary.replaceAll(':', ' ').replaceAll('*', ' ');
+      return this.$documentFileService.updateVersionSummary(version.originId, version.id, cleanSummary)
+        .then(updatedVersion => {
+          this.$root.$emit('version-description-updated', updatedVersion || {...version, summary: cleanSummary});
+          this.alert(this.$t('documents.summary.added.success'), 'success');
+        })
+        .catch(() => {
+          this.$root.$emit('version-description-update-error', version);
+          this.alert(this.$t('documents.summary.added.error'), 'error');
+        });
+    },
+    /**
+     * Shows a message in the page's alert area.
+     * @param {string} message the message
+     * @param {string} type success, warning or error
+     * @returns {void}
+     */
+    alert(message, type) {
+      document.dispatchEvent(new CustomEvent('alert-message', {detail: {alertMessage: message, alertType: type}}));
     },
   },
 };
