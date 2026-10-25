@@ -113,4 +113,22 @@
       </propertyDefinition>
     </propertyDefinitions>
   </nodeType>
+  <nodeType
+    name="exo:transcriptionSpeakers"
+    isMixin="true"
+    hasOrderableChildNodes="false"
+    primaryItemName="">
+    <propertyDefinitions>
+      <propertyDefinition
+        name="exo:transcriptionSpeaker"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="true">
+        <valueConstraints />
+      </propertyDefinition>
+    </propertyDefinitions>
+  </nodeType>
 </nodeTypes>

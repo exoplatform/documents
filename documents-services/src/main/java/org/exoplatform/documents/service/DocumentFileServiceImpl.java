@@ -651,6 +651,26 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getTranscriptionChapters(documentId, getAclUserIdentity(aclIdentity));
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, String> getTranscriptionSpeakers(String documentId,
+                                                      long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSpeakers(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void setTranscriptionSpeaker(String documentId,
+                                      String speaker,
+                                      String identityId,
+                                      long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    documentFileStorage.setTranscriptionSpeaker(documentId, speaker, identityId, getAclUserIdentity(aclIdentity));
+  }
+
   @Override
   public void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
     documentFileStorage.createShortcut(documentId, destPath, aclIdentity, conflictAction);
