@@ -94,7 +94,7 @@
   </exo-drawer>
 </template>
 <script>
-import {awaitsChapters} from '../js/TranscriptChapters.js';
+import {awaitsChapters, lacksChapters} from '../js/TranscriptChapters.js';
 
 const POLLING_MILLIS = 15000;
 
@@ -113,6 +113,7 @@ export default {
     text: null,
     segments: null,
     chapters: null,
+    chaptersAskedAt: null,
     term: '',
     pollingTimer: null,
     lastRead: 0,
@@ -191,6 +192,7 @@ export default {
         this.text = null;
         this.segments = null;
         this.chapters = null;
+        this.chaptersAskedAt = null;
         this.playerUrl = null;
         this.fileUnknown = false;
         this.loadFile();
@@ -286,7 +288,8 @@ export default {
           this.unreadable = false;
           this.state = state;
           if (state.status === 'DONE') {
-            if (this.drawer && awaitsChapters(state)) {
+            this.askChapters(documentId, state);
+            if (this.drawer && awaitsChapters(state, this.chaptersAskedAt)) {
               this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
             }
             return Promise.all([this.loadTranscript(documentId, state.hasSegments), this.loadChapters(documentId, state.hasChapters)]);
@@ -332,6 +335,20 @@ export default {
           }
         });
       });
+    },
+    /**
+     * Asks once for the chapters of a transcript opened with none, as one
+     * done before they were switched on.
+     *
+     * @param {string} documentId the file's id
+     * @param {Object} state the transcription state
+     * @returns {void}
+     */
+    askChapters(documentId, state) {
+      if (!this.chaptersAskedAt && lacksChapters(state) && !awaitsChapters(state)) {
+        this.chaptersAskedAt = Date.now();
+        this.$transcriptionService.requestChapters(documentId).catch(() => null);
+      }
     },
     /**
      * Reads the chapters the transcript is grouped into, once.

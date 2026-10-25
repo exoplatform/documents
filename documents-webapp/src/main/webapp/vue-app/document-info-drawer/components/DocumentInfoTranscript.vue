@@ -56,7 +56,7 @@
   </div>
 </template>
 <script>
-import {awaitsChapters} from '../../document-transcript-drawer/js/TranscriptChapters.js';
+import {awaitsChapters, lacksChapters} from '../../document-transcript-drawer/js/TranscriptChapters.js';
 
 const POLLING_MILLIS = 15000;
 
@@ -86,6 +86,7 @@ export default {
     text: null,
     segments: null,
     chapters: null,
+    chaptersAskedAt: null,
     term: '',
     loading: false,
     retrying: false,
@@ -120,6 +121,7 @@ export default {
         this.text = null;
         this.segments = null;
         this.chapters = null;
+        this.chaptersAskedAt = null;
         this.term = this.initialTerm || '';
         this.refresh();
       },
@@ -157,7 +159,8 @@ export default {
             }
             return;
           }
-          if (awaitsChapters(state)) {
+          this.askChapters(documentId, state);
+          if (awaitsChapters(state, this.chaptersAskedAt)) {
             this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
           }
           // a transcript cannot change while done: the segments already read stay
@@ -203,6 +206,19 @@ export default {
     isRunning(state) {
       return state.status === 'QUEUED'
         || (state.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
+    },
+    /**
+     * Asks once for the chapters of a transcript opened with none, as one
+     * done before they were switched on.
+     * @param {string} documentId the file's id
+     * @param {Object} state the transcription state
+     * @returns {void}
+     */
+    askChapters(documentId, state) {
+      if (!this.chaptersAskedAt && lacksChapters(state) && !awaitsChapters(state)) {
+        this.chaptersAskedAt = Date.now();
+        this.$transcriptionService.requestChapters(documentId).catch(() => null);
+      }
     },
     /**
      * Stops reading the state again.
