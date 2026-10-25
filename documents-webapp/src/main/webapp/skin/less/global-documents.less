@@ -94,15 +94,14 @@
       }
     }
   }
-  @documentTimelineLabelWidth: 120px;
-  @documentTimelineGap: 12px;
   .documentRecordingTimeline {
     border: 1px solid @borderColor;
     flex: 0 0 auto;
     .documentTimelineGrid {
+      position: relative;
       display: grid;
-      grid-template-columns: @documentTimelineLabelWidth minmax(0, 1fr);
-      column-gap: @documentTimelineGap;
+      grid-template-columns: 120px minmax(0, 1fr);
+      column-gap: 12px;
       row-gap: 8px;
       align-items: center;
     }
@@ -129,11 +128,13 @@
       &.documentTimelineLane {
         height: 18px;
         border-radius: 9px;
-        background: @greyColorLighten1;
+        background: @greyColorLighten1Opacity2;
         .documentTimelineItem {
           top: 3px;
           bottom: 3px;
           min-width: 3px;
+          padding: 0;
+          border: 0;
           border-radius: 6px;
         }
       }
@@ -168,15 +169,23 @@
       font-size: 10px;
       font-weight: 700;
     }
+    // laid over the tracks' column, from the first track to the last: placed
+    // absolutely in that grid area, it takes none of the tracks' cells
+    .documentTimelineNow {
+      grid-column: 2;
+      grid-row: 2 / -1;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
     .documentTimelinePlayhead {
       position: absolute;
-      top: 16px;
-      bottom: 0;
+      top: -4px;
+      bottom: -4px;
       width: 2px;
       margin-inline-start: -1px;
-      inset-inline-start: calc(~"@{documentTimelineLabelWidth} + @{documentTimelineGap} + (100% - @{documentTimelineLabelWidth} - @{documentTimelineGap}) * var(--documentTimelinePlayhead)");
       background: @textColor;
-      pointer-events: none;
     }
   }
   .documentInfoTranscriptSearch {
