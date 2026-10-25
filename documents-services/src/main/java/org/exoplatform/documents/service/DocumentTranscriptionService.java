@@ -496,8 +496,9 @@ public class DocumentTranscriptionService {
    * owner, so only while the owner can still edit the file, and only when
    * neither the speaker nor the person is named yet: it never replaces a name a
    * person gave. A proposal made by elimination is applied after the others,
-   * and only while the voice it follows from is still named after the person it
-   * was taken to be. Every proposal is kept, the applied ones marked so, the
+   * and only if, when its name is written, the voice it follows from is still
+   * named after the person it was taken to be: the storage reads it again under
+   * the file's lock, as it reads again that the proposal was not dismissed. Every proposal is kept, the applied ones marked so, the
    * others shown to the people who can edit the file until one confirms or
    * dismisses them.
    *
@@ -531,7 +532,6 @@ public class DocumentTranscriptionService {
         TranscriptionSpeakerSuggestion suggestion = kept.get(i);
         if (suggestion.strong()
             && (suggestion.premiseSpeaker() != null) == byElimination
-            && (!byElimination || premiseHolds(documentId, suggestion, ownerIdentityId))
             && autoName(documentId, suggestion, ownerIdentityId, transcriptUpdated)) {
           kept.set(i, suggestion.withAutoApplied(true));
         }
@@ -611,18 +611,20 @@ public class DocumentTranscriptionService {
   }
 
   /**
-   * Names a speaker after a strong proposal, as the recording's owner, when
-   * neither the speaker nor the person is named yet and the transcript is still
-   * the one it was made from, then marks the stored proposal as applied.
+   * Names a speaker after a strong proposal, as the recording's owner, and marks
+   * the stored proposal applied, in one save that reads again everything the
+   * proposal depends on (see
+   * {@link DocumentFileService#applyTranscriptionSpeakerSuggestion}).
    *
    * @param documentId the file's UUID
    * @param suggestion the proposal
    * @param ownerIdentityId the identity id of the recording's owner
    * @param transcriptUpdated the update time of the transcription state the
    *          proposal was made from
-   * @return true when the speaker was named and its proposal marked; false when
-   *         it, or the person, already was named, the transcript changed, the
-   *         proposal was dismissed meanwhile, or the owner may no longer name it
+   * @return true when the speaker was named; false when it, or the person,
+   *         already was named, the transcript changed, the proposal was
+   *         dismissed meanwhile, its premise no longer holds, or the owner may
+   *         no longer name it
    */
   private boolean autoName(String documentId,
                            TranscriptionSpeakerSuggestion suggestion,
@@ -630,39 +632,13 @@ public class DocumentTranscriptionService {
                            long transcriptUpdated) {
     try {
       checkNameable(documentId, suggestion.speaker(), suggestion.identityId(), ownerIdentityId);
-      return documentFileService.nameTranscriptionSpeakerIfUnnamed(documentId,
-                                                                   suggestion.speaker(),
-                                                                   String.valueOf(suggestion.identityId()),
-                                                                   transcriptUpdated,
-                                                                   ownerIdentityId)
-          && documentFileService.markTranscriptionSpeakerSuggestionApplied(documentId,
-                                                                           suggestion.speaker(),
-                                                                           suggestion.identityId(),
-                                                                           transcriptUpdated);
+      return documentFileService.applyTranscriptionSpeakerSuggestion(documentId, suggestion, transcriptUpdated, ownerIdentityId);
     } catch (IllegalAccessException | ObjectNotFoundException | IllegalArgumentException | IllegalStateException e) {
       LOG.debug("Speaker {} of recording '{}' is left to a person to name", suggestion.speaker(), documentId, e);
       return false;
     }
   }
 
-  /**
-   * Tells whether the voice a proposal made by elimination follows from is still
-   * named after the person it was taken to be, read with the owner's rights.
-   *
-   * @param documentId the file's UUID
-   * @param suggestion the proposal
-   * @param ownerIdentityId the identity id of the recording's owner
-   * @return true while that voice is named after that person
-   */
-  private boolean premiseHolds(String documentId, TranscriptionSpeakerSuggestion suggestion, long ownerIdentityId) {
-    try {
-      return String.valueOf(suggestion.premiseIdentityId())
-                   .equals(getSpeakers(documentId, ownerIdentityId).get(suggestion.premiseSpeaker()));
-    } catch (IllegalAccessException | ObjectNotFoundException e) {
-      LOG.debug("The named speakers of recording '{}' cannot be read by its owner", documentId, e);
-      return false;
-    }
-  }
 
   /**
    * Reads a transcript's segments.
