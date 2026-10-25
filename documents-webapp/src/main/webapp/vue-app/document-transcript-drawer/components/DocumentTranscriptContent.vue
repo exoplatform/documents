@@ -56,7 +56,7 @@
         <span class="text-caption primary--text text-no-wrap pt-1 me-3">{{ formatMoment(segment.start) }}</span>
         <div class="flex-grow-1">
           <document-transcript-speaker
-            v-if="opensSpeakerRun(segments, index, false)"
+            v-if="opensSpeakerRun(segments, index, false, speakerKey)"
             :speaker="segment.speaker"
             :person="speakersByNumber[segment.speaker]"
             :can-edit="canNameSpeakers && (!savingSpeaker || savingSpeaker === segment.speaker)"
@@ -160,6 +160,10 @@ export default {
     speakersByNumber() {
       return Object.fromEntries((this.speakers || []).map(person => [person.speaker, person]));
     },
+    speakerKey() {
+      // one person named for two numbers is one run
+      return speaker => this.speakersByNumber[speaker]?.identityId || speaker;
+    },
   },
   watch: {
     term() {
@@ -192,6 +196,7 @@ export default {
      * @param {Array<object>} segments the sentences
      * @param {number} index the sentence's index
      * @param {boolean} firstOfGroup whether the sentence is the first under a heading
+     * @param {Function} keyOf who a speaker number is
      * @returns {boolean} true when the sentence shows its speaker
      */
     opensSpeakerRun,
