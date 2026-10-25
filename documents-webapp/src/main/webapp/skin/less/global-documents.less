@@ -69,15 +69,26 @@
     min-width: 0;
   }
   .documentInfoContent {
+    .documentInfoContentOpen {
+      flex: 1 1 auto;
+      width: 100%;
+      min-height: 0;
+      cursor: pointer;
+    }
     .documentInfoContentImage,
     .documentInfoContentMedia {
       max-width: 100%;
-      max-height: 100%;
+      max-height: calc(~"100vh - 120px");
       object-fit: contain;
     }
     .documentInfoContentMedia {
       width: 100%;
     }
+  }
+  .documentInfoTranscriptSearch {
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
   .documentInfoSidePane {
     width: 460px;
