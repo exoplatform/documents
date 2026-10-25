@@ -360,9 +360,10 @@ class TranscriptionRestTest {
   }
 
   /**
-   * The proposals come with the person each names, a deleted or disabled
-   * person left out, never stored by a shared cache; a caller who cannot edit
-   * the file is answered 403 (EXO-92126).
+   * The proposals come with the person each names, a deleted person left out,
+   * and a disabled one too unless the proposal was applied; never stored by a
+   * shared cache; a caller who cannot edit the file is answered 403
+   * (EXO-92126).
    */
   @Test
   void theSpeakerProposalsComeWithTheirPerson_andAreForEditorsOnly() throws Exception {
@@ -370,7 +371,8 @@ class TranscriptionRestTest {
     when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenReturn(List.of(
         new TranscriptionSpeakerProposal("2", 42, true, false, quotes, "1"),
         new TranscriptionSpeakerProposal("3", 43, false, false, List.of(), null),
-        new TranscriptionSpeakerProposal("4", 44, false, false, List.of(), null)));
+        new TranscriptionSpeakerProposal("4", 44, false, false, List.of(), null),
+        new TranscriptionSpeakerProposal("5", 44, true, true, List.of(), null)));
     Identity julien = mock(Identity.class);
     Profile profile = mock(Profile.class);
     when(julien.getId()).thenReturn("42");
@@ -385,14 +387,16 @@ class TranscriptionRestTest {
     when(identityManager.getIdentity("43")).thenReturn(deleted);
     Identity disabled = mock(Identity.class);
     when(disabled.isEnable()).thenReturn(false);
-    lenient().when(disabled.getId()).thenReturn("44");
-    lenient().when(disabled.getProfile()).thenReturn(profile);
+    when(disabled.getId()).thenReturn("44");
+    when(disabled.getRemoteId()).thenReturn("jane");
+    when(disabled.getProfile()).thenReturn(profile);
     when(identityManager.getIdentity("44")).thenReturn(disabled);
 
     ResponseEntity<List<TranscriptionSpeakerProposalEntity>> answer = rest.getSpeakerProposals(request, DOCUMENT_ID);
 
     assertEquals("no-store", answer.getHeaders().getCacheControl());
-    assertEquals(List.of(new TranscriptionSpeakerProposalEntity("2", "42", "julien", "Julien Dupont", "/avatar/julien", true, false, quotes, "1")),
+    assertEquals(List.of(new TranscriptionSpeakerProposalEntity("2", "42", "julien", "Julien Dupont", "/avatar/julien", true, false, quotes, "1"),
+                         new TranscriptionSpeakerProposalEntity("5", "44", "jane", "Julien Dupont", "/avatar/julien", true, true, List.of(), null)),
                  answer.getBody());
 
     when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenThrow(new IllegalAccessException("no"));
