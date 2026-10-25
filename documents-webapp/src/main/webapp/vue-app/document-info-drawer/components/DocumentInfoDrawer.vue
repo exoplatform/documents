@@ -82,8 +82,16 @@
             @click="openPreview">
             <v-card-text
               class="d-flex flex-grow-1 pa-0">
+              <document-media-thumbnail
+                v-if="mediaKind && !mediaFailed"
+                :src="downloadUrl"
+                :kind="mediaKind"
+                :icon="icon"
+                @duration="readMediaDuration"
+                @loaded="loading = false"
+                @failed="handleMediaError" />
               <img
-                v-if="!showIcon"
+                v-else-if="!showIcon && !mediaKind"
                 :src="getThumbnailUrl()"
                 class="ma-auto"
                 alt="No thumbnail"
@@ -112,10 +120,16 @@
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-subtitle>{{ $t('documents.drawer.details.size') }}</v-list-item-subtitle>
             <v-list-item-title class="text-body">
-              {{ fileSize.value }} {{ $t(`document.size.label.unit.${fileSize.unit}`) }} ({{ fileWithVersionsSize.value }} {{ $t(`document.size.label.unit.${fileWithVersionsSize.unit}`) }} {{ $t('documents.drawer.details.sizeWithVersions') }})              
+              {{ fileSize.value }} {{ $t(`document.size.label.unit.${fileSize.unit}`) }} ({{ fileWithVersionsSize.value }} {{ $t(`document.size.label.unit.${fileWithVersionsSize.unit}`) }} {{ $t('documents.drawer.details.sizeWithVersions') }})
             </v-list-item-title>
           </v-list-item-content>
         </v-list-item>
+        <document-recording-details
+          v-if="mediaKind"
+          :document-id="fileId"
+          :mimetype="file.mimeType"
+          :measured-duration="mediaDuration"
+          @available="transcriptAvailable = $event" />
         <v-list-item dense two-line>
           <v-list-item-content class="pt-0 pb-2">
             <v-list-item-subtitle>{{ $t('documents.drawer.details.created') }}</v-list-item-subtitle>
@@ -301,6 +315,7 @@
   </exo-drawer>
 </template>
 <script>
+import {mediaKind} from '../js/RecordingLength.js';
 
 export default {
   props: {
@@ -336,8 +351,14 @@ export default {
     fileInitialDescription: '',
     isFavorite: false,
     showIcon: false,
+    mediaDuration: null,
+    mediaFailed: false,
+    transcriptAvailable: false,
   }),
   computed: {
+    mediaKind() {
+      return this.file && !this.file.folder && mediaKind(this.file.mimeType) || null;
+    },
     fileId() {
       return this.file?.id;
     },
@@ -429,6 +450,25 @@ export default {
       this.showIcon=true;
       this.loading = false;
     },
+    /**
+     * Shows the file's icon instead of a frame of a video the browser could
+     * not load.
+     * @returns {void}
+     */
+    /**
+     * Keeps how long the audio or video lasts, read from its metadata.
+     * @param {Number} duration the duration in seconds, or null when unknown
+     * @returns {void}
+     */
+    readMediaDuration(duration) {
+      this.mediaDuration = duration;
+      this.loading = false;
+    },
+    handleMediaError() {
+      this.mediaFailed = true;
+      this.showIcon = true;
+      this.loading = false;
+    },
     getThumbnailUrl() {
       if (this.file.folder) {return null;}
       const file = this.file;
@@ -479,6 +519,12 @@ export default {
           this.icon = file.icon;
           this.displayEditor = false;
           this.showIcon = false;
+          this.mediaDuration = null;
+          this.mediaFailed = false;
+          this.transcriptAvailable = false;
+          if (this.mediaKind === 'audio') {
+            this.loading = false;
+          }
           this.showNoDescription = !this.file.description && !this.displayEditor;
           this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
           this.fileInitialDescription = this.file.description;    
@@ -513,6 +559,9 @@ export default {
       this.showNoDescription = false;
       this.showDescription = true;
       this.showIcon = false;
+      this.mediaDuration = null;
+      this.mediaFailed = false;
+      this.transcriptAvailable = false;
       this.loading = true;
       this.$refs.documentInfoDrawer.close();
     },
@@ -588,6 +637,9 @@ export default {
         this.openFolder(this.file);
         return;
       }
+      if (this.mediaKind && this.transcriptAvailable && !this.openPlayerWithTranscript()) {
+        return;
+      }
       this.loading = true;
       if (this.isFileEditable)  {
         if (this.file?.acl?.canEdit){
@@ -617,6 +669,19 @@ export default {
       document.dispatchEvent(new CustomEvent('mark-attachment-as-viewed', {detail: {file: this.file}}));
       this.close();
       this.loading = false;
+    },
+    /**
+     * Asks the transcript drawer to open the player of an audio or video file
+     * with its transcript, as the header's transcript button does; called only
+     * once the transcription state says the transcript can be offered.
+     * @returns {boolean} true when nothing on the page answered, so the
+     *          preview opens instead
+     */
+    openPlayerWithTranscript() {
+      return document.dispatchEvent(new CustomEvent('documents-open-transcript', {
+        detail: {documentId: this.fileId},
+        cancelable: true,
+      }));
     },
     async openFileInEditor(mode) {
       if (this.file && this.fileId) {
