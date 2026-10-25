@@ -436,7 +436,8 @@ public class TranscriptionRest {
    * @param request the HTTP request, which names the caller
    * @param documentId the file's UUID
    * @param speaker the speaker's number in the transcript
-   * @return 204 once dismissed
+   * @return 204 once dismissed, 409 when another change of the file held it
+   *         up
    */
   @DeleteMapping(path = "{documentId}/speakers/proposals/{speaker}")
   @Secured("users")
@@ -445,6 +446,7 @@ public class TranscriptionRest {
     @ApiResponse(responseCode = "204", description = "Proposal dismissed"),
     @ApiResponse(responseCode = "403", description = "The file cannot be edited by the caller"),
     @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
+    @ApiResponse(responseCode = "409", description = "Another change of the file held it up; the request can be sent again"),
   })
   public ResponseEntity<Void> dismissSpeakerProposal(HttpServletRequest request,
                                                      @Parameter(description = "The file's UUID", required = true)
@@ -456,6 +458,9 @@ public class TranscriptionRest {
     try {
       documentTranscriptionService.dismissSpeakerProposal(documentId, speaker, getCurrentIdentityId(request));
       return ResponseEntity.noContent().build();
+    } catch (TranscriptionBusyException e) {
+      LOG.debug("Dismissing a speaker proposal of file {} was held up by another change of it", documentId, e);
+      throw new ResponseStatusException(HttpStatus.CONFLICT, BUSY_MESSAGE);
     } catch (IllegalAccessException e) {
       throw forbidden(documentId, e);
     } catch (ObjectNotFoundException e) {
