@@ -418,7 +418,8 @@ public class TranscriptionRest {
                                                                person.getProfile().getAvatarUrl(),
                                                                proposal.strong(),
                                                                proposal.autoApplied(),
-                                                               proposal.quotes()));
+                                                               proposal.quotes(),
+                                                               proposal.premiseSpeaker()));
         }
       }
       return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(proposals);
