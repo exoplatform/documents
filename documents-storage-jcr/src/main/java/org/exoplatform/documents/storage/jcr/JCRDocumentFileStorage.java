@@ -115,6 +115,9 @@ import lombok.SneakyThrows;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
+  /** How long a request waits for a speaker lock, in milliseconds; shortened by the tests only. */
+  static long                                       speakerLockWaitMillis       = 30_000;
+
   /** The refusal of a folder title the storage can't name a folder after */
   private static final String INVALID_FOLDER_NAME_MESSAGE    =
                                                           "The folder name '%s' is not valid: a folder name can't hold any of < \\ > : \" / | ? * and can't be only an extension. Ask the user for another name.";
@@ -257,9 +260,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
 
   private static final long                         DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS  = 20;
-
-  /** How long a request waits for a speaker lock, in milliseconds; shortened by the tests only. */
-  static long                                       speakerLockWaitMillis                    = 30_000;
 
   private volatile DocumentTextExtractor            textExtractor;
 
@@ -3174,7 +3174,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                       Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     ReentrantLock lock = speakerLock(documentId);
     if (!acquireOnRequest(lock)) {
-      throw new IllegalStateException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
+      throw new TranscriptionBusyException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
     }
     SessionProvider sessionProvider = null;
     try {
