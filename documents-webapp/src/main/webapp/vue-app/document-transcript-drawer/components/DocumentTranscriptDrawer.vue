@@ -342,7 +342,9 @@ export default {
     /**
      * Asks once for the chapters of a transcript opened with none: just made,
      * or done before they were switched on. The state is read again, while the
-     * drawer is open, only when the server says they are coming.
+     * drawer is open, only when the server says they are coming, which
+     * documents-transcript-chapters-coming tells the rest of the page, with the
+     * file's id and when.
      *
      * @param {string} documentId the file's id
      * @param {Object} state the transcription state
@@ -357,6 +359,10 @@ export default {
         .then(coming => {
           if (coming && documentId === this.documentId) {
             this.chaptersComingSince = Date.now();
+            // what else shows this file's chapters (the full view's timeline) waits for them too
+            document.dispatchEvent(new CustomEvent('documents-transcript-chapters-coming', {
+              detail: {documentId, comingSince: this.chaptersComingSince},
+            }));
             if (this.drawer && !this.pollingTimer) {
               this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
             }
