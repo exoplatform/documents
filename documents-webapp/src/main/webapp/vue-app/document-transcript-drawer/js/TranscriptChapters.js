@@ -113,17 +113,16 @@ export function lacksChapters(state) {
 }
 
 /**
- * Tells whether a transcribed recording may still get its chapters: they are
- * made right after the transcript, or after they were asked for when it was
- * opened, and come a little later.
+ * Tells whether a transcribed recording may still get its chapters: the
+ * server said they are coming when they were asked for, and they come a
+ * little later.
  *
  * @param {Object} state the transcription state
- * @param {number} askedAt when the chapters were asked for, in milliseconds
- *          since the epoch, or null
- * @returns {boolean} true for a transcript with no chapters yet, written or
- *          asked for less than three minutes ago
+ * @param {number} comingSince when the server said the chapters are coming,
+ *          in milliseconds since the epoch, or null when it did not
+ * @returns {boolean} true for a transcript with no chapters yet, said to be
+ *          coming less than three minutes ago
  */
-export function awaitsChapters(state, askedAt) {
-  const since = Math.max(state?.updated || 0, askedAt || 0);
-  return lacksChapters(state) && !!since && Date.now() - since < CHAPTERS_WAIT_MILLIS;
+export function awaitsChapters(state, comingSince) {
+  return lacksChapters(state) && !!comingSince && Date.now() - comingSince < CHAPTERS_WAIT_MILLIS;
 }
