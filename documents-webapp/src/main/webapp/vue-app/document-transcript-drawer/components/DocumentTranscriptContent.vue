@@ -102,6 +102,10 @@ export default {
       type: Array,
       default: null,
     },
+    durationSeconds: {
+      type: Number,
+      default: null,
+    },
   },
   computed: {
     hasSegments() {
@@ -124,7 +128,7 @@ export default {
       return this.indexAt(this.seconds);
     },
     groups() {
-      return groupByChapters(this.segments, this.chapters);
+      return groupByChapters(this.segments, this.chapters, this.durationSeconds);
     },
     hasChapters() {
       return this.groups.some(group => group.chapter);
