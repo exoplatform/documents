@@ -18,13 +18,16 @@
 /**
  * The naming of a transcript's speakers, shared by the transcript drawer and
  * the details' Transcript tab (EXO-92123): the component using it has a
- * documentId and an alert(message, type) method.
+ * documentId and an alert(message, type) method. One speaker is saved at a
+ * time, since the server rewrites all the names of a file at each save, and
+ * only the latest read of the names is shown.
  */
 export default {
   data: () => ({
     speakers: null,
     canNameSpeakers: false,
     savingSpeaker: null,
+    speakersRead: 0,
   }),
   methods: {
     /**
@@ -37,17 +40,12 @@ export default {
      */
     loadSpeakers(documentId, segments) {
       if (!segments?.some(segment => segment.speaker)) {
+        this.speakersRead++;
         this.speakers = null;
         this.canNameSpeakers = false;
         return Promise.resolve();
       }
-      return this.$transcriptionService.getSpeakers(documentId)
-        .then(answer => {
-          if (documentId === this.documentId) {
-            this.speakers = answer?.speakers || [];
-            this.canNameSpeakers = !!answer?.canEdit;
-          }
-        })
+      return this.reloadSpeakers(documentId)
         .catch(() => {
           this.speakers = [];
           this.canNameSpeakers = false;
@@ -61,6 +59,9 @@ export default {
      * @returns {Promise<void>} resolved once done
      */
     nameSpeaker({speaker, user}) {
+      if (this.savingSpeaker) {
+        return Promise.resolve();
+      }
       const documentId = this.documentId;
       this.savingSpeaker = speaker;
       return this.identityIdOf(user)
@@ -76,6 +77,9 @@ export default {
      * @returns {Promise<void>} resolved once done
      */
     unnameSpeaker({speaker}) {
+      if (this.savingSpeaker) {
+        return Promise.resolve();
+      }
       const documentId = this.documentId;
       this.savingSpeaker = speaker;
       return this.$transcriptionService.unsetSpeaker(documentId, speaker)
@@ -84,14 +88,16 @@ export default {
         .finally(() => this.savingSpeaker = null);
     },
     /**
-     * Reads the named speakers again, whatever the sentences say.
+     * Reads the named speakers again, whatever the sentences say; a read
+     * answered after a later one started is dropped.
      *
      * @param {string} documentId the file's UUID
      * @returns {Promise<void>} resolved once read
      */
     reloadSpeakers(documentId) {
+      const read = ++this.speakersRead;
       return this.$transcriptionService.getSpeakers(documentId).then(answer => {
-        if (documentId === this.documentId) {
+        if (read === this.speakersRead && documentId === this.documentId) {
           this.speakers = answer?.speakers || [];
           this.canNameSpeakers = !!answer?.canEdit;
         }
