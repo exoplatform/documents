@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -141,14 +142,48 @@ class TranscriptionRestTest {
   }
 
   /**
-   * A request for the chapters is accepted, whether or not they are to be
-   * made, as the reader (EXO-92122).
+   * A request for the chapters answers 202 only when they are coming, so that
+   * the reader waits for them; 204 when none are to be made (EXO-92122).
    */
   @Test
-  void aChaptersRequestIsAccepted() throws Exception {
+  void aChaptersRequestAnswers202OnlyWhenTheyAreComing() throws Exception {
+    when(documentTranscriptionService.requestChapters(DOCUMENT_ID, 7L)).thenReturn(true);
     assertEquals(HttpStatus.ACCEPTED, rest.requestChapters(request, DOCUMENT_ID).getStatusCode());
 
-    verify(documentTranscriptionService).requestChapters(DOCUMENT_ID, 7L, "john");
+    when(documentTranscriptionService.requestChapters(DOCUMENT_ID, 7L)).thenReturn(false);
+    assertEquals(HttpStatus.NO_CONTENT, rest.requestChapters(request, DOCUMENT_ID).getStatusCode());
+  }
+
+  /**
+   * A chapters request on a file the viewer cannot read answers 403, on one
+   * they cannot see 404, each with a fixed code and no repository path
+   * (EXO-92122).
+   */
+  @Test
+  void aChaptersRequestOnAnUnreadableFileAnswers403Or404() throws Exception {
+    when(documentTranscriptionService.requestChapters(DOCUMENT_ID, 7L)).thenThrow(new IllegalAccessException("john may not read /x"));
+    ResponseStatusException e = assertThrows(ResponseStatusException.class, () -> rest.requestChapters(request, DOCUMENT_ID));
+    assertEquals(HttpStatus.FORBIDDEN, e.getStatusCode());
+    assertEquals("documents.transcription.forbidden", e.getReason());
+
+    doThrow(new ObjectNotFoundException("/Groups/spaces/x/secret.mp4")).when(documentTranscriptionService).requestChapters(DOCUMENT_ID, 7L);
+    e = assertThrows(ResponseStatusException.class, () -> rest.requestChapters(request, DOCUMENT_ID));
+    assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
+    assertEquals("documents.transcription.notFound", e.getReason());
+  }
+
+  /**
+   * The chapters of a file the viewer cannot see answer 404 with a fixed code
+   * and no repository path (EXO-92122).
+   */
+  @Test
+  void theChaptersOfAnUnseenFileAnswer404() throws Exception {
+    when(documentTranscriptionService.getChapters(DOCUMENT_ID, 7L)).thenThrow(new ObjectNotFoundException("/Groups/spaces/x/secret.mp4"));
+
+    ResponseStatusException e = assertThrows(ResponseStatusException.class, () -> rest.getChapters(request, DOCUMENT_ID));
+
+    assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
+    assertEquals("documents.transcription.notFound", e.getReason());
   }
 
   @Test
