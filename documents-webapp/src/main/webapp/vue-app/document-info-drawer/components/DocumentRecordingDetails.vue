@@ -26,7 +26,7 @@
       <button
         v-if="ready"
         type="button"
-        class="font-weight-bold primary--text"
+        class="font-weight-bold primary--text pa-0"
         @click="openTranscript">
         {{ $t('documents.drawer.details.transcript.read') }}
       </button>
