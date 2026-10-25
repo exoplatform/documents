@@ -24,24 +24,25 @@
       :start="start"
       class="documentInfoContentMedia"
       @time="$emit('time', $event)" />
-    <img
-      v-else-if="imageUrl"
-      :src="imageUrl"
-      :alt="file.name"
-      class="documentInfoContentImage"
-      @error="imageFailed = true">
-    <v-icon
+    <button
       v-else
-      :class="icon && icon.class"
-      :color="icon && icon.color"
-      size="120" />
-    <v-btn
-      v-if="!mediaKind"
-      class="mt-4"
-      outlined
+      :title="$t('documents.drawer.details.clickToOpen')"
+      :aria-label="$t('documents.drawer.details.clickToOpen')"
+      type="button"
+      class="documentInfoContentOpen d-flex align-center justify-center"
       @click="$emit('open')">
-      {{ $t('documents.drawer.details.openFile') }}
-    </v-btn>
+      <img
+        v-if="imageUrl"
+        :src="imageUrl"
+        :alt="file.name"
+        class="documentInfoContentImage"
+        @error="imageFailed = true">
+      <v-icon
+        v-else
+        :class="icon && icon.class"
+        :color="icon && icon.color"
+        size="120" />
+    </button>
   </div>
 </template>
 <script>

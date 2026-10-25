@@ -16,7 +16,7 @@
 -->
 <template>
   <div class="documentInfoTranscript">
-    <div v-if="done" class="d-flex align-center py-3">
+    <div v-if="done" class="documentInfoTranscriptSearch d-flex align-center py-3 white">
       <v-text-field
         v-model="term"
         :placeholder="$t('documents.transcript.search')"
