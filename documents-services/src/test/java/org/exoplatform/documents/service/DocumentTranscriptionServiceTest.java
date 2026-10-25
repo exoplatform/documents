@@ -30,6 +30,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -177,12 +178,18 @@ class DocumentTranscriptionServiceTest {
   }
 
   /**
-   * With nothing to make chapters, none are coming (EXO-92122).
+   * With nothing to make chapters, none are coming (EXO-92122): no requester,
+   * and no list at all, which is what an optional injection leaves when the
+   * transcriber is not installed.
    */
   @Test
   void noChaptersAreComingWithoutAnythingToMakeThem() throws Exception {
     mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).media(true).build());
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
 
+    Field requesters = DocumentTranscriptionService.class.getDeclaredField("chaptersRequesters");
+    requesters.setAccessible(true);
+    requesters.set(service, null);
     assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
   }
 
