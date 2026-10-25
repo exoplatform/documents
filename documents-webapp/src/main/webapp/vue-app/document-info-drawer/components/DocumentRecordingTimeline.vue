@@ -23,7 +23,7 @@
       <h3 class="text-subtitle-1 font-weight-bold me-3">{{ $t('documents.timeline.title') }}</h3>
       <span class="text-caption text-sub-title">{{ $t('documents.timeline.hint') }}</span>
     </div>
-    <div class="documentTimelineGrid position-relative">
+    <div :style="{gridTemplateRows: `repeat(${rows}, auto)`}" class="documentTimelineGrid">
       <span></span>
       <div class="documentTimelineScale position-relative text-caption text-sub-title" aria-hidden="true">
         <span
@@ -60,9 +60,10 @@
       </template>
       <div
         v-if="playhead !== null"
-        :style="{'--documentTimelinePlayhead': playhead}"
-        class="documentTimelinePlayhead"
-        aria-hidden="true"></div>
+        class="documentTimelineNow"
+        aria-hidden="true">
+        <div :style="{insetInlineStart: `${playhead * 100}%`}" class="documentTimelinePlayhead"></div>
+      </div>
     </div>
     <div class="d-flex flex-wrap text-caption text-sub-title mt-2">
       <span v-if="currentChapter || currentTurn" class="me-5">
@@ -118,6 +119,15 @@ export default {
     },
     ticks() {
       return timelineTicks(this.duration);
+    },
+    /**
+     * How many rows the timeline has: the time scale, the chapters when
+     * there are some, and the lanes; the line marking the current moment
+     * spans all but the scale.
+     * @returns {number} the count of rows
+     */
+    rows() {
+      return 1 + (this.chapters.length ? 1 : 0) + this.lanes.length;
     },
     shown() {
       return this.duration > 0 && (this.chapters.length > 0 || this.lanes.length > 0);
