@@ -592,8 +592,8 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * Chapters that cannot be read, or that hold no usable chapter, leave the
-   * transcript alone (EXO-92122).
+   * Chapters that cannot be read, that hold no usable chapter, or whose read
+   * fails, leave the transcript alone (EXO-92122).
    */
   @Test
   public void getDocumentTranscriptionByIdIgnoresUnreadableChapters() throws Exception {
@@ -605,6 +605,11 @@ public class DocumentMcpToolTest {
 
     when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenReturn("[{\"summary\":\"untitled\"}]");
     assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+    assertEquals("Expected a failure on the chapters never to take the transcript away",
+                 "the transcription",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
   }
 
   @Test
