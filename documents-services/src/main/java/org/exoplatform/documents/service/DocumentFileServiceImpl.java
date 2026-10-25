@@ -683,9 +683,21 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    * {@inheritDoc}
    */
   @Override
-  public void saveTranscriptionSpeakerSuggestions(String documentId,
-                                                  List<TranscriptionSpeakerSuggestion> suggestions) throws ObjectNotFoundException {
-    documentFileStorage.saveTranscriptionSpeakerSuggestions(documentId, suggestions);
+  public boolean saveTranscriptionSpeakerSuggestions(String documentId,
+                                                     List<TranscriptionSpeakerSuggestion> suggestions,
+                                                     long transcriptUpdated) throws ObjectNotFoundException {
+    return documentFileStorage.saveTranscriptionSpeakerSuggestions(documentId, suggestions, transcriptUpdated);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean markTranscriptionSpeakerSuggestionApplied(String documentId,
+                                                           String speaker,
+                                                           long identityId,
+                                                           long transcriptUpdated) throws ObjectNotFoundException {
+    return documentFileStorage.markTranscriptionSpeakerSuggestionApplied(documentId, speaker, identityId, transcriptUpdated);
   }
 
   /**
@@ -715,8 +727,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   public boolean nameTranscriptionSpeakerIfUnnamed(String documentId,
                                                    String speaker,
                                                    String identityId,
+                                                   long transcriptUpdated,
                                                    long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
-    return documentFileStorage.nameTranscriptionSpeakerIfUnnamed(documentId, speaker, identityId, getAclUserIdentity(aclIdentity));
+    return documentFileStorage.nameTranscriptionSpeakerIfUnnamed(documentId,
+                                                                 speaker,
+                                                                 identityId,
+                                                                 transcriptUpdated,
+                                                                 getAclUserIdentity(aclIdentity));
   }
 
   @Override

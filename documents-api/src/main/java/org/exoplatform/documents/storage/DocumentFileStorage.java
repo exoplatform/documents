@@ -645,14 +645,42 @@ public interface DocumentFileStorage {
 
   /**
    * Replaces, as the system, the proposals of who the speakers of a media
-   * file's transcript are (EXO-92126); none removes them.
+   * file's transcript are (EXO-92126), only while the transcript they were made
+   * from is still the stored one; none removes them.
    *
    * @param documentId the file's UUID
    * @param suggestions the proposals, one per speaker at most
+   * @param transcriptUpdated the update time of the transcription state the
+   *          proposals were made from, in milliseconds since the epoch
+   * @return true when written, false when the transcript changed since, or is
+   *         not done
    * @throws ObjectNotFoundException when the file does not exist
    */
-  default void saveTranscriptionSpeakerSuggestions(String documentId,
-                                                   List<TranscriptionSpeakerSuggestion> suggestions) throws ObjectNotFoundException {
+  default boolean saveTranscriptionSpeakerSuggestions(String documentId,
+                                                      List<TranscriptionSpeakerSuggestion> suggestions,
+                                                      long transcriptUpdated) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Marks, as the system, the stored proposal of a speaker as applied
+   * (EXO-92126), re-read under the file's lock so that a proposal dismissed
+   * meanwhile stays dismissed, and only while the transcript it was made from is
+   * still the stored one.
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param identityId the identity id of the person the proposal names
+   * @param transcriptUpdated the update time of the transcription state the
+   *          proposal was made from, in milliseconds since the epoch
+   * @return true when marked, false when no such proposal is stored any more,
+   *         or the transcript changed
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default boolean markTranscriptionSpeakerSuggestionApplied(String documentId,
+                                                            String speaker,
+                                                            long identityId,
+                                                            long transcriptUpdated) throws ObjectNotFoundException {
     throw new UnsupportedOperationException();
   }
 
@@ -692,16 +720,19 @@ public interface DocumentFileStorage {
 
   /**
    * Names a speaker of a media file's transcript, as a user who can edit the
-   * file, only when neither the speaker nor the person is named yet
-   * (EXO-92126): a name applied without waiting for a person never replaces one
-   * a person gave.
+   * file, only when neither the speaker nor the person is named yet, and only
+   * while the transcript is the one the name was proposed from (EXO-92126): a
+   * name applied without waiting for a person never replaces one a person
+   * gave, nor names a voice of another transcript.
    *
    * @param documentId the file's UUID
    * @param speaker the speaker's number in the transcript
    * @param identityId the identity id of the person
+   * @param transcriptUpdated the update time of the transcription state the
+   *          name was proposed from, in milliseconds since the epoch
    * @param aclIdentity the user naming it
    * @return true when the speaker was named, false when the speaker or the
-   *         person already was
+   *         person already was, or the transcript changed
    * @throws IllegalAccessException when the user may not edit the file
    * @throws ObjectNotFoundException when the file does not exist, or the user
    *           cannot see it
@@ -709,6 +740,7 @@ public interface DocumentFileStorage {
   default boolean nameTranscriptionSpeakerIfUnnamed(String documentId,
                                                     String speaker,
                                                     String identityId,
+                                                    long transcriptUpdated,
                                                     Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     throw new UnsupportedOperationException();
   }
