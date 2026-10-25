@@ -37,7 +37,7 @@ export default {
     speakers: null,
     lastRead: 0,
     speakersRead: 0,
-    openedAt: null,
+    chaptersAwaitedSince: null,
     pollingTimer: null,
   }),
   computed: {
@@ -58,7 +58,7 @@ export default {
         this.rawChapters = null;
         this.speakers = null;
         this.speakersRead++;
-        this.openedAt = Date.now();
+        this.chaptersAwaitedSince = Date.now();
         this.read();
       },
     },
@@ -69,6 +69,7 @@ export default {
    */
   created() {
     document.addEventListener('documents-transcript-speakers-changed', this.readSpeakersAgain);
+    document.addEventListener('documents-transcript-chapters-requested', this.awaitChapters);
   },
   /**
    * Stops reading: no read under way changes the timeline any more.
@@ -79,6 +80,7 @@ export default {
     this.speakersRead++;
     this.stopPolling();
     document.removeEventListener('documents-transcript-speakers-changed', this.readSpeakersAgain);
+    document.removeEventListener('documents-transcript-chapters-requested', this.awaitChapters);
   },
   methods: {
     /**
@@ -127,17 +129,29 @@ export default {
         .catch(() => null);
     },
     /**
+     * Waits for the chapters the Transcript tab just asked for, reading the
+     * state again until they come or the wait for them ends.
+     * @param {CustomEvent} event its detail holds the file's documentId
+     * @returns {void}
+     */
+    awaitChapters(event) {
+      if (event?.detail?.documentId === this.documentId) {
+        this.chaptersAwaitedSince = Date.now();
+        this.read();
+      }
+    },
+    /**
      * Tells whether what the timeline shows may still change: a transcription
      * waiting in the queue or running and still moving, or a transcript whose
-     * chapters may still come since the timeline opened, when the Transcript
-     * tab asks for them.
+     * chapters may still come, made with it or asked for by the Transcript tab
+     * since the timeline opened.
      * @param {Object} state the transcription state
      * @returns {boolean} true when the state is worth reading again
      */
     mayChange(state) {
       return state?.status === 'QUEUED'
         || (state?.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS)
-        || awaitsChapters(state, this.openedAt);
+        || awaitsChapters(state, this.chaptersAwaitedSince);
     },
     /**
      * Stops reading the state again.
@@ -199,7 +213,7 @@ export default {
      * @returns {string} the name
      */
     laneName(lane) {
-      return lane.speaker && this.speakerName(lane.speaker) || this.$t('documents.timeline.others', {0: lane.speakers.length});
+      return lane.speaker && this.speakerName(lane.speaker) || this.$t('documents.timeline.others', {0: lane.count});
     },
   },
 };

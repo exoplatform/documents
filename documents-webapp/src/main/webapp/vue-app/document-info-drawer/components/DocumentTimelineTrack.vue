@@ -26,7 +26,7 @@
       :ref="`item-${index}`"
       :title="item.title"
       :aria-label="item.label"
-      :tabindex="index === focused && 0 || -1"
+      :tabindex="index === focused ? 0 : -1"
       :class="[item.background, item.text, item.key === activeKey && 'documentTimelineActive']"
       :style="[placement(item), item.style]"
       type="button"
