@@ -33,6 +33,8 @@ import org.exoplatform.documents.model.TranscriptionQuote;
  * @param autoApplied whether the speaker was named after it without waiting for
  *          a person
  * @param quotes the sentences that show it, each with its moment
+ * @param premiseSpeaker for a proposal made by elimination, the other voice it
+ *          follows from; null otherwise
  */
 public record TranscriptionSpeakerProposalEntity(String speaker,
                                                  String identityId,
@@ -41,5 +43,6 @@ public record TranscriptionSpeakerProposalEntity(String speaker,
                                                  String avatarUrl,
                                                  boolean strong,
                                                  boolean autoApplied,
-                                                 List<TranscriptionQuote> quotes) {
+                                                 List<TranscriptionQuote> quotes,
+                                                 String premiseSpeaker) {
 }
