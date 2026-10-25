@@ -180,15 +180,21 @@
   }
 }
 
-// a transcript's change-speaker button: a light pencil next to the name, darker on the speaker's hover or focus
+// a transcript's change-speaker button: a light pencil right after the name, darker on the speaker's hover or focus, its button 24px square
+@transcriptSpeakerChangeColor: #8a949e;
+@transcriptSpeakerChangeActiveColor: #4a5560;
 .documentTranscriptSpeaker {
+  .documentTranscriptSpeakerChange.v-btn {
+    width: 24px;
+    height: 24px;
+  }
   .documentTranscriptSpeakerChange .v-icon {
-    color: #8a949e !important;
+    color: @transcriptSpeakerChangeColor;
   }
   &:hover,
   &:focus-within {
     .documentTranscriptSpeakerChange .v-icon {
-      color: #4a5560 !important;
+      color: @transcriptSpeakerChangeActiveColor;
     }
   }
 }
