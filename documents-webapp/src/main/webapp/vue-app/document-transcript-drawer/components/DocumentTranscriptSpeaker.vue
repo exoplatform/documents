@@ -15,70 +15,85 @@
  * along with this program. If not, see <gnu.org/licenses>.
 -->
 <template>
-  <v-menu
-    v-model="menu"
-    :disabled="!canEdit"
-    :close-on-content-click="false"
-    offset-y
-    max-width="300">
-    <template #activator="{on, attrs}">
-      <span
-        v-bind="attrs"
-        :title="canEdit && $t('documents.transcript.speaker.name') || ''"
-        :class="canEdit && 'clickable'"
-        :role="canEdit ? 'button' : null"
-        :tabindex="canEdit ? 0 : null"
-        class="d-inline-flex align-center mb-1"
-        v-on="on"
-        @click.stop
-        @keydown.enter.stop.prevent="openFromKeyboard"
-        @keydown.space.stop.prevent="openFromKeyboard">
-        <user-avatar
+  <div
+    class="d-flex align-center"
+    @click.stop
+    @keydown.enter.stop>
+    <user-avatar
+      v-if="person"
+      :profile-id="person.username"
+      :size="20"
+      extra-class="text-subtitle-2" />
+    <v-menu
+      v-if="!person || canEdit"
+      v-model="menu"
+      :disabled="!canEdit"
+      :close-on-content-click="false"
+      class="d-flex"
+      offset-y
+      max-width="300">
+      <template #activator="{on, attrs}">
+        <v-btn
           v-if="person"
-          :profile-id="person.username"
-          :size="20"
-          :popover="false"
-          avatar-class="me-1"
-          extra-class="text-subtitle-2"
-          fullname />
-        <v-chip
-          v-else
-          :color="color"
+          v-bind="attrs"
+          :title="$t('documents.transcript.speaker.change')"
+          :aria-label="$t('documents.transcript.speaker.change')"
+          class="ms-1"
+          icon
           x-small
-          outlined>
-          {{ $t('documents.transcript.speaker.label', {0: speaker}) }}
-        </v-chip>
-      </span>
-    </template>
-    <v-card class="pa-3" flat>
-      <div class="text-subtitle-2 mb-2">{{ $t('documents.transcript.speaker.who', {0: speaker}) }}</div>
-      <identity-suggester
-        v-if="menu"
-        v-model="chosen"
-        :labels="suggesterLabels"
-        :include-spaces="false"
-        name="transcriptSpeaker"
-        include-users />
-      <div class="d-flex justify-end mt-2">
-        <v-btn
-          v-if="person"
-          :disabled="saving"
-          class="btn me-2"
-          small
-          @click="unname">
-          {{ $t('documents.transcript.speaker.clear') }}
+          v-on="on"
+          @keydown.space.stop>
+          <v-icon x-small>fas fa-pen</v-icon>
         </v-btn>
-        <v-btn
-          :disabled="!chosen || saving"
-          :loading="saving"
-          class="btn btn-primary"
-          small
-          @click="name">
-          {{ $t('documents.transcript.speaker.apply') }}
-        </v-btn>
-      </div>
-    </v-card>
-  </v-menu>
+        <span
+          v-else
+          v-bind="attrs"
+          :title="canEdit && $t('documents.transcript.speaker.name') || ''"
+          :class="canEdit && 'clickable'"
+          :role="canEdit ? 'button' : null"
+          :tabindex="canEdit ? 0 : null"
+          class="d-inline-flex align-center"
+          v-on="on"
+          @keydown.enter.stop.prevent="openFromKeyboard"
+          @keydown.space.stop.prevent="openFromKeyboard">
+          <v-chip
+            :color="color"
+            x-small
+            outlined>
+            {{ $t('documents.transcript.speaker.label', {0: speaker}) }}
+          </v-chip>
+        </span>
+      </template>
+      <v-card class="pa-3" flat>
+        <div class="text-subtitle-2 mb-2">{{ $t('documents.transcript.speaker.who', {0: speaker}) }}</div>
+        <identity-suggester
+          v-if="menu"
+          v-model="chosen"
+          :labels="suggesterLabels"
+          :include-spaces="false"
+          name="transcriptSpeaker"
+          include-users />
+        <div class="d-flex justify-end mt-2">
+          <v-btn
+            v-if="person"
+            :disabled="saving"
+            class="btn me-2"
+            small
+            @click="unname">
+            {{ $t('documents.transcript.speaker.clear') }}
+          </v-btn>
+          <v-btn
+            :disabled="!chosen || saving"
+            :loading="saving"
+            class="btn btn-primary"
+            small
+            @click="name">
+            {{ $t('documents.transcript.speaker.apply') }}
+          </v-btn>
+        </div>
+      </v-card>
+    </v-menu>
+  </div>
 </template>
 <script>
 import {speakerColor} from '../js/TranscriptSpeakers.js';
