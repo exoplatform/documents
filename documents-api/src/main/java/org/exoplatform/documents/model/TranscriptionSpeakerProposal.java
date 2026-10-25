@@ -29,10 +29,13 @@ import java.util.List;
  * @param autoApplied whether the speaker was named after it without waiting for
  *          a person, and still is
  * @param quotes the sentences that show it, in order
+ * @param premiseSpeaker for a proposal made by elimination, the other voice it
+ *          follows from; null otherwise
  */
 public record TranscriptionSpeakerProposal(String speaker,
                                            long identityId,
                                            boolean strong,
                                            boolean autoApplied,
-                                           List<TranscriptionQuote> quotes) {
+                                           List<TranscriptionQuote> quotes,
+                                           String premiseSpeaker) {
 }
