@@ -68,7 +68,7 @@ export default {
         ? this.$transcriptionService.setGuestSpeaker(documentId, speaker, guestName)
         : this.identityIdOf(user).then(identityId => this.$transcriptionService.setSpeaker(documentId, speaker, identityId));
       return saved
-        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
+        .then(() => this.reloadSpeakers(documentId).then(() => this.announceSpeakers(documentId)), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
     },
     /**
@@ -84,7 +84,7 @@ export default {
       const documentId = this.documentId;
       this.savingSpeaker = speaker;
       return this.$transcriptionService.unsetSpeaker(documentId, speaker)
-        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
+        .then(() => this.reloadSpeakers(documentId).then(() => this.announceSpeakers(documentId)), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
     },
     /**
@@ -120,6 +120,17 @@ export default {
       return this.$transcriptionService.dismissSpeakerProposal(documentId, speaker)
         .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
+    },
+    /**
+     * Tells the page that the speakers of a file were named again, so that the
+     * other views of its transcript, as the full view's timeline, read the
+     * names again (EXO-92127).
+     *
+     * @param {string} documentId the file's UUID
+     * @returns {void}
+     */
+    announceSpeakers(documentId) {
+      document.dispatchEvent(new CustomEvent('documents-transcript-speakers-changed', {detail: {documentId}}));
     },
     /**
      * Reads the named speakers again, whatever the sentences say, and for a
