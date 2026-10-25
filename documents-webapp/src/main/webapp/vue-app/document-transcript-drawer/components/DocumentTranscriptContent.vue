@@ -145,7 +145,10 @@ export default {
     },
   },
   mounted() {
+    this.applyFolds();
     this.showActiveSegment();
+    // the occurrences of a term already set exist in the DOM only once its chapters are unfolded
+    this.$nextTick(this.revealCurrent);
   },
   methods: {
     /**
