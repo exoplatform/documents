@@ -26,7 +26,7 @@
     </template>
     <template v-if="drawer && file" #titleIcons>
       <v-btn
-        v-if="openLabel"
+        v-if="openLabel && sideBySide"
         class="primary me-2"
         depressed
         small
@@ -125,6 +125,7 @@
               </template>
               <v-card
                 v-else
+                :title="$t('documents.drawer.details.clickToOpen')"
                 class="documentInfoCompactHeader d-flex align-center pa-3 mb-2"
                 outlined
                 @click="openPreview">
@@ -340,7 +341,8 @@ export default {
      * Names the header's open action as Documents opens the file: Edit in
      * the online editor when the viewer may edit it and the editor can, else
      * View, in the viewer or the preview; none for a folder, or for an audio
-     * or video file, whose player is the content.
+     * or video file, whose player is the content. Shown in the full view
+     * only: the narrow drawer's preview or card opens the file on click.
      * @returns {string} the label, or null when there is no action
      */
     openLabel() {
@@ -376,12 +378,28 @@ export default {
     document.addEventListener('document-views-updated', this.handleUpdateViews);
     document.addEventListener('search-metadata-tag', this.close);
     document.addEventListener('document-category-selected', this.close);
-    document.addEventListener('click', (event) => {
-      if (event.target.closest('.documentInfoDrawer') || event.target.closest('.documentDescription') || event.target.closest('.documentCategories') || event.target.closest('.documentInfoMenu')) {return;}
-      this.close();
-    });
+    document.addEventListener('click', this.closeOnClickOutside);
   },
   methods: {
+    /**
+     * Closes the drawer on a click outside it. A link opened by script, as a
+     * version in a new tab, and a click in a dialog over the drawer, as the
+     * preview of a version, are not a click outside: the drawer stays. The
+     * click's path is read as it was dispatched, since closing a preview
+     * removes the clicked button from the page before the click reaches here.
+     * @param {MouseEvent} event a click anywhere in the page
+     * @returns {void}
+     */
+    closeOnClickOutside(event) {
+      if (!event.isTrusted) {
+        return;
+      }
+      const path = event.composedPath?.() || [];
+      const inside = path.some(element => element.classList && ['documentInfoDrawer', 'documentDescription', 'documentCategories', 'documentInfoMenu', 'v-dialog__content'].some(name => element.classList.contains(name)));
+      if (!inside) {
+        this.close();
+      }
+    },
     /**
      * Falls back to the compact header when the browser cannot load the
      * file's thumbnail.
