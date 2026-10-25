@@ -59,7 +59,7 @@
             v-if="opensSpeakerRun(segments, index, false)"
             :speaker="segment.speaker"
             :person="speakersByNumber[segment.speaker]"
-            :can-edit="canNameSpeakers"
+            :can-edit="canNameSpeakers && (!savingSpeaker || savingSpeaker === segment.speaker)"
             :saving="savingSpeaker === segment.speaker"
             class="d-block"
             @name="$emit('name-speaker', $event)"
