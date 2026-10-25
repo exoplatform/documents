@@ -140,6 +140,17 @@ class TranscriptionRestTest {
     assertEquals("documents.transcription.noTranscript", e.getReason());
   }
 
+  /**
+   * A request for the chapters is accepted, whether or not they are to be
+   * made, as the reader (EXO-92122).
+   */
+  @Test
+  void aChaptersRequestIsAccepted() throws Exception {
+    assertEquals(HttpStatus.ACCEPTED, rest.requestChapters(request, DOCUMENT_ID).getStatusCode());
+
+    verify(documentTranscriptionService).requestChapters(DOCUMENT_ID, 7L, "john");
+  }
+
   @Test
   void aRetryIsAccepted() throws Exception {
     when(documentTranscriptionService.requestRetry(DOCUMENT_ID, 7L, "john")).thenReturn(true);
