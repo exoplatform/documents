@@ -16,7 +16,7 @@
 -->
 <template>
   <div
-    class="d-flex align-center"
+    class="documentTranscriptSpeaker d-flex align-center"
     @click.stop
     @keydown.enter.stop>
     <user-avatar
@@ -40,12 +40,12 @@
           :title="$t('documents.transcript.speaker.change')"
           :aria-label="$t('documents.transcript.speaker.change')"
           :disabled="busy"
-          class="ms-1"
+          class="documentTranscriptSpeakerChange ms-1"
           icon
           small
           v-on="on"
           @keydown.space.stop>
-          <v-icon small>fas fa-pen</v-icon>
+          <v-icon size="14">fas fa-pen</v-icon>
         </v-btn>
         <span
           v-else
@@ -72,8 +72,10 @@
           v-if="menu"
           v-model="chosen"
           :labels="suggesterLabels"
+          :search-options="searchOptions"
           :include-spaces="false"
           name="transcriptSpeaker"
+          type-of-relations="user_to_invite"
           include-users />
         <div class="d-flex justify-end mt-2">
           <v-btn
@@ -127,6 +129,10 @@ export default {
   data: () => ({
     menu: false,
     chosen: null,
+    // without options the suggester's user search fails; an empty current user lists everyone, the viewer included
+    searchOptions: {
+      currentUser: '',
+    },
   }),
   computed: {
     /**
