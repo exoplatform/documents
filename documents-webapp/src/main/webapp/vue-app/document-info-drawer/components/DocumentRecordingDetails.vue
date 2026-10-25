@@ -66,6 +66,7 @@ export default {
     state: null,
     retrying: false,
     refreshTimeout: null,
+    lastRead: 0,
     destroyed: false,
   }),
   computed: {
@@ -111,19 +112,20 @@ export default {
      * Reads the transcription state of the file, and reads it again every
      * 15 seconds while the transcription moves, and tells whether the
      * transcript can be offered. An answer that comes back for another file
-     * than the one shown is dropped, and a failed read shows no transcript
-     * row.
+     * than the one shown, or after a later read was sent, is dropped, so a
+     * single chain of reads runs; a failed read shows no transcript row.
      * @returns {Promise} resolved once the state is read
      */
     readState() {
       this.stopRefresh();
       const documentId = this.documentId;
+      const read = ++this.lastRead;
       if (!documentId || !this.media) {
         return Promise.resolve();
       }
       return getState(documentId)
         .then(state => {
-          if (this.isCurrent(documentId)) {
+          if (this.isCurrent(documentId) && read === this.lastRead) {
             this.state = state;
             this.$emit('available', !!state?.available);
             if (this.isRunning(state)) {
@@ -132,7 +134,7 @@ export default {
           }
         })
         .catch(() => {
-          if (this.isCurrent(documentId)) {
+          if (this.isCurrent(documentId) && read === this.lastRead) {
             this.state = null;
             this.$emit('available', false);
           }
