@@ -27,7 +27,7 @@
       @click="$emit('select', group)"
       @keydown.enter="$emit('select', group)">
       <span :style="group.color && {backgroundColor: group.color}" class="documentTranscriptChapterDot"></span>
-      <span class="documentTranscriptChapterTime primary--text text-no-wrap">{{ formatMoment(group.chapter.start) }}</span>
+      <span class="documentTranscriptChapterTime text-caption primary--text text-no-wrap">{{ formatMoment(group.chapter.start) }}</span>
       <span class="text-body-2 text-truncate">{{ group.chapter.title }}</span>
     </div>
   </nav>
