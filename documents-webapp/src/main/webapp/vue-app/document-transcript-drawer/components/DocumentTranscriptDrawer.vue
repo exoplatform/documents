@@ -113,7 +113,8 @@ export default {
     text: null,
     segments: null,
     chapters: null,
-    chaptersAskedAt: null,
+    chaptersAsked: false,
+    chaptersComingSince: null,
     term: '',
     pollingTimer: null,
     lastRead: 0,
@@ -192,7 +193,8 @@ export default {
         this.text = null;
         this.segments = null;
         this.chapters = null;
-        this.chaptersAskedAt = null;
+        this.chaptersAsked = false;
+        this.chaptersComingSince = null;
         this.playerUrl = null;
         this.fileUnknown = false;
         this.loadFile();
@@ -274,7 +276,8 @@ export default {
       this.stopPolling();
       const documentId = this.documentId;
       const read = ++this.lastRead;
-      this.loading = true;
+      // a transcript already shown is only read again for its chapters, with no bar
+      this.loading = !this.done;
       return this.$transcriptionService.getState(documentId)
         .then(state => {
           if (read !== this.lastRead) {
@@ -289,7 +292,7 @@ export default {
           this.state = state;
           if (state.status === 'DONE') {
             this.askChapters(documentId, state);
-            if (this.drawer && awaitsChapters(state, this.chaptersAskedAt)) {
+            if (this.drawer && awaitsChapters(state, this.chaptersComingSince)) {
               this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
             }
             return Promise.all([this.loadTranscript(documentId, state.hasSegments), this.loadChapters(documentId, state.hasChapters)]);
@@ -337,18 +340,29 @@ export default {
       });
     },
     /**
-     * Asks once for the chapters of a transcript opened with none, as one
-     * done before they were switched on.
+     * Asks once for the chapters of a transcript opened with none: just made,
+     * or done before they were switched on. The state is read again, while the
+     * drawer is open, only when the server says they are coming.
      *
      * @param {string} documentId the file's id
      * @param {Object} state the transcription state
      * @returns {void}
      */
     askChapters(documentId, state) {
-      if (!this.chaptersAskedAt && lacksChapters(state) && !awaitsChapters(state)) {
-        this.chaptersAskedAt = Date.now();
-        this.$transcriptionService.requestChapters(documentId).catch(() => null);
+      if (this.chaptersAsked || !lacksChapters(state)) {
+        return;
       }
+      this.chaptersAsked = true;
+      this.$transcriptionService.requestChapters(documentId)
+        .then(coming => {
+          if (coming && documentId === this.documentId) {
+            this.chaptersComingSince = Date.now();
+            if (this.drawer && !this.pollingTimer) {
+              this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
+            }
+          }
+        })
+        .catch(() => null);
     },
     /**
      * Reads the chapters the transcript is grouped into, once.
