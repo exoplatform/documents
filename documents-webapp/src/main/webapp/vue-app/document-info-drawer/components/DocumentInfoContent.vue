@@ -38,11 +38,14 @@
         class="documentInfoContentImage"
         @load="checkBlank"
         @error="imageFailed = true">
-      <v-icon
-        v-else
-        :class="icon && icon.class"
-        :color="icon && icon.color"
-        size="120" />
+      <div v-else class="d-flex flex-column align-center text-center">
+        <v-icon
+          :class="icon && icon.class"
+          :color="icon && icon.color"
+          size="120" />
+        <div class="documentInfoName font-weight-bold mt-4">{{ file.name }}</div>
+        <div class="text-sub-title">{{ subtitle }}</div>
+      </div>
     </button>
   </div>
 </template>
@@ -76,6 +79,10 @@ export default {
     start: {
       type: Number,
       default: 0,
+    },
+    subtitle: {
+      type: String,
+      default: null,
     },
   },
   data: () => ({
