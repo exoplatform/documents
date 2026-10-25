@@ -83,9 +83,17 @@ export default {
     },
   },
   computed: {
+    /**
+     * Names the file's type, as the Documents list does.
+     * @returns {string} the type
+     */
     typeLabel() {
       return this.$t(`documents.label.type.${this.icon?.type}`);
     },
+    /**
+     * Gives the size of the file's current content.
+     * @returns {string} the size, as « 2 MB »
+     */
     sizeLabel() {
       return this.formatSize(this.file.size);
     },
@@ -100,6 +108,10 @@ export default {
       }
       return this.$t('documents.drawer.details.sizeWithVersions.value', {0: this.formatSize(this.file.sizeWithVersions)});
     },
+    /**
+     * Counts the file's views, singular for one.
+     * @returns {string} the label, as « 1 view »
+     */
     viewsLabel() {
       const views = Number(this.file.views) || 0;
       return this.$t(views === 1 && 'documents.drawer.details.views.one' || 'documents.drawer.details.views.many', {0: views});
@@ -121,9 +133,17 @@ export default {
       const byCreator = !modifier || modifier === this.file.creatorIdentity?.remoteId;
       return !byCreator || !created || Math.abs(modified - created) >= CREATION_WRITE_MILLIS;
     },
+    /**
+     * Names the drive the file is in: the space, or the viewer's own documents.
+     * @returns {string} the drive's name
+     */
     driveName() {
       return this.file.ownerIdentity?.providerId === 'space' && this.file.ownerIdentity.name || this.$t('documents.label.userHomeDocuments');
     },
+    /**
+     * Points at the drive's Documents page.
+     * @returns {string} the url
+     */
     drivePath() {
       if (this.file.ownerIdentity?.providerId === 'space') {
         const spaceId = this.file.ownerIdentity.avatar?.split('social/spaces/')[1]?.split('/avatar')[0];
