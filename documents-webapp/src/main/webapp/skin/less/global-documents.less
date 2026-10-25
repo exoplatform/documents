@@ -108,7 +108,7 @@
 
 // A transcript's chapters (EXO-92122), in the details and the transcript drawer.
 // A heading is a 20px chevron column, a 44px time column and the title, the
-// summary under the title. An unfolded chapter's lines run along a 2px guide at
+// summary under the title; the sizes are the theme's typography classes. An unfolded chapter's lines run along a 2px guide at
 // the chevron's column, in the chapter's colour (lighter for a chapter not being
 // read), each a 44px time column under the heading's time, then the text.
 .documentTranscriptChapterListItem {
@@ -116,7 +116,6 @@
   align-items: center;
   gap: 10px;
   padding: 4px 0;
-  font-size: 14px;
   .documentTranscriptChapterTime {
     flex: 0 0 40px;
   }
@@ -141,16 +140,10 @@
     column-gap: 8px;
   }
   .documentTranscriptChapterTime {
-    font-size: 13px;
     padding-top: 3px;
-  }
-  .documentTranscriptChapterTitle {
-    font-size: 16px;
   }
   .documentTranscriptChapterSummary {
     grid-column: 2;
-    font-size: 12.5px;
-    line-height: 1.45;
     margin-top: 2px;
   }
   .documentTranscriptChapterLines {
@@ -182,7 +175,6 @@
     padding: 4px 0;
   }
   .documentTranscriptLineTime {
-    font-size: 12.5px;
     padding-top: 2px;
   }
 }
