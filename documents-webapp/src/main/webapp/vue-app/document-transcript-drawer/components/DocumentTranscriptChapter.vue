@@ -15,27 +15,49 @@
  * along with this program. If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div class="d-flex align-start pt-3 pb-1">
-    <v-btn
-      :aria-label="open && $t('documents.transcript.chapters.fold') || $t('documents.transcript.chapters.unfold')"
-      :aria-expanded="String(open)"
-      class="me-1"
-      icon
-      @click="$emit('toggle')">
-      <v-icon size="12" class="icon-default-color">{{ open && 'fa-chevron-down' || 'fa-chevron-right' }}</v-icon>
-    </v-btn>
-    <div
-      :title="$t('documents.transcript.playFrom', {0: moment})"
-      class="d-flex flex-column flex-grow-1 clickable border-radius px-1"
-      role="button"
-      tabindex="0"
-      @click="$emit('seek', chapter.start)"
-      @keydown.enter="$emit('seek', chapter.start)">
-      <div class="d-flex align-baseline">
-        <span class="text-caption primary--text text-no-wrap me-3">{{ moment }}</span>
-        <span class="text-subtitle-1 font-weight-bold">{{ chapter.title }}</span>
+  <div
+    :class="current && 'documentTranscriptChapterCurrent'"
+    :style="color && {'--documentTranscriptChapterColor': color}"
+    class="documentTranscriptChapter">
+    <div class="documentTranscriptChapterHeading">
+      <v-btn
+        :aria-label="open && $t('documents.transcript.chapters.fold') || $t('documents.transcript.chapters.unfold')"
+        :aria-expanded="String(open)"
+        x-small
+        icon
+        @click="$emit('toggle')">
+        <v-icon size="12" class="icon-default-color">{{ open && 'fa-chevron-down' || 'fa-chevron-right' }}</v-icon>
+      </v-btn>
+      <div
+        :title="$t('documents.transcript.playFrom', {0: formatMoment(chapter.start)})"
+        class="documentTranscriptChapterHeadingText clickable border-radius"
+        role="button"
+        tabindex="0"
+        @click="$emit('seek', chapter.start)"
+        @keydown.enter="$emit('seek', chapter.start)">
+        <span class="documentTranscriptChapterTime primary--text text-no-wrap">{{ formatMoment(chapter.start) }}</span>
+        <span class="documentTranscriptChapterTitle font-weight-bold">{{ chapter.title }}</span>
+        <span v-if="chapter.summary" class="documentTranscriptChapterSummary text-sub-title text-truncate-2">{{ chapter.summary }}</span>
       </div>
-      <div v-if="chapter.summary" class="text-caption text-sub-title text-truncate-2">{{ chapter.summary }}</div>
+    </div>
+    <div v-if="open" class="documentTranscriptChapterLines">
+      <div
+        v-for="row in rows"
+        :key="row.index"
+        :data-segment-index="row.index"
+        :title="$t('documents.transcript.playFrom', {0: formatMoment(row.segment.start)})"
+        :class="row.index === activeIndex && 'light-grey-background-color'"
+        class="documentTranscriptChapterLine clickable border-radius"
+        role="button"
+        tabindex="0"
+        @click="$emit('seek', row.segment.start)"
+        @keydown.enter="$emit('seek', row.segment.start)">
+        <span class="documentTranscriptLineTime primary--text text-no-wrap">{{ formatMoment(row.segment.start) }}</span>
+        <document-transcript-highlight
+          :text="row.segment.text"
+          :term="term"
+          class="text-body-2" />
+      </div>
     </div>
   </div>
 </template>
@@ -48,15 +70,40 @@ export default {
       type: Object,
       required: true,
     },
+    rows: {
+      type: Array,
+      required: true,
+    },
+    term: {
+      type: String,
+      default: '',
+    },
+    activeIndex: {
+      type: Number,
+      default: -1,
+    },
     open: {
       type: Boolean,
-      default: true,
+      default: false,
+    },
+    current: {
+      type: Boolean,
+      default: false,
+    },
+    /** The chapter's colour, for the guide along its lines; the primary colour when none. */
+    color: {
+      type: String,
+      default: null,
     },
   },
-  computed: {
-    moment() {
-      return formatMoment(this.chapter.start);
-    },
+  methods: {
+    /**
+     * Writes a moment of the recording as m:ss or h:mm:ss.
+     *
+     * @param {number} seconds the moment, in seconds
+     * @returns {string} the written moment
+     */
+    formatMoment,
   },
 };
 </script>
