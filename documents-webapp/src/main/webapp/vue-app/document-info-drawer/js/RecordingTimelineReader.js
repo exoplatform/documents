@@ -15,6 +15,7 @@
  * along with this program. If not, see <gnu.org/licenses>.
  */
 
+import TranscriptSpeakerNaming from '../../document-transcript-drawer/js/TranscriptSpeakerNaming.js';
 import {awaitsChapters} from '../../document-transcript-drawer/js/TranscriptChapters.js';
 
 /** How often the timeline reads the state again while the transcript or its chapters may still come, in milliseconds. */
@@ -26,17 +27,17 @@ const STALE_MILLIS = 3600000;
 /**
  * The reading of what a recording's timeline shows (EXO-92127): its timed
  * segments, its chapters and the speakers someone named, with the names they
- * go by. The component using it has a documentId prop; it follows the names
- * given in the transcript, and reads the state again while the transcript is
- * made or its chapters may still come, as the Transcript tab does.
+ * go by. The component using it has a documentId prop and an alert(message,
+ * type) method; it names the speakers as the transcript does, follows the
+ * names given there, and reads the state again while the transcript is made
+ * or its chapters may still come, as the Transcript tab does.
  */
 export default {
+  mixins: [TranscriptSpeakerNaming],
   data: () => ({
     segments: null,
     rawChapters: null,
-    speakers: null,
     lastRead: 0,
-    speakersRead: 0,
     chaptersAwaitedSince: null,
     pollingTimer: null,
   }),
@@ -57,6 +58,7 @@ export default {
         this.segments = null;
         this.rawChapters = null;
         this.speakers = null;
+        this.canNameSpeakers = false;
         this.speakersRead++;
         this.chaptersAwaitedSince = Date.now();
         this.read();
@@ -64,11 +66,10 @@ export default {
     },
   },
   /**
-   * Follows the names given in the transcript.
+   * Follows the chapters the Transcript tab asks for.
    * @returns {void}
    */
   created() {
-    document.addEventListener('documents-transcript-speakers-changed', this.readSpeakersAgain);
     document.addEventListener('documents-transcript-chapters-requested', this.awaitChapters);
   },
   /**
@@ -79,7 +80,6 @@ export default {
     this.lastRead++;
     this.speakersRead++;
     this.stopPolling();
-    document.removeEventListener('documents-transcript-speakers-changed', this.readSpeakersAgain);
     document.removeEventListener('documents-transcript-chapters-requested', this.awaitChapters);
   },
   methods: {
@@ -124,7 +124,7 @@ export default {
           const [segments, chapters] = answer;
           this.segments = Array.isArray(segments) && segments || null;
           this.rawChapters = Array.isArray(chapters) && chapters || null;
-          return firstRead && this.segments?.some(segment => segment.speaker) && this.readSpeakers(documentId);
+          return firstRead && this.segments?.some(segment => segment.speaker) && this.reloadSpeakers(documentId);
         })
         .catch(() => null);
     },
@@ -161,34 +161,6 @@ export default {
       if (this.pollingTimer) {
         window.clearTimeout(this.pollingTimer);
         this.pollingTimer = null;
-      }
-    },
-    /**
-     * Reads the speakers someone named. Only the latest read of the speakers
-     * of the file shown changes the names: an earlier answer arriving last
-     * holds older names.
-     * @param {string} documentId the file's id
-     * @returns {Promise} resolved once read, never rejected
-     */
-    readSpeakers(documentId) {
-      const read = ++this.speakersRead;
-      return this.$transcriptionService.getSpeakers(documentId)
-        .then(answer => {
-          if (read === this.speakersRead && documentId === this.documentId) {
-            this.speakers = answer?.speakers || [];
-          }
-        })
-        .catch(() => null);
-    },
-    /**
-     * Reads the named speakers again once someone named one in the
-     * transcript, so that the lanes show the new names.
-     * @param {CustomEvent} event its detail holds the file's documentId
-     * @returns {void}
-     */
-    readSpeakersAgain(event) {
-      if (this.segments && event?.detail?.documentId === this.documentId) {
-        this.readSpeakers(this.documentId);
       }
     },
     /**

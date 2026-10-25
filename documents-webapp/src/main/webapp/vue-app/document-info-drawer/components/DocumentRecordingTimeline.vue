@@ -45,10 +45,20 @@
           @seek="$emit('seek', $event)" />
       </template>
       <template v-for="lane in lanes">
-        <document-timeline-speaker
+        <document-transcript-speaker
+          v-if="lane.speaker"
           :key="`${lane.key}-name`"
           :speaker="lane.speaker"
           :person="personOf(lane)"
+          :can-edit="canNameSpeakers"
+          :busy="!!savingSpeaker && savingSpeaker !== lane.speaker"
+          :saving="savingSpeaker === lane.speaker"
+          class="text-caption font-weight-bold overflow-hidden"
+          @name="nameSpeaker"
+          @unname="unnameSpeaker" />
+        <document-timeline-speaker
+          v-else
+          :key="`${lane.key}-name`"
           :name="laneName(lane)" />
         <document-timeline-track
           :key="lane.key"
@@ -210,6 +220,15 @@ export default {
      */
     describe(name, label, from, to) {
       return {title: `${name} · ${formatMoment(from)}–${formatMoment(to)}`, label};
+    },
+    /**
+     * Shows a message to the user, as the Transcript tab does.
+     * @param {string} message the message
+     * @param {string} type its kind: success or error
+     * @returns {void}
+     */
+    alert(message, type) {
+      document.dispatchEvent(new CustomEvent('alert-message', {detail: {alertMessage: message, alertType: type}}));
     },
   },
 };
