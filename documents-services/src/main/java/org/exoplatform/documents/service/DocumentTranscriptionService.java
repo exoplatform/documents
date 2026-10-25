@@ -39,13 +39,6 @@ public class DocumentTranscriptionService {
    */
   public static final String                   TRANSCRIPTION_RETRY_REQUESTED_EVENT = "exo.documents.transcription.retryRequested";
 
-  /**
-   * Broadcast when a user opens a transcript that has timed segments and no
-   * chapters (EXO-92122), with the user name as source and the file's UUID as
-   * data: the transcriber decides whether its chapters are to be made.
-   */
-  public static final String                   TRANSCRIPTION_CHAPTERS_REQUESTED_EVENT = "exo.documents.transcription.chaptersRequested";
-
   public static final String                   UNAVAILABLE_MESSAGE                 = "documents.transcription.unavailable";
 
   public static final String                   NOT_MEDIA_MESSAGE                   = "documents.transcription.notMedia";
@@ -63,6 +56,9 @@ public class DocumentTranscriptionService {
 
   @Autowired
   private ListenerService                      listenerService;
+
+  @Autowired
+  private TranscriptChaptersRequesterRegistry  chaptersRequesters;
 
   /**
    * Tells whether media files can be transcribed on this server.
@@ -178,18 +174,17 @@ public class DocumentTranscriptionService {
    * read the file (EXO-92122): a transcript done before chapters were switched
    * on gets them the first time it is read. Only a transcript done, with timed
    * segments and no chapters, is handed to the transcriber, which makes them at
-   * most once per file.
+   * most once per file and tells whether they are coming.
    *
    * @param documentId the file's UUID
    * @param aclIdentity the identity id of the user
-   * @param username the user's name
-   * @return true when the request was handed to the transcriber
+   * @return true when the chapters are coming: queued now, or queued earlier
+   *         and not made yet; false when none are to be made
    * @throws IllegalAccessException when the user may not read the file
    * @throws ObjectNotFoundException when the file does not exist or the user
    *           cannot see it
    */
-  public boolean requestChapters(String documentId, long aclIdentity, String username) throws IllegalAccessException,
-                                                                                       ObjectNotFoundException {
+  public boolean requestChapters(String documentId, long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     if (!isAvailable()) {
       return false;
     }
@@ -197,12 +192,7 @@ public class DocumentTranscriptionService {
     if (state.status() != TranscriptionStatus.DONE || !state.hasSegments() || state.hasChapters()) {
       return false;
     }
-    try {
-      listenerService.broadcast(TRANSCRIPTION_CHAPTERS_REQUESTED_EVENT, username, documentId);
-    } catch (Exception e) {
-      throw new IllegalStateException("Error asking for the chapters of media file '%s'".formatted(documentId), e);
-    }
-    return true;
+    return chaptersRequesters.requestChapters(documentId);
   }
 
 }
