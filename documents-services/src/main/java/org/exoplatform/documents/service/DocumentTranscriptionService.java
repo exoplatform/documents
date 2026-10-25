@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.service;
 
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -57,8 +59,8 @@ public class DocumentTranscriptionService {
   @Autowired
   private ListenerService                      listenerService;
 
-  @Autowired
-  private TranscriptChaptersRequesterRegistry  chaptersRequesters;
+  @Autowired(required = false)
+  private List<TranscriptChaptersRequester>    chaptersRequesters;
 
   /**
    * Tells whether media files can be transcribed on this server.
@@ -192,7 +194,15 @@ public class DocumentTranscriptionService {
     if (state.status() != TranscriptionStatus.DONE || !state.hasSegments() || state.hasChapters()) {
       return false;
     }
-    return chaptersRequesters.requestChapters(documentId);
+    if (chaptersRequesters == null) {
+      return false;
+    }
+    // every requester is asked, whatever an earlier one answered
+    boolean coming = false;
+    for (TranscriptChaptersRequester requester : chaptersRequesters) {
+      coming |= requester.requestChapters(documentId);
+    }
+    return coming;
   }
 
 }
