@@ -217,17 +217,20 @@ public class TranscriptionRest {
 
   /**
    * Asks for the chapters of a transcript being read (EXO-92122); a transcript
-   * that has them, or none to make, is left as it is.
+   * that has them, or none to make, is left as it is. The answer tells the
+   * reader whether to wait for them.
    *
    * @param request the HTTP request, which names the caller
    * @param documentId the file's UUID
-   * @return 202 once asked, whether or not chapters are to be made
+   * @return 202 when the chapters are coming (queued now, or earlier and not
+   *         made yet), 204 when none are to be made
    */
   @PostMapping(path = "{documentId}/chapters")
   @Secured("users")
   @Operation(summary = "Ask for the chapters of the transcript of an audio or video file", method = "POST")
   @ApiResponses(value = {
-    @ApiResponse(responseCode = "202", description = "Request accepted"),
+    @ApiResponse(responseCode = "202", description = "The chapters are coming"),
+    @ApiResponse(responseCode = "204", description = "No chapters are to be made for this transcript"),
     @ApiResponse(responseCode = "403", description = "The file cannot be read by the caller"),
     @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
   })
@@ -236,8 +239,8 @@ public class TranscriptionRest {
                                               @PathVariable("documentId")
                                               String documentId) {
     try {
-      documentTranscriptionService.requestChapters(documentId, getCurrentIdentityId(request), request.getRemoteUser());
-      return ResponseEntity.accepted().build();
+      boolean coming = documentTranscriptionService.requestChapters(documentId, getCurrentIdentityId(request));
+      return coming ? ResponseEntity.accepted().build() : ResponseEntity.noContent().build();
     } catch (IllegalAccessException e) {
       throw forbidden(documentId, e);
     } catch (ObjectNotFoundException e) {
