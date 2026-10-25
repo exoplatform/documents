@@ -21,9 +21,11 @@ const CHAPTERS_MIN_SECONDS = 300;
 /**
  * The colours of a transcript's chapters, in turn: the dot of the list, the
  * guide along an unfolded chapter's lines, and anything else that marks a
- * chapter (the timeline) reads its colour from its group.
+ * chapter (the timeline) reads its colour from its group. The first is the
+ * theme's primary colour, so a chapter follows the site's branding; the others
+ * are fixed categorical colours told apart from it, the PO's mockup ones.
  */
-export const CHAPTER_COLORS = ['#2f6db5', '#c4622d', '#7a5a8c', '#2e7d4f'];
+export const CHAPTER_COLORS = ['var(--allPagesPrimaryColor, #2f6db5)', '#c4622d', '#7a5a8c', '#2e7d4f'];
 
 /**
  * Groups a transcript's segments under its chapters, each chapter holding the
