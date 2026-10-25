@@ -400,7 +400,9 @@ export default {
     /**
      * Follows the drawer's expansion. A full view the transcript drawer opened
      * from these details expanded in place collapses to the narrow details as
-     * they were, scrolled where they were. Collapsing the full view opened from
+     * they were, scrolled where they were. Any other collapse onto these
+     * details stops the recording where it was, so expanding again opens it
+     * there, paused. Collapsing the full view opened from
      * the transcript drawer closes it onto that drawer, still open underneath
      * with its mask: the moment and the search go back to it, and the full
      * view's player pauses. Opened from the details, it collapses to them,
@@ -410,6 +412,9 @@ export default {
      */
     updateExpanded(expanded) {
       this.expanded = expanded;
+      if (!expanded && this.origin !== 'transcript') {
+        this.keepRecordingMoment();
+      }
       if (!expanded && this.narrowScroll !== null) {
         const scroll = this.narrowScroll;
         this.narrowScroll = null;
@@ -428,6 +433,20 @@ export default {
         this.returning = 'synced';
         this.close();
       }
+    },
+    /**
+     * Keeps the moment the full view's recording reached, paused, so that
+     * expanding again opens it there rather than playing from an older one.
+     * Read when the full view collapses, before its player leaves the page
+     * with the re-render.
+     * @returns {void}
+     */
+    keepRecordingMoment() {
+      const media = this.contentMedia();
+      const moment = media ? media.currentTime : (this.playerSeconds ?? this.transcriptMoment);
+      media?.pause?.();
+      this.transcriptMoment = Number.isFinite(moment) ? Math.floor(moment) : null;
+      this.transcriptPlaying = false;
     },
     /**
      * The full view's audio or video element.
