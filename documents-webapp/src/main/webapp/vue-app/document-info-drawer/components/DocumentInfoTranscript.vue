@@ -106,6 +106,9 @@ export default {
     },
   },
   watch: {
+    term() {
+      this.$emit('term', this.term || '');
+    },
     documentId: {
       immediate: true,
       handler() {
