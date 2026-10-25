@@ -42,6 +42,7 @@
       :segments="segments"
       :text="text"
       :term="term"
+      :seconds="seconds"
       :playing-seconds="playingSeconds"
       @seek="$emit('seek', $event)" />
     <document-transcript-status
@@ -54,6 +55,10 @@
   </div>
 </template>
 <script>
+const POLLING_MILLIS = 15000;
+
+const STALE_MILLIS = 3600000;
+
 export default {
   props: {
     documentId: {
@@ -63,6 +68,14 @@ export default {
     playingSeconds: {
       type: Number,
       default: null,
+    },
+    seconds: {
+      type: Number,
+      default: null,
+    },
+    initialTerm: {
+      type: String,
+      default: '',
     },
   },
   data: () => ({
@@ -74,6 +87,7 @@ export default {
     retrying: false,
     unreadable: false,
     lastRead: 0,
+    pollingTimer: null,
   }),
   computed: {
     done() {
@@ -90,10 +104,14 @@ export default {
         this.state = null;
         this.text = null;
         this.segments = null;
-        this.term = '';
+        this.term = this.initialTerm || '';
         this.refresh();
       },
     },
+  },
+  beforeDestroy() {
+    this.lastRead++;
+    this.stopPolling();
   },
   methods: {
     /**
@@ -107,6 +125,7 @@ export default {
       if (!documentId) {
         return Promise.resolve();
       }
+      this.stopPolling();
       const read = ++this.lastRead;
       this.loading = true;
       return this.$transcriptionService.getState(documentId)
@@ -117,6 +136,9 @@ export default {
           this.unreadable = false;
           this.state = state;
           if (state?.status !== 'DONE') {
+            if (state && this.isRunning(state)) {
+              this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
+            }
             return;
           }
           const segments = state.hasSegments && this.$transcriptionService.getSegments(documentId).catch(() => null) || Promise.resolve(null);
@@ -146,6 +168,27 @@ export default {
             this.loading = false;
           }
         });
+    },
+    /**
+     * Tells whether a transcription is waiting in the queue, or running and
+     * still moving, as the transcript drawer reads it.
+     * @param {Object} state the transcription state
+     * @returns {boolean} true when queued, or running and changed less than an
+     *          hour ago
+     */
+    isRunning(state) {
+      return state.status === 'QUEUED'
+        || (state.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
+    },
+    /**
+     * Stops reading the state again.
+     * @returns {void}
+     */
+    stopPolling() {
+      if (this.pollingTimer) {
+        window.clearTimeout(this.pollingTimer);
+        this.pollingTimer = null;
+      }
     },
     /**
      * Asks to transcribe the file again, then reads its new state.

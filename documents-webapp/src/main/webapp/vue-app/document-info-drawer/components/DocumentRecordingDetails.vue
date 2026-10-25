@@ -23,15 +23,15 @@
     <documents-info-row
       v-if="state && state.available"
       :label="$t('documents.drawer.details.transcript')">
-      <v-btn
-        v-if="ready"
-        class="px-0 text-none font-weight-bold"
-        color="primary"
-        small
-        text
-        @click="openTranscript">
-        {{ $t('documents.drawer.details.transcript.ready') }}
-      </v-btn>
+      <span v-if="ready">
+        {{ $t('documents.drawer.details.transcript.readyState') }} ·
+        <button
+          type="button"
+          class="font-weight-bold primary--text pa-0"
+          @click="openTranscript">
+          {{ $t('documents.drawer.details.transcript.read') }}
+        </button>
+      </span>
       <document-transcript-status
         v-else
         :state="state"

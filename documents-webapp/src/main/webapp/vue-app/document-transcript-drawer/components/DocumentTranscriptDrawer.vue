@@ -25,7 +25,7 @@
     use-filter
     right
     @filter-updated="term = $event"
-    @expand-updated="expanded = $event"
+    @expand-updated="expandIntoDetails"
     @closed="closePlayer">
     <template #title>
       {{ $t('documents.transcript.title') }}
@@ -57,13 +57,12 @@
       </v-tooltip>
     </template>
     <template v-if="drawer" #content>
-      <div :class="sideBySide && 'd-flex align-start'" class="pa-4">
+      <div class="pa-4">
         <div
           v-if="playerUrl && (file || fileUnknown)"
-          :class="sideBySide && 'flex-grow-1 me-4' || 'mb-4'"
           :style="{position: 'sticky', top: 0, zIndex: 1}"
-          class="white">
-          <div v-if="!sideBySide" class="d-flex justify-end">
+          class="white mb-4">
+          <div class="d-flex justify-end">
             <v-btn
               :title="playerCollapsed && $t('documents.transcript.showPlayer') || $t('documents.transcript.hidePlayer')"
               icon
@@ -72,16 +71,16 @@
             </v-btn>
           </div>
           <document-transcript-player
-            v-show="sideBySide || !playerCollapsed"
+            v-show="!playerCollapsed"
             ref="player"
             :url="playerUrl"
             :start="playerStart"
             :autoplay="playerAutoplay"
             :audio="audioFile"
-            :compact="!sideBySide"
+            compact
             @time="playerSeconds = $event" />
         </div>
-        <div :style="sideBySide && {flex: '0 0 40%', minWidth: 0}">
+        <div>
           <div
             v-if="file"
             :title="file.name"
@@ -127,7 +126,6 @@ export default {
     term: '',
     pollingTimer: null,
     lastRead: 0,
-    expanded: false,
     fileUnknown: false,
     playerCollapsed: false,
     playerAutoplay: false,
@@ -137,9 +135,6 @@ export default {
     inDocuments: false,
   }),
   computed: {
-    sideBySide() {
-      return !!this.playerUrl && this.expanded && !this.$vuetify.breakpoint.smAndDown;
-    },
     audioFile() {
       return /^audio\//.test(this.file?.mimeType || '');
     },
@@ -415,8 +410,7 @@ export default {
       }
     },
     /**
-     * Shows the drawer's own player above the transcript, or beside it once
-     * the drawer is expanded.
+     * Shows the drawer's own player above the transcript.
      *
      * @param {number} seconds the moment to start at, in seconds
      * @param {boolean} autoplay whether to play at once
@@ -427,6 +421,31 @@ export default {
       this.playerAutoplay = autoplay;
       this.playerCollapsed = false;
       this.playerUrl = this.$documentsUtils.getDownloadUrl(this.documentId, this.file?.modifiedDate);
+    },
+    /**
+     * Expanding the drawer opens the file's full view instead, on its
+     * Transcript tab, at the moment the recording reached and with the same
+     * search: one full-screen view serves both the details and the
+     * transcript. The drawer closes, so collapsing the full view returns to
+     * the details.
+     *
+     * @param {boolean} expanded whether the drawer was expanded
+     * @returns {void}
+     */
+    expandIntoDetails(expanded) {
+      if (!expanded) {
+        return;
+      }
+      const moment = this.playerSeconds ?? this.seconds;
+      const detail = {
+        documentId: this.documentId,
+        expanded: true,
+        tab: 'transcript',
+        seconds: Number.isFinite(moment) ? Math.floor(moment) : null,
+        term: this.term,
+      };
+      this.$refs.drawer.close();
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail}));
     },
     /**
      * Stops the drawer's own player and the polling once the drawer closes.
