@@ -20,9 +20,10 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 
 /**
  * What makes the chapters of transcripts (EXO-92122), as Documents asks it for
- * those of a transcript opened with none. The transcriber implements it and
- * registers itself in {@link TranscriptChaptersRequesterRegistry} when it
- * starts.
+ * those of a transcript opened with none. The transcriber implements it as a
+ * bean of the documents context, which {@link DocumentTranscriptionService}
+ * collects: Documents cannot see the transcriber's classes, only this
+ * interface.
  */
 public interface TranscriptChaptersRequester {
 
