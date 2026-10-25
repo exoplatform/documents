@@ -73,6 +73,7 @@
             :download-url="downloadUrl"
             :readable="isFileReadable"
             :start="transcriptMoment || 0"
+            :subtitle="compactSubtitle"
             @time="playerSeconds = $event"
             @open="openPreview" />
         </div>
