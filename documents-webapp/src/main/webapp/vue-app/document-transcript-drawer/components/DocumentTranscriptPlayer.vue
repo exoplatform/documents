@@ -22,7 +22,8 @@
     :autoplay="autoplay"
     controls="controls"
     class="full-width"
-    @timeupdate="$emit('time', $event.target.currentTime)">
+    @timeupdate="$emit('time', $event.target.currentTime)"
+    @play="pauseOthers">
   </audio>
   <video
     v-else
@@ -32,10 +33,15 @@
     :style="compact && {maxHeight: '30vh'}"
     controls="controls"
     class="black full-width documentTranscriptPlayer"
-    @timeupdate="$emit('time', $event.target.currentTime)">
+    @timeupdate="$emit('time', $event.target.currentTime)"
+    @play="pauseOthers">
   </video>
 </template>
 <script>
+// one set for the page: the transcript drawer and the details' full view
+// each bundle this player, and a hidden view keeps its player mounted
+const players = window.documentsRecordingPlayers || (window.documentsRecordingPlayers = new Set());
+
 export default {
   props: {
     url: {
@@ -59,7 +65,29 @@ export default {
       default: false,
     },
   },
+  beforeDestroy() {
+    const player = this.$refs.player;
+    if (player) {
+      player.pause();
+      players.delete(player);
+    }
+  },
   methods: {
+    /**
+     * Keeps one recording playing at a time on the page: this player, once it
+     * starts, pauses every other one that has played, shown or hidden.
+     * @param {Event} event the play event
+     * @returns {void}
+     */
+    pauseOthers(event) {
+      const started = event.target;
+      players.add(started);
+      players.forEach(player => {
+        if (player !== started && !player.paused) {
+          player.pause();
+        }
+      });
+    },
     /**
      * Moves the recording to a moment and plays it from there.
      *
