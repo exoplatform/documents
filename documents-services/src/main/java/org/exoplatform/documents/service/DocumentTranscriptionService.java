@@ -36,6 +36,18 @@ import org.exoplatform.social.core.manager.IdentityManager;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Optional;
+import org.exoplatform.documents.model.DocumentAudience;
+import org.exoplatform.documents.model.TranscriptionQuote;
+import org.exoplatform.documents.model.TranscriptionSpeakerCandidates;
+import org.exoplatform.documents.model.TranscriptionSpeakerProposal;
+import org.exoplatform.documents.model.TranscriptionSpeakerSuggestion;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
+import org.exoplatform.social.core.space.model.Space;
+import org.exoplatform.social.core.space.spi.SpaceService;
 
 /**
  * What a user can know and ask about the transcription of an audio or video
@@ -411,6 +423,210 @@ public class DocumentTranscriptionService {
       coming |= requester.requestChapters(documentId);
     }
     return coming;
+  }
+
+  /**
+   * The most people taken as the possible speakers of a recording linked to no
+   * meeting (EXO-92126): past it, a space's members are left out, a name said
+   * matching too many people to point to one.
+   */
+  static final int                             MAX_CANDIDATES                      = 50;
+
+  private static final Log                     LOG                                 = ExoLogger.getLogger(DocumentTranscriptionService.class);
+
+  @Autowired
+  private SpaceService                         spaceService;
+
+  @Autowired(required = false)
+  private List<TranscriptionAttendeesPlugin>   attendeesPlugins                    = List.of();
+
+  /**
+   * The people who may be the speakers of a recording (EXO-92126): the
+   * attendees of its meeting when an add-on knows it; otherwise the file's
+   * owner, the users it is shared with one by one and, up to
+   * {@link #MAX_CANDIDATES}, the members of the space that holds it. Only
+   * enabled users are kept.
+   *
+   * @param documentId the recording file's UUID
+   * @return the candidates, and whether they are a meeting's attendees
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  public TranscriptionSpeakerCandidates getSpeakerCandidates(String documentId) throws ObjectNotFoundException {
+    Set<Long> attendees = new LinkedHashSet<>();
+    boolean meeting = false;
+    for (TranscriptionAttendeesPlugin plugin : attendeesPlugins) {
+      try {
+        Optional<List<Long>> pluginAttendees = plugin.getAttendees(documentId);
+        if (pluginAttendees != null && pluginAttendees.isPresent()) {
+          meeting = true;
+          attendees.addAll(pluginAttendees.get());
+        }
+      } catch (RuntimeException e) {
+        LOG.warn("The attendees of the meeting of recording '{}' couldn't be read from {}", documentId, plugin.getClass().getName(), e);
+      }
+    }
+    if (meeting) {
+      return new TranscriptionSpeakerCandidates(true, attendees.stream().filter(this::isEnabledUser).toList());
+    }
+    DocumentAudience audience = documentFileService.getDocumentAudience(documentId);
+    Set<String> usernames = new LinkedHashSet<>();
+    if (StringUtils.isNotBlank(audience.owner())) {
+      usernames.add(audience.owner());
+    }
+    usernames.addAll(audience.users());
+    Space space = audience.spaceGroupId() == null ? null : spaceService.getSpaceByGroupId(audience.spaceGroupId());
+    if (space != null && space.getMembers() != null && usernames.size() + space.getMembers().length <= MAX_CANDIDATES) {
+      usernames.addAll(List.of(space.getMembers()));
+    }
+    List<Long> candidates = new ArrayList<>();
+    for (String username : usernames) {
+      Identity identity = identityManager.getOrCreateUserIdentity(username);
+      if (identity != null && candidates.size() < MAX_CANDIDATES && isEnabledUser(Long.parseLong(identity.getId()))) {
+        candidates.add(Long.parseLong(identity.getId()));
+      }
+    }
+    return new TranscriptionSpeakerCandidates(false, candidates);
+  }
+
+  /**
+   * Keeps the proposals made for the speakers of a recording's transcript, as
+   * the system, after naming the speakers whose proposal is strong
+   * (EXO-92126). A strong proposal names its speaker as the recording's owner,
+   * so only while the owner can still edit the file, and only when neither the
+   * speaker nor the person is named yet: it never replaces a name a person
+   * gave. Every proposal is kept, the applied ones marked so, the others shown
+   * to the people who can edit the file until one confirms or dismisses them.
+   *
+   * @param documentId the recording file's UUID
+   * @param suggestions the proposals, one per speaker at most
+   * @param ownerIdentityId the identity id of the recording's owner, or null
+   *          when unknown, which names no speaker
+   * @return the proposals kept, each saying whether it was applied
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  public List<TranscriptionSpeakerSuggestion> applySpeakerSuggestions(String documentId,
+                                                                      List<TranscriptionSpeakerSuggestion> suggestions,
+                                                                      Long ownerIdentityId) throws ObjectNotFoundException {
+    List<TranscriptionSpeakerSuggestion> waiting = suggestions.stream().map(suggestion -> suggestion.withAutoApplied(false)).toList();
+    // kept before any speaker is named, so that no name is ever applied without the proposal that explains it
+    documentFileService.saveTranscriptionSpeakerSuggestions(documentId, waiting);
+    List<TranscriptionSpeakerSuggestion> kept = new ArrayList<>();
+    boolean applied = false;
+    for (TranscriptionSpeakerSuggestion suggestion : waiting) {
+      boolean named = suggestion.strong() && ownerIdentityId != null && autoName(documentId, suggestion, ownerIdentityId);
+      applied = applied || named;
+      kept.add(suggestion.withAutoApplied(named));
+    }
+    if (applied) {
+      documentFileService.saveTranscriptionSpeakerSuggestions(documentId, kept);
+    }
+    return kept;
+  }
+
+  /**
+   * The proposals of who the speakers of a file's transcript are, for a user
+   * who can edit the file (EXO-92126), each with the sentences that show it. A
+   * proposal waiting for a person is shown while neither its speaker nor its
+   * person is named; an applied one while its speaker is still named after its
+   * person.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user
+   * @return the proposals to show, in the order they were made
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   */
+  public List<TranscriptionSpeakerProposal> getSpeakerProposals(String documentId, long aclIdentity) throws IllegalAccessException,
+                                                                                                    ObjectNotFoundException {
+    if (!canNameSpeakers(documentId, aclIdentity)) {
+      throw new IllegalAccessException("User may not name the speakers of file " + documentId);
+    }
+    List<TranscriptionSpeakerSuggestion> suggestions = documentFileService.getTranscriptionSpeakerSuggestions(documentId, aclIdentity);
+    if (suggestions.isEmpty()) {
+      return List.of();
+    }
+    Map<String, String> named = getSpeakers(documentId, aclIdentity);
+    List<JsonNode> segments = readSegments(getSegments(documentId, aclIdentity));
+    List<TranscriptionSpeakerProposal> proposals = new ArrayList<>();
+    for (TranscriptionSpeakerSuggestion suggestion : suggestions) {
+      String person = String.valueOf(suggestion.identityId());
+      boolean shown = suggestion.autoApplied() ? person.equals(named.get(suggestion.speaker()))
+                                               : !named.containsKey(suggestion.speaker()) && !named.containsValue(person);
+      if (shown) {
+        List<TranscriptionQuote> quotes = new ArrayList<>();
+        for (int index : suggestion.evidence()) {
+          if (index >= 0 && index < segments.size()) {
+            JsonNode segment = segments.get(index);
+            quotes.add(new TranscriptionQuote(segment.path("start").asDouble(),
+                                              segment.path("speaker").isString() ? segment.path("speaker").asString() : null,
+                                              segment.path("text").asString("")));
+          }
+        }
+        proposals.add(new TranscriptionSpeakerProposal(suggestion.speaker(),
+                                                       suggestion.identityId(),
+                                                       suggestion.strong(),
+                                                       suggestion.autoApplied(),
+                                                       quotes));
+      }
+    }
+    return proposals;
+  }
+
+  /**
+   * Dismisses the proposal for one speaker of a file's transcript, for a user
+   * who can edit the file (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param aclIdentity the identity id of the user
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   */
+  public void dismissSpeakerProposal(String documentId, String speaker, long aclIdentity) throws IllegalAccessException,
+                                                                                         ObjectNotFoundException {
+    if (!canNameSpeakers(documentId, aclIdentity)) {
+      throw new IllegalAccessException("User may not name the speakers of file " + documentId);
+    }
+    documentFileService.removeTranscriptionSpeakerSuggestion(documentId, speaker, aclIdentity);
+  }
+
+  /**
+   * Names a speaker after a strong proposal, as the recording's owner, when
+   * neither the speaker nor the person is named yet.
+   *
+   * @param documentId the file's UUID
+   * @param suggestion the proposal
+   * @param ownerIdentityId the identity id of the recording's owner
+   * @return true when the speaker was named; false when it, or the person,
+   *         already was, or when the owner may no longer name it
+   */
+  private boolean autoName(String documentId, TranscriptionSpeakerSuggestion suggestion, long ownerIdentityId) {
+    try {
+      checkNameable(documentId, suggestion.speaker(), suggestion.identityId(), ownerIdentityId);
+      return documentFileService.nameTranscriptionSpeakerIfUnnamed(documentId,
+                                                                   suggestion.speaker(),
+                                                                   String.valueOf(suggestion.identityId()),
+                                                                   ownerIdentityId);
+    } catch (IllegalAccessException | ObjectNotFoundException | IllegalArgumentException | IllegalStateException e) {
+      LOG.debug("Speaker {} of recording '{}' is left to a person to name", suggestion.speaker(), documentId, e);
+      return false;
+    }
+  }
+
+  /**
+   * Reads a transcript's segments.
+   *
+   * @param segments the segments as a JSON list, possibly null
+   * @return the segments, in order; empty when there are none
+   */
+  private List<JsonNode> readSegments(String segments) {
+    List<JsonNode> nodes = new ArrayList<>();
+    if (StringUtils.isNotBlank(segments)) {
+      objectMapper.readTree(segments).forEach(nodes::add);
+    }
+    return nodes;
   }
 
 }

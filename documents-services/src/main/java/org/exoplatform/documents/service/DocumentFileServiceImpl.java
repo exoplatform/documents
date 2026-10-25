@@ -671,6 +671,54 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     documentFileStorage.setTranscriptionSpeaker(documentId, speaker, identityId, getAclUserIdentity(aclIdentity));
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DocumentAudience getDocumentAudience(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.getDocumentAudience(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void saveTranscriptionSpeakerSuggestions(String documentId,
+                                                  List<TranscriptionSpeakerSuggestion> suggestions) throws ObjectNotFoundException {
+    documentFileStorage.saveTranscriptionSpeakerSuggestions(documentId, suggestions);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
+                                                                                 long aclIdentity) throws IllegalAccessException,
+                                                                                                   ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSpeakerSuggestions(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void removeTranscriptionSpeakerSuggestion(String documentId,
+                                                   String speaker,
+                                                   long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    documentFileStorage.removeTranscriptionSpeakerSuggestion(documentId, speaker, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean nameTranscriptionSpeakerIfUnnamed(String documentId,
+                                                   String speaker,
+                                                   String identityId,
+                                                   long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.nameTranscriptionSpeakerIfUnnamed(documentId, speaker, identityId, getAclUserIdentity(aclIdentity));
+  }
+
   @Override
   public void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
     documentFileStorage.createShortcut(documentId, destPath, aclIdentity, conflictAction);
