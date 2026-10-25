@@ -612,9 +612,10 @@ public class DocumentTranscriptionService {
 
   /**
    * Names a speaker after a strong proposal, as the recording's owner, and marks
-   * the stored proposal applied, in one save that reads again everything the
-   * proposal depends on (see
-   * {@link DocumentFileService#applyTranscriptionSpeakerSuggestion}).
+   * the stored proposal applied, in one save that reads again what the
+   * proposal rests on in the file (see
+   * {@link DocumentFileService#applyTranscriptionSpeakerSuggestion}). Whether
+   * the person is an enabled user is checked just before that save, not in it.
    *
    * @param documentId the file's UUID
    * @param suggestion the proposal
