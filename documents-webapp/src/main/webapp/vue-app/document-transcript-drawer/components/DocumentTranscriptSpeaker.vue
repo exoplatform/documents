@@ -40,7 +40,7 @@
           :title="$t('documents.transcript.speaker.change')"
           :aria-label="$t('documents.transcript.speaker.change')"
           :disabled="busy"
-          class="documentTranscriptSpeakerChange ms-1"
+          class="documentTranscriptSpeakerChange"
           icon
           small
           v-on="on"
@@ -129,7 +129,7 @@ export default {
   data: () => ({
     menu: false,
     chosen: null,
-    // without options the suggester's user search fails; an empty current user lists everyone, the viewer included
+    // without options the suggester's user search fails; an empty current user leaves the viewer among the users found
     searchOptions: {
       currentUser: '',
     },
