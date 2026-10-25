@@ -130,6 +130,7 @@ export default {
         this.chapters = null;
         this.resetChaptersRequest();
         this.speakers = null;
+        this.canNameSpeakers = false;
         this.term = this.initialTerm || '';
         this.refresh();
       },
