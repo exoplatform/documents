@@ -18,25 +18,25 @@
   <div
     :class="timeline && 'documentInfoContentWithTimeline'"
     class="documentInfoContent d-flex flex-column align-center justify-center fill-height pa-6">
-    <document-transcript-player
-      v-if="mediaKind"
-      ref="player"
-      :url="downloadUrl"
-      :audio="mediaKind === 'audio'"
-      :start="start"
-      :autoplay="autoplay"
-      class="documentInfoContentMedia"
-      @loadedmetadata.native="readDuration"
-      @time="updateTime" />
-    <document-recording-timeline
-      v-if="mediaKind && file"
-      :document-id="file.id"
-      :playing-seconds="playingSeconds"
-      :media-duration="duration"
-      :class="mediaKind === 'audio' && 'order-first mb-4' || 'mt-4'"
-      class="full-width"
-      @shown="timeline = $event"
-      @seek="seek" />
+    <template v-if="mediaKind">
+      <document-transcript-player
+        ref="player"
+        :url="downloadUrl"
+        :audio="mediaKind === 'audio'"
+        :start="start"
+        :autoplay="autoplay"
+        class="documentInfoContentMedia"
+        @loadedmetadata.native="readDuration"
+        @time="updateTime" />
+      <document-recording-timeline
+        :document-id="file.id"
+        :playing-seconds="playingSeconds"
+        :media-duration="duration"
+        :class="mediaKind === 'audio' && 'order-first mb-4' || 'mt-4'"
+        class="full-width"
+        @shown="timeline = $event"
+        @seek="seek" />
+    </template>
     <button
       v-else
       :title="$t('documents.drawer.details.clickToOpen')"
@@ -135,6 +135,14 @@ export default {
   watch: {
     file() {
       this.imageFailed = false;
+    },
+    /**
+     * Forgets the moment, the length and the timeline of the recording shown
+     * when another file is shown; the same file read again, as after a
+     * version restore, keeps them.
+     * @returns {void}
+     */
+    'file.id'() {
       this.seconds = null;
       this.duration = null;
       this.timeline = false;
