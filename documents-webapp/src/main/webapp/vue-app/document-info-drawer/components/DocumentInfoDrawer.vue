@@ -2,6 +2,7 @@
   <exo-drawer
     ref="documentInfoDrawer"
     v-model="drawer"
+    :expanded="openExpanded"
     class="documentInfoDrawer"
     allow-expand
     right
@@ -63,6 +64,7 @@
             :media-kind="mediaKind"
             :download-url="downloadUrl"
             :readable="isFileReadable"
+            :start="transcriptMoment || 0"
             @time="playerSeconds = $event"
             @open="openPreview" />
         </div>
@@ -73,7 +75,7 @@
             class="documentInfoTabs flex-grow-0">
             <v-tab href="#details">{{ $t('documents.drawer.details.tab.details') }}</v-tab>
             <v-tab v-if="!file.folder" href="#versions">{{ $t('documents.drawer.details.versions') }}</v-tab>
-            <v-tab v-if="mediaKind && transcriptAvailable" href="#transcript">{{ $t('documents.drawer.details.transcript') }}</v-tab>
+            <v-tab v-if="mediaKind && (transcriptAvailable || tab === 'transcript')" href="#transcript">{{ $t('documents.drawer.details.transcript') }}</v-tab>
           </v-tabs>
           <div
             v-show="!sideBySide || tab === 'details'"
@@ -206,6 +208,8 @@
             v-if="sideBySide && tab === 'transcript'"
             :document-id="fileId"
             :playing-seconds="playerSeconds"
+            :seconds="transcriptMoment"
+            :initial-term="transcriptTerm"
             class="px-4 overflow-y-auto"
             @seek="seek" />
         </div>
@@ -248,6 +252,9 @@ export default {
     tab: 'details',
     thumbnailUrl: null,
     playerSeconds: null,
+    openExpanded: false,
+    transcriptMoment: null,
+    transcriptTerm: '',
     file: null,
     fileInDrive: null,
     fileInDriveRequest: null,
@@ -450,13 +457,17 @@ export default {
     },
     /**
      * Reads the file the event names, with its creator, modifier, owner and
-     * metadata, and opens the drawer on it, narrow, on its details.
-     * @param {CustomEvent} event its detail is the file's id
+     * metadata, and opens the drawer on it: narrow, on its details, unless
+     * the event asks for the full view on a tab, at a moment of the recording
+     * and with a search, as the transcript drawer does when expanded.
+     * @param {CustomEvent} event its detail is the file's id, or an object
+     *          with documentId, and optionally expanded, tab, seconds and term
      * @returns {void}
      */
     open(event) {
-      const fileId = event?.detail?.id || event?.detail;
-      this.contextOwnerId = event?.detail?.ownerId || null;
+      const request = event?.detail && typeof event.detail === 'object' && event.detail || {documentId: event?.detail};
+      const fileId = request.documentId || request.id;
+      this.contextOwnerId = request.ownerId || null;
       const expand =  'modifier,creator,owner,metadatas';
       this.$attachmentService.getDocumentDetails(fileId,expand)
         .then(file => {
@@ -475,7 +486,10 @@ export default {
           this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
           this.fileInitialDescription = this.file.description;    
           this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length; 
-          this.tab = 'details';
+          this.tab = request.tab || 'details';
+          this.openExpanded = !!request.expanded;
+          this.transcriptMoment = Number.isFinite(request.seconds) ? request.seconds : null;
+          this.transcriptTerm = request.term || '';
           this.playerSeconds = null;
           if (file.folder){
             this.file.mimeType = 'folder';
