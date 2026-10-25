@@ -19,9 +19,11 @@ import {countOccurrences} from './TranscriptSearch.js';
 
 /**
  * The folds of a transcript's chapters, for the component that shows them
- * from its `groups`, `activeIndex`, `playingSeconds` and `term`: every
- * chapter is folded on open, and unfolds when the user opens it, picks it in
- * the list, plays into it or searches a term it holds.
+ * from its `groups`, `activeIndex`, `playingSeconds`, `term`, `seconds` and
+ * `shownIndex`: every chapter is folded on open, and unfolds when the user
+ * opens it, picks it in the list, plays into it or searches a term it holds.
+ * A term or a moment already set when the transcript shows, or when its
+ * chapters arrive, unfolds its chapters the same way.
  */
 export default {
   data: () => ({
@@ -46,9 +48,35 @@ export default {
     },
     chapters() {
       this.opened = {};
+      this.applyFolds();
+      // the unfolded lines exist in the DOM only once the new groups are rendered
+      this.$nextTick(this.revealCurrent);
     },
   },
   methods: {
+    /**
+     * Unfolds the chapters the current state asks for: those holding the
+     * searched term, and the one of the moment asked for, when after the start.
+     *
+     * @returns {void}
+     */
+    applyFolds() {
+      this.openMatchingChapters();
+      if (this.seconds > 0 && this.shownIndex >= 0) {
+        this.openChapter(this.groupKeyOf(this.shownIndex));
+      }
+    },
+    /**
+     * Scrolls to the first occurrence of the searched term, else to the
+     * sentence of the moment asked for.
+     *
+     * @returns {void}
+     */
+    revealCurrent() {
+      const target = this.term && this.$el?.querySelector?.('mark')
+        || this.seconds > 0 && this.$el?.querySelector?.(`[data-segment-index="${this.shownIndex}"]`);
+      target?.scrollIntoView?.({block: 'center'});
+    },
     /**
      * Finds the group a sentence is shown in.
      *
