@@ -46,6 +46,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.TranscriptionStatus;
+import org.exoplatform.documents.model.TranscriptionBusyException;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakerEntity;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakersEntity;
@@ -224,6 +225,11 @@ class TranscriptionRestTest {
     ResponseStatusException refused = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "9", 42L));
     assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
     assertEquals("documents.transcription.speaker.unknown", refused.getReason());
+
+    doThrow(new TranscriptionBusyException("held up")).when(documentTranscriptionService).setSpeaker(DOCUMENT_ID, "3", 42L, 7L);
+    ResponseStatusException busy = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "3", 42L));
+    assertEquals(HttpStatus.CONFLICT, busy.getStatusCode());
+    assertEquals("documents.transcription.speaker.busy", busy.getReason());
 
     doThrow(new IllegalAccessException("john may not edit /x")).when(documentTranscriptionService).setSpeaker(DOCUMENT_ID, "2", 42L, 7L);
     ResponseStatusException forbidden = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "2", 42L));
