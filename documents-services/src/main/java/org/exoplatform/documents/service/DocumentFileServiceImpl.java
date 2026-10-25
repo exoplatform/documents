@@ -635,6 +635,33 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getTranscriptionSegments(documentId, getAclUserIdentity(aclIdentity));
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionSegments(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSegments(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean saveTranscriptionChapters(String documentId,
+                                           String chapters,
+                                           long transcriptUpdated) throws ObjectNotFoundException {
+    return documentFileStorage.saveTranscriptionChapters(documentId, chapters, transcriptUpdated);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionChapters(String documentId,
+                                         long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionChapters(documentId, getAclUserIdentity(aclIdentity));
+  }
+
   @Override
   public void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
     documentFileStorage.createShortcut(documentId, destPath, aclIdentity, conflictAction);
