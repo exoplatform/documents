@@ -84,6 +84,100 @@
     .documentInfoContentMedia {
       width: 100%;
     }
+    &.documentInfoContentWithTimeline {
+      justify-content: flex-start !important;
+      overflow-y: auto;
+      video.documentInfoContentMedia {
+        flex: 1 1 0;
+        min-height: 160px;
+        max-height: none;
+      }
+    }
+  }
+  @documentTimelineLabelWidth: 120px;
+  @documentTimelineGap: 12px;
+  .documentRecordingTimeline {
+    border: 1px solid @borderColor;
+    flex: 0 0 auto;
+    .documentTimelineGrid {
+      display: grid;
+      grid-template-columns: @documentTimelineLabelWidth minmax(0, 1fr);
+      column-gap: @documentTimelineGap;
+      row-gap: 8px;
+      align-items: center;
+    }
+    .documentTimelineScale {
+      height: 16px;
+      font-variant-numeric: tabular-nums;
+      .documentTimelineTick {
+        position: absolute;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        &:first-child {
+          transform: none;
+        }
+        &:last-child {
+          transform: translateX(-100%);
+        }
+      }
+    }
+    .documentTimelineTrack {
+      position: relative;
+      &.documentTimelineBlocks {
+        height: 40px;
+      }
+      &.documentTimelineLane {
+        height: 18px;
+        border-radius: 9px;
+        background: @greyColorLighten1;
+        .documentTimelineItem {
+          top: 3px;
+          bottom: 3px;
+          min-width: 3px;
+          border-radius: 6px;
+        }
+      }
+    }
+    .documentTimelineItem {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      margin: 0;
+      padding: 0 10px;
+      border: 0;
+      border-inline-end: 2px solid @white;
+      border-radius: 6px;
+      color: @textColor;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: start;
+      overflow: hidden;
+      cursor: pointer;
+      &:focus-visible {
+        outline: 2px solid @primaryColor;
+        outline-offset: 1px;
+        z-index: 1;
+      }
+      &.documentTimelineActive {
+        box-shadow: inset 0 0 0 2px fade(@black, 45%);
+      }
+    }
+    .documentTimelineNumber {
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .documentTimelinePlayhead {
+      position: absolute;
+      top: 16px;
+      bottom: 0;
+      width: 2px;
+      margin-inline-start: -1px;
+      inset-inline-start: calc(~"@{documentTimelineLabelWidth} + @{documentTimelineGap} + (100% - @{documentTimelineLabelWidth} - @{documentTimelineGap}) * var(--documentTimelinePlayhead)");
+      background: @textColor;
+      pointer-events: none;
+    }
   }
   .documentInfoTranscriptSearch {
     position: sticky;
