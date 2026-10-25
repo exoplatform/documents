@@ -3965,6 +3965,7 @@ public class JCRDocumentFileStorageTest {
     assertNull(jcrDocumentFileStorage.getTranscriptionSegments("1"));
   }
 
+  /** Gives the node a done transcript updated at the given time, in milliseconds. */
   private void mockDoneTranscript(Node node, long updated) throws Exception {
     when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
     mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
@@ -3976,6 +3977,7 @@ public class JCRDocumentFileStorageTest {
     when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(updatedProperty);
   }
 
+  /** Stores the given speaker proposals, in their stored form, on the node. */
   private void mockSuggestions(Node node, String... values) throws Exception {
     when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)).thenReturn(true);
     when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION)).thenReturn(true);
