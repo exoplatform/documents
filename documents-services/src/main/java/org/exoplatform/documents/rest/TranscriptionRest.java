@@ -387,7 +387,8 @@ public class TranscriptionRest {
   /**
    * Answers the proposals of who the speakers of a file's transcript are, with
    * the sentences that show each, to a user who can edit the file
-   * (EXO-92126).
+   * (EXO-92126). A proposal naming a person deleted or disabled since is left
+   * out: that person can no longer be named.
    *
    * @param request the HTTP request, which names the caller
    * @param documentId the file's UUID
@@ -410,7 +411,7 @@ public class TranscriptionRest {
       for (TranscriptionSpeakerProposal proposal : documentTranscriptionService.getSpeakerProposals(documentId,
                                                                                                     getCurrentIdentityId(request))) {
         Identity person = identityManager.getIdentity(String.valueOf(proposal.identityId()));
-        if (person != null && !person.isDeleted()) {
+        if (person != null && !person.isDeleted() && person.isEnable()) {
           proposals.add(new TranscriptionSpeakerProposalEntity(proposal.speaker(),
                                                                person.getId(),
                                                                person.getRemoteId(),
