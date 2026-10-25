@@ -3647,6 +3647,11 @@ public class JCRDocumentFileStorageTest {
                                                                            List.of(new TranscriptionSpeakerSuggestion("1", 44, true, false, List.of())),
                                                                            999L));
     verify(session, times(2)).save();
+
+    // a state that is no longer done refuses them even when written in the same millisecond
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "QUEUED");
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1", List.of(), 1000L));
+    verify(session, times(2)).save();
     assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
   }
 
