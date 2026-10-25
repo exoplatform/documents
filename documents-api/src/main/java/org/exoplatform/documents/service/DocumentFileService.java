@@ -744,28 +744,6 @@ public interface DocumentFileService {
   }
 
   /**
-   * Marks, as the system, the stored proposal of a speaker as applied
-   * (EXO-92126), re-read under the file's lock so that a proposal dismissed
-   * meanwhile stays dismissed, and only while the transcript it was made from is
-   * still the stored one.
-   *
-   * @param documentId the file's UUID
-   * @param speaker the speaker's number in the transcript
-   * @param identityId the identity id of the person the proposal names
-   * @param transcriptUpdated the update time of the transcription state the
-   *          proposal was made from, in milliseconds since the epoch
-   * @return true when marked, false when no such proposal is stored any more,
-   *         or the transcript changed
-   * @throws ObjectNotFoundException when the file does not exist
-   */
-  default boolean markTranscriptionSpeakerSuggestionApplied(String documentId,
-                                                            String speaker,
-                                                            long identityId,
-                                                            long transcriptUpdated) throws ObjectNotFoundException {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
    * The proposals of who the speakers of a media file's transcript are, read
    * with the rights of the given user (EXO-92126).
    *
@@ -800,29 +778,31 @@ public interface DocumentFileService {
   }
 
   /**
-   * Names a speaker of a media file's transcript, as a user who can edit the
-   * file, only when neither the speaker nor the person is named yet, and only
-   * while the transcript is the one the name was proposed from (EXO-92126): a
-   * name applied without waiting for a person never replaces one a person
-   * gave, nor names a voice of another transcript.
+   * Names a speaker of a media file's transcript after a proposal the platform
+   * made, as a user who can edit the file, and marks that proposal applied, in
+   * one save under the file's lock (EXO-92126). Everything that could have
+   * changed since the proposal was made is read again at that moment: the
+   * transcript must still be the one it was made from, the proposal must still
+   * be stored (not dismissed), neither the speaker nor the person may be named,
+   * and a proposal made by elimination needs its other voice still named after
+   * the person it was taken to be. A name applied this way never replaces one a
+   * person gave, nor names a voice of another transcript.
    *
    * @param documentId the file's UUID
-   * @param speaker the speaker's number in the transcript
-   * @param identityId the identity id of the person
+   * @param suggestion the proposal
    * @param transcriptUpdated the update time of the transcription state the
-   *          name was proposed from, in milliseconds since the epoch
+   *          proposal was made from, in milliseconds since the epoch
    * @param aclIdentity the identity id of the user naming it
-   * @return true when the speaker was named, false when the speaker or the
-   *         person already was, or the transcript changed
+   * @return true when the speaker was named; false when any of these no longer
+   *         holds
    * @throws IllegalAccessException when the user may not edit the file
    * @throws ObjectNotFoundException when the file does not exist, or the user
    *           cannot see it
    */
-  default boolean nameTranscriptionSpeakerIfUnnamed(String documentId,
-                                                    String speaker,
-                                                    String identityId,
-                                                    long transcriptUpdated,
-                                                    long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+  default boolean applyTranscriptionSpeakerSuggestion(String documentId,
+                                                      TranscriptionSpeakerSuggestion suggestion,
+                                                      long transcriptUpdated,
+                                                      long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     throw new UnsupportedOperationException();
   }
 
