@@ -39,6 +39,13 @@ public class DocumentTranscriptionService {
    */
   public static final String                   TRANSCRIPTION_RETRY_REQUESTED_EVENT = "exo.documents.transcription.retryRequested";
 
+  /**
+   * Broadcast when a user opens a transcript that has timed segments and no
+   * chapters (EXO-92122), with the user name as source and the file's UUID as
+   * data: the transcriber decides whether its chapters are to be made.
+   */
+  public static final String                   TRANSCRIPTION_CHAPTERS_REQUESTED_EVENT = "exo.documents.transcription.chaptersRequested";
+
   public static final String                   UNAVAILABLE_MESSAGE                 = "documents.transcription.unavailable";
 
   public static final String                   NOT_MEDIA_MESSAGE                   = "documents.transcription.notMedia";
@@ -162,6 +169,38 @@ public class DocumentTranscriptionService {
       listenerService.broadcast(TRANSCRIPTION_RETRY_REQUESTED_EVENT, username, documentId);
     } catch (Exception e) {
       throw new IllegalStateException("Error asking to transcribe media file '%s' again".formatted(documentId), e);
+    }
+    return true;
+  }
+
+  /**
+   * Asks for the chapters of a transcript a user opens, for any user who can
+   * read the file (EXO-92122): a transcript done before chapters were switched
+   * on gets them the first time it is read. Only a transcript done, with timed
+   * segments and no chapters, is handed to the transcriber, which makes them at
+   * most once per file.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user
+   * @param username the user's name
+   * @return true when the request was handed to the transcriber
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   */
+  public boolean requestChapters(String documentId, long aclIdentity, String username) throws IllegalAccessException,
+                                                                                       ObjectNotFoundException {
+    if (!isAvailable()) {
+      return false;
+    }
+    TranscriptionState state = getState(documentId, aclIdentity);
+    if (state.status() != TranscriptionStatus.DONE || !state.hasSegments() || state.hasChapters()) {
+      return false;
+    }
+    try {
+      listenerService.broadcast(TRANSCRIPTION_CHAPTERS_REQUESTED_EVENT, username, documentId);
+    } catch (Exception e) {
+      throw new IllegalStateException("Error asking for the chapters of media file '%s'".formatted(documentId), e);
     }
     return true;
   }
