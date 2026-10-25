@@ -2845,6 +2845,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS,
                          new ByteArrayInputStream(segments.getBytes(StandardCharsets.UTF_8)));
       }
+      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)) {
+        node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+      }
       session.save();
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error writing the transcript of media file '%s'".formatted(documentId), e);
@@ -2859,27 +2862,122 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public String getTranscriptionSegments(String documentId,
                                          Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return readTranscriptionProperty(documentId,
+                                     aclIdentity,
+                                     NodeTypeConstants.EXO_TRANSCRIPTION_STATE,
+                                     NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionSegments(String documentId) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return readBinaryProperty(getTranscribedNode(session, documentId),
+                                NodeTypeConstants.EXO_TRANSCRIPTION_STATE,
+                                NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS);
+    } catch (RepositoryException | IOException e) {
+      throw new IllegalStateException("Error reading the transcript segments of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean saveTranscriptionChapters(String documentId,
+                                           String chapters,
+                                           long transcriptUpdated) throws ObjectNotFoundException {
+    if (StringUtils.isBlank(chapters)) {
+      throw new IllegalArgumentException("chapters are mandatory");
+    }
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      TranscriptionState state = toTranscriptionState(node);
+      if (state.status() != TranscriptionStatus.DONE || !Objects.equals(state.updated(), transcriptUpdated)) {
+        return false;
+      }
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)) {
+        node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+      }
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS,
+                       new ByteArrayInputStream(chapters.getBytes(StandardCharsets.UTF_8)));
+      session.save();
+      return true;
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error writing the transcript chapters of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionChapters(String documentId,
+                                         Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return readTranscriptionProperty(documentId,
+                                     aclIdentity,
+                                     NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS,
+                                     NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+  }
+
+  /**
+   * Reads a Binary property of a transcribed file with the rights of a user.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the user reading it
+   * @param mixin the mixin that holds the property
+   * @param property the property's name
+   * @return its text, or null when the file has no such property
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  private String readTranscriptionProperty(String documentId,
+                                           Identity aclIdentity,
+                                           String mixin,
+                                           String property) throws IllegalAccessException, ObjectNotFoundException {
     SessionProvider sessionProvider = null;
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
-      Node node = getTranscribedNode(session, documentId);
-      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)
-          && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)) {
-        try (InputStream stream = node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS).getStream()) {
-          return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        }
-      } else {
-        return null;
-      }
+      return readBinaryProperty(getTranscribedNode(session, documentId), mixin, property);
     } catch (AccessDeniedException e) {
       throw new IllegalAccessException(e.getMessage());
     } catch (RepositoryException | IOException e) {
-      throw new IllegalStateException("Error reading the transcript segments of media file '%s'".formatted(documentId), e);
+      throw new IllegalStateException("Error reading the property %s of media file '%s'".formatted(property, documentId), e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
+    }
+  }
+
+  /**
+   * Reads a Binary property of a node as UTF-8 text.
+   *
+   * @param node the node
+   * @param mixin the mixin that holds the property
+   * @param property the property's name
+   * @return its text, or null when the node does not have it
+   * @throws RepositoryException when the node cannot be read
+   * @throws IOException when the value cannot be read
+   */
+  private String readBinaryProperty(Node node, String mixin, String property) throws RepositoryException, IOException {
+    if (!node.isNodeType(mixin) || !node.hasProperty(property)) {
+      return null;
+    }
+    try (InputStream stream = node.getProperty(property).getStream()) {
+      return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
     }
   }
 
@@ -3931,6 +4029,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                                         .getTimeInMillis() :
                                                                                                     null)
                                .hasSegments(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS))
+                               .hasChapters(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS))
                                .media(media)
                                .build();
     } else if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)

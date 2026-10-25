@@ -1,0 +1,88 @@
+/*
+ * Copyright (C) 2026 eXo Platform SAS.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <gnu.org/licenses>.
+ */
+
+/**
+ * Groups a transcript's segments under its chapters, each chapter holding the
+ * segments from its first one to the next chapter's. Chapters that do not fit
+ * the segments (fewer than two, untitled, out of order or out of range) are
+ * ignored, and the segments make one group with no chapter.
+ *
+ * @param {Array<Object>} segments the transcript's segments, each with start
+ *          and text
+ * @param {Array<Object>} chapters the chapters, each with start, index, title
+ *          and summary, or null
+ * @returns {Array<Object>} the groups in order, each with its key, its chapter
+ *          or null, and its rows; a row holds its segment, the segment's index
+ *          in the transcript, and whether it is the first row of its group
+ */
+export function groupByChapters(segments, chapters) {
+  const rows = (segments || []).map((segment, index) => ({segment, index, firstOfChapter: index === 0}));
+  if (!fitChapters(rows.length, chapters)) {
+    return [{key: 'all', chapter: null, rows}];
+  }
+  return chapters.map((chapter, position) => {
+    const first = position === 0 ? 0 : chapter.index;
+    const end = position + 1 < chapters.length ? chapters[position + 1].index : rows.length;
+    return {
+      key: `chapter-${position}`,
+      chapter,
+      rows: rows.slice(first, end).map((row, rank) => ({...row, firstOfChapter: rank === 0})),
+    };
+  });
+}
+
+/**
+ * Tells whether chapters fit a transcript's segments.
+ *
+ * @param {number} count how many segments the transcript has
+ * @param {Array<Object>} chapters the chapters, or null
+ * @returns {boolean} true for at least two titled chapters whose first segments
+ *          follow each other within the transcript
+ */
+function fitChapters(count, chapters) {
+  if (!count || !Array.isArray(chapters) || chapters.length < 2) {
+    return false;
+  }
+  return chapters.every((chapter, position) => chapter?.title
+    && Number.isInteger(chapter.index)
+    && chapter.index < count
+    && (position === 0 || chapter.index > chapters[position - 1].index));
+}
+
+/** How long after its transcript a recording's chapters may still come, in milliseconds. */
+const CHAPTERS_WAIT_MILLIS = 180000;
+
+/** The shortest recording grouped into chapters, in seconds, as the server decides it. */
+const CHAPTERS_MIN_SECONDS = 180;
+
+/**
+ * Tells whether a transcribed recording may still get its chapters: they are
+ * made right after the transcript, for a recording long enough, and come a
+ * little later.
+ *
+ * @param {Object} state the transcription state
+ * @returns {boolean} true for a transcript with segments and no chapters yet,
+ *          written less than three minutes ago
+ */
+export function awaitsChapters(state) {
+  return state?.status === 'DONE'
+    && !!state.hasSegments
+    && !state.hasChapters
+    && (state.durationSeconds || 0) >= CHAPTERS_MIN_SECONDS
+    && !!state.updated
+    && Date.now() - state.updated < CHAPTERS_WAIT_MILLIS;
+}
