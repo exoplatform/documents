@@ -48,8 +48,11 @@ import org.springframework.web.server.ResponseStatusException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.TranscriptionBusyException;
+import org.exoplatform.documents.model.TranscriptionQuote;
+import org.exoplatform.documents.model.TranscriptionSpeakerProposal;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakerEntity;
+import org.exoplatform.documents.rest.model.TranscriptionSpeakerProposalEntity;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakersEntity;
 import org.exoplatform.documents.rest.model.TranscriptionStateEntity;
 import org.exoplatform.documents.service.DocumentTranscriptionService;
@@ -354,6 +357,58 @@ class TranscriptionRestTest {
     e = assertThrows(ResponseStatusException.class, () -> rest.getChapters(request, DOCUMENT_ID));
     assertEquals(HttpStatus.FORBIDDEN, e.getStatusCode());
     assertEquals("documents.transcription.forbidden", e.getReason());
+  }
+
+  /**
+   * The proposals come with the person each names, a deleted person left out,
+   * never stored by a shared cache; a caller who cannot edit the file is
+   * answered 403 (EXO-92126).
+   */
+  @Test
+  void theSpeakerProposalsComeWithTheirPerson_andAreForEditorsOnly() throws Exception {
+    List<TranscriptionQuote> quotes = List.of(new TranscriptionQuote(4, "1", "Merci Julien."));
+    when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenReturn(List.of(
+        new TranscriptionSpeakerProposal("2", 42, true, false, quotes),
+        new TranscriptionSpeakerProposal("3", 43, false, false, List.of())));
+    Identity julien = mock(Identity.class);
+    Profile profile = mock(Profile.class);
+    when(julien.getId()).thenReturn("42");
+    when(julien.getRemoteId()).thenReturn("julien");
+    when(julien.getProfile()).thenReturn(profile);
+    when(profile.getFullName()).thenReturn("Julien Dupont");
+    when(profile.getAvatarUrl()).thenReturn("/avatar/julien");
+    Identity deleted = mock(Identity.class);
+    when(deleted.isDeleted()).thenReturn(true);
+    when(identityManager.getIdentity("42")).thenReturn(julien);
+    when(identityManager.getIdentity("43")).thenReturn(deleted);
+
+    ResponseEntity<List<TranscriptionSpeakerProposalEntity>> answer = rest.getSpeakerProposals(request, DOCUMENT_ID);
+
+    assertEquals("no-store", answer.getHeaders().getCacheControl());
+    assertEquals(List.of(new TranscriptionSpeakerProposalEntity("2", "42", "julien", "Julien Dupont", "/avatar/julien", true, false, quotes)),
+                 answer.getBody());
+
+    when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenThrow(new IllegalAccessException("no"));
+    assertEquals(HttpStatus.FORBIDDEN,
+                 assertThrows(ResponseStatusException.class, () -> rest.getSpeakerProposals(request, DOCUMENT_ID)).getStatusCode());
+  }
+
+  /**
+   * Dismissing a proposal answers 204, 403 to a caller who cannot edit the
+   * file, 404 for a file the caller cannot see (EXO-92126).
+   */
+  @Test
+  void dismissingASpeakerProposalAnswersItsStatus() throws Exception {
+    assertEquals(HttpStatus.NO_CONTENT, rest.dismissSpeakerProposal(request, DOCUMENT_ID, "2").getStatusCode());
+    verify(documentTranscriptionService).dismissSpeakerProposal(DOCUMENT_ID, "2", 7L);
+
+    doThrow(new IllegalAccessException("no")).when(documentTranscriptionService).dismissSpeakerProposal(DOCUMENT_ID, "3", 7L);
+    assertEquals(HttpStatus.FORBIDDEN,
+                 assertThrows(ResponseStatusException.class, () -> rest.dismissSpeakerProposal(request, DOCUMENT_ID, "3")).getStatusCode());
+
+    doThrow(new ObjectNotFoundException("none")).when(documentTranscriptionService).dismissSpeakerProposal(DOCUMENT_ID, "4", 7L);
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class, () -> rest.dismissSpeakerProposal(request, DOCUMENT_ID, "4")).getStatusCode());
   }
 
 }
