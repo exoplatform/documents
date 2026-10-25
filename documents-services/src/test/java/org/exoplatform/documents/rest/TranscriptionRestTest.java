@@ -368,8 +368,8 @@ class TranscriptionRestTest {
   void theSpeakerProposalsComeWithTheirPerson_andAreForEditorsOnly() throws Exception {
     List<TranscriptionQuote> quotes = List.of(new TranscriptionQuote(4, "1", "Merci Julien."));
     when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenReturn(List.of(
-        new TranscriptionSpeakerProposal("2", 42, true, false, quotes),
-        new TranscriptionSpeakerProposal("3", 43, false, false, List.of())));
+        new TranscriptionSpeakerProposal("2", 42, true, false, quotes, "1"),
+        new TranscriptionSpeakerProposal("3", 43, false, false, List.of(), null)));
     Identity julien = mock(Identity.class);
     Profile profile = mock(Profile.class);
     when(julien.getId()).thenReturn("42");
@@ -385,7 +385,7 @@ class TranscriptionRestTest {
     ResponseEntity<List<TranscriptionSpeakerProposalEntity>> answer = rest.getSpeakerProposals(request, DOCUMENT_ID);
 
     assertEquals("no-store", answer.getHeaders().getCacheControl());
-    assertEquals(List.of(new TranscriptionSpeakerProposalEntity("2", "42", "julien", "Julien Dupont", "/avatar/julien", true, false, quotes)),
+    assertEquals(List.of(new TranscriptionSpeakerProposalEntity("2", "42", "julien", "Julien Dupont", "/avatar/julien", true, false, quotes, "1")),
                  answer.getBody());
 
     when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenThrow(new IllegalAccessException("no"));

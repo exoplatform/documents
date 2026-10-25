@@ -32,12 +32,34 @@ import java.util.List;
  *          waiting for a person
  * @param evidence the indexes of the transcript's segments that show it, in
  *          order
+ * @param premiseSpeaker for a proposal made by elimination (two voices, two
+ *          attendees), the other voice, whose person it follows from; null
+ *          otherwise
+ * @param premiseIdentityId the person that other voice is taken to be: the
+ *          proposal is applied only while that voice is named after that
+ *          person; null otherwise
  */
 public record TranscriptionSpeakerSuggestion(String speaker,
                                              long identityId,
                                              boolean strong,
                                              boolean autoApplied,
-                                             List<Integer> evidence) {
+                                             List<Integer> evidence,
+                                             String premiseSpeaker,
+                                             Long premiseIdentityId) {
+
+  /**
+   * A proposal shown by the names said, which follows from no other voice.
+   *
+   * @param speaker the speaker's number in the transcript
+   * @param identityId the identity id of the person proposed
+   * @param strong whether the evidence was strong
+   * @param autoApplied whether the speaker was named after it without waiting
+   *          for a person
+   * @param evidence the indexes of the transcript's segments that show it
+   */
+  public TranscriptionSpeakerSuggestion(String speaker, long identityId, boolean strong, boolean autoApplied, List<Integer> evidence) {
+    this(speaker, identityId, strong, autoApplied, evidence, null, null);
+  }
 
   /**
    * Same proposal, applied or not.
@@ -47,7 +69,7 @@ public record TranscriptionSpeakerSuggestion(String speaker,
    * @return the proposal with that flag
    */
   public TranscriptionSpeakerSuggestion withAutoApplied(boolean applied) {
-    return new TranscriptionSpeakerSuggestion(speaker, identityId, strong, applied, evidence);
+    return new TranscriptionSpeakerSuggestion(speaker, identityId, strong, applied, evidence, premiseSpeaker, premiseIdentityId);
   }
 
 }
