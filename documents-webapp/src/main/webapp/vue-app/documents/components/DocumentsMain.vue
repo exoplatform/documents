@@ -140,6 +140,7 @@
   </v-app>
 </template>
 <script>
+import {openFileVersion} from '../../../js/DocumentVersionUtils.js';
 
 export default {
   data: () => ({
@@ -374,6 +375,7 @@ export default {
     this.$root.$on('hide-element', this.hideElement);
     this.$root.$on('add-drives', this.addDrives);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
+    document.addEventListener('document-version-restored', this.handleVersionRestoredElsewhere);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
     document.addEventListener('document-category-selected', (event) => {
       if (event && event.detail) {
@@ -390,6 +392,7 @@ export default {
   },
   destroyed() {
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
+    document.removeEventListener('document-version-restored', this.handleVersionRestoredElsewhere);
   },
   beforeDestroy() {
     this.$root.$off('add-drives', this.addDrives());
@@ -1703,24 +1706,22 @@ export default {
       this.folderPath = nodePathParts.join('/');
       return this.getFolderPath(this.folderPath);
     },
+    /**
+     * Shows a version restored from outside the application, as from a
+     * file's details: the list reads its files again and the file's version
+     * number updates, as after a restore from the version history.
+     * @param {CustomEvent} event its detail holds the file's id
+     * @returns {void}
+     */
+    handleVersionRestoredElsewhere(event) {
+      const fileId = event?.detail?.fileId;
+      if (fileId) {
+        this.$root.$emit('version-number-updated', fileId);
+      }
+      this.refreshFiles();
+    },
     showVersionPreview(version) {
-      return this.$attachmentService.getDocumentDetails(version.originId)
-        .then(attachment => {
-          return this.$attachmentService.getDocumentDetails(version.frozenId)
-            .then(file => {
-              file.downloadUrl =`/rest/jcr/repository/collaboration${attachment.path}?version=${version.versionNumber}`;
-              file.path = attachment.path;
-              file.mimeType = attachment.mimeType;
-              file.filename = attachment.name;
-              file.source = 'documents';
-              if (this.isFileReadable(attachment)){
-                this.openFileInEditor(file,'view');
-              } else {
-                const versionFile = {'id': file.id,'filename': attachment.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': file.downloadUrl, 'icon': this.getFileIcon(attachment)};
-                document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [versionFile],'id': file.id }}));
-                return attachment;}
-            });
-        })
+      return openFileVersion(version, this.$supportedDocuments, attachment => this.getFileIcon(attachment))
         .catch(e => console.error(e))
         .finally(() => this.loading = false);
     },
