@@ -25,6 +25,14 @@
       </template>
     </template>
     <template v-if="drawer && file" #titleIcons>
+      <v-btn
+        v-if="openLabel"
+        class="primary me-2"
+        depressed
+        small
+        @click="openPreview">
+        {{ openLabel }}
+      </v-btn>
       <documents-favorite-button
         v-if="!file.folder"
         :id="fileId"
@@ -93,6 +101,7 @@
                 </div>
                 <v-card
                   :loading="loading"
+                  :title="$t('documents.drawer.details.clickToOpen')"
                   class="documentInfoPreview overflow-hidden d-flex mb-2"
                   outlined
                   @click="openPreview">
@@ -327,6 +336,19 @@ export default {
         return this.mediaKind === 'video' && !this.mediaFailed;
       }
       return !!this.thumbnailUrl && !this.showIcon;
+    },
+    /**
+     * Names the header's open action as Documents opens the file: Edit in
+     * the online editor when the viewer may edit it and the editor can, else
+     * View, in the viewer or the preview; none for a folder, or for an audio
+     * or video file, whose player is the content.
+     * @returns {string} the label, or null when there is no action
+     */
+    openLabel() {
+      if (!this.file || this.file.folder || this.mediaKind) {
+        return null;
+      }
+      return this.isFileEditable && this.file.acl?.canEdit && this.$t('documents.drawer.details.edit') || this.$t('documents.drawer.details.view');
     },
     /**
      * Sums up the file in the compact header: its type, and its size.
