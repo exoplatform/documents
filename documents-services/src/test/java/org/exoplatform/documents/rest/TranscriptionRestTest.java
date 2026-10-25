@@ -360,19 +360,21 @@ class TranscriptionRestTest {
   }
 
   /**
-   * The proposals come with the person each names, a deleted person left out,
-   * never stored by a shared cache; a caller who cannot edit the file is
-   * answered 403 (EXO-92126).
+   * The proposals come with the person each names, a deleted or disabled
+   * person left out, never stored by a shared cache; a caller who cannot edit
+   * the file is answered 403 (EXO-92126).
    */
   @Test
   void theSpeakerProposalsComeWithTheirPerson_andAreForEditorsOnly() throws Exception {
     List<TranscriptionQuote> quotes = List.of(new TranscriptionQuote(4, "1", "Merci Julien."));
     when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenReturn(List.of(
         new TranscriptionSpeakerProposal("2", 42, true, false, quotes, "1"),
-        new TranscriptionSpeakerProposal("3", 43, false, false, List.of(), null)));
+        new TranscriptionSpeakerProposal("3", 43, false, false, List.of(), null),
+        new TranscriptionSpeakerProposal("4", 44, false, false, List.of(), null)));
     Identity julien = mock(Identity.class);
     Profile profile = mock(Profile.class);
     when(julien.getId()).thenReturn("42");
+    when(julien.isEnable()).thenReturn(true);
     when(julien.getRemoteId()).thenReturn("julien");
     when(julien.getProfile()).thenReturn(profile);
     when(profile.getFullName()).thenReturn("Julien Dupont");
@@ -381,6 +383,11 @@ class TranscriptionRestTest {
     when(deleted.isDeleted()).thenReturn(true);
     when(identityManager.getIdentity("42")).thenReturn(julien);
     when(identityManager.getIdentity("43")).thenReturn(deleted);
+    Identity disabled = mock(Identity.class);
+    when(disabled.isEnable()).thenReturn(false);
+    lenient().when(disabled.getId()).thenReturn("44");
+    lenient().when(disabled.getProfile()).thenReturn(profile);
+    when(identityManager.getIdentity("44")).thenReturn(disabled);
 
     ResponseEntity<List<TranscriptionSpeakerProposalEntity>> answer = rest.getSpeakerProposals(request, DOCUMENT_ID);
 
