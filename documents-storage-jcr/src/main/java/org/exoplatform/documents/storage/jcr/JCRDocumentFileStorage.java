@@ -3187,42 +3187,6 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
-  public boolean markTranscriptionSpeakerSuggestionApplied(String documentId,
-                                                           String speaker,
-                                                           long identityId,
-                                                           long transcriptUpdated) throws ObjectNotFoundException {
-    ReentrantLock lock = speakerLock(documentId);
-    lock.lock();
-    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
-    try {
-      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
-      Node node = getTranscribedNode(session, documentId);
-      if (!isTranscriptAt(node, transcriptUpdated)) {
-        return false;
-      }
-      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
-      for (int i = 0; i < suggestions.size(); i++) {
-        TranscriptionSpeakerSuggestion suggestion = suggestions.get(i);
-        if (suggestion.speaker().equals(speaker) && suggestion.identityId() == identityId) {
-          suggestions.set(i, suggestion.withAutoApplied(true));
-          writeTranscriptionSpeakerSuggestions(node, suggestions);
-          session.save();
-          return true;
-        }
-      }
-      return false;
-    } catch (RepositoryException e) {
-      throw new IllegalStateException("Error marking a speaker proposal of media file '%s' as applied".formatted(documentId), e);
-    } finally {
-      sessionProvider.close();
-      lock.unlock();
-    }
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
   public List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
                                                                                  Identity aclIdentity) throws IllegalAccessException,
                                                                                                        ObjectNotFoundException {
@@ -3282,11 +3246,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
-  public boolean nameTranscriptionSpeakerIfUnnamed(String documentId,
-                                                   String speaker,
-                                                   String identityId,
-                                                   long transcriptUpdated,
-                                                   Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+  public boolean applyTranscriptionSpeakerSuggestion(String documentId,
+                                                     TranscriptionSpeakerSuggestion suggestion,
+                                                     long transcriptUpdated,
+                                                     Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     ReentrantLock lock = speakerLock(documentId);
     if (!acquireOnRequest(lock)) {
       throw new IllegalStateException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
@@ -3299,16 +3262,32 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
         throw new IllegalAccessException("User may not edit file '%s'".formatted(documentId));
       }
+      String identityId = String.valueOf(suggestion.identityId());
+      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
+      int stored = -1;
+      for (int i = 0; i < suggestions.size() && stored < 0; i++) {
+        if (suggestions.get(i).speaker().equals(suggestion.speaker()) && suggestions.get(i).identityId() == suggestion.identityId()) {
+          stored = i;
+        }
+      }
       Map<String, String> speakers = new TreeMap<>(readTranscriptionSpeakers(node));
-      if (!isTranscriptAt(node, transcriptUpdated) || speakers.containsKey(speaker) || speakers.containsValue(identityId)) {
+      boolean premiseHolds = suggestion.premiseSpeaker() == null
+          || String.valueOf(suggestion.premiseIdentityId()).equals(speakers.get(suggestion.premiseSpeaker()));
+      if (!isTranscriptAt(node, transcriptUpdated)
+          || stored < 0
+          || speakers.containsKey(suggestion.speaker())
+          || speakers.containsValue(identityId)
+          || !premiseHolds) {
         return false;
       }
-      speakers.put(speaker, identityId);
+      speakers.put(suggestion.speaker(), identityId);
       if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)) {
         node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
       }
       node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER,
                        speakers.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new));
+      suggestions.set(stored, suggestions.get(stored).withAutoApplied(true));
+      writeTranscriptionSpeakerSuggestions(node, suggestions);
       session.save();
       return true;
     } catch (AccessDeniedException e) {
