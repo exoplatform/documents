@@ -107,7 +107,7 @@
                     :src="thumbnailUrl"
                     :alt="file.name"
                     class="ma-auto"
-                    @load="loading = false"
+                    @load="handleThumbnailLoaded"
                     @error="handleError">
                 </v-card>
               </template>
@@ -133,8 +133,7 @@
             </template>
             <document-info-details
               :file="file"
-              :icon="icon"
-              :is-mobile="isMobile">
+              :icon="icon">
               <template #about>
                 <document-recording-details
                   v-if="mediaKind"
@@ -230,6 +229,7 @@
 </template>
 <script>
 import {mediaKind} from '../js/RecordingLength.js';
+import {isBlankImage} from '../js/BlankImage.js';
 
 export default {
   props: {
@@ -364,6 +364,19 @@ export default {
       this.loading = false;
     },
     /**
+     * Falls back to the compact header when the page the server rendered for
+     * an office document or a PDF is blank, as for a document it could not
+     * render; an image keeps its preview, however pale.
+     * @param {Event} event the image's load event
+     * @returns {void}
+     */
+    handleThumbnailLoaded(event) {
+      this.loading = false;
+      if (this.isFileReadable && isBlankImage(event.target)) {
+        this.showIcon = true;
+      }
+    },
+    /**
      * Keeps how long the audio or video lasts, read from its metadata.
      * @param {Number} duration the duration in seconds, or null when unknown
      * @returns {void}
@@ -472,7 +485,6 @@ export default {
           } else {
             this.thumbnailUrl = this.mediaKind ? null : this.getThumbnailUrl();
           }
-          this.$root.$emit('update-breadcrumb', this.file.parentFolderId);
           this.$nextTick(()=>{
             this.$refs.documentInfoDrawer.open();
           });

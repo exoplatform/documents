@@ -48,7 +48,7 @@
     </documents-info-row>
 
     <div class="documentInfoGroupTitle">{{ $t('documents.drawer.details.group.location') }}</div>
-    <documents-info-row v-if="file.ownerIdentity" :label="$t('documents.details.drive.label')">
+    <div v-if="file.ownerIdentity" class="d-flex align-center py-1">
       <img
         :src="file.ownerIdentity.avatar"
         alt=""
@@ -61,13 +61,8 @@
         class="font-weight-bold text-truncate">
         {{ driveName }}
       </a>
-    </documents-info-row>
-    <documents-info-row :label="$t('documents.drawer.details.location')">
-      <breadcrumb
-        :folder-id="file.parentFolderId"
-        :is-mobile="isMobile"
-        class="text-truncate" />
-    </documents-info-row>
+    </div>
+    <document-info-path :folder-id="file.parentFolderId" />
   </div>
 </template>
 <script>
@@ -85,10 +80,6 @@ export default {
     icon: {
       type: Object,
       default: null,
-    },
-    isMobile: {
-      type: Boolean,
-      default: false,
     },
   },
   computed: {
