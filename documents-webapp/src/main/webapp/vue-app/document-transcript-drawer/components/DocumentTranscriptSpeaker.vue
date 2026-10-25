@@ -31,7 +31,7 @@
         class="d-inline-flex align-center mb-1"
         v-on="on"
         @click.stop
-        @keydown.enter.stop>
+        @keydown.enter.stop.prevent="openFromKeyboard">
         <user-avatar
           v-if="person"
           :profile-id="person.username"
@@ -129,6 +129,16 @@ export default {
     },
   },
   methods: {
+    /**
+     * Opens the menu from the keyboard, which the menu's activator does not
+     * do for an element that is no button.
+     * @returns {void}
+     */
+    openFromKeyboard() {
+      if (this.canEdit) {
+        this.menu = true;
+      }
+    },
     /**
      * Asks to name the speaker after the chosen user.
      * @returns {void}
