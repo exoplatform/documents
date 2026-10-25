@@ -30,5 +30,9 @@ const components = {
 };
 
 for (const key in components) {
-  Vue.component(key, components[key]);
+  // the details drawer's bundle registers the same transcript components:
+  // the first registration stays, so a mounted player is never replaced
+  if (!Vue.options.components[key]) {
+    Vue.component(key, components[key]);
+  }
 }
