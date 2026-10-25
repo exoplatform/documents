@@ -699,13 +699,15 @@ public interface DocumentFileStorage {
   /**
    * Names a speaker of a media file's transcript after a proposal the platform
    * made, as a user who can edit the file, and marks that proposal applied, in
-   * one save under the file's lock (EXO-92126). Everything that could have
-   * changed since the proposal was made is read again at that moment: the
-   * transcript must still be the one it was made from, the proposal must still
-   * be stored (not dismissed), neither the speaker nor the person may be named,
-   * and a proposal made by elimination needs its other voice still named after
-   * the person it was taken to be. A name applied this way never replaces one a
-   * person gave, nor names a voice of another transcript.
+   * one save under the file's lock (EXO-92126). What the proposal rests on in
+   * the file is read again at that moment: the transcript must still be the
+   * one it was made from, the proposal must still be stored (not dismissed),
+   * neither the speaker nor the person may be named, and a proposal made by
+   * elimination needs its other voice still named after the person it was
+   * taken to be. A name applied this way never replaces one a person gave, nor
+   * names a voice of another transcript. Whether the person is still an
+   * enabled user is not read here: the caller checks it just before, so a
+   * person disabled in between is still named.
    *
    * @param documentId the file's UUID
    * @param suggestion the proposal
