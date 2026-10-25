@@ -131,4 +131,22 @@
       </propertyDefinition>
     </propertyDefinitions>
   </nodeType>
+  <nodeType
+    name="exo:transcriptionSpeakerSuggestions"
+    isMixin="true"
+    hasOrderableChildNodes="false"
+    primaryItemName="">
+    <propertyDefinitions>
+      <propertyDefinition
+        name="exo:transcriptionSpeakerSuggestion"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="COPY"
+        protected="false"
+        multiple="true">
+        <valueConstraints />
+      </propertyDefinition>
+    </propertyDefinitions>
+  </nodeType>
 </nodeTypes>
