@@ -468,6 +468,8 @@ export default {
      * preview of a version, are not a click outside: the drawer stays. The
      * click's path is read as it was dispatched, since closing a preview
      * removes the clicked button from the page before the click reaches here.
+     * A click in a menu opened from the drawer, as a transcript speaker's
+     * person search and its suggestions, is not a click outside either.
      * @param {MouseEvent} event a click anywhere in the page
      * @returns {void}
      */
@@ -476,10 +478,29 @@ export default {
         return;
       }
       const path = event.composedPath?.() || [];
-      const inside = path.some(element => element.classList && ['documentInfoDrawer', 'documentDescription', 'documentCategories', 'documentInfoMenu', 'v-dialog__content'].some(name => element.classList.contains(name)));
+      const inside = path.some(element => element.classList && (['documentInfoDrawer', 'documentDescription', 'documentCategories', 'documentInfoMenu', 'v-dialog__content'].some(name => element.classList.contains(name))
+          || this.isMenuOpenedHere(element)));
       if (!inside) {
         this.close();
       }
+    },
+    /**
+     * Tells whether an element is the content of a menu one of this drawer's
+     * components opened. Vuetify renders a menu's content at the application's
+     * root, outside the drawer, and every menu of the page has the same class:
+     * the menu is the drawer's when its component is among the drawer's.
+     * @param {Element} element an element of a click's path
+     * @returns {boolean} true for the content of a menu opened from the drawer
+     */
+    isMenuOpenedHere(element) {
+      if (!element.classList.contains('v-menu__content')) {
+        return false;
+      }
+      let component = element.__vue__;
+      while (component && component !== this) {
+        component = component.$parent;
+      }
+      return !!component;
     },
     /**
      * Falls back to the compact header when the browser cannot load the
