@@ -34,6 +34,10 @@ export default {
     },
   },
   computed: {
+    /**
+     * The person's username, when the identity names one.
+     * @returns {string} the username, or null for the system
+     */
     username() {
       return this.identity?.remoteId || null;
     },
