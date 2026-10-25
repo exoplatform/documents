@@ -451,11 +451,6 @@ export default {
       this.loading = false;
     },
     /**
-     * Shows the file's icon instead of a frame of a video the browser could
-     * not load.
-     * @returns {void}
-     */
-    /**
      * Keeps how long the audio or video lasts, read from its metadata.
      * @param {Number} duration the duration in seconds, or null when unknown
      * @returns {void}
@@ -464,6 +459,11 @@ export default {
       this.mediaDuration = duration;
       this.loading = false;
     },
+    /**
+     * Shows the file's icon instead of a frame of a video the browser could
+     * not load.
+     * @returns {void}
+     */
     handleMediaError() {
       this.mediaFailed = true;
       this.showIcon = true;
