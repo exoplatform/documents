@@ -35,9 +35,9 @@
         tabindex="0"
         @click="$emit('seek', chapter.start)"
         @keydown.enter="$emit('seek', chapter.start)">
-        <span class="documentTranscriptChapterTime primary--text text-no-wrap">{{ formatMoment(chapter.start) }}</span>
-        <span class="documentTranscriptChapterTitle font-weight-bold">{{ chapter.title }}</span>
-        <span v-if="chapter.summary" class="documentTranscriptChapterSummary text-sub-title text-truncate-2">{{ chapter.summary }}</span>
+        <span class="documentTranscriptChapterTime text-caption primary--text text-no-wrap">{{ formatMoment(chapter.start) }}</span>
+        <span class="text-subtitle-1 font-weight-bold">{{ chapter.title }}</span>
+        <span v-if="chapter.summary" class="documentTranscriptChapterSummary text-caption text-sub-title text-truncate-2">{{ chapter.summary }}</span>
       </div>
     </div>
     <div v-if="open" class="documentTranscriptChapterLines">
@@ -52,7 +52,7 @@
         tabindex="0"
         @click="$emit('seek', row.segment.start)"
         @keydown.enter="$emit('seek', row.segment.start)">
-        <span class="documentTranscriptLineTime primary--text text-no-wrap">{{ formatMoment(row.segment.start) }}</span>
+        <span class="documentTranscriptLineTime text-caption primary--text text-no-wrap">{{ formatMoment(row.segment.start) }}</span>
         <document-transcript-highlight
           :text="row.segment.text"
           :term="term"
