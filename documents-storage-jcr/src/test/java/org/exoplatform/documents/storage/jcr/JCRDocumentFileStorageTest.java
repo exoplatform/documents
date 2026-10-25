@@ -3623,7 +3623,7 @@ public class JCRDocumentFileStorageTest {
       other.start();
       held.await();
 
-      assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", "42", viewer));
+      assertThrows(TranscriptionBusyException.class, () -> jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", "42", viewer));
 
       verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
     } finally {
