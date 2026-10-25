@@ -58,7 +58,8 @@
           <document-transcript-speaker
             :speaker="segment.speaker"
             :person="speakersByNumber[segment.speaker]"
-            :can-edit="canNameSpeakers && (!savingSpeaker || savingSpeaker === segment.speaker)"
+            :can-edit="canNameSpeakers"
+            :busy="!!savingSpeaker && savingSpeaker !== segment.speaker"
             :saving="savingSpeaker === segment.speaker"
             class="text-truncate"
             @name="$emit('name-speaker', $event)"
