@@ -98,25 +98,31 @@ export function speakerTurns(segments) {
 }
 
 /**
- * Lays the turns out on lanes, the most active speaker first: one lane per
- * speaker up to MAX_SPEAKER_LANES; beyond, the TOP_SPEAKER_LANES most active
- * keep theirs and the others share one lane, so that « Others » never holds a
- * single person.
+ * Lays the turns out on lanes, the most active first: one lane per key, a key
+ * being a speaker or the person several speakers are, up to
+ * MAX_SPEAKER_LANES; beyond, the TOP_SPEAKER_LANES most active keep theirs and
+ * the others share one lane, so that « Others » never holds a single one.
  *
  * @param {Array<Object>} turns the turns, as speakerTurns gives them
- * @returns {Array<Object>} the lanes, each with its key, its speaker's number
- *          (null for the shared lane), the speakers it holds, its turns and the
- *          seconds they last
+ * @param {Function} keyOf gives the key of a speaker's number; by default, one
+ *          lane per speaker
+ * @returns {Array<Object>} the lanes, each with its key, the number of its
+ *          first speaker (null for the shared lane), the speakers it holds, how
+ *          many lanes it groups, its turns and the seconds they last
  */
-export function speakerLanes(turns) {
-  const bySpeaker = new Map();
+export function speakerLanes(turns, keyOf = speaker => `speaker-${speaker}`) {
+  const byKey = new Map();
   (turns || []).forEach(turn => {
-    const lane = bySpeaker.get(turn.speaker) || {key: `speaker-${turn.speaker}`, speaker: turn.speaker, speakers: [turn.speaker], turns: [], seconds: 0};
+    const key = keyOf(turn.speaker);
+    const lane = byKey.get(key) || {key, speaker: turn.speaker, speakers: [], count: 1, turns: [], seconds: 0};
+    if (!lane.speakers.includes(turn.speaker)) {
+      lane.speakers.push(turn.speaker);
+    }
     lane.turns.push(turn);
     lane.seconds += turn.end - turn.start;
-    bySpeaker.set(turn.speaker, lane);
+    byKey.set(key, lane);
   });
-  const lanes = [...bySpeaker.values()].sort((a, b) => b.seconds - a.seconds
+  const lanes = [...byKey.values()].sort((a, b) => b.seconds - a.seconds
     || Number.parseInt(a.speaker, 10) - Number.parseInt(b.speaker, 10));
   if (lanes.length <= MAX_SPEAKER_LANES) {
     return lanes;
@@ -125,7 +131,8 @@ export function speakerLanes(turns) {
   return [...lanes.slice(0, TOP_SPEAKER_LANES), {
     key: 'others',
     speaker: null,
-    speakers: others.map(lane => lane.speaker),
+    speakers: others.flatMap(lane => lane.speakers),
+    count: others.length,
     turns: others.flatMap(lane => lane.turns).sort((a, b) => a.start - b.start),
     seconds: others.reduce((sum, lane) => sum + lane.seconds, 0),
   }];

@@ -114,9 +114,17 @@ export default {
     turns() {
       return speakerTurns(this.segments);
     },
-    /** @returns {Array<Object>} the speakers' lanes, the least active grouped beyond five */
+    /**
+     * The speakers' lanes, one per person: a person named for two speakers
+     * holds both on one lane, as in the transcript; the least active are
+     * grouped beyond five.
+     * @returns {Array<Object>} the lanes
+     */
     lanes() {
-      return speakerLanes(this.turns);
+      return speakerLanes(this.turns, speaker => {
+        const identityId = this.speakersByNumber[speaker]?.identityId;
+        return identityId ? `person-${identityId}` : `speaker-${speaker}`;
+      });
     },
     /** @returns {Object} each lane's share of the speaking time, in percents, by its key */
     shares() {
@@ -179,6 +187,11 @@ export default {
   watch: {
     shown: {
       immediate: true,
+      /**
+       * Tells the full view whether the timeline shows, for its layout.
+       * @param {boolean} shown whether the timeline shows
+       * @returns {void}
+       */
       handler(shown) {
         this.$emit('shown', shown);
       },
