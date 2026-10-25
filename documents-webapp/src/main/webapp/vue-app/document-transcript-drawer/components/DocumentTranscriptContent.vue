@@ -23,22 +23,40 @@
       {{ occurrences && $t('documents.transcript.occurrences', {0: occurrences}) || $t('documents.transcript.noOccurrence') }}
     </div>
     <template v-if="hasSegments">
+      <document-transcript-chapter-list
+        v-if="hasChapters"
+        :groups="groups"
+        class="mb-2"
+        @select="selectChapter" />
       <div
-        v-for="(segment, index) in segments"
-        :key="index"
-        :ref="`segment-${index}`"
-        :title="$t('documents.transcript.playFrom', {0: formatMoment(segment.start)})"
-        :class="index === activeIndex && 'light-grey-background-color'"
-        class="d-flex align-start py-1 px-2 clickable border-radius"
-        role="button"
-        tabindex="0"
-        @click="$emit('seek', segment.start)"
-        @keydown.enter="$emit('seek', segment.start)">
-        <span class="text-caption primary--text text-no-wrap pt-1 me-3">{{ formatMoment(segment.start) }}</span>
-        <document-transcript-highlight
-          :text="segment.text"
-          :term="term"
-          class="text-body-1" />
+        v-for="group in groups"
+        :key="group.key">
+        <document-transcript-chapter
+          v-if="group.chapter"
+          :ref="group.key"
+          :chapter="group.chapter"
+          :open="!closed[group.key]"
+          @toggle="toggleChapter(group.key)"
+          @seek="$emit('seek', $event)" />
+        <template v-if="!closed[group.key]">
+          <div
+            v-for="row in group.rows"
+            :key="row.index"
+            :ref="`segment-${row.index}`"
+            :title="$t('documents.transcript.playFrom', {0: formatMoment(row.segment.start)})"
+            :class="row.index === activeIndex && 'light-grey-background-color'"
+            class="d-flex align-start py-1 px-2 clickable border-radius"
+            role="button"
+            tabindex="0"
+            @click="$emit('seek', row.segment.start)"
+            @keydown.enter="$emit('seek', row.segment.start)">
+            <span class="text-caption primary--text text-no-wrap pt-1 me-3">{{ formatMoment(row.segment.start) }}</span>
+            <document-transcript-highlight
+              :text="row.segment.text"
+              :term="term"
+              class="text-body-1" />
+          </div>
+        </template>
       </div>
     </template>
     <template v-else>
@@ -53,6 +71,7 @@
 </template>
 <script>
 import {countOccurrences, formatMoment} from '../js/TranscriptSearch.js';
+import {groupByChapters} from '../js/TranscriptChapters.js';
 
 export default {
   props: {
@@ -76,7 +95,14 @@ export default {
       type: Number,
       default: null,
     },
+    chapters: {
+      type: Array,
+      default: null,
+    },
   },
+  data: () => ({
+    closed: {},
+  }),
   computed: {
     hasSegments() {
       return !!this.segments?.length;
@@ -97,14 +123,30 @@ export default {
     shownIndex() {
       return this.indexAt(this.seconds);
     },
+    groups() {
+      return groupByChapters(this.segments, this.chapters);
+    },
+    hasChapters() {
+      return this.groups.some(group => group.chapter);
+    },
+    activeGroupKey() {
+      return this.groupKeyOf(this.activeIndex);
+    },
   },
   watch: {
     term() {
+      this.openMatchingChapters();
       // the highlighted occurrences exist in the DOM only once the new term is rendered
       this.$nextTick(() => this.$el?.querySelector?.('mark')?.scrollIntoView({block: 'center'}));
     },
     shownIndex() {
       this.showActiveSegment();
+    },
+    activeGroupKey() {
+      this.openChapter(this.activeGroupKey);
+    },
+    chapters() {
+      this.closed = {};
     },
   },
   mounted() {
@@ -144,9 +186,63 @@ export default {
      */
     showActiveSegment() {
       if (this.shownIndex >= 0) {
+        this.openChapter(this.groupKeyOf(this.shownIndex));
         // the sentence exists in the DOM only once the segments are rendered
         this.$nextTick(() => this.$refs[`segment-${this.shownIndex}`]?.[0]?.scrollIntoView({block: 'center'}));
       }
+    },
+    /**
+     * Finds the group a sentence is shown in.
+     *
+     * @param {number} index the sentence's index, or -1
+     * @returns {string} the group's key, or null
+     */
+    groupKeyOf(index) {
+      return index < 0 ? null : this.groups.find(group => group.rows.some(row => row.index === index))?.key || null;
+    },
+    /**
+     * Unfolds a chapter.
+     *
+     * @param {string} key the chapter's group key, or null
+     * @returns {void}
+     */
+    openChapter(key) {
+      if (key && this.closed[key]) {
+        this.$set(this.closed, key, false);
+      }
+    },
+    /**
+     * Folds or unfolds a chapter.
+     *
+     * @param {string} key the chapter's group key
+     * @returns {void}
+     */
+    toggleChapter(key) {
+      this.$set(this.closed, key, !this.closed[key]);
+    },
+    /**
+     * Unfolds every chapter holding an occurrence of the searched term; the
+     * others keep the fold the user chose.
+     *
+     * @returns {void}
+     */
+    openMatchingChapters() {
+      this.groups
+        .filter(group => group.rows.some(row => countOccurrences(row.segment.text, this.term)))
+        .forEach(group => this.openChapter(group.key));
+    },
+    /**
+     * Goes to a chapter picked in the list: unfolded, shown, and played from
+     * its start.
+     *
+     * @param {Object} group the chapter's group
+     * @returns {void}
+     */
+    selectChapter(group) {
+      this.openChapter(group.key);
+      // the heading is in the DOM only once the list of chapters is rendered
+      this.$nextTick(() => this.$refs[group.key]?.[0]?.$el?.scrollIntoView({block: 'start'}));
+      this.$emit('seek', group.chapter.start);
     },
   },
 };

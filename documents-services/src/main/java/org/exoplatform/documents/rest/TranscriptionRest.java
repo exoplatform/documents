@@ -63,6 +63,8 @@ public class TranscriptionRest {
 
   private static final String          NO_TRANSCRIPT_MESSAGE = "documents.transcription.noTranscript";
 
+  private static final String          NO_CHAPTERS_MESSAGE = "documents.transcription.noChapters";
+
   @Autowired
   private DocumentTranscriptionService documentTranscriptionService;
 
@@ -92,7 +94,7 @@ public class TranscriptionRest {
     if (!documentTranscriptionService.isAvailable()) {
       return ResponseEntity.ok()
                            .cacheControl(CacheControl.noStore())
-                           .body(new TranscriptionStateEntity(false, null, null, null, null, null, null, false));
+                           .body(new TranscriptionStateEntity(false, null, null, null, null, null, null, false, false));
     }
     try {
       TranscriptionState state = documentTranscriptionService.getState(documentId, getCurrentIdentityId(request));
@@ -105,7 +107,8 @@ public class TranscriptionRest {
                                                               state.language(),
                                                               state.durationSeconds(),
                                                               state.updated(),
-                                                              state.hasSegments()));
+                                                              state.hasSegments(),
+                                                              state.hasChapters()));
     } catch (IllegalAccessException e) {
       throw forbidden(documentId, e);
     } catch (ObjectNotFoundException e) {
@@ -171,6 +174,40 @@ public class TranscriptionRest {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, NO_TRANSCRIPT_MESSAGE);
       }
       return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(segments);
+    } catch (IllegalAccessException e) {
+      throw forbidden(documentId, e);
+    } catch (ObjectNotFoundException e) {
+      throw notFound(documentId, e);
+    }
+  }
+
+  /**
+   * Answers the chapters a file's transcript is grouped into (EXO-92122), a JSON
+   * list of chapters, each with its start in seconds, the index of its first
+   * segment, its title and its summary.
+   *
+   * @param request the HTTP request, which names the caller
+   * @param documentId the file's UUID
+   * @return the chapters, never stored by a shared cache
+   */
+  @GetMapping(path = "{documentId}/chapters", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Secured("users")
+  @Operation(summary = "Chapters of the transcript of an audio or video file", method = "GET")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "403", description = "The file cannot be read by the caller"),
+    @ApiResponse(responseCode = "404", description = "No such file, or no chapters"),
+  })
+  public ResponseEntity<String> getChapters(HttpServletRequest request,
+                                            @Parameter(description = "The file's UUID", required = true)
+                                            @PathVariable("documentId")
+                                            String documentId) {
+    try {
+      String chapters = documentTranscriptionService.getChapters(documentId, getCurrentIdentityId(request));
+      if (chapters == null) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, NO_CHAPTERS_MESSAGE);
+      }
+      return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(chapters);
     } catch (IllegalAccessException e) {
       throw forbidden(documentId, e);
     } catch (ObjectNotFoundException e) {

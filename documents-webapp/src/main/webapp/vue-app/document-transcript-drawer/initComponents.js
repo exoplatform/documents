@@ -18,6 +18,8 @@
 import DocumentTranscriptDrawer from './components/DocumentTranscriptDrawer.vue';
 import DocumentTranscriptStatus from './components/DocumentTranscriptStatus.vue';
 import DocumentTranscriptContent from './components/DocumentTranscriptContent.vue';
+import DocumentTranscriptChapter from './components/DocumentTranscriptChapter.vue';
+import DocumentTranscriptChapterList from './components/DocumentTranscriptChapterList.vue';
 import DocumentTranscriptHighlight from './components/DocumentTranscriptHighlight.vue';
 import DocumentTranscriptPlayer from './components/DocumentTranscriptPlayer.vue';
 
@@ -25,6 +27,8 @@ const components = {
   'document-transcript-drawer': DocumentTranscriptDrawer,
   'document-transcript-status': DocumentTranscriptStatus,
   'document-transcript-content': DocumentTranscriptContent,
+  'document-transcript-chapter': DocumentTranscriptChapter,
+  'document-transcript-chapter-list': DocumentTranscriptChapterList,
   'document-transcript-highlight': DocumentTranscriptHighlight,
   'document-transcript-player': DocumentTranscriptPlayer,
 };

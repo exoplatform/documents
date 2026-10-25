@@ -24,6 +24,8 @@ import DocumentTranscriptStatus from '../document-transcript-drawer/components/D
 import DocumentRecordingDetails from './components/DocumentRecordingDetails.vue';
 import DocumentMediaThumbnail from './components/DocumentMediaThumbnail.vue';
 import DocumentTranscriptContent from '../document-transcript-drawer/components/DocumentTranscriptContent.vue';
+import DocumentTranscriptChapter from '../document-transcript-drawer/components/DocumentTranscriptChapter.vue';
+import DocumentTranscriptChapterList from '../document-transcript-drawer/components/DocumentTranscriptChapterList.vue';
 import DocumentTranscriptHighlight from '../document-transcript-drawer/components/DocumentTranscriptHighlight.vue';
 import DocumentTranscriptPlayer from '../document-transcript-drawer/components/DocumentTranscriptPlayer.vue';
 import DocumentInfoMenu from './components/DocumentInfoMenu.vue';
@@ -44,6 +46,8 @@ const components = {
   'document-recording-details': DocumentRecordingDetails,
   'document-media-thumbnail': DocumentMediaThumbnail,
   'document-transcript-content': DocumentTranscriptContent,
+  'document-transcript-chapter': DocumentTranscriptChapter,
+  'document-transcript-chapter-list': DocumentTranscriptChapterList,
   'document-transcript-highlight': DocumentTranscriptHighlight,
   'document-transcript-player': DocumentTranscriptPlayer,
   'document-info-menu': DocumentInfoMenu,

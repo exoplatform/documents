@@ -113,6 +113,21 @@ public class DocumentTranscriptionService {
   }
 
   /**
+   * The chapters a file's transcript is grouped into (EXO-92122), read with the
+   * user's rights.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user
+   * @return the chapters as a JSON list, or null when there are none
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   */
+  public String getChapters(String documentId, long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileService.getTranscriptionChapters(documentId, aclIdentity);
+  }
+
+  /**
    * Asks to transcribe a file again, for any user who can read it. A failed file,
    * or one never transcribed, is handed to the transcriber; one queued or being
    * transcribed is left as it is, unless its state has not changed for

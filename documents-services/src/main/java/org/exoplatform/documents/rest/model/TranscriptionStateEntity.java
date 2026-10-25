@@ -29,6 +29,8 @@ package org.exoplatform.documents.rest.model;
  * @param durationSeconds the duration of the media
  * @param updated when the state last changed, in milliseconds since the epoch
  * @param hasSegments whether the transcript has timed segments
+ * @param hasChapters whether the transcript is grouped into chapters
+ *          (EXO-92122)
  */
 public record TranscriptionStateEntity(boolean available,
                                        String status,
@@ -37,5 +39,6 @@ public record TranscriptionStateEntity(boolean available,
                                        String language,
                                        Long durationSeconds,
                                        Long updated,
-                                       boolean hasSegments) {
+                                       boolean hasSegments,
+                                       boolean hasChapters) {
 }
