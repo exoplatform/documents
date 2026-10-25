@@ -564,6 +564,10 @@ export default {
         return;
       }
       this.$refs.drawer.filterText = detail.term || '';
+      // the names may have changed in the full view
+      if (this.segments?.some(segment => segment.speaker)) {
+        this.reloadSpeakers(this.documentId);
+      }
       const media = this.playerMedia();
       if (media && Number.isFinite(detail.seconds)) {
         media.currentTime = detail.seconds;

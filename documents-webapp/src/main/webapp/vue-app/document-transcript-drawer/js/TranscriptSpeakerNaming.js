@@ -18,9 +18,9 @@
 /**
  * The naming of a transcript's speakers, shared by the transcript drawer and
  * the details' Transcript tab (EXO-92123): the component using it has a
- * documentId and an alert(message, type) method. One speaker is saved at a
- * time, since the server rewrites all the names of a file at each save, and
- * only the latest read of the names is shown.
+ * documentId and an alert(message, type) method. A view saves one speaker at
+ * a time, the server running the saves of a file one after the other, and
+ * shows only its latest read of the names.
  */
 export default {
   data: () => ({
@@ -45,11 +45,7 @@ export default {
         this.canNameSpeakers = false;
         return Promise.resolve();
       }
-      return this.reloadSpeakers(documentId)
-        .catch(() => {
-          this.speakers = [];
-          this.canNameSpeakers = false;
-        });
+      return this.reloadSpeakers(documentId);
     },
     /**
      * Names a speaker after the user chosen in the suggester, then reads the
@@ -66,8 +62,7 @@ export default {
       this.savingSpeaker = speaker;
       return this.identityIdOf(user)
         .then(identityId => this.$transcriptionService.setSpeaker(documentId, speaker, identityId))
-        .then(() => this.reloadSpeakers(documentId))
-        .catch(e => this.alertSpeakerError(e))
+        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
     },
     /**
@@ -83,23 +78,29 @@ export default {
       const documentId = this.documentId;
       this.savingSpeaker = speaker;
       return this.$transcriptionService.unsetSpeaker(documentId, speaker)
-        .then(() => this.reloadSpeakers(documentId))
-        .catch(e => this.alertSpeakerError(e))
+        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
     },
     /**
-     * Reads the named speakers again, whatever the sentences say; a read
-     * answered after a later one started is dropped.
+     * Reads the named speakers again, whatever the sentences say. Only the
+     * latest read of the file shown changes the names, failed or not: a failed
+     * one shows no names and no naming. Never rejected.
      *
      * @param {string} documentId the file's UUID
      * @returns {Promise<void>} resolved once read
      */
     reloadSpeakers(documentId) {
       const read = ++this.speakersRead;
+      const isLatest = () => read === this.speakersRead && documentId === this.documentId;
       return this.$transcriptionService.getSpeakers(documentId).then(answer => {
-        if (read === this.speakersRead && documentId === this.documentId) {
+        if (isLatest()) {
           this.speakers = answer?.speakers || [];
           this.canNameSpeakers = !!answer?.canEdit;
+        }
+      }, () => {
+        if (isLatest()) {
+          this.speakers = [];
+          this.canNameSpeakers = false;
         }
       });
     },
