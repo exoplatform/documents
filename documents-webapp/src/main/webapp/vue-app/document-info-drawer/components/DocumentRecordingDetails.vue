@@ -16,39 +16,29 @@
 -->
 <template>
   <div v-if="media" class="documentRecordingDetails">
-    <v-list-item
+    <documents-info-row
       v-if="durationLabel"
-      dense
-      two-line>
-      <v-list-item-content class="pt-0 pb-2">
-        <v-list-item-subtitle>{{ $t('documents.drawer.details.duration') }}</v-list-item-subtitle>
-        <v-list-item-title>{{ durationLabel }}</v-list-item-title>
-      </v-list-item-content>
-    </v-list-item>
-    <v-list-item
+      :label="$t('documents.drawer.details.duration')"
+      :value="durationLabel" />
+    <documents-info-row
       v-if="state && state.available"
-      dense
-      two-line>
-      <v-list-item-content class="pt-0 pb-2">
-        <v-list-item-subtitle>{{ $t('documents.drawer.details.transcript') }}</v-list-item-subtitle>
-        <v-list-item-title v-if="ready">
-          <v-btn
-            class="px-0 text-none font-weight-bold"
-            color="primary"
-            small
-            text
-            @click="openTranscript">
-            {{ $t('documents.drawer.details.transcript.ready') }}
-          </v-btn>
-        </v-list-item-title>
-        <document-transcript-status
-          v-else
-          :state="state"
-          :retrying="retrying"
-          class="text-wrap"
-          @retry="retryTranscription" />
-      </v-list-item-content>
-    </v-list-item>
+      :label="$t('documents.drawer.details.transcript')">
+      <v-btn
+        v-if="ready"
+        class="px-0 text-none font-weight-bold"
+        color="primary"
+        small
+        text
+        @click="openTranscript">
+        {{ $t('documents.drawer.details.transcript.ready') }}
+      </v-btn>
+      <document-transcript-status
+        v-else
+        :state="state"
+        :retrying="retrying"
+        class="text-wrap"
+        @retry="retryTranscription" />
+    </documents-info-row>
   </div>
 </template>
 <script>
