@@ -54,10 +54,21 @@
         @click="$emit('seek', segment.start)"
         @keydown.enter="$emit('seek', segment.start)">
         <span class="text-caption primary--text text-no-wrap pt-1 me-3">{{ formatMoment(segment.start) }}</span>
-        <document-transcript-highlight
-          :text="segment.text"
-          :term="term"
-          class="text-body-1" />
+        <div class="flex-grow-1">
+          <document-transcript-speaker
+            v-if="opensSpeakerRun(segments, index, false)"
+            :speaker="segment.speaker"
+            :person="speakersByNumber[segment.speaker]"
+            :can-edit="canNameSpeakers"
+            :saving="savingSpeaker === segment.speaker"
+            class="d-block"
+            @name="$emit('name-speaker', $event)"
+            @unname="$emit('unname-speaker', $event)" />
+          <document-transcript-highlight
+            :text="segment.text"
+            :term="term"
+            class="text-body-1" />
+        </div>
       </div>
     </template>
     <template v-else>
@@ -74,6 +85,7 @@
 import {countOccurrences, formatMoment} from '../js/TranscriptSearch.js';
 import {groupByChapters} from '../js/TranscriptChapters.js';
 import TranscriptChapterFolds from '../js/TranscriptChapterFolds.js';
+import {opensSpeakerRun} from '../js/TranscriptSpeakers.js';
 
 export default {
   mixins: [TranscriptChapterFolds],
@@ -106,6 +118,18 @@ export default {
       type: Number,
       default: null,
     },
+    speakers: {
+      type: Array,
+      default: null,
+    },
+    canNameSpeakers: {
+      type: Boolean,
+      default: false,
+    },
+    savingSpeaker: {
+      type: String,
+      default: null,
+    },
   },
   computed: {
     hasSegments() {
@@ -133,6 +157,9 @@ export default {
     hasChapters() {
       return this.groups.some(group => group.chapter);
     },
+    speakersByNumber() {
+      return Object.fromEntries((this.speakers || []).map(person => [person.speaker, person]));
+    },
   },
   watch: {
     term() {
@@ -158,6 +185,16 @@ export default {
      * @returns {string} the written moment
      */
     formatMoment,
+    /**
+     * Tells whether a sentence opens a run of sentences of its speaker, which
+     * then shows above it.
+     *
+     * @param {Array<object>} segments the sentences
+     * @param {number} index the sentence's index
+     * @param {boolean} firstOfGroup whether the sentence is the first under a heading
+     * @returns {boolean} true when the sentence shows its speaker
+     */
+    opensSpeakerRun,
     /**
      * Finds the sentence a moment of the recording falls in.
      *
