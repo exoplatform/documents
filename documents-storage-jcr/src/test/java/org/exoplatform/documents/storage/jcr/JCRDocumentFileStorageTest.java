@@ -3722,7 +3722,7 @@ public class JCRDocumentFileStorageTest {
     Node node = mockMediaNode(session, "video/mp4");
     mockSpeakers(node, "1=42");
     mockDoneTranscript(node, 1000L);
-    mockSuggestions(node, "2=43|strong|manual|1|1=42", "3=44|strong|manual|2|", "4=42|strong|manual|2|");
+    mockSuggestions(node, "2=43|strong|manual|1|1=42", "3=44|strong|manual|2|", "4=42|strong|manual|2|", "1=44|strong|manual|2|");
     TranscriptionSpeakerSuggestion byElimination = new TranscriptionSpeakerSuggestion("2", 43, true, false, List.of(1), "1", 42L);
     java.util.concurrent.atomic.AtomicBoolean lockedWhileWriting = new java.util.concurrent.atomic.AtomicBoolean();
     doAnswer(invocation -> {
@@ -3738,6 +3738,11 @@ public class JCRDocumentFileStorageTest {
     assertFalse("Expected a dismissed proposal not applied",
                 jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
                                                                            new TranscriptionSpeakerSuggestion("5", 45, true, false, List.of()),
+                                                                           1000L,
+                                                                           owner));
+    assertFalse("Expected a proposal stored for another person not applied",
+                jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                           new TranscriptionSpeakerSuggestion("3", 45, true, false, List.of(2)),
                                                                            1000L,
                                                                            owner));
     assertFalse("Expected a named speaker kept",
@@ -3760,7 +3765,7 @@ public class JCRDocumentFileStorageTest {
     assertTrue(jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", byElimination, 1000L, owner));
     verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=42", "2=43" });
     verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION,
-                             new String[] { "2=43|strong|auto|1|1=42", "3=44|strong|manual|2|", "4=42|strong|manual|2|" });
+                             new String[] { "2=43|strong|auto|1|1=42", "3=44|strong|manual|2|", "4=42|strong|manual|2|", "1=44|strong|manual|2|" });
     verify(session).save();
     assertTrue("Expected the name written under the file's lock", lockedWhileWriting.get());
     assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
