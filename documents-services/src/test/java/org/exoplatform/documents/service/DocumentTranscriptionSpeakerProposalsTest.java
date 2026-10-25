@@ -30,6 +30,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -156,6 +157,54 @@ class DocumentTranscriptionSpeakerProposalsTest {
     lenient().when(someone.isEnable()).thenReturn(true);
 
     assertEquals(new TranscriptionSpeakerCandidates(false, List.of(1L, 2L)), service.getSpeakerCandidates(DOCUMENT_ID));
+  }
+
+  /**
+   * A space whose members bring the candidates to exactly
+   * {@link DocumentTranscriptionService#MAX_CANDIDATES} is kept.
+   */
+  @Test
+  void aSpaceFillingTheCandidatesExactlyIsKept() throws Exception {
+    when(documentFileService.getDocumentAudience(DOCUMENT_ID)).thenReturn(new DocumentAudience("mary", List.of("john"), "/spaces/team"));
+    Space space = mock(Space.class);
+    String[] members = new String[DocumentTranscriptionService.MAX_CANDIDATES - 2];
+    List<Long> expected = new ArrayList<>(List.of(1L, 2L));
+    mockUsername("mary", "1", true);
+    mockUsername("john", "2", true);
+    for (int i = 0; i < members.length; i++) {
+      members[i] = "member" + i;
+      mockUsername(members[i], String.valueOf(100 + i), true);
+      expected.add(100L + i);
+    }
+    when(space.getMembers()).thenReturn(members);
+    when(spaceService.getSpaceByGroupId("/spaces/team")).thenReturn(space);
+
+    assertEquals(new TranscriptionSpeakerCandidates(false, expected), service.getSpeakerCandidates(DOCUMENT_ID));
+  }
+
+  /**
+   * A file shared one by one with more users than the candidates allow gives
+   * its first {@link DocumentTranscriptionService#MAX_CANDIDATES} only.
+   */
+  @Test
+  void theSharesAreCutAtTheMostCandidates() throws Exception {
+    List<String> shares = new ArrayList<>();
+    List<Long> expected = new ArrayList<>();
+    for (int i = 0; i < DocumentTranscriptionService.MAX_CANDIDATES + 5; i++) {
+      shares.add("user" + i);
+      Identity identity = mock(Identity.class);
+      lenient().when(identity.getId()).thenReturn(String.valueOf(100 + i));
+      lenient().when(identityManager.getOrCreateUserIdentity("user" + i)).thenReturn(identity);
+      lenient().when(identityManager.getIdentity(String.valueOf(100 + i))).thenReturn(identity);
+      lenient().when(identity.isUser()).thenReturn(true);
+      lenient().when(identity.isEnable()).thenReturn(true);
+      if (i < DocumentTranscriptionService.MAX_CANDIDATES) {
+        expected.add(100L + i);
+      }
+    }
+    when(documentFileService.getDocumentAudience(DOCUMENT_ID)).thenReturn(new DocumentAudience(null, shares, null));
+
+    assertEquals(new TranscriptionSpeakerCandidates(false, expected), service.getSpeakerCandidates(DOCUMENT_ID));
   }
 
   /**
