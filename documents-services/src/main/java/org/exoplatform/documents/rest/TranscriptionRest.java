@@ -36,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.model.TranscriptionBusyException;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakerEntity;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakersEntity;
@@ -73,6 +74,8 @@ public class TranscriptionRest {
   private static final String          NO_TRANSCRIPT_MESSAGE = "documents.transcription.noTranscript";
 
   private static final String          NO_CHAPTERS_MESSAGE = "documents.transcription.noChapters";
+
+  private static final String          BUSY_MESSAGE        = "documents.transcription.speaker.busy";
 
   @Autowired
   private DocumentTranscriptionService documentTranscriptionService;
@@ -318,6 +321,7 @@ public class TranscriptionRest {
     @ApiResponse(responseCode = "400", description = "No speakers in the transcript, no such speaker, or the person is no enabled user"),
     @ApiResponse(responseCode = "403", description = "The file cannot be edited by the caller"),
     @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
+    @ApiResponse(responseCode = "409", description = "Another change of the file held the naming up: try again"),
   })
   public ResponseEntity<Void> setSpeaker(HttpServletRequest request,
                                          @Parameter(description = "The file's UUID", required = true)
@@ -349,6 +353,7 @@ public class TranscriptionRest {
     @ApiResponse(responseCode = "400", description = "No speakers in the transcript, or no such speaker"),
     @ApiResponse(responseCode = "403", description = "The file cannot be edited by the caller"),
     @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
+    @ApiResponse(responseCode = "409", description = "Another change of the file held the naming up: try again"),
   })
   public ResponseEntity<Void> unsetSpeaker(HttpServletRequest request,
                                            @Parameter(description = "The file's UUID", required = true)
@@ -406,6 +411,9 @@ public class TranscriptionRest {
     try {
       documentTranscriptionService.setSpeaker(documentId, speaker, identityId, getCurrentIdentityId(request));
       return ResponseEntity.noContent().build();
+    } catch (TranscriptionBusyException e) {
+      LOG.debug("Naming a speaker of file {} was held up by another change of it", documentId, e);
+      throw new ResponseStatusException(HttpStatus.CONFLICT, BUSY_MESSAGE);
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     } catch (IllegalAccessException e) {
