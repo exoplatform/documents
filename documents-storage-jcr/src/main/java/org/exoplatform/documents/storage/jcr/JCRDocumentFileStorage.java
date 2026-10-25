@@ -2816,6 +2816,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         return false;
       }
       node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+      removeTranscriptionSpeakers(node);
       session.save();
       return true;
     } catch (RepositoryException e) {
@@ -2843,6 +2844,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION,
                        new ByteArrayInputStream(Objects.toString(transcription, "").getBytes(StandardCharsets.UTF_8)));
       writeTranscriptionState(node, state.toBuilder().hasSegments(StringUtils.isNotBlank(segments)).build());
+      // A new transcript numbers its speakers anew: the people named for the previous one no longer apply
+      removeTranscriptionSpeakers(node);
       if (StringUtils.isBlank(segments)) {
         if (node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)) {
           node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS).remove();
@@ -2984,6 +2987,72 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
     try (InputStream stream = node.getProperty(property).getStream()) {
       return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, String> getTranscriptionSpeakers(String documentId,
+                                                      Identity aclIdentity) throws IllegalAccessException,
+                                                                            ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return readTranscriptionSpeakers(getTranscribedNode(session, documentId));
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the transcript speakers of media file '%s'".formatted(documentId), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void setTranscriptionSpeaker(String documentId,
+                                      String speaker,
+                                      String identityId,
+                                      Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new IllegalAccessException("User may not edit file '%s'".formatted(documentId));
+      }
+      Map<String, String> speakers = new TreeMap<>(readTranscriptionSpeakers(node));
+      if (identityId == null) {
+        speakers.remove(speaker);
+      } else {
+        speakers.put(speaker, identityId);
+      }
+      if (speakers.isEmpty()) {
+        removeTranscriptionSpeakers(node);
+      } else {
+        if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)) {
+          node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+        }
+        node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER,
+                         speakers.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new));
+      }
+      session.save();
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error naming a speaker of media file '%s'".formatted(documentId), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
@@ -4125,6 +4194,41 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @throws ObjectNotFoundException when the file does not exist or the session
    *           cannot see it
    */
+  /**
+   * Reads the person each named speaker of a file's transcript is.
+   *
+   * @param node the file
+   * @return the identity id of each named speaker, by speaker number; empty when
+   *         none is named
+   * @throws RepositoryException when the file cannot be read
+   */
+  private Map<String, String> readTranscriptionSpeakers(Node node) throws RepositoryException {
+    Map<String, String> speakers = new TreeMap<>();
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS) && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER)) {
+      for (Value value : node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER).getValues()) {
+        String speaker = StringUtils.substringBefore(value.getString(), "=");
+        String identityId = StringUtils.substringAfter(value.getString(), "=");
+        if (StringUtils.isNotBlank(speaker) && StringUtils.isNotBlank(identityId)) {
+          speakers.put(speaker, identityId);
+        }
+      }
+    }
+    return speakers;
+  }
+
+  /**
+   * Forgets the people named for the speakers of a file's transcript, the save
+   * being the caller's.
+   *
+   * @param node the file
+   * @throws RepositoryException when the file cannot be written
+   */
+  private void removeTranscriptionSpeakers(Node node) throws RepositoryException {
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)) {
+      node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+    }
+  }
+
   private Node getTranscribedNode(Session session, String documentId) throws ObjectNotFoundException {
     Node node = getNodeByIdentifier(session, documentId);
     if (node == null) {
