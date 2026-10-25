@@ -22,8 +22,7 @@
       :profile-id="person.username"
       :size="22"
       :popover="false"
-      extra-class="text-truncate"
-      fullname />
+      extra-class="text-truncate" />
     <template v-else>
       <v-avatar
         :color="speaker && color || 'grey'"
