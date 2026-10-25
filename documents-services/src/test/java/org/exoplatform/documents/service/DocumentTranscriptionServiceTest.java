@@ -24,6 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -41,9 +43,12 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.services.listener.ListenerService;
+import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.manager.IdentityManager;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentTranscriptionServiceTest {
@@ -68,6 +73,9 @@ class DocumentTranscriptionServiceTest {
 
   @Mock
   private TranscriptChaptersRequester          requester;
+
+  @Mock
+  private IdentityManager                      identityManager;
 
   @InjectMocks
   private DocumentTranscriptionService         service;
@@ -229,6 +237,121 @@ class DocumentTranscriptionServiceTest {
     assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
 
     verifyNoInteractions(requester);
+  }
+
+  /** Segments of a two-speaker transcript, as the transcription writes them. */
+  private static final String SPEAKER_SEGMENTS = "[{\"start\":0.0,\"end\":2.0,\"text\":\"Hello.\",\"speaker\":\"1\"},"
+      + "{\"start\":2.0,\"end\":3.0,\"text\":\"Yes.\",\"speaker\":\"2\"}]";
+
+  /**
+   * A user who cannot edit the file is refused before anything else is
+   * checked, so a refusal never tells what the transcript holds (EXO-92123).
+   */
+  @Test
+  void namingASpeakerIsRefusedToAUserWhoCannotEditTheFile() throws Exception {
+    when(documentFileService.getTranscriptionState(DOCUMENT_ID, VIEWER_ID)).thenReturn(done());
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, VIEWER_ID)).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class, () -> service.setSpeaker(DOCUMENT_ID, "9", 42L, VIEWER_ID));
+
+    verify(documentFileService, never()).getTranscriptionSegments(anyString(), anyLong());
+    verify(documentFileService, never()).setTranscriptionSpeaker(anyString(), anyString(), any(), anyLong());
+  }
+
+  /**
+   * A file the user cannot see is not found, whatever else the request says.
+   */
+  @Test
+  void namingASpeakerOfAFileTheUserCannotSeeIsNotFound() throws Exception {
+    when(documentFileService.getTranscriptionState(DOCUMENT_ID, VIEWER_ID)).thenThrow(new ObjectNotFoundException(DOCUMENT_ID));
+
+    assertThrows(ObjectNotFoundException.class, () -> service.setSpeaker(DOCUMENT_ID, "1", 42L, VIEWER_ID));
+
+    verify(documentFileService, never()).hasEditPermissionOnDocument(anyString(), anyLong());
+  }
+
+  /**
+   * Only a speaker the transcript holds can be named, and only in a transcript
+   * that tells its speakers apart.
+   */
+  @Test
+  void onlyASpeakerOfADiarizedTranscriptCanBeNamed() throws Exception {
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, VIEWER_ID)).thenReturn(true);
+    when(documentFileService.getTranscriptionState(DOCUMENT_ID, VIEWER_ID)).thenReturn(done());
+    when(documentFileService.getTranscriptionSegments(DOCUMENT_ID, VIEWER_ID)).thenReturn(SPEAKER_SEGMENTS);
+    assertEquals(DocumentTranscriptionService.UNKNOWN_SPEAKER_MESSAGE,
+                 assertThrows(IllegalArgumentException.class, () -> service.setSpeaker(DOCUMENT_ID, "3", 42L, VIEWER_ID)).getMessage());
+
+    when(documentFileService.getTranscriptionSegments(DOCUMENT_ID, VIEWER_ID)).thenReturn("[{\"start\":0.0,\"end\":2.0,\"text\":\"Hello.\"}]");
+    assertEquals(DocumentTranscriptionService.NO_SPEAKERS_MESSAGE,
+                 assertThrows(IllegalArgumentException.class, () -> service.setSpeaker(DOCUMENT_ID, "1", 42L, VIEWER_ID)).getMessage());
+
+    lenient().when(documentFileService.getTranscriptionSegments(DOCUMENT_ID, VIEWER_ID)).thenReturn(SPEAKER_SEGMENTS);
+    when(documentFileService.getTranscriptionState(DOCUMENT_ID, VIEWER_ID)).thenReturn(TranscriptionState.builder()
+                                                                                                         .status(TranscriptionStatus.PROCESSING)
+                                                                                                         .build());
+    assertEquals(DocumentTranscriptionService.NO_SPEAKERS_MESSAGE,
+                 assertThrows(IllegalArgumentException.class, () -> service.setSpeaker(DOCUMENT_ID, "1", 42L, VIEWER_ID)).getMessage(),
+                 "Expected no naming while the transcript is being written");
+    verify(documentFileService, never()).setTranscriptionSpeaker(anyString(), anyString(), any(), anyLong());
+  }
+
+  /**
+   * A speaker can be said to be an enabled user only: not a space, nor a
+   * deleted or disabled user, nor an identity that does not exist.
+   */
+  @Test
+  void aSpeakerIsNamedAfterAnEnabledUserOnly() throws Exception {
+    mockNameableTranscript();
+    Identity space = identity(false, false, true);
+    Identity deleted = identity(true, true, true);
+    Identity disabled = identity(true, false, false);
+    when(identityManager.getIdentity("41")).thenReturn(null);
+    when(identityManager.getIdentity("43")).thenReturn(space);
+    when(identityManager.getIdentity("44")).thenReturn(deleted);
+    when(identityManager.getIdentity("45")).thenReturn(disabled);
+
+    for (long refused : new long[] { 41L, 43L, 44L, 45L }) {
+      assertEquals(DocumentTranscriptionService.NOT_A_USER_MESSAGE,
+                   assertThrows(IllegalArgumentException.class, () -> service.setSpeaker(DOCUMENT_ID, "1", refused, VIEWER_ID)).getMessage(),
+                   "Expected identity " + refused + " refused");
+    }
+    verify(documentFileService, never()).setTranscriptionSpeaker(anyString(), anyString(), any(), anyLong());
+  }
+
+  /**
+   * A speaker is named after an enabled user, and unnamed without any person
+   * to check.
+   */
+  @Test
+  void aSpeakerIsNamedAfterAnEnabledUser_andUnnamed() throws Exception {
+    mockNameableTranscript();
+    Identity user = identity(true, false, true);
+    when(identityManager.getIdentity("42")).thenReturn(user);
+
+    service.setSpeaker(DOCUMENT_ID, "2", 42L, VIEWER_ID);
+    service.setSpeaker(DOCUMENT_ID, "2", null, VIEWER_ID);
+
+    verify(documentFileService).setTranscriptionSpeaker(DOCUMENT_ID, "2", "42", VIEWER_ID);
+    verify(documentFileService).setTranscriptionSpeaker(DOCUMENT_ID, "2", null, VIEWER_ID);
+  }
+
+  private void mockNameableTranscript() throws Exception {
+    when(documentFileService.getTranscriptionState(DOCUMENT_ID, VIEWER_ID)).thenReturn(done());
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, VIEWER_ID)).thenReturn(true);
+    when(documentFileService.getTranscriptionSegments(DOCUMENT_ID, VIEWER_ID)).thenReturn(SPEAKER_SEGMENTS);
+  }
+
+  private static TranscriptionState done() {
+    return TranscriptionState.builder().status(TranscriptionStatus.DONE).media(true).build();
+  }
+
+  private static Identity identity(boolean user, boolean deleted, boolean enabled) {
+    Identity identity = mock(Identity.class);
+    lenient().when(identity.isUser()).thenReturn(user);
+    lenient().when(identity.isDeleted()).thenReturn(deleted);
+    lenient().when(identity.isEnable()).thenReturn(enabled);
+    return identity;
   }
 
   private void mockState(TranscriptionState state) throws Exception {
