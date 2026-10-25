@@ -93,9 +93,17 @@ export default {
     lastFolder() {
       return this.folders.length > 1 && this.folders[this.folders.length - 1] || null;
     },
+    /**
+     * Names the drive's root folder.
+     * @returns {string} the label
+     */
     homeLabel() {
       return this.folders[0]?.name === 'Private' && this.$t('documents.label.userHomeDocuments') || this.$t('documents.label.spaceHomeDocuments');
     },
+    /**
+     * Spells the whole path, for the hover.
+     * @returns {string} the folders from the root, separated by « › »
+     */
     fullPath() {
       return [this.homeLabel, ...this.folders.slice(1).map(folder => folder.name)].join(' › ');
     },
