@@ -15,10 +15,20 @@
  * along with this program. If not, see <gnu.org/licenses>.
  */
 
+import {awaitsChapters} from '../../document-transcript-drawer/js/TranscriptChapters.js';
+
+/** How often the timeline reads the state again while the transcript or its chapters may still come, in milliseconds. */
+const POLLING_MILLIS = 15000;
+
+/** How long a transcription may run without a change before it is no longer waited for, in milliseconds. */
+const STALE_MILLIS = 3600000;
+
 /**
  * The reading of what a recording's timeline shows (EXO-92127): its timed
- * segments, its chapters and the speakers someone named. The component using
- * it has a documentId prop; it follows the names given in the transcript.
+ * segments, its chapters and the speakers someone named, with the names they
+ * go by. The component using it has a documentId prop; it follows the names
+ * given in the transcript, and reads the state again while the transcript is
+ * made or its chapters may still come, as the Transcript tab does.
  */
 export default {
   data: () => ({
@@ -27,57 +37,117 @@ export default {
     speakers: null,
     lastRead: 0,
     speakersRead: 0,
+    openedAt: null,
+    pollingTimer: null,
   }),
+  computed: {
+    /** @returns {Object} the persons someone named, by their speaker's number */
+    speakersByNumber() {
+      return Object.fromEntries((this.speakers || []).map(person => [person.speaker, person]));
+    },
+  },
   watch: {
     documentId: {
       immediate: true,
+      /**
+       * Forgets the file shown before and reads the new one.
+       * @returns {void}
+       */
       handler() {
         this.segments = null;
         this.rawChapters = null;
         this.speakers = null;
+        this.speakersRead++;
+        this.openedAt = Date.now();
         this.read();
       },
     },
   },
+  /**
+   * Follows the names given in the transcript.
+   * @returns {void}
+   */
   created() {
     document.addEventListener('documents-transcript-speakers-changed', this.readSpeakersAgain);
   },
+  /**
+   * Stops reading: no read under way changes the timeline any more.
+   * @returns {void}
+   */
   beforeDestroy() {
     this.lastRead++;
     this.speakersRead++;
+    this.stopPolling();
     document.removeEventListener('documents-transcript-speakers-changed', this.readSpeakersAgain);
   },
   methods: {
     /**
      * Reads what the timeline shows of a transcribed recording: its timed
-     * segments, its chapters and the speakers someone named. A recording not
-     * transcribed yet, or a read that fails, shows no timeline; only the
-     * latest read changes it.
+     * segments, its chapters and, on the first read of its segments, the
+     * speakers someone named. A recording not transcribed yet, or a read that
+     * fails, shows no timeline; only the latest read changes it. The state is
+     * read again while the transcription runs or the chapters may still come.
      * @returns {Promise} resolved once read
      */
     read() {
       const documentId = this.documentId;
       const read = ++this.lastRead;
-      this.speakersRead++;
+      this.stopPolling();
       if (!documentId) {
         return Promise.resolve();
       }
       const service = this.$transcriptionService;
       return service.getState(documentId)
-        .then(state => state?.status === 'DONE' && state.hasSegments && Promise.all([
-          service.getSegments(documentId),
-          state.hasChapters && service.getChapters(documentId).catch(() => null) || null,
-        ]))
+        .then(state => {
+          if (read !== this.lastRead) {
+            return null;
+          }
+          if (this.mayChange(state)) {
+            this.pollingTimer = window.setTimeout(this.read, POLLING_MILLIS);
+          }
+          if (state?.status !== 'DONE' || !state.hasSegments) {
+            return null;
+          }
+          // a transcript cannot change once done: what was already read stays
+          return Promise.all([
+            this.segments || service.getSegments(documentId),
+            this.rawChapters || state.hasChapters && service.getChapters(documentId).catch(() => null) || null,
+          ]);
+        })
         .then(answer => {
           if (!answer || read !== this.lastRead) {
             return;
           }
+          const firstRead = !this.segments;
           const [segments, chapters] = answer;
           this.segments = Array.isArray(segments) && segments || null;
           this.rawChapters = Array.isArray(chapters) && chapters || null;
-          return this.segments?.some(segment => segment.speaker) && this.readSpeakers(documentId);
+          return firstRead && this.segments?.some(segment => segment.speaker) && this.readSpeakers(documentId);
         })
         .catch(() => null);
+    },
+    /**
+     * Tells whether what the timeline shows may still change: a transcription
+     * waiting in the queue or running and still moving, or a transcript whose
+     * chapters may still come since the timeline opened, when the Transcript
+     * tab asks for them.
+     * @param {Object} state the transcription state
+     * @returns {boolean} true when the state is worth reading again
+     */
+    mayChange(state) {
+      return state?.status === 'QUEUED'
+        || (state?.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS)
+        || awaitsChapters(state, this.openedAt);
+    },
+    /**
+     * Stops reading the state again.
+     * @returns {void}
+     */
+    stopPolling() {
+      if (this.pollingTimer) {
+        window.clearTimeout(this.pollingTimer);
+        this.pollingTimer = null;
+      }
     },
     /**
      * Reads the speakers someone named. Only the latest read of the speakers
@@ -106,6 +176,30 @@ export default {
       if (this.segments && event?.detail?.documentId === this.documentId) {
         this.readSpeakers(this.documentId);
       }
+    },
+    /**
+     * The person a lane's speaker is, once someone named them.
+     * @param {Object} lane the lane
+     * @returns {Object} the person, or null for an unnamed speaker or « Others »
+     */
+    personOf(lane) {
+      return lane.speaker && this.speakersByNumber[lane.speaker] || null;
+    },
+    /**
+     * The name of a speaker: the person someone named, else « Speaker N ».
+     * @param {string} speaker the speaker's number
+     * @returns {string} the name
+     */
+    speakerName(speaker) {
+      return this.speakersByNumber[speaker]?.fullName || this.$t('documents.transcript.speaker.label', {0: speaker});
+    },
+    /**
+     * The name of a lane: its speaker's, or « Others (N) » for the shared one.
+     * @param {Object} lane the lane
+     * @returns {string} the name
+     */
+    laneName(lane) {
+      return lane.speaker && this.speakerName(lane.speaker) || this.$t('documents.timeline.others', {0: lane.speakers.length});
     },
   },
 };
