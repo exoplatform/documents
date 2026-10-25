@@ -22,6 +22,7 @@ import * as attachmentService from '../../js/attachmentService.js';
 import * as documentFileService from '../../js/DocumentFileService.js';
 import * as documentsUtils from '../../js/DocumentsUtils.js';
 import * as transferRulesService from '../../js/transferRulesService.js';
+import * as transcriptionService from '../../js/TranscriptionService.js';
 import '../documents-icons-extension/extensions.js';
 
 if (!Vue.prototype.$documentFileService) {
@@ -39,6 +40,12 @@ if (!Vue.prototype.$attachmentService) {
 if (!Vue.prototype.$documentsUtils) {
   window.Object.defineProperty(Vue.prototype, '$documentsUtils', {
     value: documentsUtils,
+  });
+}
+
+if (!Vue.prototype.$transcriptionService) {
+  window.Object.defineProperty(Vue.prototype, '$transcriptionService', {
+    value: transcriptionService,
   });
 }
 
