@@ -74,13 +74,14 @@ export default {
       return !!mediaKind(this.mimetype);
     },
     /**
-     * Shows the transcript row only for a recording whose transcription has
-     * started, whatever became of it: a recording never transcribed gets
-     * none, its transcription being offered in the transcript drawer.
+     * Shows the transcript row only for a recording whose transcript is ready
+     * or under way: a recording never transcribed, or whose transcription
+     * failed, gets none, its transcription and its retry being offered in
+     * the transcript drawer.
      * @returns {boolean} true when the row shows
      */
     transcribed() {
-      return !!this.state?.available && !!this.state.status;
+      return !!this.state?.available && !!this.state.status && this.state.status !== 'FAILED';
     },
     ready() {
       return this.state?.status === 'DONE';
