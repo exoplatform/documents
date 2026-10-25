@@ -21,22 +21,20 @@
       :label="$t('documents.drawer.details.duration')"
       :value="durationLabel" />
     <documents-info-row
-      v-if="state && state.available"
+      v-if="transcribed"
       :label="$t('documents.drawer.details.transcript')">
-      <span v-if="ready">
-        {{ $t('documents.drawer.details.transcript.readyState') }} ·
-        <button
-          type="button"
-          class="font-weight-bold primary--text pa-0"
-          @click="openTranscript">
-          {{ $t('documents.drawer.details.transcript.read') }}
-        </button>
-      </span>
+      <button
+        v-if="ready"
+        type="button"
+        class="font-weight-bold primary--text"
+        @click="openTranscript">
+        {{ $t('documents.drawer.details.transcript.read') }}
+      </button>
       <document-transcript-status
         v-else
         :state="state"
         :retrying="retrying"
-        class="text-wrap"
+        compact
         @retry="retryTranscription" />
     </documents-info-row>
   </div>
@@ -74,6 +72,15 @@ export default {
     media() {
       return !!mediaKind(this.mimetype);
     },
+    /**
+     * Shows the transcript row only for a recording whose transcription has
+     * started, whatever became of it: a recording never transcribed gets
+     * none, its transcription being offered in the transcript drawer.
+     * @returns {boolean} true when the row shows
+     */
+    transcribed() {
+      return !!this.state?.available && !!this.state.status;
+    },
     ready() {
       return this.state?.status === 'DONE';
     },
@@ -91,7 +98,11 @@ export default {
       },
     },
   },
+  created() {
+    document.addEventListener('documents-transcript-drawer-closed', this.readStateOnDrawerClosed);
+  },
   beforeDestroy() {
+    document.removeEventListener('documents-transcript-drawer-closed', this.readStateOnDrawerClosed);
     this.destroyed = true;
     this.stopRefresh();
   },
@@ -126,6 +137,17 @@ export default {
             this.$emit('available', false);
           }
         });
+    },
+    /**
+     * Reads the state again once the transcript drawer of the same file
+     * closes, since a transcription may have been asked from there.
+     * @param {CustomEvent} event its detail holds documentId
+     * @returns {void}
+     */
+    readStateOnDrawerClosed(event) {
+      if (!this.destroyed && event?.detail?.documentId === this.documentId) {
+        this.readState();
+      }
     },
     /**
      * Tells whether an answer read for a file still concerns the rows shown:
