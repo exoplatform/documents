@@ -21,6 +21,7 @@
       ref="player"
       :url="downloadUrl"
       :audio="mediaKind === 'audio'"
+      :start="start"
       class="documentInfoContentMedia"
       @time="$emit('time', $event)" />
     <img
@@ -67,6 +68,10 @@ export default {
     readable: {
       type: Boolean,
       default: false,
+    },
+    start: {
+      type: Number,
+      default: 0,
     },
   },
   data: () => ({
