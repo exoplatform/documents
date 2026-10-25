@@ -121,15 +121,14 @@ export default {
       }
     },
     /**
-     * Says the state in a few words, for a one-line row: the progress as
-     * parts transcribed, or how the transcription ended.
+     * Says the state of a transcription under way in a few words, for a
+     * one-line row: the progress as parts transcribed, or why it waits; a
+     * failed one has no such row.
      * @returns {string} the short message
      */
     compactMessage() {
       if (this.unreadable) {
         return this.$t('documents.transcript.status.unreadable');
-      } else if (this.status === 'FAILED') {
-        return this.$t('documents.transcript.compact.failed');
       } else if (this.stale) {
         return this.$t('documents.transcript.compact.stopped');
       } else if (this.rescheduled) {
