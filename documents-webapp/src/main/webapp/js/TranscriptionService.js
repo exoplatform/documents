@@ -97,7 +97,8 @@ export function getChapters(documentId) {
  * done before they were switched on gets the first time it is opened.
  *
  * @param {string} documentId the file's id
- * @returns {Promise} resolved once the request is accepted
+ * @returns {Promise<boolean>} resolved with true when the chapters are coming
+ *          (the server answered 202), false when none are to be made (204)
  */
 export function requestChapters(documentId) {
   return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/chapters`, {
@@ -107,6 +108,7 @@ export function requestChapters(documentId) {
     if (!resp?.ok) {
       throw new Error(`Error ${resp?.status} when asking for the transcript chapters of '${documentId}'`);
     }
+    return resp.status === 202;
   });
 }
 
