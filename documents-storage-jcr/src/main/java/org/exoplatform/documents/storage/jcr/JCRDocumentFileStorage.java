@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -238,14 +239,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   /**
    * The locks that serialize the naming of a file's speakers on this server, by
    * file (EXO-92123): a save rewrites all the names of the file from what it
-   * read, so two at once would drop one.
+   * read, so two at once would drop one, and a new transcript drops them, which
+   * a save then must not bring back.
    */
   private static final ReentrantLock[]              SPEAKER_LOCKS                            =
                                                                   Stream.generate(ReentrantLock::new)
                                                                         .limit(64)
                                                                         .toArray(ReentrantLock[]::new);
 
+
   private static final long                         DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS  = 20;
+
+  /** How long a request waits for a speaker lock, in milliseconds; shortened by the tests only. */
+  static long                                       speakerLockWaitMillis                    = 30_000;
 
   private volatile DocumentTextExtractor            textExtractor;
 
@@ -2819,6 +2825,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    */
   @Override
   public boolean clearTranscriptionState(String documentId) throws ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    // the names of the speakers go with the state: never while a speaker is being named
+    lock.lock();
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
     try {
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -2835,6 +2844,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error removing the transcription state of media file '%s'".formatted(documentId), e);
     } finally {
       sessionProvider.close();
+      lock.unlock();
     }
   }
 
@@ -2846,6 +2856,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                     String transcription,
                                     String segments,
                                     TranscriptionState state) throws ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    // the names of the speakers go with the old transcript: never while a speaker is being named
+    lock.lock();
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
     try {
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -2874,6 +2887,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error writing the transcript of media file '%s'".formatted(documentId), e);
     } finally {
       sessionProvider.close();
+      lock.unlock();
     }
   }
 
@@ -3033,9 +3047,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                       String speaker,
                                       String identityId,
                                       Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
-    SessionProvider sessionProvider = null;
     ReentrantLock lock = speakerLock(documentId);
-    lock.lock();
+    if (!acquireOnRequest(lock)) {
+      throw new IllegalStateException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
+    }
+    SessionProvider sessionProvider = null;
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -3068,6 +3084,23 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
       lock.unlock();
+    }
+  }
+
+  /**
+   * Takes a speaker lock for a request, which waits at most
+   * {@link #speakerLockWaitMillis}: a request is never held by a save that
+   * hangs.
+   *
+   * @param lock the lock
+   * @return true once held, false when the wait timed out or was interrupted
+   */
+  private static boolean acquireOnRequest(ReentrantLock lock) {
+    try {
+      return lock.tryLock(speakerLockWaitMillis, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return false;
     }
   }
 
