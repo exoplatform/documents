@@ -3215,7 +3215,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                    Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     ReentrantLock lock = speakerLock(documentId);
     if (!acquireOnRequest(lock)) {
-      throw new IllegalStateException("Timed out waiting to dismiss a speaker proposal of media file '%s'".formatted(documentId));
+      throw new TranscriptionBusyException("Timed out waiting to dismiss a speaker proposal of media file '%s'".formatted(documentId));
     }
     SessionProvider sessionProvider = null;
     try {
@@ -3252,7 +3252,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                      Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     ReentrantLock lock = speakerLock(documentId);
     if (!acquireOnRequest(lock)) {
-      throw new IllegalStateException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
+      throw new TranscriptionBusyException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
     }
     SessionProvider sessionProvider = null;
     try {

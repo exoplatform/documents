@@ -3682,6 +3682,53 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * Dismissing a proposal and applying one wait a bounded time for a save of
+   * the same file running on another thread, then give up as busy without
+   * writing, as naming a speaker does.
+   */
+  @Test
+  public void dismissingOrApplyingAProposalGivesUpAsBusyWhenAnotherSaveOfTheFileHoldsItsLock() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSuggestions(node, "1=42|strong|manual|3|");
+    java.util.concurrent.CountDownLatch held = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+    Thread other = new Thread(() -> {
+      JCRDocumentFileStorage.speakerLock("1").lock();
+      try {
+        held.countDown();
+        release.await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } finally {
+        JCRDocumentFileStorage.speakerLock("1").unlock();
+      }
+    });
+    long wait = JCRDocumentFileStorage.speakerLockWaitMillis;
+    JCRDocumentFileStorage.speakerLockWaitMillis = 50;
+    try {
+      other.start();
+      held.await();
+
+      assertThrows(TranscriptionBusyException.class, () -> jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "1", viewer));
+      assertThrows(TranscriptionBusyException.class,
+                   () -> jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                                    new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(3)),
+                                                                                    1000L,
+                                                                                    viewer));
+
+      verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION), any(String[].class));
+      verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
+    } finally {
+      JCRDocumentFileStorage.speakerLockWaitMillis = wait;
+      release.countDown();
+      other.join();
+    }
+  }
+
+  /**
    * Dismissing a proposal keeps the others, removes the mixin with the last
    * one, and is refused to a user who cannot edit the file.
    */

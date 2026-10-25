@@ -395,7 +395,8 @@ class TranscriptionRestTest {
 
   /**
    * Dismissing a proposal answers 204, 403 to a caller who cannot edit the
-   * file, 404 for a file the caller cannot see (EXO-92126).
+   * file, 404 for a file the caller cannot see, 409 when another change of
+   * the file held it up (EXO-92126).
    */
   @Test
   void dismissingASpeakerProposalAnswersItsStatus() throws Exception {
@@ -409,6 +410,10 @@ class TranscriptionRestTest {
     doThrow(new ObjectNotFoundException("none")).when(documentTranscriptionService).dismissSpeakerProposal(DOCUMENT_ID, "4", 7L);
     assertEquals(HttpStatus.NOT_FOUND,
                  assertThrows(ResponseStatusException.class, () -> rest.dismissSpeakerProposal(request, DOCUMENT_ID, "4")).getStatusCode());
+    doThrow(new TranscriptionBusyException("held up")).when(documentTranscriptionService).dismissSpeakerProposal(DOCUMENT_ID, "5", 7L);
+    ResponseStatusException busy = assertThrows(ResponseStatusException.class, () -> rest.dismissSpeakerProposal(request, DOCUMENT_ID, "5"));
+    assertEquals(HttpStatus.CONFLICT, busy.getStatusCode());
+    assertEquals("documents.transcription.speaker.busy", busy.getReason());
   }
 
 }
