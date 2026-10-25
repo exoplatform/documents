@@ -201,6 +201,7 @@ export default {
         this.chapters = null;
         this.resetChaptersRequest();
         this.speakers = null;
+        this.canNameSpeakers = false;
         this.playerUrl = null;
         this.fileUnknown = false;
         this.loadFile();
