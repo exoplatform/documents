@@ -443,7 +443,9 @@ export default {
      * search: one full-screen view serves both the details and the
      * transcript, playing on when this drawer's recording was playing.
      * This drawer stays open underneath, narrow, its player paused, so
-     * collapsing the full view reveals it in place.
+     * collapsing the full view reveals it in place. Opened from the details,
+     * still open underneath, it expands those details in place instead and
+     * closes (expandDetailsInPlace).
      *
      * @param {boolean} expanded whether the drawer was expanded
      * @returns {void}
