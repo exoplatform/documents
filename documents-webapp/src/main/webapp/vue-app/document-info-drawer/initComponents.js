@@ -18,7 +18,6 @@
  */
 
 import DocumentInfoDrawer from './components/DocumentInfoDrawer.vue';
-import Breadcrumb from './components/Breadcrumb.vue';
 import DocumentCategories from './components/DocumentCategories.vue';
 import DocumentTranscriptButton from '../document-transcript-drawer/components/DocumentTranscriptButton.vue';
 import DocumentTranscriptStatus from '../document-transcript-drawer/components/DocumentTranscriptStatus.vue';
@@ -35,11 +34,11 @@ import DocumentInfoDetails from './components/DocumentInfoDetails.vue';
 import DocumentInfoContent from './components/DocumentInfoContent.vue';
 import DocumentInfoVersions from './components/DocumentInfoVersions.vue';
 import DocumentInfoTranscript from './components/DocumentInfoTranscript.vue';
+import DocumentInfoPath from './components/DocumentInfoPath.vue';
 
 const components = {
   'document-info-drawer': DocumentInfoDrawer,
   'document-categories': DocumentCategories,
-  'breadcrumb': Breadcrumb,
   'document-transcript-button': DocumentTranscriptButton,
   'document-transcript-status': DocumentTranscriptStatus,
   'document-recording-details': DocumentRecordingDetails,
@@ -55,6 +54,7 @@ const components = {
   'document-info-content': DocumentInfoContent,
   'document-info-versions': DocumentInfoVersions,
   'document-info-transcript': DocumentInfoTranscript,
+  'document-info-path': DocumentInfoPath,
 };
 
 for (const key in components) {
