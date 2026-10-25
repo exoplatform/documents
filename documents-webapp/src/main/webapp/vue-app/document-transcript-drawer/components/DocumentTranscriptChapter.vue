@@ -21,7 +21,6 @@
       :aria-expanded="String(open)"
       class="me-1"
       icon
-      small
       @click="$emit('toggle')">
       <v-icon size="12" class="icon-default-color">{{ open && 'fa-chevron-down' || 'fa-chevron-right' }}</v-icon>
     </v-btn>
