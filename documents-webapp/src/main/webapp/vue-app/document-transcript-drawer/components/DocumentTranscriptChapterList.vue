@@ -21,12 +21,13 @@
       v-for="group in groups"
       :key="group.key"
       :title="$t('documents.transcript.playFrom', {0: formatMoment(group.chapter.start)})"
-      class="d-flex align-baseline py-1 px-2 clickable border-radius"
+      class="documentTranscriptChapterListItem clickable border-radius"
       role="button"
       tabindex="0"
       @click="$emit('select', group)"
       @keydown.enter="$emit('select', group)">
-      <span class="text-caption primary--text text-no-wrap me-3">{{ formatMoment(group.chapter.start) }}</span>
+      <span :style="group.color && {backgroundColor: group.color}" class="documentTranscriptChapterDot"></span>
+      <span class="documentTranscriptChapterTime primary--text text-no-wrap">{{ formatMoment(group.chapter.start) }}</span>
       <span class="text-body-2 text-truncate">{{ group.chapter.title }}</span>
     </div>
   </nav>
