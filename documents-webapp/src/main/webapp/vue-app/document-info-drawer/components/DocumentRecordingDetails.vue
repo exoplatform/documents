@@ -78,6 +78,7 @@ export default {
     state: null,
     retrying: false,
     refreshTimeout: null,
+    destroyed: false,
   }),
   computed: {
     media() {
@@ -85,11 +86,6 @@ export default {
     },
     ready() {
       return this.state?.status === 'DONE';
-    },
-    running() {
-      const status = this.state?.status;
-      return status === 'QUEUED'
-        || (status === 'PROCESSING' && !!this.state.updated && Date.now() - this.state.updated < STALE_MILLIS);
     },
     durationLabel() {
       const stored = this.state?.available && this.state.durationSeconds;
@@ -106,6 +102,7 @@ export default {
     },
   },
   beforeDestroy() {
+    this.destroyed = true;
     this.stopRefresh();
   },
   methods: {
@@ -125,22 +122,41 @@ export default {
       }
       return getState(documentId)
         .then(state => {
-          if (documentId === this.documentId) {
+          if (this.isCurrent(documentId)) {
             this.state = state;
             this.$emit('available', !!state?.available);
+            if (this.isRunning(state)) {
+              this.refreshTimeout = window.setTimeout(this.readState, REFRESH_MILLIS);
+            }
           }
         })
         .catch(() => {
-          if (documentId === this.documentId) {
+          if (this.isCurrent(documentId)) {
             this.state = null;
             this.$emit('available', false);
           }
-        })
-        .finally(() => {
-          if (documentId === this.documentId && this.running) {
-            this.refreshTimeout = window.setTimeout(this.readState, REFRESH_MILLIS);
-          }
         });
+    },
+    /**
+     * Tells whether an answer read for a file still concerns the rows shown:
+     * the rows are not destroyed, as when the drawer closes while a read is
+     * in flight, and still show that file.
+     * @param {string} documentId the file the answer was read for
+     * @returns {boolean} true when the answer is to be shown
+     */
+    isCurrent(documentId) {
+      return !this.destroyed && documentId === this.documentId;
+    },
+    /**
+     * Tells whether a transcription still moves: queued, or being transcribed
+     * with an update less than an hour ago, as the transcript drawer counts it.
+     * @param {Object} state the transcription state
+     * @returns {boolean} true while the state is worth reading again
+     */
+    isRunning(state) {
+      const status = state?.status;
+      return status === 'QUEUED'
+        || (status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
     },
     /**
      * Stops the pending read of the state, if any.
@@ -162,7 +178,7 @@ export default {
       this.retrying = true;
       return retry(documentId)
         .catch(() => this.$root.$emit('alert-message', this.$t('documents.transcript.retryError'), 'error'))
-        .then(() => documentId === this.documentId && this.readState())
+        .then(() => this.isCurrent(documentId) && this.readState())
         .finally(() => this.retrying = false);
     },
     /**
