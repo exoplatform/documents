@@ -53,7 +53,7 @@
           :can-edit="canNameSpeakers"
           :busy="!!savingSpeaker && savingSpeaker !== lane.speaker"
           :saving="savingSpeaker === lane.speaker"
-          class="text-caption font-weight-bold overflow-hidden"
+          class="text-caption font-weight-bold text-truncate"
           @name="nameSpeaker"
           @unname="unnameSpeaker" />
         <document-timeline-speaker
