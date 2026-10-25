@@ -632,6 +632,88 @@ public interface DocumentFileStorage {
   }
 
   /**
+   * Who a file is for, read as the system: its owner, the users it is shared
+   * with one by one, and the space whose documents hold it (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @return who the file is for
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default DocumentAudience getDocumentAudience(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Replaces, as the system, the proposals of who the speakers of a media
+   * file's transcript are (EXO-92126); none removes them.
+   *
+   * @param documentId the file's UUID
+   * @param suggestions the proposals, one per speaker at most
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default void saveTranscriptionSpeakerSuggestions(String documentId,
+                                                   List<TranscriptionSpeakerSuggestion> suggestions) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The proposals of who the speakers of a media file's transcript are, read
+   * with the rights of the given user (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the user reading them
+   * @return the proposals, in the order they were saved; empty when none
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
+                                                                                  Identity aclIdentity) throws IllegalAccessException,
+                                                                                                         ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Removes the proposal for one speaker of a media file's transcript, as a
+   * user who can edit the file (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param aclIdentity the user removing it
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default void removeTranscriptionSpeakerSuggestion(String documentId,
+                                                    String speaker,
+                                                    Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Names a speaker of a media file's transcript, as a user who can edit the
+   * file, only when neither the speaker nor the person is named yet
+   * (EXO-92126): a name applied without waiting for a person never replaces one
+   * a person gave.
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param identityId the identity id of the person
+   * @param aclIdentity the user naming it
+   * @return true when the speaker was named, false when the speaker or the
+   *         person already was
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default boolean nameTranscriptionSpeakerIfUnnamed(String documentId,
+                                                    String speaker,
+                                                    String identityId,
+                                                    Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Creates a shortcut for a document
    *
    * @param documentId     document id
