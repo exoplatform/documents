@@ -149,6 +149,37 @@ class DocumentTranscriptionServiceTest {
     assertEquals("hello", service.getText(DOCUMENT_ID, VIEWER_ID));
   }
 
+  /**
+   * A transcript read with timed segments and no chapters is handed to the
+   * transcriber for its chapters, with the reader's name (EXO-92122).
+   */
+  @Test
+  void aTranscriptReadWithNoChaptersAsksForThem() throws Exception {
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).media(true).build());
+
+    assertTrue(service.requestChapters(DOCUMENT_ID, VIEWER_ID, VIEWER));
+
+    verify(listenerService).broadcast(DocumentTranscriptionService.TRANSCRIPTION_CHAPTERS_REQUESTED_EVENT, VIEWER, DOCUMENT_ID);
+  }
+
+  /**
+   * Nothing is asked for a transcript that has chapters, has no timed segments
+   * or is not done, nor without a transcriber (EXO-92122).
+   */
+  @Test
+  void noChaptersAreAskedForATranscriptThatCannotGetThem() throws Exception {
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).hasChapters(true).media(true).build());
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID, VIEWER));
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).media(true).build());
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID, VIEWER));
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.PROCESSING).hasSegments(true).media(true).build());
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID, VIEWER));
+    when(capabilityRegistry.isAvailable()).thenReturn(false);
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID, VIEWER));
+
+    verify(listenerService, never()).broadcast(anyString(), any(), any());
+  }
+
   private void mockState(TranscriptionState state) throws Exception {
     when(capabilityRegistry.isAvailable()).thenReturn(true);
     when(documentFileService.getTranscriptionState(DOCUMENT_ID, VIEWER_ID)).thenReturn(state);
