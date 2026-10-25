@@ -978,12 +978,20 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param documentId the file's UUID
    * @param identityId the identity id of the user reading it
    * @return the outline, starting with {@code Chapters:}, or null when the
-   *         transcript has no chapter, or none that can be read
+   *         transcript has no chapter, none that can be read, or its chapters
+   *         cannot be read now
    * @throws IllegalAccessException when the user may not read the file
    * @throws ObjectNotFoundException when the file does not exist
    */
   private String toChaptersOutline(String documentId, long identityId) throws IllegalAccessException, ObjectNotFoundException {
-    String chapters = documentFileService.getTranscriptionChapters(documentId, identityId);
+    String chapters;
+    try {
+      chapters = documentFileService.getTranscriptionChapters(documentId, identityId);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its chapters never takes it away
+      LOG.debug("The chapters of media file {} cannot be read, its transcript is given alone", documentId, e);
+      return null;
+    }
     if (StringUtils.isBlank(chapters)) {
       return null;
     }
