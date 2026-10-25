@@ -22,6 +22,7 @@ import DocumentTranscriptChapter from './components/DocumentTranscriptChapter.vu
 import DocumentTranscriptChapterList from './components/DocumentTranscriptChapterList.vue';
 import DocumentTranscriptHighlight from './components/DocumentTranscriptHighlight.vue';
 import DocumentTranscriptPlayer from './components/DocumentTranscriptPlayer.vue';
+import DocumentTranscriptSpeaker from './components/DocumentTranscriptSpeaker.vue';
 
 const components = {
   'document-transcript-drawer': DocumentTranscriptDrawer,
@@ -31,6 +32,7 @@ const components = {
   'document-transcript-chapter-list': DocumentTranscriptChapterList,
   'document-transcript-highlight': DocumentTranscriptHighlight,
   'document-transcript-player': DocumentTranscriptPlayer,
+  'document-transcript-speaker': DocumentTranscriptSpeaker,
 };
 
 for (const key in components) {

@@ -28,6 +28,7 @@ import DocumentTranscriptChapter from '../document-transcript-drawer/components/
 import DocumentTranscriptChapterList from '../document-transcript-drawer/components/DocumentTranscriptChapterList.vue';
 import DocumentTranscriptHighlight from '../document-transcript-drawer/components/DocumentTranscriptHighlight.vue';
 import DocumentTranscriptPlayer from '../document-transcript-drawer/components/DocumentTranscriptPlayer.vue';
+import DocumentTranscriptSpeaker from '../document-transcript-drawer/components/DocumentTranscriptSpeaker.vue';
 import DocumentInfoMenu from './components/DocumentInfoMenu.vue';
 import DocumentInfoMenuItem from './components/DocumentInfoMenuItem.vue';
 import DocumentInfoRow from './components/DocumentInfoRow.vue';
@@ -50,6 +51,7 @@ const components = {
   'document-transcript-chapter-list': DocumentTranscriptChapterList,
   'document-transcript-highlight': DocumentTranscriptHighlight,
   'document-transcript-player': DocumentTranscriptPlayer,
+  'document-transcript-speaker': DocumentTranscriptSpeaker,
   'document-info-menu': DocumentInfoMenu,
   'documents-info-menu-item': DocumentInfoMenuItem,
   'documents-info-row': DocumentInfoRow,
