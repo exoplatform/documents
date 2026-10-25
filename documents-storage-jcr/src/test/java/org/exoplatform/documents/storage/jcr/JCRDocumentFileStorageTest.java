@@ -3736,6 +3736,29 @@ public class JCRDocumentFileStorageTest {
     assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentAudience("2"));
   }
 
+  /**
+   * The platform's background work reads a transcript's segments as the
+   * system; a file with no transcription state, or no segments, has none.
+   */
+  @Test
+  public void theSegmentsAreReadAsTheSystem_andNoneWithoutAState() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+    Property segments = mock(Property.class);
+    when(segments.getStream()).thenAnswer(invocation -> new java.io.ByteArrayInputStream("[{\"text\":\"é\"}]".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(segments);
+
+    assertEquals("[{\"text\":\"é\"}]", jcrDocumentFileStorage.getTranscriptionSegments("1"));
+
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(false);
+    assertNull(jcrDocumentFileStorage.getTranscriptionSegments("1"));
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(false);
+    assertNull(jcrDocumentFileStorage.getTranscriptionSegments("1"));
+  }
+
   private void mockSuggestions(Node node, String... values) throws Exception {
     when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)).thenReturn(true);
     when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION)).thenReturn(true);
