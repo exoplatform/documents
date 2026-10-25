@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -583,6 +584,44 @@ public interface DocumentFileStorage {
    */
   default String getTranscriptionChapters(String documentId,
                                           Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The person each named speaker of a media file's transcript is, read with
+   * the rights of the given user (EXO-92123).
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the user reading it
+   * @return the identity id of each named speaker, by speaker number; empty when
+   *         none is named
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default Map<String, String> getTranscriptionSpeakers(String documentId,
+                                                       Identity aclIdentity) throws IllegalAccessException,
+                                                                             ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Says which person a speaker of a media file's transcript is, or that it is
+   * nobody named any more, as a user who can edit the file (EXO-92123).
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param identityId the identity id of the person, or null to unname the
+   *          speaker
+   * @param aclIdentity the user naming it
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default void setTranscriptionSpeaker(String documentId,
+                                       String speaker,
+                                       String identityId,
+                                       Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     throw new UnsupportedOperationException();
   }
 
