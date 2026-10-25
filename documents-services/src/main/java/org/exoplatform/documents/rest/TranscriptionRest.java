@@ -16,25 +16,34 @@
  */
 package org.exoplatform.documents.rest;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.annotation.Secured;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.TranscriptionState;
+import org.exoplatform.documents.rest.model.TranscriptionSpeakerEntity;
+import org.exoplatform.documents.rest.model.TranscriptionSpeakersEntity;
 import org.exoplatform.documents.rest.model.TranscriptionStateEntity;
 import org.exoplatform.documents.service.DocumentTranscriptionService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -249,6 +258,109 @@ public class TranscriptionRest {
   }
 
   /**
+   * Answers the speakers of a file's transcript whom someone named, with the
+   * person each is, and whether the caller may name them (EXO-92123).
+   *
+   * @param request the HTTP request, which names the caller
+   * @param documentId the file's UUID
+   * @return the named speakers, never stored by a shared cache
+   */
+  @GetMapping(path = "{documentId}/speakers", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Secured("users")
+  @Operation(summary = "Named speakers of the transcript of an audio or video file", method = "GET")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "403", description = "The file cannot be read by the caller"),
+    @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
+  })
+  public ResponseEntity<TranscriptionSpeakersEntity> getSpeakers(HttpServletRequest request,
+                                                                 @Parameter(description = "The file's UUID", required = true)
+                                                                 @PathVariable("documentId")
+                                                                 String documentId) {
+    try {
+      long identityId = getCurrentIdentityId(request);
+      List<TranscriptionSpeakerEntity> speakers = new ArrayList<>();
+      documentTranscriptionService.getSpeakers(documentId, identityId).forEach((speaker, personId) -> {
+        Identity person = identityManager.getIdentity(personId);
+        if (person != null && !person.isDeleted()) {
+          speakers.add(new TranscriptionSpeakerEntity(speaker,
+                                                      personId,
+                                                      person.getRemoteId(),
+                                                      person.getProfile().getFullName(),
+                                                      person.getProfile().getAvatarUrl()));
+        }
+      });
+      return ResponseEntity.ok()
+                           .cacheControl(CacheControl.noStore())
+                           .body(new TranscriptionSpeakersEntity(documentTranscriptionService.canNameSpeakers(documentId, identityId),
+                                                                 speakers));
+    } catch (IllegalAccessException e) {
+      throw forbidden(documentId, e);
+    } catch (ObjectNotFoundException e) {
+      throw notFound(documentId, e);
+    }
+  }
+
+  /**
+   * Says which person a speaker of a file's transcript is (EXO-92123).
+   *
+   * @param request the HTTP request, which names the caller
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param identityId the person's identity id
+   * @return 204 once the speaker is named
+   */
+  @PutMapping(path = "{documentId}/speakers/{speaker}")
+  @Secured("users")
+  @Operation(summary = "Name a speaker of the transcript of an audio or video file", method = "PUT")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "204", description = "Speaker named"),
+    @ApiResponse(responseCode = "400", description = "No speakers in the transcript, no such speaker, or the person is no enabled user"),
+    @ApiResponse(responseCode = "403", description = "The file cannot be edited by the caller"),
+    @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
+  })
+  public ResponseEntity<Void> setSpeaker(HttpServletRequest request,
+                                         @Parameter(description = "The file's UUID", required = true)
+                                         @PathVariable("documentId")
+                                         String documentId,
+                                         @Parameter(description = "The speaker's number in the transcript", required = true)
+                                         @PathVariable("speaker")
+                                         String speaker,
+                                         @Parameter(description = "The person's identity id", required = true)
+                                         @RequestParam("identityId")
+                                         long identityId) {
+    return updateSpeaker(request, documentId, speaker, identityId);
+  }
+
+  /**
+   * Says that a speaker of a file's transcript is nobody named any more
+   * (EXO-92123).
+   *
+   * @param request the HTTP request, which names the caller
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @return 204 once the speaker is unnamed
+   */
+  @DeleteMapping(path = "{documentId}/speakers/{speaker}")
+  @Secured("users")
+  @Operation(summary = "Unname a speaker of the transcript of an audio or video file", method = "DELETE")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "204", description = "Speaker unnamed"),
+    @ApiResponse(responseCode = "400", description = "No speakers in the transcript, or no such speaker"),
+    @ApiResponse(responseCode = "403", description = "The file cannot be edited by the caller"),
+    @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
+  })
+  public ResponseEntity<Void> unsetSpeaker(HttpServletRequest request,
+                                           @Parameter(description = "The file's UUID", required = true)
+                                           @PathVariable("documentId")
+                                           String documentId,
+                                           @Parameter(description = "The speaker's number in the transcript", required = true)
+                                           @PathVariable("speaker")
+                                           String speaker) {
+    return updateSpeaker(request, documentId, speaker, null);
+  }
+
+  /**
    * Asks to transcribe a file again.
    *
    * @param request the HTTP request, which names the caller
@@ -272,6 +384,28 @@ public class TranscriptionRest {
     try {
       documentTranscriptionService.requestRetry(documentId, getCurrentIdentityId(request), request.getRemoteUser());
       return ResponseEntity.accepted().build();
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    } catch (IllegalAccessException e) {
+      throw forbidden(documentId, e);
+    } catch (ObjectNotFoundException e) {
+      throw notFound(documentId, e);
+    }
+  }
+
+  /**
+   * Names or unnames a speaker, mapping the service's refusals to their status.
+   *
+   * @param request the HTTP request, which names the caller
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param identityId the person's identity id, or null to unname
+   * @return 204 once done
+   */
+  private ResponseEntity<Void> updateSpeaker(HttpServletRequest request, String documentId, String speaker, Long identityId) {
+    try {
+      documentTranscriptionService.setSpeaker(documentId, speaker, identityId, getCurrentIdentityId(request));
+      return ResponseEntity.noContent().build();
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
     } catch (IllegalAccessException e) {

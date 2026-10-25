@@ -3482,6 +3482,128 @@ public class JCRDocumentFileStorageTest {
     assertEquals("[]", jcrDocumentFileStorage.getTranscriptionSegments("1"));
   }
 
+  /**
+   * The named speakers are read with the viewer's rights, a malformed value
+   * left out (EXO-92123).
+   */
+  @Test
+  public void getTranscriptionSpeakersReadsTheNamedSpeakersWithTheViewersRights() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Node node = mockMediaNode(mockViewerSession(viewer), "video/mp4");
+    mockSpeakers(node, "2=43", "1=42", "broken", "3=");
+
+    assertEquals(Map.of("1", "42", "2", "43"), jcrDocumentFileStorage.getTranscriptionSpeakers("1", viewer));
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)).thenReturn(false);
+    assertEquals(Map.of(), jcrDocumentFileStorage.getTranscriptionSpeakers("1", viewer));
+  }
+
+  /**
+   * Naming a speaker keeps the others, and adds the mixin the first time.
+   */
+  @Test
+  public void setTranscriptionSpeakerKeepsTheOtherSpeakers_andAddsTheMixinTheFirstTime() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSpeakers(node, "1=42");
+
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "2", "43", viewer);
+
+    verify(node, never()).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=42", "2=43" });
+    verify(session).save();
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)).thenReturn(false);
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", "44", viewer);
+
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=44" });
+  }
+
+  /**
+   * Unnaming the last named speaker removes the mixin, and any other one only
+   * its value.
+   */
+  @Test
+  public void unnamingASpeakerRemovesItsValue_andTheMixinWithTheLastOne() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSpeakers(node, "1=42", "2=43");
+
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", null, viewer);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "2=43" });
+    verify(node, never()).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+
+    mockSpeakers(node, "2=43");
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "2", null, viewer);
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+  }
+
+  /**
+   * A user who cannot edit the file names no speaker.
+   */
+  @Test
+  public void setTranscriptionSpeakerIsRefusedToAUserWhoCannotEditTheFile() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", "42", viewer));
+
+    verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
+    verify(session, never()).save();
+  }
+
+  /**
+   * A new transcript numbers its speakers anew, and a cleared state starts
+   * over: both forget the people named before.
+   */
+  @Test
+  public void aNewTranscriptOrAClearedStateForgetsTheNamedSpeakers() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)).thenReturn(true);
+
+    jcrDocumentFileStorage.completeTranscription("1", "hello", null, TranscriptionState.builder().status(TranscriptionStatus.DONE).build());
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "FAILED");
+    assertTrue(jcrDocumentFileStorage.clearTranscriptionState("1"));
+    verify(node, times(2)).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+  }
+
+  /**
+   * A file whose speakers nobody named has no mixin to remove.
+   */
+  @Test
+  public void aNewTranscriptOfAFileWithoutNamedSpeakersRemovesNoMixin() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+
+    jcrDocumentFileStorage.completeTranscription("1", "hello", null, TranscriptionState.builder().status(TranscriptionStatus.DONE).build());
+
+    verify(node, never()).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+  }
+
+  private void mockSpeakers(Node node, String... values) throws Exception {
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER)).thenReturn(true);
+    Property property = mock(Property.class);
+    Value[] jcrValues = new Value[values.length];
+    for (int i = 0; i < values.length; i++) {
+      jcrValues[i] = mock(Value.class);
+      when(jcrValues[i].getString()).thenReturn(values[i]);
+    }
+    when(property.getValues()).thenReturn(jcrValues);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER)).thenReturn(property);
+  }
+
   private Session mockViewerSession(org.exoplatform.services.security.Identity viewer) throws Exception {
     SessionProvider sessionProvider = mock(SessionProvider.class);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, viewer)).thenReturn(sessionProvider);
