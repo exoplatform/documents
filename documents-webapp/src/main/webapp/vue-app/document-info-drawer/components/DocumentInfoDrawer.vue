@@ -6,8 +6,8 @@
     class="documentInfoDrawer"
     allow-expand
     right
-    @expand-updated="expanded = $event"
-    @closed="close">
+    @expand-updated="updateExpanded"
+    @closed="handleClosed">
     <template #title>
       <div
         v-if="sideBySide && file"
@@ -73,6 +73,7 @@
             :download-url="downloadUrl"
             :readable="isFileReadable"
             :start="transcriptMoment || 0"
+            :autoplay="transcriptPlaying"
             :subtitle="compactSubtitle"
             @time="playerSeconds = $event"
             @open="openPreview" />
@@ -223,6 +224,7 @@
             :seconds="transcriptMoment"
             :initial-term="transcriptTerm"
             class="px-4 overflow-y-auto"
+            @term="transcriptTerm = $event"
             @seek="seek" />
         </div>
       </div>
@@ -266,7 +268,10 @@ export default {
     playerSeconds: null,
     openExpanded: false,
     transcriptMoment: null,
+    transcriptPlaying: false,
     transcriptTerm: '',
+    origin: null,
+    returning: false,
     file: null,
     fileInDrive: null,
     fileInDriveRequest: null,
@@ -382,8 +387,83 @@ export default {
     document.addEventListener('search-metadata-tag', this.close);
     document.addEventListener('document-category-selected', this.close);
     document.addEventListener('click', this.closeOnClickOutside);
+    document.addEventListener('closeDisplayedDrawer', this.collapseOnMaskOrEscape, true);
   },
   methods: {
+    /**
+     * Follows the drawer's expansion. Collapsing the full view opened from
+     * the transcript drawer closes it onto that drawer, still open underneath
+     * with its mask: the moment and the search go back to it, and the full
+     * view's player pauses. Opened from the details, it collapses to them,
+     * narrow.
+     * @param {boolean} expanded whether the drawer is expanded
+     * @returns {void}
+     */
+    updateExpanded(expanded) {
+      this.expanded = expanded;
+      if (!expanded && this.origin === 'transcript' && this.fileId) {
+        // synced now: the full view's player leaves the page with the re-render
+        this.syncTranscript();
+        this.returning = 'synced';
+        this.close();
+      }
+    },
+    /**
+     * The full view's audio or video element.
+     * @returns {HTMLMediaElement} the element, or null when the full view
+     *          shows no recording
+     */
+    contentMedia() {
+      return this.$refs.content?.$refs?.player?.$refs?.player || null;
+    },
+    /**
+     * Gives the transcript drawer underneath the moment and the search the
+     * full view reached, and whether it was playing; then pauses the full
+     * view's player.
+     * @returns {void}
+     */
+    syncTranscript() {
+      const media = this.contentMedia();
+      const playing = !!media && !media.paused;
+      const moment = media ? media.currentTime : (this.playerSeconds ?? this.transcriptMoment);
+      media?.pause?.();
+      document.dispatchEvent(new CustomEvent('documents-transcript-sync', {detail: {
+        documentId: this.fileId,
+        seconds: Number.isFinite(moment) ? Math.floor(moment) : null,
+        term: this.transcriptTerm,
+        playing,
+      }}));
+    },
+    /**
+     * Before the drawer forgets the file: opened from the transcript drawer,
+     * a collapse, a click on the mask or Esc returns to that drawer with the
+     * moment and the search, while the close button leaves both.
+     * @returns {void}
+     */
+    handleClosed() {
+      if (this.origin === 'transcript' && this.fileId) {
+        if (this.returning === true) {
+          this.syncTranscript();
+        } else if (!this.returning) {
+          this.contentMedia()?.pause?.();
+          document.dispatchEvent(new CustomEvent('documents-transcript-close', {detail: {documentId: this.fileId}}));
+        }
+      }
+      this.returning = false;
+      this.close();
+    },
+    /**
+     * Treats a click on the mask or Esc, which close the top drawer, as a
+     * collapse when this drawer is that drawer and was opened from the
+     * transcript drawer.
+     * @returns {void}
+     */
+    collapseOnMaskOrEscape() {
+      const openedDrawers = eXo.openedDrawers || [];
+      if (this.drawer && this.origin === 'transcript' && openedDrawers[openedDrawers.length - 1] === this.$refs.documentInfoDrawer) {
+        this.returning = true;
+      }
+    },
     /**
      * Closes the drawer on a click outside it. A link opened by script, as a
      * version in a new tab, and a click in a dialog over the drawer, as the
@@ -531,7 +611,9 @@ export default {
           this.tab = request.tab || 'details';
           this.openExpanded = !!request.expanded;
           this.transcriptMoment = Number.isFinite(request.seconds) ? request.seconds : null;
+          this.transcriptPlaying = !!request.playing;
           this.transcriptTerm = request.term || '';
+          this.origin = request.origin || null;
           this.playerSeconds = null;
           if (file.folder){
             this.file.mimeType = 'folder';
@@ -545,7 +627,7 @@ export default {
             this.$refs.documentInfoDrawer.open();
           });
         });
-      
+
     },
     /**
      * Shows the description editor.
@@ -566,6 +648,8 @@ export default {
      * @returns {void}
      */
     close() {
+      this.origin = null;
+      this.transcriptPlaying = false;
       this.file = null;
       this.fileInDrive = null;
       this.fileInDriveRequest = null;
