@@ -57,13 +57,14 @@
   </div>
 </template>
 <script>
-import {awaitsChapters, lacksChapters} from '../../document-transcript-drawer/js/TranscriptChapters.js';
+import TranscriptChaptersRequest from '../../document-transcript-drawer/js/TranscriptChaptersRequest.js';
 
 const POLLING_MILLIS = 15000;
 
 const STALE_MILLIS = 3600000;
 
 export default {
+  mixins: [TranscriptChaptersRequest],
   props: {
     documentId: {
       type: String,
@@ -87,8 +88,6 @@ export default {
     text: null,
     segments: null,
     chapters: null,
-    chaptersAsked: false,
-    chaptersComingSince: null,
     term: '',
     loading: false,
     retrying: false,
@@ -123,8 +122,7 @@ export default {
         this.text = null;
         this.segments = null;
         this.chapters = null;
-        this.chaptersAsked = false;
-        this.chaptersComingSince = null;
+        this.resetChaptersRequest();
         this.term = this.initialTerm || '';
         this.refresh();
       },
@@ -164,7 +162,7 @@ export default {
             return;
           }
           this.askChapters(documentId, state);
-          if (awaitsChapters(state, this.chaptersComingSince)) {
+          if (this.awaitingChapters(state)) {
             this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
           }
           // a transcript cannot change while done: the segments already read stay
@@ -212,33 +210,13 @@ export default {
         || (state.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
     },
     /**
-     * Asks once for the chapters of a transcript opened with none: just made,
-     * or done before they were switched on. The state is read again only when
-     * the server says they are coming, which documents-transcript-chapters-coming
-     * tells the rest of the page, with the file's id and when.
-     * @param {string} documentId the file's id
-     * @param {Object} state the transcription state
+     * Reads the state again for the chapters the server said are coming.
      * @returns {void}
      */
-    askChapters(documentId, state) {
-      if (this.chaptersAsked || !lacksChapters(state)) {
-        return;
+    pollForChapters() {
+      if (!this.pollingTimer) {
+        this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
       }
-      this.chaptersAsked = true;
-      this.$transcriptionService.requestChapters(documentId)
-        .then(coming => {
-          if (coming && documentId === this.documentId) {
-            this.chaptersComingSince = Date.now();
-            // what else shows this file's chapters (the full view's timeline) waits for them too
-            document.dispatchEvent(new CustomEvent('documents-transcript-chapters-coming', {
-              detail: {documentId, comingSince: this.chaptersComingSince},
-            }));
-            if (!this.pollingTimer) {
-              this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
-            }
-          }
-        })
-        .catch(() => null);
     },
     /**
      * Stops reading the state again.

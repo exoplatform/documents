@@ -95,13 +95,14 @@
   </exo-drawer>
 </template>
 <script>
-import {awaitsChapters, lacksChapters} from '../js/TranscriptChapters.js';
+import TranscriptChaptersRequest from '../js/TranscriptChaptersRequest.js';
 
 const POLLING_MILLIS = 15000;
 
 const STALE_MILLIS = 3600000;
 
 export default {
+  mixins: [TranscriptChaptersRequest],
   data: () => ({
     drawer: false,
     loading: false,
@@ -114,8 +115,6 @@ export default {
     text: null,
     segments: null,
     chapters: null,
-    chaptersAsked: false,
-    chaptersComingSince: null,
     term: '',
     pollingTimer: null,
     lastRead: 0,
@@ -194,8 +193,7 @@ export default {
         this.text = null;
         this.segments = null;
         this.chapters = null;
-        this.chaptersAsked = false;
-        this.chaptersComingSince = null;
+        this.resetChaptersRequest();
         this.playerUrl = null;
         this.fileUnknown = false;
         this.loadFile();
@@ -293,7 +291,7 @@ export default {
           this.state = state;
           if (state.status === 'DONE') {
             this.askChapters(documentId, state);
-            if (this.drawer && awaitsChapters(state, this.chaptersComingSince)) {
+            if (this.drawer && this.awaitingChapters(state)) {
               this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
             }
             return Promise.all([this.loadTranscript(documentId, state.hasSegments), this.loadChapters(documentId, state.hasChapters)]);
@@ -341,35 +339,15 @@ export default {
       });
     },
     /**
-     * Asks once for the chapters of a transcript opened with none: just made,
-     * or done before they were switched on. The state is read again, while the
-     * drawer is open, only when the server says they are coming, which
-     * documents-transcript-chapters-coming tells the rest of the page, with the
-     * file's id and when.
+     * Reads the state again, while the drawer is open, for the chapters the
+     * server said are coming.
      *
-     * @param {string} documentId the file's id
-     * @param {Object} state the transcription state
      * @returns {void}
      */
-    askChapters(documentId, state) {
-      if (this.chaptersAsked || !lacksChapters(state)) {
-        return;
+    pollForChapters() {
+      if (this.drawer && !this.pollingTimer) {
+        this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
       }
-      this.chaptersAsked = true;
-      this.$transcriptionService.requestChapters(documentId)
-        .then(coming => {
-          if (coming && documentId === this.documentId) {
-            this.chaptersComingSince = Date.now();
-            // what else shows this file's chapters (the full view's timeline) waits for them too
-            document.dispatchEvent(new CustomEvent('documents-transcript-chapters-coming', {
-              detail: {documentId, comingSince: this.chaptersComingSince},
-            }));
-            if (this.drawer && !this.pollingTimer) {
-              this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
-            }
-          }
-        })
-        .catch(() => null);
     },
     /**
      * Reads the chapters the transcript is grouped into, once.
