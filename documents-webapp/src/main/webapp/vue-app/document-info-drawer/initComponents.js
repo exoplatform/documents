@@ -21,12 +21,18 @@ import DocumentInfoDrawer from './components/DocumentInfoDrawer.vue';
 import Breadcrumb from './components/Breadcrumb.vue';
 import DocumentCategories from './components/DocumentCategories.vue';
 import DocumentTranscriptButton from '../document-transcript-drawer/components/DocumentTranscriptButton.vue';
+import DocumentTranscriptStatus from '../document-transcript-drawer/components/DocumentTranscriptStatus.vue';
+import DocumentRecordingDetails from './components/DocumentRecordingDetails.vue';
+import DocumentMediaThumbnail from './components/DocumentMediaThumbnail.vue';
 
 const components = {
   'document-info-drawer': DocumentInfoDrawer,
   'document-categories': DocumentCategories,
   'breadcrumb': Breadcrumb,
   'document-transcript-button': DocumentTranscriptButton,
+  'document-transcript-status': DocumentTranscriptStatus,
+  'document-recording-details': DocumentRecordingDetails,
+  'document-media-thumbnail': DocumentMediaThumbnail,
 };
 
 for (const key in components) {
