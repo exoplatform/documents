@@ -58,7 +58,7 @@
       </v-tooltip>
       <document-info-menu
         :file="file"
-        :transcript-available="!!mediaKind && transcriptAvailable"
+        :transcript-available="!!mediaKind && transcriptAvailable && !sideBySide"
         @transcript="showTranscript"
         @copy-link="copyLink" />
     </template>
@@ -154,7 +154,8 @@
                   :document-id="fileId"
                   :mimetype="file.mimeType"
                   :measured-duration="mediaDuration"
-                  @available="transcriptAvailable = $event" />
+                  @available="transcriptAvailable = $event"
+                  @transcript="showTranscript" />
               </template>
             </document-info-details>
             <div class="documentInfoGroupTitle">{{ $t('documents.drawer.details.category') }}</div>
