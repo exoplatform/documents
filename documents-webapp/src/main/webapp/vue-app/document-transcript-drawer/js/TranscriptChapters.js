@@ -62,7 +62,10 @@ export function groupByChapters(segments, chapters) {
 /**
  * Tells whether a transcript shows chapters: a recording of at least five
  * minutes, with at least two titled chapters whose first segments follow each
- * other within the transcript.
+ * other within the transcript. The recording's length is where its last
+ * segment ends, rounded to the second as the server's duration is, never the
+ * span from its first words: a recording of exactly five minutes whose speech
+ * starts after 0:00 still shows the chapters the server made for it.
  *
  * @param {Array<Object>} segments the transcript's segments, each with start
  *          and end, or null
@@ -72,7 +75,7 @@ export function groupByChapters(segments, chapters) {
 export function showsChapters(segments, chapters) {
   const count = segments?.length || 0;
   return count > 0
-    && (segments[count - 1].end || segments[count - 1].start || 0) - (segments[0].start || 0) >= CHAPTERS_MIN_SECONDS
+    && Math.round(segments[count - 1].end || segments[count - 1].start || 0) >= CHAPTERS_MIN_SECONDS
     && fitChapters(count, chapters);
 }
 
