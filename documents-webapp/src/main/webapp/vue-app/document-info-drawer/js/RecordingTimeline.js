@@ -28,6 +28,9 @@ const TICK_STEPS = [10, 15, 30, 60, 120, 300, 600, 900, 1200, 1800, 3600];
 /** The most marks the time scale shows, its end aside. */
 const MAX_TICKS = 6;
 
+/** The least contrast of a caption with its background, as WCAG AA asks of normal text. */
+const MIN_TEXT_CONTRAST = 4.5;
+
 /**
  * How long a recording lasts on its timeline: the length the player read, or
  * else the end of the transcript's last segment.
@@ -157,6 +160,81 @@ export function timelineTicks(duration) {
   }
   ticks.push(duration);
   return ticks;
+}
+
+/**
+ * The blocks of the chapters on their track, in the colours the transcript
+ * gives them: every other block is a light tint of its colour, so two
+ * chapters side by side differ by lightness and not by hue alone. A block's
+ * caption is white where white reads on its colour, dark otherwise.
+ *
+ * @param {Array<Object>} chapters the spans, as chapterSpans gives them
+ * @param {Function} describe gives a chapter's tooltip and accessible label,
+ *          as {title, label}
+ * @returns {Array<Object>} the track's items
+ */
+export function chapterItems(chapters, describe) {
+  return (chapters || []).map(chapter => {
+    const solid = chapter.position % 2 === 0;
+    return {
+      ...chapter,
+      ...describe(chapter),
+      key: `chapter-${chapter.position}`,
+      caption: chapter.title,
+      text: solid && readsWhite(chapter.color) && 'white--text' || null,
+      style: {backgroundColor: solid ? chapter.color : `${chapter.color}33`},
+    };
+  });
+}
+
+/**
+ * The bars of a lane on its track, one per turn of speech.
+ *
+ * @param {Object} lane the lane, as speakerLanes gives it
+ * @param {string} background the theme colour of its bars
+ * @param {Function} describe gives a turn's tooltip and accessible label,
+ *          as {title, label}
+ * @returns {Array<Object>} the track's items
+ */
+export function turnItems(lane, background, describe) {
+  return lane.turns.map(turn => ({
+    ...describe(turn),
+    key: turnKey(turn),
+    start: turn.start,
+    from: turn.start,
+    to: turn.end,
+    background,
+  }));
+}
+
+/**
+ * The key of a turn, unique on the timeline.
+ *
+ * @param {Object} turn the turn
+ * @returns {string} the key
+ */
+export function turnKey(turn) {
+  return `${turn.speaker}-${turn.start}`;
+}
+
+/**
+ * Tells whether white text reads on a colour, by the contrast of their
+ * relative luminances.
+ *
+ * @param {string} color the colour, as #rrggbb
+ * @returns {boolean} true when white text on it has a contrast of 4.5 or more
+ */
+export function readsWhite(color) {
+  const channels = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color || '');
+  if (!channels) {
+    return false;
+  }
+  const [red, green, blue] = channels.slice(1).map(channel => {
+    const value = Number.parseInt(channel, 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+  return 1.05 / (luminance + 0.05) >= MIN_TEXT_CONTRAST;
 }
 
 /**
