@@ -146,6 +146,12 @@ class DocumentTranscriptionSpeakerProposalsTest {
     when(spaceService.getSpaceByGroupId("/spaces/all")).thenReturn(space);
     mockUsername("mary", "1", true);
     mockUsername("john", "2", true);
+    Identity someone = mock(Identity.class);
+    lenient().when(someone.getId()).thenReturn("5");
+    lenient().when(identityManager.getOrCreateUserIdentity("someone")).thenReturn(someone);
+    lenient().when(identityManager.getIdentity("5")).thenReturn(someone);
+    lenient().when(someone.isUser()).thenReturn(true);
+    lenient().when(someone.isEnable()).thenReturn(true);
 
     assertEquals(new TranscriptionSpeakerCandidates(false, List.of(1L, 2L)), service.getSpeakerCandidates(DOCUMENT_ID));
   }
@@ -158,7 +164,12 @@ class DocumentTranscriptionSpeakerProposalsTest {
   void aStrongProposalNamesItsSpeakerAsTheOwner_afterAllAreKept() throws Exception {
     mockNameableBy(OWNER_ID);
     mockUser("42", true);
+    Identity other = mock(Identity.class);
+    lenient().when(other.isUser()).thenReturn(true);
+    lenient().when(other.isEnable()).thenReturn(true);
+    lenient().when(identityManager.getIdentity("43")).thenReturn(other);
     when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "1", "42", OWNER_ID)).thenReturn(true);
+    lenient().when(documentFileService.nameTranscriptionSpeakerIfUnnamed(DOCUMENT_ID, "2", "43", OWNER_ID)).thenReturn(true);
     TranscriptionSpeakerSuggestion strong = new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(0, 2));
     TranscriptionSpeakerSuggestion likely = new TranscriptionSpeakerSuggestion("2", 43, false, false, List.of(0));
 
