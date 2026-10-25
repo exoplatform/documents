@@ -26,6 +26,7 @@ export default {
     rawChapters: null,
     speakers: null,
     lastRead: 0,
+    speakersRead: 0,
   }),
   watch: {
     documentId: {
@@ -43,6 +44,7 @@ export default {
   },
   beforeDestroy() {
     this.lastRead++;
+    this.speakersRead++;
     document.removeEventListener('documents-transcript-speakers-changed', this.readSpeakersAgain);
   },
   methods: {
@@ -56,6 +58,7 @@ export default {
     read() {
       const documentId = this.documentId;
       const read = ++this.lastRead;
+      this.speakersRead++;
       if (!documentId) {
         return Promise.resolve();
       }
@@ -72,19 +75,25 @@ export default {
           const [segments, chapters] = answer;
           this.segments = Array.isArray(segments) && segments || null;
           this.rawChapters = Array.isArray(chapters) && chapters || null;
-          return this.segments?.some(segment => segment.speaker) && this.readSpeakers(documentId, read);
+          return this.segments?.some(segment => segment.speaker) && this.readSpeakers(documentId);
         })
         .catch(() => null);
     },
     /**
-     * Reads the speakers someone named, kept only when no later read began.
+     * Reads the speakers someone named. Only the latest read of the speakers
+     * of the file shown changes the names: an earlier answer arriving last
+     * holds older names.
      * @param {string} documentId the file's id
-     * @param {number} read the read it belongs to
      * @returns {Promise} resolved once read, never rejected
      */
-    readSpeakers(documentId, read) {
+    readSpeakers(documentId) {
+      const read = ++this.speakersRead;
       return this.$transcriptionService.getSpeakers(documentId)
-        .then(answer => read === this.lastRead && (this.speakers = answer?.speakers || []))
+        .then(answer => {
+          if (read === this.speakersRead && documentId === this.documentId) {
+            this.speakers = answer?.speakers || [];
+          }
+        })
         .catch(() => null);
     },
     /**
@@ -95,7 +104,7 @@ export default {
      */
     readSpeakersAgain(event) {
       if (this.segments && event?.detail?.documentId === this.documentId) {
-        this.readSpeakers(this.documentId, this.lastRead);
+        this.readSpeakers(this.documentId);
       }
     },
   },
