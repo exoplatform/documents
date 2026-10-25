@@ -172,4 +172,11 @@ public class NodeTypeConstants {
 
   public static final String EXO_TRANSCRIPTION_SEGMENTS        = "exo:transcriptionSegments";
 
+  /**
+   * The mixin, and its one Binary property, holding the chapters of a
+   * transcript as a JSON list (EXO-92122): a mixin of its own, since an
+   * existing repository never takes a property added to a registered one.
+   */
+  public static final String EXO_TRANSCRIPTION_CHAPTERS        = "exo:transcriptionChapters";
+
 }
