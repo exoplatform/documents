@@ -48,26 +48,31 @@
         :data-segment-index="index"
         :title="$t('documents.transcript.playFrom', {0: formatMoment(segment.start)})"
         :class="index === activeIndex && 'light-grey-background-color'"
-        class="d-flex align-start py-1 px-2 clickable border-radius"
+        class="d-flex flex-column py-1 px-2 clickable border-radius"
         role="button"
         tabindex="0"
         @click="$emit('seek', segment.start)"
         @keydown.enter="$emit('seek', segment.start)">
-        <span class="text-caption primary--text text-no-wrap pt-1 me-3">{{ formatMoment(segment.start) }}</span>
-        <div class="flex-grow-1">
+        <div v-if="speakerHeads[index]" class="d-flex align-center mb-1">
+          <span class="text-caption primary--text text-no-wrap me-3">{{ formatMoment(segment.start) }}</span>
           <document-transcript-speaker
-            v-if="opensSpeakerRun(segments, index, false, speakerKey)"
             :speaker="segment.speaker"
             :person="speakersByNumber[segment.speaker]"
             :can-edit="canNameSpeakers && (!savingSpeaker || savingSpeaker === segment.speaker)"
             :saving="savingSpeaker === segment.speaker"
-            class="d-block"
+            class="text-truncate"
             @name="$emit('name-speaker', $event)"
             @unname="$emit('unname-speaker', $event)" />
+        </div>
+        <div class="d-flex align-start">
+          <span
+            :class="speakerHeads[index] && 'invisible'"
+            :aria-hidden="speakerHeads[index] && 'true' || null"
+            class="text-caption primary--text text-no-wrap pt-1 me-3">{{ formatMoment(segment.start) }}</span>
           <document-transcript-highlight
             :text="segment.text"
             :term="term"
-            class="text-body-1" />
+            class="text-body-1 flex-grow-1" />
         </div>
       </div>
     </template>
@@ -167,6 +172,15 @@ export default {
         return identityId ? `person:${identityId}` : `speaker:${speaker}`;
       };
     },
+    /**
+     * Tells, sentence by sentence, whether it opens a run of its speaker, the
+     * speaker then showing on its first line, beside its moment.
+     *
+     * @returns {Array<boolean>} true for each sentence that shows its speaker
+     */
+    speakerHeads() {
+      return (this.segments || []).map((segment, index) => opensSpeakerRun(this.segments, index, false, this.speakerKey));
+    },
   },
   watch: {
     term() {
@@ -192,17 +206,6 @@ export default {
      * @returns {string} the written moment
      */
     formatMoment,
-    /**
-     * Tells whether a sentence opens a run of sentences of its speaker, which
-     * then shows above it.
-     *
-     * @param {Array<object>} segments the sentences
-     * @param {number} index the sentence's index
-     * @param {boolean} firstOfGroup whether the sentence is the first under a heading
-     * @param {Function} keyOf who a speaker number is
-     * @returns {boolean} true when the sentence shows its speaker
-     */
-    opensSpeakerRun,
     /**
      * Finds the sentence a moment of the recording falls in.
      *
