@@ -52,7 +52,20 @@
         tabindex="0"
         @click="$emit('seek', row.segment.start)"
         @keydown.enter="$emit('seek', row.segment.start)">
-        <span class="documentTranscriptLineTime text-caption primary--text text-no-wrap">{{ formatMoment(row.segment.start) }}</span>
+        <template v-if="speakerHeads[row.index]">
+          <span class="documentTranscriptLineTime text-caption primary--text text-no-wrap align-self-center mb-1">{{ formatMoment(row.segment.start) }}</span>
+          <document-transcript-speaker
+            :speaker="row.segment.speaker"
+            :person="speakersByNumber[row.segment.speaker]"
+            :can-edit="canNameSpeakers"
+            :busy="!!savingSpeaker && savingSpeaker !== row.segment.speaker"
+            :saving="savingSpeaker === row.segment.speaker"
+            class="text-truncate mb-1"
+            @name="$emit('name-speaker', $event)"
+            @unname="$emit('unname-speaker', $event)" />
+          <span aria-hidden="true"></span>
+        </template>
+        <span v-else class="documentTranscriptLineTime text-caption primary--text text-no-wrap">{{ formatMoment(row.segment.start) }}</span>
         <document-transcript-highlight
           :text="row.segment.text"
           :term="term"
@@ -92,6 +105,24 @@ export default {
     },
     /** The chapter's colour, for the guide along its lines; the primary colour when none. */
     color: {
+      type: String,
+      default: null,
+    },
+    /** The speakers' people, by speaker number. */
+    speakersByNumber: {
+      type: Object,
+      default: () => ({}),
+    },
+    /** Whether each line opens a run of its speaker, which then shows beside its moment, by the sentence's index. */
+    speakerHeads: {
+      type: Array,
+      default: () => [],
+    },
+    canNameSpeakers: {
+      type: Boolean,
+      default: false,
+    },
+    savingSpeaker: {
       type: String,
       default: null,
     },
