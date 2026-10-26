@@ -71,6 +71,16 @@
             @name="$emit('name-speaker', $event)"
             @unname="$emit('unname-speaker', $event)" />
         </div>
+        <document-transcript-speaker-suggestion
+          v-if="proposalsShown[index]"
+          :proposal="proposalsShown[index]"
+          :busy="!!savingSpeaker && savingSpeaker !== segment.speaker"
+          :saving="savingSpeaker === segment.speaker"
+          class="mb-1 ms-12"
+          @confirm="$emit('confirm-proposal', $event)"
+          @dismiss="$emit('dismiss-proposal', $event)"
+          @undo="$emit('unname-speaker', {speaker: $event.speaker})"
+          @seek="$emit('seek', $event)" />
         <div class="d-flex align-start">
           <span
             :class="speakerHeads[index] && 'invisible'"
@@ -142,6 +152,10 @@ export default {
       type: String,
       default: null,
     },
+    speakerProposals: {
+      type: Array,
+      default: null,
+    },
   },
   computed: {
     hasSegments() {
@@ -188,6 +202,24 @@ export default {
         this.groups.forEach(group => group.rows.forEach(row => row.firstOfChapter && chapterFirsts.add(row.index)));
       }
       return (this.segments || []).map((segment, index) => opensSpeakerRun(this.segments, index, chapterFirsts.has(index), this.speakerKey));
+    },
+    /**
+     * The proposal of who a speaker is, shown under that speaker's first line
+     * only, to a user who can name the speakers (EXO-92126).
+     *
+     * @returns {Array<object>} for each sentence, the proposal it shows, or null
+     */
+    proposalsShown() {
+      const proposals = this.canNameSpeakers && Object.fromEntries((this.speakerProposals || []).map(proposal => [proposal.speaker, proposal])) || {};
+      const shown = new Set();
+      return (this.segments || []).map((segment, index) => {
+        const proposal = this.speakerHeads[index] && proposals[segment.speaker];
+        if (!proposal || shown.has(segment.speaker)) {
+          return null;
+        }
+        shown.add(segment.speaker);
+        return proposal;
+      });
     },
   },
   watch: {
