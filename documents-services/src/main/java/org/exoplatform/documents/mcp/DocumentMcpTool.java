@@ -936,11 +936,11 @@ public class DocumentMcpTool implements McpToolPlugin {
    * {@code [mm:ss · Ns]} ({@code [h:mm:ss · Ns]} past an hour), where N is that
    * moment in whole seconds (EXO-92112); without segments, the plain transcript
    * is given, as without timestamps, or its turns when it tells who speaks. A
-   * transcript whose segments tell who
-   * speaks (EXO-92123) is given after the list of its speakers, each with its
-   * talk time, and each of its lines names who said it: the person named for
-   * the speaker, the guest's name, or {@code Speaker N}; without timestamps,
-   * it is given one turn per line, {@code Name: text}, with no moment.
+   * transcript whose segments tell who speaks (EXO-92123) is given after the
+   * list of its speakers, each with its talk time, and each of its lines names
+   * who said it: the person named for the speaker, the guest's name, or
+   * {@code Speaker N}; without timestamps, it is given one turn per line,
+   * {@code Name: text}, with no moment.
    *
    * @param documentId the file's UUID
    * @param timestamps true to have each segment start with its moment
@@ -1129,7 +1129,7 @@ public class DocumentMcpTool implements McpToolPlugin {
   private String toSpeakersList(JSONArray segments, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
     Map<String, String> names = new LinkedHashMap<>();
     Map<String, Double> talkTimes = new HashMap<>();
-        for (int i = 0; i < segments.length(); i++) {
+    for (int i = 0; i < segments.length(); i++) {
       JSONObject segment = segments.optJSONObject(i);
       String speaker = getSegmentSpeaker(segment);
       if (speaker != null && getSegmentText(segment) != null) {
@@ -1163,7 +1163,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   private String toTimedLines(JSONArray segments, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
     StringBuilder timedTranscription = new StringBuilder();
-        for (int i = 0; i < segments.length(); i++) {
+    for (int i = 0; i < segments.length(); i++) {
       JSONObject segment = segments.optJSONObject(i);
       String text = getSegmentText(segment);
       double start = segment == null ? Double.NaN : segment.optDouble("start", Double.NaN);
@@ -1190,7 +1190,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   private String toTurns(JSONArray segments, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
     StringBuilder turns = new StringBuilder();
-        String turnKey = null;
+    String turnKey = null;
     StringBuilder turnText = null;
     String turnName = null;
     for (int i = 0; i < segments.length(); i++) {
@@ -1233,7 +1233,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * Tells who a speaker number is, so that two numbers named after the same
    * person or the same guest are one speaker. A number whose person is gone,
    * or cannot be read now, is a speaker of its own, {@code Speaker N}, as the
-   * transcript's other readers show it.
+   * transcript's other readers show it; a guest is always known by its name,
+   * whatever that name.
    *
    * @param speaker the speaker's number in the transcript
    * @param speakers the stored value of each named speaker, by speaker number
@@ -1244,8 +1245,15 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   private String getSpeakerKey(String speaker, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
     String value = StringUtils.trimToNull(speakers.get(speaker));
-    String byNumber = TranscriptSpeakers.SPEAKER_LABEL + " " + speaker;
-    return value == null || byNumber.equals(getSpeakerName(speaker, speakers, namesBySpeaker)) ? "speaker:" + speaker : value;
+    boolean byNumber;
+    if (value == null) {
+      byNumber = true;
+    } else if (TranscriptSpeakers.isGuest(value)) {
+      byNumber = StringUtils.isBlank(TranscriptSpeakers.guestName(value));
+    } else {
+      byNumber = (TranscriptSpeakers.SPEAKER_LABEL + " " + speaker).equals(getSpeakerName(speaker, speakers, namesBySpeaker));
+    }
+    return byNumber ? "speaker:" + speaker : value;
   }
 
   /**
