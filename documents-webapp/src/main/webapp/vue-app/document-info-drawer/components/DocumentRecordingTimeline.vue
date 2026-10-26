@@ -29,7 +29,7 @@
         <span
           v-for="tick in ticks"
           :key="tick"
-          :style="{insetInlineStart: `${tick * 100 / duration}%`}"
+          :style="tick < duration ? {insetInlineStart: `${tick * 100 / duration}%`} : {insetInlineEnd: 0}"
           class="documentTimelineTick">
           {{ formatMoment(tick) }}
         </span>
@@ -90,7 +90,7 @@
   </section>
 </template>
 <script>
-import {chapterItems, chapterSpans, itemAt, speakerLanes, speakerTurns, talkShares, timelineDuration, timelineTicks, turnItems, turnKey} from '../js/RecordingTimeline.js';
+import {chapterItems, chapterSpans, itemAt, itemDescription, speakerLanes, speakerTurns, talkShares, timelineDuration, timelineTicks, turnItems, turnKey} from '../js/RecordingTimeline.js';
 import {speakerColor} from '../../document-transcript-drawer/js/TranscriptSpeakers.js';
 import RecordingTimelineReader from '../js/RecordingTimelineReader.js';
 import {formatMoment} from '../../document-transcript-drawer/js/TranscriptSearch.js';
@@ -159,7 +159,7 @@ export default {
     },
     /** @returns {Array<Object>} the chapters' blocks, in the transcript's colours */
     chapterItems() {
-      return chapterItems(this.chapters, chapter => this.describe(chapter.title, this.$t('documents.timeline.chapter', {
+      return chapterItems(this.chapters, chapter => itemDescription(chapter.title, this.$t('documents.timeline.chapter', {
         0: chapter.title,
         1: formatMoment(chapter.from),
         2: formatMoment(chapter.to),
@@ -174,7 +174,7 @@ export default {
     laneItems() {
       return Object.fromEntries(this.lanes.map(lane => [lane.key, turnItems(lane, lane.speaker && speakerColor(lane.speaker) || 'grey', turn => {
         const name = this.speakerName(turn.speaker);
-        return this.describe(name, this.$t('documents.timeline.turn', {0: name, 1: formatMoment(turn.start), 2: formatMoment(turn.end)}), turn.start, turn.end);
+        return itemDescription(name, this.$t('documents.timeline.turn', {0: name, 1: formatMoment(turn.start), 2: formatMoment(turn.end)}), turn.start, turn.end);
       })]));
     },
     /** @returns {Object} the chapter at the current moment, or null */
@@ -210,26 +210,6 @@ export default {
   methods: {
     formatMoment,
     turnKey,
-    /**
-     * The tooltip and the accessible label of a block or a bar.
-     * @param {string} name what it shows: a chapter's title or a speaker's name
-     * @param {string} label its accessible label
-     * @param {number} from where it begins, in seconds
-     * @param {number} to where it ends, in seconds
-     * @returns {{title: string, label: string}} its tooltip and its label
-     */
-    describe(name, label, from, to) {
-      return {title: `${name} · ${formatMoment(from)}–${formatMoment(to)}`, label};
-    },
-    /**
-     * Shows a message to the user, as the Transcript tab does.
-     * @param {string} message the message
-     * @param {string} type its kind: success or error
-     * @returns {void}
-     */
-    alert(message, type) {
-      document.dispatchEvent(new CustomEvent('alert-message', {detail: {alertMessage: message, alertType: type}}));
-    },
   },
 };
 </script>
