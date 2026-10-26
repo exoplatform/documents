@@ -361,18 +361,20 @@ class TranscriptionRestTest {
 
   /**
    * The proposals come with the person each names, a deleted person left out,
-   * and a disabled one too unless the proposal was applied; never stored by a
-   * shared cache; a caller who cannot edit the file is answered 403
-   * (EXO-92126).
+   * and a disabled one too unless the proposal was applied; one made by
+   * elimination comes with the full name of its premise person, and is left out
+   * once that person is deleted; never stored by a shared cache; a caller who
+   * cannot edit the file is answered 403 (EXO-92126).
    */
   @Test
   void theSpeakerProposalsComeWithTheirPerson_andAreForEditorsOnly() throws Exception {
     List<TranscriptionQuote> quotes = List.of(new TranscriptionQuote(4, "1", "Merci Julien."));
     when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenReturn(List.of(
-        new TranscriptionSpeakerProposal("2", 42, true, false, quotes, "1"),
-        new TranscriptionSpeakerProposal("3", 43, false, false, List.of(), null),
-        new TranscriptionSpeakerProposal("4", 44, false, false, List.of(), null),
-        new TranscriptionSpeakerProposal("5", 44, true, true, List.of(), null)));
+        new TranscriptionSpeakerProposal("2", 42, false, false, quotes, "1", 41L),
+        new TranscriptionSpeakerProposal("3", 43, false, false, List.of(), null, null),
+        new TranscriptionSpeakerProposal("4", 44, false, false, List.of(), null, null),
+        new TranscriptionSpeakerProposal("5", 44, true, true, List.of(), null, null),
+        new TranscriptionSpeakerProposal("6", 42, false, false, List.of(), "1", 43L)));
     Identity julien = mock(Identity.class);
     Profile profile = mock(Profile.class);
     when(julien.getId()).thenReturn("42");
@@ -391,12 +393,26 @@ class TranscriptionRestTest {
     when(disabled.getRemoteId()).thenReturn("jane");
     when(disabled.getProfile()).thenReturn(profile);
     when(identityManager.getIdentity("44")).thenReturn(disabled);
+    Identity premise = mock(Identity.class);
+    Profile premiseProfile = mock(Profile.class);
+    when(premise.getProfile()).thenReturn(premiseProfile);
+    when(premiseProfile.getFullName()).thenReturn("Benjamin Martin");
+    when(identityManager.getIdentity("41")).thenReturn(premise);
 
     ResponseEntity<List<TranscriptionSpeakerProposalEntity>> answer = rest.getSpeakerProposals(request, DOCUMENT_ID);
 
     assertEquals("no-store", answer.getHeaders().getCacheControl());
-    assertEquals(List.of(new TranscriptionSpeakerProposalEntity("2", "42", "julien", "Julien Dupont", "/avatar/julien", true, false, quotes, "1"),
-                         new TranscriptionSpeakerProposalEntity("5", "44", "jane", "Julien Dupont", "/avatar/julien", true, true, List.of(), null)),
+    assertEquals(List.of(new TranscriptionSpeakerProposalEntity("2",
+                                                                "42",
+                                                                "julien",
+                                                                "Julien Dupont",
+                                                                "/avatar/julien",
+                                                                false,
+                                                                false,
+                                                                quotes,
+                                                                "1",
+                                                                "Benjamin Martin"),
+                         new TranscriptionSpeakerProposalEntity("5", "44", "jane", "Julien Dupont", "/avatar/julien", true, true, List.of(), null, null)),
                  answer.getBody());
 
     when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenThrow(new IllegalAccessException("no"));
