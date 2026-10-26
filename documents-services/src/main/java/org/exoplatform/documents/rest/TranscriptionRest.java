@@ -344,7 +344,7 @@ public class TranscriptionRest {
                                          @Parameter(description = "The person's identity id, for a person with an account")
                                          @RequestParam(name = "identityId", required = false)
                                          Long identityId,
-                                         @Parameter(description = "The guest's name, for a guest with no account: trimmed, at most 80 characters, no '|', line break or control character")
+                                         @Parameter(description = "The guest's name, for a guest with no account: trimmed, at most 80 characters, with a letter or digit, and no '|', line break, control character, or Unicode format character other than a zero-width joiner or non-joiner")
                                          @RequestParam(name = "name", required = false)
                                          String name) {
     if ((identityId == null) == (name == null)) {
