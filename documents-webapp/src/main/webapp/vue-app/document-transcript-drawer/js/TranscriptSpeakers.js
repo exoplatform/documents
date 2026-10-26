@@ -35,6 +35,23 @@ export function speakerColor(speaker) {
 }
 
 /**
+ * Tells who a speaker number is, so that two numbers named after one person,
+ * or after one guest, are one speaker wherever speakers are told apart: the
+ * transcript's runs, the recording's lanes.
+ *
+ * @param {string} speaker the speaker's number
+ * @param {object} speakersByNumber the named speakers, by speaker number
+ * @returns {string} a key that a person, a guest and a number never share
+ */
+export function speakerIdentity(speaker, speakersByNumber) {
+  const person = speakersByNumber?.[speaker];
+  if (person?.guest) {
+    return `guest:${person.fullName}`;
+  }
+  return person?.identityId ? `person:${person.identityId}` : `speaker:${speaker}`;
+}
+
+/**
  * Tells whether a sentence opens a run of sentences of its speaker: the first
  * one, the first under a heading, or one whose speaker is not the previous
  * sentence's. Two numbers named after one person are one speaker.
