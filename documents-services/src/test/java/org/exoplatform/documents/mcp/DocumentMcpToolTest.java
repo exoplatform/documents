@@ -752,13 +752,13 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * Two speaker numbers named after the same person who is gone are one
-   * speaker, under the name the first of them gets, in the list as in the lines
-   * and the turns; an identity that cannot be read gives its speaker by its
-   * number (EXO-92123).
+   * Two speaker numbers named after the same person who is gone are each a
+   * speaker of their own, by their number, as the transcript's other readers
+   * show them, in the list as in the lines and the turns; an identity that
+   * cannot be read gives its speaker by its number (EXO-92123).
    */
   @Test
-  public void getDocumentTranscriptionByIdGivesOneNameToTheNumbersOfOneGonePerson() throws Exception {
+  public void getDocumentTranscriptionByIdGivesTheNumbersOfOneGonePersonByTheirNumber() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
     when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
@@ -769,20 +769,23 @@ public class DocumentMcpToolTest {
 
     assertEquals("""
         Speakers:
-        - Speaker 1 (talk time 00:05)
+        - Speaker 1 (talk time 00:02)
+        - Speaker 4 (talk time 00:03)
         - Speaker 2 (talk time 00:01)
 
         Transcript:
         [00:00 · 0s] Speaker 1: Bonjour.
-        [00:02 · 2s] Speaker 1: Encore moi.
+        [00:02 · 2s] Speaker 4: Encore moi.
         [00:05 · 5s] Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
     assertEquals("""
         Speakers:
-        - Speaker 1 (talk time 00:05)
+        - Speaker 1 (talk time 00:02)
+        - Speaker 4 (talk time 00:03)
         - Speaker 2 (talk time 00:01)
 
         Transcript:
-        Speaker 1: Bonjour. Encore moi.
+        Speaker 1: Bonjour.
+        Speaker 4: Encore moi.
         Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
   }
 
