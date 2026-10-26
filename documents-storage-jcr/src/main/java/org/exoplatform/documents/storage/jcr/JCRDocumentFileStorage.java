@@ -215,6 +215,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       "AND jcr:path LIKE '%s/%%' " +
       "AND (jcr:primaryType = 'nt:file' OR jcr:primaryType = 'exo:symlink')";
 
+  static final String                               SYMLINKS_TARGETING_QUERY    = "SELECT * FROM exo:symlink " +
+      "WHERE jcr:path LIKE '%s/%%' " +
+      "AND (%s)";
+
   private static final String                       TEMP_DIRECTORY_PATH         = "java.io.tmpdir";
 
   private static Map<Long, List<SymlinkNavigation>> symlinksNavHistory          = new HashMap<>();
@@ -2564,6 +2568,117 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getDocumentPathInDrive(String documentId, long ownerId, Identity aclIdentity) throws ObjectNotFoundException {
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    if (ownerIdentity == null) {
+      throw new ObjectNotFoundException(String.format("Owner identity with id %s not found", ownerId));
+    }
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node == null) {
+        throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
+      }
+      Node driveRootNode = getDriveRootNode(ownerIdentity, aclIdentity.getUserId(), sessionProvider);
+      if (driveRootNode == null) {
+        throw new ObjectNotFoundException(String.format("Drive of owner %s not found", ownerId));
+      }
+      // A user drive's folder URL is resolved by getNodeByPath without following
+      // a shortcut inside the path, so only a shortcut to the document or its
+      // parent folder gives a URL the Documents app opens
+      return getDocumentPathInDrive(session, node, driveRootNode.getPath(), ownerIdentity.isSpace());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException(String.format("Error retrieving the path of node %s in the drive of owner %s",
+                                                    documentId,
+                                                    ownerId),
+                                      e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * Resolves the path of a node as reached from a drive: the node's own path
+   * when it lies in the drive, else the path through the drive's shortcut
+   * targeting its nearest ancestor (the node itself included). When
+   * {@code anyAncestor} is false, only a shortcut targeting the node or its
+   * parent folder is considered.
+   */
+  static String getDocumentPathInDrive(Session session,
+                                       Node node,
+                                       String drivePath,
+                                       boolean anyAncestor) throws RepositoryException {
+    String nodePath = node.getPath();
+    if (nodePath.equals(drivePath) || nodePath.startsWith(drivePath + SLASH)) {
+      return nodePath;
+    }
+    // Nearest ancestor first, so that the deepest shortcut target wins
+    Map<String, String> ancestorPaths = new LinkedHashMap<>();
+    int maxAncestors = anyAncestor ? Integer.MAX_VALUE : 2;
+    Node ancestor = node;
+    while (ancestor != null && ancestorPaths.size() < maxAncestors) {
+      String identifier = ((ExtendedNode) ancestor).getIdentifier();
+      if (StringUtils.isNotBlank(identifier) && !identifier.contains("'")) {
+        ancestorPaths.put(identifier, ancestor.getPath());
+      }
+      ancestor = getReadableParent(ancestor);
+    }
+    if (ancestorPaths.isEmpty()) {
+      return null;
+    }
+    String targetsCondition = ancestorPaths.keySet()
+                                           .stream()
+                                           .map(id -> String.format("%s = '%s'", NodeTypeConstants.EXO_SYMLINK_UUID, id))
+                                           .collect(Collectors.joining(" OR "));
+    String statement = String.format(SYMLINKS_TARGETING_QUERY, drivePath, targetsCondition);
+    QueryResult queryResult = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL).execute();
+    NodeIterator symlinks = queryResult.getNodes();
+    Map<String, String> symlinkPathByTargetId = new HashMap<>();
+    while (symlinks.hasNext()) {
+      Node symlink = symlinks.nextNode();
+      symlinkPathByTargetId.merge(symlink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString(),
+                                  symlink.getPath(),
+                                  (path1, path2) -> path1.length() <= path2.length() ? path1 : path2);
+    }
+    for (Map.Entry<String, String> ancestorPath : ancestorPaths.entrySet()) {
+      String symlinkPath = symlinkPathByTargetId.get(ancestorPath.getKey());
+      if (symlinkPath != null) {
+        return symlinkPath + nodePath.substring(ancestorPath.getValue().length());
+      }
+    }
+    return null;
+  }
+
+  private static Node getReadableParent(Node node) throws RepositoryException {
+    if (node.getDepth() == 0) {
+      return null;
+    }
+    try {
+      return node.getParent();
+    } catch (AccessDeniedException | ItemNotFoundException e) {
+      return null;
+    }
+  }
+
+  private Node getDriveRootNode(org.exoplatform.social.core.identity.model.Identity ownerIdentity,
+                                String username,
+                                SessionProvider sessionProvider) {
+    try {
+      return getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+    } catch (Exception e) {
+      LOG.debug("Drive of owner {} is not accessible to user {}", ownerIdentity.getId(), username, e);
+      return null;
     }
   }
 

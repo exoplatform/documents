@@ -15,6 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import { getDocumentPathInDrive } from './DocumentFileService.js';
+
 export function injectSortTooltip(tooltipName, markerClass) {
     const elements = document.getElementsByClassName(markerClass);
     elements?.forEach?.(element => {
@@ -89,6 +91,29 @@ export function getParentFolderUrl(file) {
     }
     return folderPath;
   }
+}
+
+// A document reached through a folder shortcut keeps its source path, in another drive:
+// resolve its path as reached from the given owner's drive, through that shortcut
+export function getFileInDrive(file, ownerId) {
+  if (!file?.id || !file.path || !ownerId || isInPageDrive(file.path, ownerId)) {
+    return Promise.resolve(file);
+  }
+  return getDocumentPathInDrive(file.id, ownerId)
+    .then(path => (path && path !== file.path ? {...file, path} : file))
+    .catch(() => file);
+}
+
+export function getEditorUrlInDrive(file, mode, ownerId) {
+  return getFileInDrive(file, ownerId).then(fileInDrive => getEditorUrl(fileInDrive, mode));
+}
+
+function isInPageDrive(path, ownerId) {
+  if (`${ownerId}` !== `${eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId}`) {
+    return false;
+  }
+  const drivePath = eXo.env.portal.spaceGroup ? `/spaces/${eXo.env.portal.spaceGroup}/` : `/${eXo.env.portal.userName}/Private/`;
+  return path.includes(drivePath);
 }
 
 export function getPersonalDriveUrl() {

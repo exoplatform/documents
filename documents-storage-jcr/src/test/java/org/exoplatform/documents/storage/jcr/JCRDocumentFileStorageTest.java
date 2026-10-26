@@ -2052,4 +2052,97 @@ public class JCRDocumentFileStorageTest {
     when(jcrValue.getString()).thenReturn(value);
     return jcrValue;
   }
+
+  @Test
+  public void getDocumentPathInDriveRefusesMissingOwnerDocumentOrDriveAndFollowsSpaceShortcuts() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Identity spaceIdentity = new Identity("space", "space_b");
+    spaceIdentity.setId("2");
+
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentPathInDrive("docA", 2L, aclIdentity));
+
+    when(identityManager.getIdentity("2")).thenReturn(spaceIdentity);
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentPathInDrive("docA", 2L, aclIdentity));
+
+    ExtendedNode docNode = mock(ExtendedNode.class);
+    when(docNode.getPath()).thenReturn("/Groups/spaces/space_b/Documents/docA");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "docA")).thenReturn(docNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                      nodeHierarchyCreator,
+                                                                      "john",
+                                                                      spaceIdentity,
+                                                                      sessionProvider))
+                      .thenThrow(new AccessDeniedException());
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentPathInDrive("docA", 2L, aclIdentity));
+
+    Node driveRootNode = mock(Node.class);
+    when(driveRootNode.getPath()).thenReturn("/Groups/spaces/space_b/Documents");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                      nodeHierarchyCreator,
+                                                                      "john",
+                                                                      spaceIdentity,
+                                                                      sessionProvider))
+                      .thenReturn(driveRootNode);
+    assertEquals("/Groups/spaces/space_b/Documents/docA", jcrDocumentFileStorage.getDocumentPathInDrive("docA", 2L, aclIdentity));
+    verify(sessionProvider, times(3)).close();
+
+    // A space drive follows a shortcut to any ancestor, here the grand parent
+    ExtendedNode folderA = mock(ExtendedNode.class);
+    when(folderA.getIdentifier()).thenReturn("folderAId");
+    when(folderA.getPath()).thenReturn("/Groups/spaces/space_a/Documents/folderA");
+    when(folderA.getDepth()).thenReturn(5);
+    ExtendedNode subFolder = mock(ExtendedNode.class);
+    when(subFolder.getIdentifier()).thenReturn("subId");
+    when(subFolder.getPath()).thenReturn("/Groups/spaces/space_a/Documents/folderA/sub");
+    when(subFolder.getDepth()).thenReturn(6);
+    when(subFolder.getParent()).thenReturn(folderA);
+    ExtendedNode nestedDoc = mock(ExtendedNode.class);
+    when(nestedDoc.getIdentifier()).thenReturn("nestedDocId");
+    when(nestedDoc.getPath()).thenReturn("/Groups/spaces/space_a/Documents/folderA/sub/docA");
+    when(nestedDoc.getDepth()).thenReturn(7);
+    when(nestedDoc.getParent()).thenReturn(subFolder);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "nestedDocId")).thenReturn(nestedDoc);
+    Node symlink = mock(Node.class);
+    Property symlinkTarget = mock(Property.class);
+    when(symlinkTarget.getString()).thenReturn("folderAId");
+    when(symlink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(symlinkTarget);
+    when(symlink.getPath()).thenReturn("/Groups/spaces/space_b/Documents/folderA");
+    NodeIterator symlinks = mock(NodeIterator.class);
+    when(symlinks.hasNext()).thenReturn(true, false);
+    when(symlinks.nextNode()).thenReturn(symlink);
+    Workspace workspace = mock(Workspace.class);
+    QueryManager queryManager = mock(QueryManager.class);
+    Query query = mock(Query.class);
+    QueryResult queryResult = mock(QueryResult.class);
+    when(session.getWorkspace()).thenReturn(workspace);
+    when(workspace.getQueryManager()).thenReturn(queryManager);
+    when(queryManager.createQuery(anyString(), eq(Query.SQL))).thenReturn(query);
+    when(query.execute()).thenReturn(queryResult);
+    when(queryResult.getNodes()).thenReturn(symlinks);
+    assertEquals("/Groups/spaces/space_b/Documents/folderA/sub/docA",
+                 jcrDocumentFileStorage.getDocumentPathInDrive("nestedDocId", 2L, aclIdentity));
+
+    // A user drive ignores the same grand parent shortcut: its folder URL would not open
+    Identity userIdentity = new Identity(OrganizationIdentityProvider.NAME, "john");
+    userIdentity.setId("3");
+    when(identityManager.getIdentity("3")).thenReturn(userIdentity);
+    Node privateNode = mock(Node.class);
+    when(privateNode.getPath()).thenReturn("/Users/j___/jo___/joh___/john/Private");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                      nodeHierarchyCreator,
+                                                                      "john",
+                                                                      userIdentity,
+                                                                      sessionProvider))
+                      .thenReturn(privateNode);
+    when(symlinks.hasNext()).thenReturn(true, false);
+    when(symlink.getPath()).thenReturn("/Users/j___/jo___/joh___/john/Private/folderA");
+    assertNull(jcrDocumentFileStorage.getDocumentPathInDrive("nestedDocId", 3L, aclIdentity));
+  }
 }

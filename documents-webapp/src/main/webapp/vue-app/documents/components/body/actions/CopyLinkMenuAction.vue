@@ -15,13 +15,35 @@ export default {
   data: () => ({
     viewTab: 'RECENT',
     spaceId: eXo.env.portal.spaceId,
-    publicAccessVisibilityChoice: 'COLLABORATORS_AND_PUBLIC_ACCESS'
+    publicAccessVisibilityChoice: 'COLLABORATORS_AND_PUBLIC_ACCESS',
+    fileInDrive: null,
   }),
+  watch: {
+    file: {
+      immediate: true,
+      handler() {
+        this.resolveFileInDrive();
+      },
+    },
+  },
   methods: {
+    resolveFileInDrive() {
+      this.fileInDrive = null;
+      const file = this.file;
+      if (file && !file.folder) {
+        this.$documentsUtils.getFileInDrive(file, this.$root.ownerId)
+          .then(fileInDrive => {
+            if (file === this.file) {
+              this.fileInDrive = fileInDrive;
+            }
+          });
+      }
+    },
 
     copyLink() {
       this.loading = true;
       let path;
+      const file = this.fileInDrive || this.file;
       if (this.file.folder){
         path = `${window.location.origin}${eXo.env.portal.context}`;
         if (this.$root.ownerId !== eXo.env.portal.userIdentityId && this.$root.spaceId){
@@ -36,14 +58,14 @@ export default {
         }
       } else if (this.isFileEditable())  {
         if (this.file?.acl?.canEdit){
-          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,null)}`;
+          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,null)}`;
         } else {
-          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,'view')}`;
         }
       } else if (this.isFileReadable())  {
-        path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+        path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,'view')}`;
       } else {
-        path = `${window.location.origin}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.file.id}`;
+        path = `${window.location.origin}${this.$documentsUtils.getParentFolderUrl(file)}?documentPreviewId=${this.file.id}`;
       }
       path = encodeURI(path);
       if (navigator?.clipboard?.writeText) {

@@ -1891,4 +1891,55 @@ public class DocumentFileRestTest {
     response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
     assertEquals(200, response.getStatus());
   }
+
+  @Test
+  public void testGetDocumentPathInDrive() throws Exception {
+    long userIdentityId = 1;
+    long spaceIdentityId = 2;
+    String driveDocumentPath = "/Groups/spaces/space_b/Documents/folderA/docA";
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(userIdentityId);
+    org.exoplatform.services.security.Identity userAclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(userAclIdentity);
+    Identity userIdentity = new Identity(OrganizationIdentityProvider.NAME, "user");
+    when(identityManager.getIdentity(userIdentityId)).thenReturn(userIdentity);
+
+    Response response = documentFileRest.getDocumentPathInDrive(null, spaceIdentityId);
+    assertEquals(400, response.getStatus());
+    assertEquals("documentId_is_mandatory", response.getEntity());
+    response = documentFileRest.getDocumentPathInDrive("docA", 0);
+    assertEquals(400, response.getStatus());
+    assertEquals("ownerId_is_mandatory", response.getEntity());
+
+    when(documentFileStorage.getDocumentPathInDrive("docA", spaceIdentityId, userAclIdentity)).thenReturn(driveDocumentPath);
+    response = documentFileRest.getDocumentPathInDrive("docA", spaceIdentityId);
+    assertEquals(200, response.getStatus());
+    assertEquals(driveDocumentPath, response.getEntity());
+    assertNotStored(response);
+
+    when(documentFileStorage.getDocumentPathInDrive("docA", spaceIdentityId, userAclIdentity)).thenReturn(null);
+    response = documentFileRest.getDocumentPathInDrive("docA", spaceIdentityId);
+    assertEquals(404, response.getStatus());
+    assertEquals("document_not_reachable_from_drive", response.getEntity());
+    assertNotStored(response);
+
+    when(documentFileStorage.getDocumentPathInDrive("docA",
+                                                    spaceIdentityId,
+                                                    userAclIdentity)).thenThrow(new ObjectNotFoundException("Node with id docA not found"));
+    response = documentFileRest.getDocumentPathInDrive("docA", spaceIdentityId);
+    assertEquals(404, response.getStatus());
+    assertEquals("document_or_drive_not_found", response.getEntity());
+    assertNotStored(response);
+
+    when(identityManager.getIdentity(userIdentityId)).thenReturn(null);
+    response = documentFileRest.getDocumentPathInDrive("docA", spaceIdentityId);
+    assertEquals(403, response.getStatus());
+    assertEquals("user_identity_not_resolved", response.getEntity());
+  }
+
+  private void assertNotStored(Response response) {
+    javax.ws.rs.core.CacheControl cacheControl = (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
+    assertNotNull(cacheControl);
+    assertTrue(cacheControl.isNoStore());
+    assertTrue(cacheControl.isPrivate());
+  }
 }

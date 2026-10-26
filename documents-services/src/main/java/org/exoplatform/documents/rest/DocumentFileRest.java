@@ -190,6 +190,51 @@ public class DocumentFileRest implements ResourceContainer {
   }
 
   @GET
+  @Produces(MediaType.TEXT_PLAIN)
+  @RolesAllowed("users")
+  @Path("/drive-path")
+  @Operation(summary = "Get the path of a document as reached from a drive", method = "GET", description = "Returns the document's own path when it lies in the drive of the given owner, else its path through a shortcut of that drive targeting the document or one of its parent folders (in a user drive, only its direct parent folder).")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "401", description = "Unauthenticated user"),
+      @ApiResponse(responseCode = "403", description = "Current user identity can't be resolved"),
+      @ApiResponse(responseCode = "404", description = "Document or drive not found, or no shortcut of the drive leads to the document"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getDocumentPathInDrive(@Parameter(description = "Document identifier", required = true)
+                                         @QueryParam("documentId")
+                                         String documentId,
+                                         @Parameter(description = "Identity technical identifier of the drive owner (space or user)", required = true)
+                                         @QueryParam("ownerId")
+                                         long ownerId) {
+    if (StringUtils.isBlank(documentId)) {
+      return Response.status(Status.BAD_REQUEST).entity("documentId_is_mandatory").build();
+    }
+    if (ownerId <= 0) {
+      return Response.status(Status.BAD_REQUEST).entity("ownerId_is_mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    // Both the path and its absence depend on what the caller can read
+    CacheControl noStore = new CacheControl();
+    noStore.setPrivate(true);
+    noStore.setNoStore(true);
+    try {
+      String path = documentFileService.getDocumentPathInDrive(documentId, ownerId, userIdentityId);
+      if (path == null) {
+        return Response.status(Status.NOT_FOUND).entity("document_not_reachable_from_drive").cacheControl(noStore).build();
+      }
+      return Response.ok(path).cacheControl(noStore).build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).entity("document_or_drive_not_found").cacheControl(noStore).build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.FORBIDDEN).entity("user_identity_not_resolved").build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving the path of document '{}' in the drive of owner '{}'", documentId, ownerId, e);
+      return Response.serverError().entity("error_retrieving_document_path_in_drive").build();
+    }
+  }
+
+  @GET
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Path("/settings/{ownerId}")

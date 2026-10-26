@@ -42,7 +42,8 @@ export default {
   },
   methods: {
     showInfo() {
-      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.attachment.id}));
+      const ownerId = this.attachment.ownerId;
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: ownerId ? {id: this.attachment.id, ownerId} : this.attachment.id}));
     },
   },
 };
