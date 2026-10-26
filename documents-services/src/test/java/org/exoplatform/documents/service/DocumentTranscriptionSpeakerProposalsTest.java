@@ -272,9 +272,10 @@ class DocumentTranscriptionSpeakerProposalsTest {
   }
 
   /**
-   * A speaker whose naming cannot be checked or saved (the file busy, the
-   * person's identity unreadable) stays a proposal, and the next strong
-   * proposal is still applied: one speaker never stops the others.
+   * A speaker whose naming cannot be checked or saved stays a proposal, and the
+   * next strong proposal is still applied: one speaker never stops the others.
+   * The unreadable identity (an unexpected failure) is what pins the catch of
+   * any runtime failure; the busy save is the expected refusal beside it.
    */
   @Test
   void aSpeakerThatCannotBeNamedLeavesTheNextOneNamed() throws Exception {
@@ -297,12 +298,14 @@ class DocumentTranscriptionSpeakerProposalsTest {
   }
 
   /**
-   * A name one proposal applies is read again by the next: a second strong
-   * proposal for the same person, refused by the storage once that person is
-   * named, stays a proposal.
+   * Each strong proposal is handed to the storage in turn, after the one before
+   * was applied, and keeps the storage's answer: a second proposal for the same
+   * person that the storage refuses stays a proposal. That the storage reads
+   * the names again and refuses it is pinned by
+   * JCRDocumentFileStorageTest#applyingAProposalRereadsEverythingItDependsOn.
    */
   @Test
-  void aNameAppliedByOneProposalIsReadByTheNext() throws Exception {
+  void eachProposalKeepsTheStorageAnswer_givenAfterTheOneBefore() throws Exception {
     mockNameableBy(OWNER_ID);
     mockUser("42", true);
     TranscriptionSpeakerSuggestion first = new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(0));
