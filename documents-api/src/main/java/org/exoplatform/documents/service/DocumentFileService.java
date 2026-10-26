@@ -675,7 +675,10 @@ public interface DocumentFileService {
    * @param identityId who the speaker is: the identity id of the person, or a
    *          guest's name after
    *          {@link org.exoplatform.documents.model.TranscriptSpeakers#GUEST_PREFIX};
-   *          null to unname the speaker
+   *          null to unname the speaker. The value is stored as given: a
+   *          guest's name is validated by
+   *          {@code DocumentTranscriptionService#setGuestSpeaker}, which callers
+   *          go through
    * @param aclIdentity the identity id of the user naming it
    * @throws IllegalAccessException when the user may not edit the file
    * @throws ObjectNotFoundException when the file does not exist, or the user
