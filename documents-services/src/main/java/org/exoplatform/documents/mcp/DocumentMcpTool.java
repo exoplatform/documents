@@ -935,7 +935,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * segment per line, each starting with the moment it was said,
    * {@code [mm:ss · Ns]} ({@code [h:mm:ss · Ns]} past an hour), where N is that
    * moment in whole seconds (EXO-92112); without segments, the plain transcript
-   * is given, as without timestamps. A transcript whose segments tell who
+   * is given, as without timestamps, or its turns when it tells who speaks. A
+   * transcript whose segments tell who
    * speaks (EXO-92123) is given after the list of its speakers, each with its
    * talk time, and each of its lines names who said it: the person named for
    * the speaker, the guest's name, or {@code Speaker N}; without timestamps,
@@ -957,13 +958,14 @@ public class DocumentMcpTool implements McpToolPlugin {
       String chapters = toChaptersOutline(documentId, identityId);
       JSONArray segments = readSegments(documentId, identityId);
       Map<String, String> speakers = hasSpeaker(segments) ? readSpeakers(documentId, identityId) : null;
-      String speakersList = speakers == null ? null : toSpeakersList(segments, speakers);
+      Map<String, String> namesBySpeaker = new HashMap<>();
+      String speakersList = speakers == null ? null : toSpeakersList(segments, speakers, namesBySpeaker);
       String lines = null;
       if (segments != null && Boolean.TRUE.equals(timestamps)) {
-        lines = toTimedLines(segments, speakers);
+        lines = toTimedLines(segments, speakers, namesBySpeaker);
       }
       if (lines == null && speakers != null) {
-        lines = toTurns(segments, speakers);
+        lines = toTurns(segments, speakers, namesBySpeaker);
       }
       String transcription = lines == null ? audioTranscription : lines;
       String outline = chapters == null ? speakersList : speakersList == null ? chapters : chapters + "\n\n" + speakersList;
@@ -1120,18 +1122,19 @@ public class DocumentMcpTool implements McpToolPlugin {
    *
    * @param segments the transcript's segments
    * @param speakers the stored value of each named speaker, by speaker number
+   * @param namesBySpeaker the names already found in this answer, by speaker
+   *          number
    * @return the list, starting with {@code Speakers:}
    */
-  private String toSpeakersList(JSONArray segments, Map<String, String> speakers) {
+  private String toSpeakersList(JSONArray segments, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
     Map<String, String> names = new LinkedHashMap<>();
     Map<String, Double> talkTimes = new HashMap<>();
-    Map<String, String> namesByKey = new HashMap<>();
-    for (int i = 0; i < segments.length(); i++) {
+        for (int i = 0; i < segments.length(); i++) {
       JSONObject segment = segments.optJSONObject(i);
       String speaker = getSegmentSpeaker(segment);
       if (speaker != null && getSegmentText(segment) != null) {
-        String key = getSpeakerKey(speaker, speakers);
-        names.computeIfAbsent(key, k -> getSpeakerName(speaker, speakers, namesByKey));
+        String key = getSpeakerKey(speaker, speakers, namesBySpeaker);
+        names.computeIfAbsent(key, k -> getSpeakerName(speaker, speakers, namesBySpeaker));
         double start = segment.optDouble("start", Double.NaN);
         double end = segment.optDouble("end", Double.NaN);
         double talkTime = Double.isFinite(start) && Double.isFinite(end) && end > start ? end - start : 0;
@@ -1154,12 +1157,13 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param segments the transcript's segments
    * @param speakers the stored value of each named speaker, by speaker number,
    *          or null when the transcript does not tell who speaks
+   * @param namesBySpeaker the names already found in this answer, by speaker
+   *          number
    * @return the timed transcript, or null when no segment can be used
    */
-  private String toTimedLines(JSONArray segments, Map<String, String> speakers) {
+  private String toTimedLines(JSONArray segments, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
     StringBuilder timedTranscription = new StringBuilder();
-    Map<String, String> namesByKey = new HashMap<>();
-    for (int i = 0; i < segments.length(); i++) {
+        for (int i = 0; i < segments.length(); i++) {
       JSONObject segment = segments.optJSONObject(i);
       String text = getSegmentText(segment);
       double start = segment == null ? Double.NaN : segment.optDouble("start", Double.NaN);
@@ -1167,7 +1171,7 @@ public class DocumentMcpTool implements McpToolPlugin {
         if (!timedTranscription.isEmpty()) {
           timedTranscription.append('\n');
         }
-        String name = speakers == null ? null : getSpeakerName(getSegmentSpeaker(segment), speakers, namesByKey);
+        String name = speakers == null ? null : getSpeakerName(getSegmentSpeaker(segment), speakers, namesBySpeaker);
         timedTranscription.append(TranscriptSpeakers.formatLine(start, name, text));
       }
     }
@@ -1180,12 +1184,13 @@ public class DocumentMcpTool implements McpToolPlugin {
    *
    * @param segments the transcript's segments
    * @param speakers the stored value of each named speaker, by speaker number
+   * @param namesBySpeaker the names already found in this answer, by speaker
+   *          number
    * @return the transcript in turns, or null when no segment can be used
    */
-  private String toTurns(JSONArray segments, Map<String, String> speakers) {
+  private String toTurns(JSONArray segments, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
     StringBuilder turns = new StringBuilder();
-    Map<String, String> namesByKey = new HashMap<>();
-    String turnKey = null;
+        String turnKey = null;
     StringBuilder turnText = null;
     String turnName = null;
     for (int i = 0; i < segments.length(); i++) {
@@ -1193,13 +1198,13 @@ public class DocumentMcpTool implements McpToolPlugin {
       String text = getSegmentText(segment);
       if (text != null) {
         String speaker = getSegmentSpeaker(segment);
-        String key = speaker == null ? null : getSpeakerKey(speaker, speakers);
+        String key = speaker == null ? null : getSpeakerKey(speaker, speakers, namesBySpeaker);
         if (turnText != null && StringUtils.equals(key, turnKey)) {
           turnText.append(' ').append(text);
         } else {
           appendTurn(turns, turnName, turnText);
           turnKey = key;
-          turnName = getSpeakerName(speaker, speakers, namesByKey);
+          turnName = getSpeakerName(speaker, speakers, namesBySpeaker);
           turnText = new StringBuilder(text);
         }
       }
@@ -1226,37 +1231,40 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Tells who a speaker number is, so that two numbers named after the same
-   * person or the same guest are one speaker.
+   * person or the same guest are one speaker. A number whose person is gone,
+   * or cannot be read now, is a speaker of its own, {@code Speaker N}, as the
+   * transcript's other readers show it.
    *
    * @param speaker the speaker's number in the transcript
    * @param speakers the stored value of each named speaker, by speaker number
+   * @param namesBySpeaker the names already found in this answer, by speaker
+   *          number
    * @return the stored value of the speaker, or {@code speaker:<number>} when
-   *         nobody is named for it
+   *         it is given by its number
    */
-  private static String getSpeakerKey(String speaker, Map<String, String> speakers) {
+  private String getSpeakerKey(String speaker, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
     String value = StringUtils.trimToNull(speakers.get(speaker));
-    return value == null ? "speaker:" + speaker : value;
+    String byNumber = TranscriptSpeakers.SPEAKER_LABEL + " " + speaker;
+    return value == null || byNumber.equals(getSpeakerName(speaker, speakers, namesBySpeaker)) ? "speaker:" + speaker : value;
   }
 
   /**
-   * Names a speaker, looking each speaker up once per answer: the speaker
-   * numbers named after the same person or guest get the name the first of
-   * them got, so that the list of speakers and the lines always agree, even
-   * when that person is gone and the name is {@code Speaker N}.
+   * Names a speaker, looking each speaker number up once per answer, so that
+   * the list of speakers and the lines always agree.
    *
    * @param speaker the speaker's number in the transcript, or null
    * @param speakers the stored value of each named speaker, by speaker number
-   * @param namesByKey the names already found in this answer, by
-   *          {@link #getSpeakerKey(String, Map)}
+   * @param namesBySpeaker the names already found in this answer, by speaker
+   *          number
    * @return the person's full name, the guest's name or {@code Speaker N};
    *         null when the speaker is null
    */
-  private String getSpeakerName(String speaker, Map<String, String> speakers, Map<String, String> namesByKey) {
+  private String getSpeakerName(String speaker, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
     return speaker == null ? null
-                           : namesByKey.computeIfAbsent(getSpeakerKey(speaker, speakers),
-                                                        k -> TranscriptSpeakers.speakerName(speaker,
-                                                                                            speakers,
-                                                                                            this::getIdentityFullName));
+                           : namesBySpeaker.computeIfAbsent(speaker,
+                                                            s -> TranscriptSpeakers.speakerName(s,
+                                                                                                speakers,
+                                                                                                this::getIdentityFullName));
   }
 
   /**
