@@ -63,6 +63,18 @@
             class="text-truncate mb-1"
             @name="$emit('name-speaker', $event)"
             @unname="$emit('unname-speaker', $event)" />
+          <template v-if="proposalsShown[row.index]">
+            <span aria-hidden="true"></span>
+            <document-transcript-speaker-suggestion
+              :proposal="proposalsShown[row.index]"
+              :busy="!!savingSpeaker && savingSpeaker !== row.segment.speaker"
+              :saving="savingSpeaker === row.segment.speaker"
+              class="mb-1"
+              @confirm="$emit('confirm-proposal', $event)"
+              @dismiss="$emit('dismiss-proposal', $event)"
+              @undo="$emit('unname-speaker', {speaker: $event.speaker})"
+              @seek="$emit('seek', $event)" />
+          </template>
           <span aria-hidden="true"></span>
         </template>
         <span v-else class="documentTranscriptLineTime text-caption primary--text text-no-wrap">{{ formatMoment(row.segment.start) }}</span>
@@ -121,6 +133,11 @@ export default {
     canNameSpeakers: {
       type: Boolean,
       default: false,
+    },
+    /** The proposal of who a speaker is, by the sentence's index, shown under the speaker of the line that opens its first run (EXO-92126). */
+    proposalsShown: {
+      type: Array,
+      default: () => [],
     },
     savingSpeaker: {
       type: String,
