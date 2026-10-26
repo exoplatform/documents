@@ -1267,8 +1267,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * The full name of the person named for a speaker.
    *
    * @param identityId the stored identity id
-   * @return the full name, or null when the identity is gone, is not a
-   *         person's, the id is not one, or the identity cannot be read now
+   * @return the full name, or null when the identity is gone or has no
+   *         profile, the id is not one, or the identity cannot be read now
    */
   private String getIdentityFullName(String identityId) {
     long id = NumberUtils.toLong(identityId, 0);
