@@ -42,10 +42,13 @@
         :speaker-heads="speakerHeads"
         :can-name-speakers="canNameSpeakers"
         :saving-speaker="savingSpeaker"
+        :proposals-shown="proposalsShown"
         @toggle="toggleChapter(group.key)"
         @seek="$emit('seek', $event)"
         @name-speaker="$emit('name-speaker', $event)"
-        @unname-speaker="$emit('unname-speaker', $event)" />
+        @unname-speaker="$emit('unname-speaker', $event)"
+        @confirm-proposal="$emit('confirm-proposal', $event)"
+        @dismiss-proposal="$emit('dismiss-proposal', $event)" />
     </template>
     <template v-else-if="hasSegments">
       <div
