@@ -108,15 +108,17 @@
     .documentTimelineScale {
       height: 16px;
       font-variant-numeric: tabular-nums;
+      // a mark's label is centred on it, the scale's start and end aside, which
+      // the label starts at and ends at, in either direction of the text
       .documentTimelineTick {
         position: absolute;
         transform: translateX(-50%);
         white-space: nowrap;
-        &:first-child {
-          transform: none;
+        .v-application--is-rtl & {
+          transform: translateX(50%);
         }
-        &:last-child {
-          transform: translateX(-100%);
+        &:first-child, &:last-child {
+          transform: none;
         }
       }
     }
