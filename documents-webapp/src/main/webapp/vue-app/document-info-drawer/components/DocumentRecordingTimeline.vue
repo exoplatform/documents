@@ -54,6 +54,7 @@
           :busy="!!savingSpeaker && savingSpeaker !== lane.speaker"
           :saving="savingSpeaker === lane.speaker"
           class="text-caption font-weight-bold text-truncate"
+          menu-top
           @name="nameSpeaker"
           @unname="unnameSpeaker" />
         <document-timeline-speaker
