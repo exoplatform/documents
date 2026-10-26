@@ -38,6 +38,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,6 +48,7 @@ import javax.jcr.RepositoryException;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -85,6 +87,7 @@ import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.TranscriptSpeakers;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
@@ -932,7 +935,11 @@ public class DocumentMcpTool implements McpToolPlugin {
    * segment per line, each starting with the moment it was said,
    * {@code [mm:ss · Ns]} ({@code [h:mm:ss · Ns]} past an hour), where N is that
    * moment in whole seconds (EXO-92112); without segments, the plain transcript
-   * is given, as without timestamps.
+   * is given, as without timestamps. A transcript whose segments tell who
+   * speaks (EXO-92123) is given after the list of its speakers, each with its
+   * talk time, and each of its lines names who said it: the person named for
+   * the speaker, the guest's name, or {@code Speaker N}; without timestamps,
+   * it is given one turn per line, {@code Name: text}, with no moment.
    *
    * @param documentId the file's UUID
    * @param timestamps true to have each segment start with its moment
@@ -948,9 +955,19 @@ public class DocumentMcpTool implements McpToolPlugin {
     String audioTranscription = documentFileService.getAudioTranscription(documentId, identityId);
     if (StringUtils.isNotBlank(audioTranscription)) {
       String chapters = toChaptersOutline(documentId, identityId);
-      String timedTranscription = Boolean.TRUE.equals(timestamps) ? toTimedTranscription(documentId, identityId) : null;
-      String transcription = timedTranscription == null ? audioTranscription : timedTranscription;
-      return chapters == null ? transcription : chapters + "\n\nTranscript:\n" + transcription;
+      JSONArray segments = readSegments(documentId, identityId);
+      Map<String, String> speakers = hasSpeaker(segments) ? readSpeakers(documentId, identityId) : null;
+      String speakersList = speakers == null ? null : toSpeakersList(segments, speakers);
+      String lines = null;
+      if (segments != null && Boolean.TRUE.equals(timestamps)) {
+        lines = toTimedLines(segments, speakers);
+      }
+      if (lines == null && speakers != null) {
+        lines = toTurns(segments, speakers);
+      }
+      String transcription = lines == null ? audioTranscription : lines;
+      String outline = chapters == null ? speakersList : speakersList == null ? chapters : chapters + "\n\n" + speakersList;
+      return outline == null ? transcription : outline + "\n\nTranscript:\n" + transcription;
     } else if (!(document instanceof FileNode fileNode)
                || !StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
       throw new IllegalStateException("The document with id %s isn't an audio nor a video file, so it has no transcription."
@@ -1027,18 +1044,16 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Writes a transcript's timed segments one per line, each starting with the
-   * moment it was said.
+   * Reads a transcript's timed segments.
    *
    * @param documentId the file's UUID
    * @param identityId the identity id of the user reading it
-   * @return the timed transcript, or null when the file has no segment, none
-   *         that can be read, or its segments cannot be read now
+   * @return the segments, or null when the file has none, they cannot be
+   *         parsed, or they cannot be read now
    * @throws IllegalAccessException when the user may not read the file
    * @throws ObjectNotFoundException when the file does not exist
    */
-  private String toTimedTranscription(String documentId, long identityId) throws IllegalAccessException,
-                                                                             ObjectNotFoundException {
+  private JSONArray readSegments(String documentId, long identityId) throws IllegalAccessException, ObjectNotFoundException {
     String segments;
     try {
       segments = documentFileService.getTranscriptionSegments(documentId, identityId);
@@ -1050,25 +1065,240 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(segments)) {
       return null;
     }
-    StringBuilder timedTranscription = new StringBuilder();
     try {
       JSONArray segmentsArray = new JSONArray(segments);
-      for (int i = 0; i < segmentsArray.length(); i++) {
-        JSONObject segment = segmentsArray.optJSONObject(i);
-        String text = segment == null ? null : StringUtils.trimToNull(segment.optString("text", null));
-        double start = segment == null ? Double.NaN : segment.optDouble("start", Double.NaN);
-        if (text != null && Double.isFinite(start) && start >= 0) {
-          if (!timedTranscription.isEmpty()) {
-            timedTranscription.append('\n');
-          }
-          timedTranscription.append(toMoment((long) start)).append(' ').append(text);
-        }
-      }
+      return segmentsArray.isEmpty() ? null : segmentsArray;
     } catch (JSONException e) {
       LOG.debug("The timed segments of media file {} cannot be read, its plain transcript is given", documentId, e);
       return null;
     }
+  }
+
+  /**
+   * Reads who each named speaker of a transcript is.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the stored value of each named speaker, by speaker number; empty
+   *         when none is named or they cannot be read now, every speaker then
+   *         being {@code Speaker N}
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private Map<String, String> readSpeakers(String documentId, long identityId) throws IllegalAccessException,
+                                                                               ObjectNotFoundException {
+    try {
+      Map<String, String> speakers = documentFileService.getTranscriptionSpeakers(documentId, identityId);
+      return speakers == null ? Map.of() : speakers;
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its speakers' names never takes it away
+      LOG.debug("The speakers of media file {} cannot be read, they are given by their number", documentId, e);
+      return Map.of();
+    }
+  }
+
+  /**
+   * @param segments a transcript's segments, or null
+   * @return true when one of the usable segments tells who said it
+   */
+  private static boolean hasSpeaker(JSONArray segments) {
+    if (segments == null) {
+      return false;
+    }
+    for (int i = 0; i < segments.length(); i++) {
+      if (getSegmentText(segments.optJSONObject(i)) != null && getSegmentSpeaker(segments.optJSONObject(i)) != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Writes the speakers of a transcript, one per line, in the order they first
+   * speak, each with its talk time. Two speaker numbers named after the same
+   * person or the same guest are one speaker.
+   *
+   * @param segments the transcript's segments
+   * @param speakers the stored value of each named speaker, by speaker number
+   * @return the list, starting with {@code Speakers:}
+   */
+  private String toSpeakersList(JSONArray segments, Map<String, String> speakers) {
+    Map<String, String> names = new LinkedHashMap<>();
+    Map<String, Double> talkTimes = new HashMap<>();
+    Map<String, String> namesByKey = new HashMap<>();
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String speaker = getSegmentSpeaker(segment);
+      if (speaker != null && getSegmentText(segment) != null) {
+        String key = getSpeakerKey(speaker, speakers);
+        names.computeIfAbsent(key, k -> getSpeakerName(speaker, speakers, namesByKey));
+        double start = segment.optDouble("start", Double.NaN);
+        double end = segment.optDouble("end", Double.NaN);
+        double talkTime = Double.isFinite(start) && Double.isFinite(end) && end > start ? end - start : 0;
+        talkTimes.merge(key, talkTime, Double::sum);
+      }
+    }
+    StringBuilder list = new StringBuilder("Speakers:");
+    names.forEach((key, name) -> list.append("\n- ")
+                                     .append(name)
+                                     .append(" (talk time ")
+                                     .append(TranscriptSpeakers.formatMoment(talkTimes.get(key)))
+                                     .append(')'));
+    return list.toString();
+  }
+
+  /**
+   * Writes a transcript's timed segments one per line, each starting with the
+   * moment it was said, then who said it when the transcript tells.
+   *
+   * @param segments the transcript's segments
+   * @param speakers the stored value of each named speaker, by speaker number,
+   *          or null when the transcript does not tell who speaks
+   * @return the timed transcript, or null when no segment can be used
+   */
+  private String toTimedLines(JSONArray segments, Map<String, String> speakers) {
+    StringBuilder timedTranscription = new StringBuilder();
+    Map<String, String> namesByKey = new HashMap<>();
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String text = getSegmentText(segment);
+      double start = segment == null ? Double.NaN : segment.optDouble("start", Double.NaN);
+      if (text != null && Double.isFinite(start) && start >= 0) {
+        if (!timedTranscription.isEmpty()) {
+          timedTranscription.append('\n');
+        }
+        String name = speakers == null ? null : getSpeakerName(getSegmentSpeaker(segment), speakers, namesByKey);
+        timedTranscription.append(TranscriptSpeakers.formatLine(start, name, text));
+      }
+    }
     return timedTranscription.isEmpty() ? null : timedTranscription.toString();
+  }
+
+  /**
+   * Writes a transcript one turn per line, {@code Name: text}, with no moment:
+   * the following segments of one speaker make one turn.
+   *
+   * @param segments the transcript's segments
+   * @param speakers the stored value of each named speaker, by speaker number
+   * @return the transcript in turns, or null when no segment can be used
+   */
+  private String toTurns(JSONArray segments, Map<String, String> speakers) {
+    StringBuilder turns = new StringBuilder();
+    Map<String, String> namesByKey = new HashMap<>();
+    String turnKey = null;
+    StringBuilder turnText = null;
+    String turnName = null;
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String text = getSegmentText(segment);
+      if (text != null) {
+        String speaker = getSegmentSpeaker(segment);
+        String key = speaker == null ? null : getSpeakerKey(speaker, speakers);
+        if (turnText != null && StringUtils.equals(key, turnKey)) {
+          turnText.append(' ').append(text);
+        } else {
+          appendTurn(turns, turnName, turnText);
+          turnKey = key;
+          turnName = getSpeakerName(speaker, speakers, namesByKey);
+          turnText = new StringBuilder(text);
+        }
+      }
+    }
+    appendTurn(turns, turnName, turnText);
+    return turns.isEmpty() ? null : turns.toString();
+  }
+
+  /**
+   * Adds a turn, on its own line, to a transcript in turns.
+   *
+   * @param turns the transcript written so far
+   * @param name who said the turn, or null when the transcript does not tell
+   * @param text what was said, or null when there is no turn yet
+   */
+  private static void appendTurn(StringBuilder turns, String name, StringBuilder text) {
+    if (text != null) {
+      if (!turns.isEmpty()) {
+        turns.append('\n');
+      }
+      turns.append(TranscriptSpeakers.formatTurn(name, text.toString()));
+    }
+  }
+
+  /**
+   * Tells who a speaker number is, so that two numbers named after the same
+   * person or the same guest are one speaker.
+   *
+   * @param speaker the speaker's number in the transcript
+   * @param speakers the stored value of each named speaker, by speaker number
+   * @return the stored value of the speaker, or {@code speaker:<number>} when
+   *         nobody is named for it
+   */
+  private static String getSpeakerKey(String speaker, Map<String, String> speakers) {
+    String value = StringUtils.trimToNull(speakers.get(speaker));
+    return value == null ? "speaker:" + speaker : value;
+  }
+
+  /**
+   * Names a speaker, looking each speaker up once per answer: the speaker
+   * numbers named after the same person or guest get the name the first of
+   * them got, so that the list of speakers and the lines always agree, even
+   * when that person is gone and the name is {@code Speaker N}.
+   *
+   * @param speaker the speaker's number in the transcript, or null
+   * @param speakers the stored value of each named speaker, by speaker number
+   * @param namesByKey the names already found in this answer, by
+   *          {@link #getSpeakerKey(String, Map)}
+   * @return the person's full name, the guest's name or {@code Speaker N};
+   *         null when the speaker is null
+   */
+  private String getSpeakerName(String speaker, Map<String, String> speakers, Map<String, String> namesByKey) {
+    return speaker == null ? null
+                           : namesByKey.computeIfAbsent(getSpeakerKey(speaker, speakers),
+                                                        k -> TranscriptSpeakers.speakerName(speaker,
+                                                                                            speakers,
+                                                                                            this::getIdentityFullName));
+  }
+
+  /**
+   * The full name of the person named for a speaker.
+   *
+   * @param identityId the stored identity id
+   * @return the full name, or null when the identity is gone, is not a
+   *         person's, the id is not one, or the identity cannot be read now
+   */
+  private String getIdentityFullName(String identityId) {
+    long id = NumberUtils.toLong(identityId, 0);
+    if (id <= 0) {
+      return null;
+    }
+    Identity identity;
+    try {
+      identity = identityManager.getIdentity(id);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on a speaker's name gives it by its number
+      LOG.debug("The identity {} named for a speaker cannot be read, it is given by its number", identityId, e);
+      return null;
+    }
+    if (identity == null || identity.isDeleted() || identity.getProfile() == null) {
+      return null;
+    }
+    return StringUtils.trimToNull(identity.getProfile().getFullName());
+  }
+
+  /**
+   * @param segment a transcript's segment, or null
+   * @return what was said, or null when the segment says nothing
+   */
+  private static String getSegmentText(JSONObject segment) {
+    return segment == null ? null : StringUtils.trimToNull(segment.optString("text", null));
+  }
+
+  /**
+   * @param segment a transcript's segment, or null
+   * @return the segment's speaker number, or null when it does not tell
+   */
+  private static String getSegmentSpeaker(JSONObject segment) {
+    return segment == null ? null : StringUtils.trimToNull(segment.optString("speaker", null));
   }
 
   /**
@@ -1078,11 +1308,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    *         so that the assistant links to it without converting
    */
   static String toMoment(long seconds) {
-    long hours = seconds / 3600;
-    long minutes = (seconds % 3600) / 60;
-    long remainder = seconds % 60;
-    String time = hours > 0 ? "%d:%02d:%02d".formatted(hours, minutes, remainder) : "%02d:%02d".formatted(minutes, remainder);
-    return "[%s · %ds]".formatted(time, seconds);
+    return TranscriptSpeakers.formatMarker(seconds);
   }
 
   /**
