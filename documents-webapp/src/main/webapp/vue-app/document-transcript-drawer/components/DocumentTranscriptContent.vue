@@ -97,7 +97,7 @@
 import {countOccurrences, formatMoment} from '../js/TranscriptSearch.js';
 import {groupByChapters} from '../js/TranscriptChapters.js';
 import TranscriptChapterFolds from '../js/TranscriptChapterFolds.js';
-import {opensSpeakerRun} from '../js/TranscriptSpeakers.js';
+import {opensSpeakerRun, speakerIdentity} from '../js/TranscriptSpeakers.js';
 
 export default {
   mixins: [TranscriptChapterFolds],
@@ -173,11 +173,7 @@ export default {
       return Object.fromEntries((this.speakers || []).map(person => [person.speaker, person]));
     },
     speakerKey() {
-      // one person named for two numbers is one run; a person and a number never compare equal
-      return speaker => {
-        const identityId = this.speakersByNumber[speaker]?.identityId;
-        return identityId ? `person:${identityId}` : `speaker:${speaker}`;
-      };
+      return speaker => speakerIdentity(speaker, this.speakersByNumber);
     },
     /**
      * Tells, sentence by sentence, whether it opens a run of its speaker, the
