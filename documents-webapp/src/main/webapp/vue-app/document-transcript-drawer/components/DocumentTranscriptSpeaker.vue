@@ -25,8 +25,10 @@
       :identity="avatarIdentity"
       :size="20"
       extra-class="text-subtitle-2" />
+    <!-- keyed by its activator: Vuetify moves the activator out of the hidden menu once, at mount, so a new activator element needs a new menu -->
     <v-menu
       v-if="!person || canEdit"
+      :key="person ? 'change' : 'name'"
       v-model="menu"
       :disabled="!canEdit || busy"
       :close-on-content-click="false"
