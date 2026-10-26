@@ -72,6 +72,12 @@ public class DocumentTranscriptionService {
   /** How long a queued or running transcription may go unchanged before its run is taken as lost. */
   static final long                            STALE_TRANSCRIPTION_MILLIS          = TranscriptionState.STALE_MILLIS;
 
+  /** The zero-width non-joiner, part of the spelling of Persian and Indic names. */
+  private static final int                     ZERO_WIDTH_NON_JOINER               = 0x200C;
+
+  /** The zero-width joiner, part of the spelling of Indic names. */
+  private static final int                     ZERO_WIDTH_JOINER                   = 0x200D;
+
   @Autowired
   private DocumentFileService                  documentFileService;
 
@@ -225,9 +231,8 @@ public class DocumentTranscriptionService {
    * @throws ObjectNotFoundException when the file does not exist or the user
    *           cannot see it
    * @throws IllegalArgumentException when the transcript tells no speakers
-   *           apart, holds no such speaker, or the name is empty once trimmed,
-   *           longer than {@link #GUEST_NAME_MAX_LENGTH} characters, or holds a
-   *           {@code |}, a line break or a control character
+   *           apart, holds no such speaker, or the name is refused by
+   *           {@link #toGuestName(String)}
    */
   public void setGuestSpeaker(String documentId, String speaker, String name, long aclIdentity) throws IllegalAccessException,
                                                                                                 ObjectNotFoundException {
@@ -269,17 +274,19 @@ public class DocumentTranscriptionService {
   }
 
   /**
-   * Validates a guest's name.
+   * Validates a guest's name, for any caller that stores or proposes one.
    *
    * @param name the name as typed
    * @return the name, trimmed
-   * @throws IllegalArgumentException when the name is empty once trimmed,
-   *           longer than {@link #GUEST_NAME_MAX_LENGTH} characters, or holds a
-   *           {@code |}, a line break or a control character
+   * @throws IllegalArgumentException when the name holds no letter or digit,
+   *           is longer than {@link #GUEST_NAME_MAX_LENGTH} characters once
+   *           trimmed, or holds a {@code |}, a line break, a control character
+   *           or a Unicode format character other than the zero-width joiner and
+   *           non-joiner
    */
-  static String toGuestName(String name) {
+  public static String toGuestName(String name) {
     String guestName = name == null ? "" : name.strip();
-    if (guestName.isEmpty() || guestName.codePointCount(0, guestName.length()) > GUEST_NAME_MAX_LENGTH
+    if (guestName.codePoints().noneMatch(Character::isLetterOrDigit) || guestName.codePointCount(0, guestName.length()) > GUEST_NAME_MAX_LENGTH
         || guestName.codePoints().anyMatch(DocumentTranscriptionService::isRefusedInName)) {
       throw new IllegalArgumentException(INVALID_NAME_MESSAGE);
     }
@@ -288,7 +295,10 @@ public class DocumentTranscriptionService {
 
   /**
    * Tells whether a character may not be part of a guest's name: the
-   * separator of the stored suggestions, a line break, or a control character.
+   * separator of the stored suggestions, a line break, a control character, or
+   * an invisible format character (a zero-width space, a bidi override), but
+   * the zero-width joiner and non-joiner, which Persian and Indic names are
+   * spelt with.
    *
    * @param codePoint the character
    * @return true when the name may not hold it
@@ -296,7 +306,7 @@ public class DocumentTranscriptionService {
   private static boolean isRefusedInName(int codePoint) {
     int type = Character.getType(codePoint);
     return codePoint == '|' || Character.isISOControl(codePoint) || type == Character.LINE_SEPARATOR
-           || type == Character.PARAGRAPH_SEPARATOR;
+           || type == Character.PARAGRAPH_SEPARATOR || type == Character.FORMAT && codePoint != ZERO_WIDTH_NON_JOINER && codePoint != ZERO_WIDTH_JOINER;
   }
 
   /**
