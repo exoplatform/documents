@@ -489,12 +489,14 @@ export default {
     },
     /**
      * Notes whether a press starts inside the drawer, before the click it
-     * leads to: what was pressed may be gone from the page by then.
+     * leads to: what was pressed may be gone from the page by then. Only the
+     * main button's press leads to a click; another one's is never noted, so
+     * that it cannot spare the next click, such as a key on a button.
      * @param {MouseEvent} event a press anywhere in the page
      * @returns {void}
      */
     notePress(event) {
-      this.pressedInside = event.isTrusted && this.isInside(event);
+      this.pressedInside = event.isTrusted && event.button === 0 && this.isInside(event);
     },
     /**
      * Tells whether an event happened in the drawer, in what it shows over
