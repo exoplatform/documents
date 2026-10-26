@@ -19,12 +19,11 @@ import {awaitsChapters, lacksChapters} from './TranscriptChapters.js';
 
 /**
  * The request for a transcript's chapters, for the views that show a
- * transcript (the details' Transcript tab, the transcript drawer). A
- * transcript opened with none, just made or done before chapters were switched
- * on, asks for them once. When the server answers they are coming, the view
- * reads its state again through its own pollForChapters(), and the rest of the
- * page is told by documents-transcript-chapters-coming, with the file's id and
- * when (the time awaitsChapters counts its wait from).
+ * transcript or its chapters (the details' Transcript tab, the transcript
+ * drawer, the full view's timeline). A transcript opened with none, just made
+ * or done before chapters were switched on, asks for them once. When the
+ * server answers they are coming, the view reads its state again through its
+ * own pollForChapters().
  */
 export default {
   data: () => ({
@@ -57,9 +56,6 @@ export default {
         .then(coming => {
           if (coming && documentId === this.documentId) {
             this.chaptersComingSince = Date.now();
-            document.dispatchEvent(new CustomEvent('documents-transcript-chapters-coming', {
-              detail: {documentId, comingSince: this.chaptersComingSince},
-            }));
             this.pollForChapters();
           }
         })
