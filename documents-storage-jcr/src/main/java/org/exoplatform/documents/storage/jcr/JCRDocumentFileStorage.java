@@ -4248,11 +4248,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
 
   /**
-   * Reads the person each named speaker of a file's transcript is.
+   * Reads who each named speaker of a file's transcript is.
    *
    * @param node the file
-   * @return the identity id of each named speaker, by speaker number; empty when
-   *         none is named
+   * @return the stored value of each named speaker, by speaker number: an
+   *         identity id, or a guest's name after
+   *         {@link org.exoplatform.documents.model.TranscriptSpeakers#GUEST_PREFIX};
+   *         empty when none is named
    * @throws RepositoryException when the file cannot be read
    */
   private Map<String, String> readTranscriptionSpeakers(Node node) throws RepositoryException {
