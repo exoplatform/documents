@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.TranscriptionStatus;
+import org.exoplatform.documents.model.TranscriptSpeakers;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -62,6 +63,11 @@ public class DocumentTranscriptionService {
   public static final String                   UNKNOWN_SPEAKER_MESSAGE             = "documents.transcription.speaker.unknown";
 
   public static final String                   NOT_A_USER_MESSAGE                  = "documents.transcription.speaker.notAUser";
+
+  public static final String                   INVALID_NAME_MESSAGE                = "documents.transcription.speaker.invalidName";
+
+  /** The longest guest name a speaker can be given, in characters, once trimmed. */
+  public static final int                      GUEST_NAME_MAX_LENGTH               = 80;
 
   /** How long a queued or running transcription may go unchanged before its run is taken as lost. */
   static final long                            STALE_TRANSCRIPTION_MILLIS          = TranscriptionState.STALE_MILLIS;
@@ -201,6 +207,53 @@ public class DocumentTranscriptionService {
    */
   public void setSpeaker(String documentId, String speaker, Long identityId, long aclIdentity) throws IllegalAccessException,
                                                                                                 ObjectNotFoundException {
+    checkNameable(documentId, speaker, identityId, aclIdentity);
+    documentFileService.setTranscriptionSpeaker(documentId, speaker, identityId == null ? null : String.valueOf(identityId), aclIdentity);
+  }
+
+  /**
+   * Says that a speaker of a file's transcript is a guest with no account,
+   * known by a plain name, for anyone who can edit the file (EXO-92123). The
+   * name is stored as {@link TranscriptSpeakers#GUEST_PREFIX} followed by the
+   * trimmed name, with no escaping: whoever shows it escapes it.
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param name the guest's name
+   * @param aclIdentity the identity id of the user naming it
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   * @throws IllegalArgumentException when the transcript tells no speakers
+   *           apart, holds no such speaker, or the name is empty once trimmed,
+   *           longer than {@link #GUEST_NAME_MAX_LENGTH} characters, or holds a
+   *           {@code |}, a line break or a control character
+   */
+  public void setGuestSpeaker(String documentId, String speaker, String name, long aclIdentity) throws IllegalAccessException,
+                                                                                                ObjectNotFoundException {
+    checkNameable(documentId, speaker, null, aclIdentity);
+    String guestName = toGuestName(name);
+    documentFileService.setTranscriptionSpeaker(documentId, speaker, TranscriptSpeakers.GUEST_PREFIX + guestName, aclIdentity);
+  }
+
+  /**
+   * Checks that a speaker of a file's transcript may be named by a user: the
+   * user can edit the file, the transcript tells this speaker apart, and the
+   * person is an enabled user.
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param identityId the identity id of the person, or null to unname the
+   *          speaker, or to name it after a guest
+   * @param aclIdentity the identity id of the user naming it
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   * @throws IllegalArgumentException when the transcript tells no speakers
+   *           apart, holds no such speaker, or the person is no enabled user
+   */
+  private void checkNameable(String documentId, String speaker, Long identityId, long aclIdentity) throws IllegalAccessException,
+                                                                                                 ObjectNotFoundException {
     TranscriptionState state = getState(documentId, aclIdentity);
     if (!canNameSpeakers(documentId, aclIdentity)) {
       throw new IllegalAccessException("User may not name the speakers of file " + documentId);
@@ -213,7 +266,37 @@ public class DocumentTranscriptionService {
     } else if (identityId != null && !isEnabledUser(identityId)) {
       throw new IllegalArgumentException(NOT_A_USER_MESSAGE);
     }
-    documentFileService.setTranscriptionSpeaker(documentId, speaker, identityId == null ? null : String.valueOf(identityId), aclIdentity);
+  }
+
+  /**
+   * Validates a guest's name.
+   *
+   * @param name the name as typed
+   * @return the name, trimmed
+   * @throws IllegalArgumentException when the name is empty once trimmed,
+   *           longer than {@link #GUEST_NAME_MAX_LENGTH} characters, or holds a
+   *           {@code |}, a line break or a control character
+   */
+  static String toGuestName(String name) {
+    String guestName = name == null ? "" : name.strip();
+    if (guestName.isEmpty() || guestName.codePointCount(0, guestName.length()) > GUEST_NAME_MAX_LENGTH
+        || guestName.codePoints().anyMatch(DocumentTranscriptionService::isRefusedInName)) {
+      throw new IllegalArgumentException(INVALID_NAME_MESSAGE);
+    }
+    return guestName;
+  }
+
+  /**
+   * Tells whether a character may not be part of a guest's name: the
+   * separator of the stored suggestions, a line break, or a control character.
+   *
+   * @param codePoint the character
+   * @return true when the name may not hold it
+   */
+  private static boolean isRefusedInName(int codePoint) {
+    int type = Character.getType(codePoint);
+    return codePoint == '|' || Character.isISOControl(codePoint) || type == Character.LINE_SEPARATOR
+           || type == Character.PARAGRAPH_SEPARATOR;
   }
 
   /**
