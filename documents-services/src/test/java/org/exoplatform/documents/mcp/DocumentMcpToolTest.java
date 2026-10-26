@@ -752,10 +752,11 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * Two speaker numbers named after the same person who is gone are each a
-   * speaker of their own, by their number, as the transcript's other readers
-   * show them, in the list as in the lines and the turns; an identity that
-   * cannot be read gives its speaker by its number (EXO-92123).
+   * Two speaker numbers named after the same person who is gone, a deleted
+   * identity still carrying its full name, are each a speaker of their own, by
+   * their number, as the transcript's other readers show them, in the list as
+   * in the lines and the turns; an identity that cannot be read gives its
+   * speaker by its number (EXO-92123).
    */
   @Test
   public void getDocumentTranscriptionByIdGivesTheNumbersOfOneGonePersonByTheirNumber() throws Exception {
@@ -765,6 +766,8 @@ public class DocumentMcpToolTest {
         [{"start":0,"end":2,"text":"Bonjour.","speaker":"1"},{"start":2,"end":5,"text":"Encore moi.","speaker":"4"},\
         {"start":5,"end":6,"text":"Merci.","speaker":"2"}]""");
     when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong())).thenReturn(Map.of("1", "404", "4", "404", "2", "26"));
+    mockFullName(404L, "Gone Person");
+    when(identityManager.getIdentity(404L).isDeleted()).thenReturn(true);
     when(identityManager.getIdentity(26L)).thenThrow(new IllegalStateException("social"));
 
     assertEquals("""
