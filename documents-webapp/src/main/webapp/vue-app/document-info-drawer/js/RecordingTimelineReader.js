@@ -16,7 +16,7 @@
  */
 
 import TranscriptSpeakerNaming from '../../document-transcript-drawer/js/TranscriptSpeakerNaming.js';
-import {awaitsChapters} from '../../document-transcript-drawer/js/TranscriptChapters.js';
+import TranscriptChaptersRequest from '../../document-transcript-drawer/js/TranscriptChaptersRequest.js';
 
 /** How often the timeline reads the state again while the transcript or its chapters may still come, in milliseconds. */
 const POLLING_MILLIS = 15000;
@@ -29,17 +29,18 @@ const STALE_MILLIS = 3600000;
  * segments, its chapters and the speakers someone named, with the names they
  * go by. The component using it has a documentId prop; it names the speakers
  * as the transcript does, telling a failure in an alert, follows the names
- * given there, and reads the state again while the transcript is made or its
- * chapters may still come, as the Transcript tab does.
+ * given there, asks once for the chapters of a transcript that has none, and
+ * reads the state again while the transcript is made or its chapters may
+ * still come, as the Transcript tab does.
  */
 export default {
-  mixins: [TranscriptSpeakerNaming],
+  mixins: [TranscriptSpeakerNaming, TranscriptChaptersRequest],
   data: () => ({
     segments: null,
     rawChapters: null,
     lastRead: 0,
-    chaptersAwaitedSince: null,
     pollingTimer: null,
+    closed: false,
   }),
   computed: {
     /** @returns {Object} the persons someone named, by their speaker's number */
@@ -60,35 +61,29 @@ export default {
         this.speakers = null;
         this.canNameSpeakers = false;
         this.speakersRead++;
-        this.chaptersAwaitedSince = Date.now();
+        this.resetChaptersRequest();
         this.read();
       },
     },
-  },
-  /**
-   * Follows the chapters the Transcript tab asks for.
-   * @returns {void}
-   */
-  created() {
-    document.addEventListener('documents-transcript-chapters-requested', this.awaitChapters);
   },
   /**
    * Stops reading: no read under way changes the timeline any more.
    * @returns {void}
    */
   beforeDestroy() {
+    this.closed = true;
     this.lastRead++;
     this.speakersRead++;
     this.stopPolling();
-    document.removeEventListener('documents-transcript-chapters-requested', this.awaitChapters);
   },
   methods: {
     /**
      * Reads what the timeline shows of a transcribed recording: its timed
      * segments, its chapters and, on the first read of its segments, the
      * speakers someone named. A recording not transcribed yet, or a read that
-     * fails, shows no timeline; only the latest read changes it. The state is
-     * read again while the transcription runs or the chapters may still come.
+     * fails, shows no timeline; only the latest read changes it. A transcript
+     * with no chapters asks for them once. The state is read again while the
+     * transcription runs or the chapters may still come.
      * @returns {Promise} resolved once read
      */
     read() {
@@ -107,6 +102,7 @@ export default {
           if (this.mayChange(state)) {
             this.pollingTimer = window.setTimeout(this.read, POLLING_MILLIS);
           }
+          this.askChapters(documentId, state);
           if (state?.status !== 'DONE' || !state.hasSegments) {
             return null;
           }
@@ -129,29 +125,26 @@ export default {
         .catch(() => null);
     },
     /**
-     * Waits for the chapters the Transcript tab just asked for, reading the
-     * state again until they come or the wait for them ends.
-     * @param {CustomEvent} event its detail holds the file's documentId
+     * Reads the state again for the chapters the server said are coming,
+     * unless the timeline closed while it asked for them.
      * @returns {void}
      */
-    awaitChapters(event) {
-      if (event?.detail?.documentId === this.documentId) {
-        this.chaptersAwaitedSince = Date.now();
+    pollForChapters() {
+      if (!this.closed) {
         this.read();
       }
     },
     /**
      * Tells whether what the timeline shows may still change: a transcription
      * waiting in the queue or running and still moving, or a transcript whose
-     * chapters may still come, made with it or asked for by the Transcript tab
-     * since the timeline opened.
+     * chapters the server said are coming may still come.
      * @param {Object} state the transcription state
      * @returns {boolean} true when the state is worth reading again
      */
     mayChange(state) {
       return state?.status === 'QUEUED'
         || (state?.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS)
-        || awaitsChapters(state, this.chaptersAwaitedSince);
+        || this.awaitingChapters(state);
     },
     /**
      * Stops reading the state again.
