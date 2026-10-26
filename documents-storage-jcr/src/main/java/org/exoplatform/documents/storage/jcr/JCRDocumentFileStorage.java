@@ -2925,6 +2925,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     if (StringUtils.isBlank(chapters)) {
       throw new IllegalArgumentException("chapters are mandatory");
     }
+    ReentrantLock lock = speakerLock(documentId);
+    // the chapters mixin is written with the file's whole mixin list: never while a speaker is being named
+    lock.lock();
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
     try {
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -2944,6 +2947,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error writing the transcript chapters of media file '%s'".formatted(documentId), e);
     } finally {
       sessionProvider.close();
+      lock.unlock();
     }
   }
 
