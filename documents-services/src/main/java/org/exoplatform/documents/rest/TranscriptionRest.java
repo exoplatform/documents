@@ -390,7 +390,9 @@ public class TranscriptionRest {
    * (EXO-92126). A proposal naming a person deleted since is left out, and so
    * is one still waiting for a confirmation that names a person disabled since,
    * who can no longer be named; an applied one stays, as it explains a name the
-   * speaker still bears.
+   * speaker still bears. A proposal made by elimination comes with the full
+   * name of the person its other voice is taken to be, and is left out once
+   * that person is deleted, since nothing is left to explain it.
    *
    * @param request the HTTP request, which names the caller
    * @param documentId the file's UUID
@@ -413,7 +415,10 @@ public class TranscriptionRest {
       for (TranscriptionSpeakerProposal proposal : documentTranscriptionService.getSpeakerProposals(documentId,
                                                                                                     getCurrentIdentityId(request))) {
         Identity person = identityManager.getIdentity(String.valueOf(proposal.identityId()));
-        if (person != null && !person.isDeleted() && (proposal.autoApplied() || person.isEnable())) {
+        Identity premise = proposal.premiseSpeaker() == null
+            || proposal.premiseIdentityId() == null ? null : identityManager.getIdentity(String.valueOf(proposal.premiseIdentityId()));
+        boolean explained = proposal.premiseSpeaker() == null || premise != null && !premise.isDeleted();
+        if (person != null && !person.isDeleted() && (proposal.autoApplied() || person.isEnable()) && explained) {
           proposals.add(new TranscriptionSpeakerProposalEntity(proposal.speaker(),
                                                                person.getId(),
                                                                person.getRemoteId(),
@@ -422,7 +427,8 @@ public class TranscriptionRest {
                                                                proposal.strong(),
                                                                proposal.autoApplied(),
                                                                proposal.quotes(),
-                                                               proposal.premiseSpeaker()));
+                                                               proposal.premiseSpeaker(),
+                                                               premise == null ? null : premise.getProfile().getFullName()));
         }
       }
       return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(proposals);
