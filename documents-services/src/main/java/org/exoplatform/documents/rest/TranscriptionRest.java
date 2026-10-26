@@ -36,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.model.TranscriptSpeakers;
 import org.exoplatform.documents.model.TranscriptionBusyException;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakerEntity;
@@ -76,6 +77,8 @@ public class TranscriptionRest {
   private static final String          NO_CHAPTERS_MESSAGE = "documents.transcription.noChapters";
 
   private static final String          BUSY_MESSAGE        = "documents.transcription.speaker.busy";
+
+  private static final String          IDENTITY_OR_NAME_MESSAGE = "documents.transcription.speaker.identityOrName";
 
   @Autowired
   private DocumentTranscriptionService documentTranscriptionService;
@@ -283,14 +286,19 @@ public class TranscriptionRest {
     try {
       long identityId = getCurrentIdentityId(request);
       List<TranscriptionSpeakerEntity> speakers = new ArrayList<>();
-      documentTranscriptionService.getSpeakers(documentId, identityId).forEach((speaker, personId) -> {
-        Identity person = identityManager.getIdentity(personId);
-        if (person != null && !person.isDeleted()) {
-          speakers.add(new TranscriptionSpeakerEntity(speaker,
-                                                      personId,
-                                                      person.getRemoteId(),
-                                                      person.getProfile().getFullName(),
-                                                      person.getProfile().getAvatarUrl()));
+      documentTranscriptionService.getSpeakers(documentId, identityId).forEach((speaker, value) -> {
+        if (TranscriptSpeakers.isGuest(value)) {
+          speakers.add(new TranscriptionSpeakerEntity(speaker, null, null, TranscriptSpeakers.guestName(value), null, true));
+        } else {
+          Identity person = identityManager.getIdentity(value);
+          if (person != null && !person.isDeleted()) {
+            speakers.add(new TranscriptionSpeakerEntity(speaker,
+                                                        value,
+                                                        person.getRemoteId(),
+                                                        person.getProfile().getFullName(),
+                                                        person.getProfile().getAvatarUrl(),
+                                                        false));
+          }
         }
       });
       return ResponseEntity.ok()
@@ -305,12 +313,15 @@ public class TranscriptionRest {
   }
 
   /**
-   * Says which person a speaker of a file's transcript is (EXO-92123).
+   * Says who a speaker of a file's transcript is (EXO-92123): a person with an
+   * account, by identity id, or a guest, by a plain name; exactly one of the
+   * two.
    *
    * @param request the HTTP request, which names the caller
    * @param documentId the file's UUID
    * @param speaker the speaker's number in the transcript
-   * @param identityId the person's identity id
+   * @param identityId the person's identity id, or null for a guest
+   * @param name the guest's name, or null for a person
    * @return 204 once the speaker is named
    */
   @PutMapping(path = "{documentId}/speakers/{speaker}")
@@ -318,7 +329,7 @@ public class TranscriptionRest {
   @Operation(summary = "Name a speaker of the transcript of an audio or video file", method = "PUT")
   @ApiResponses(value = {
     @ApiResponse(responseCode = "204", description = "Speaker named"),
-    @ApiResponse(responseCode = "400", description = "No speakers in the transcript, no such speaker, or the person is no enabled user"),
+    @ApiResponse(responseCode = "400", description = "Not exactly one of identityId and name, no speakers in the transcript, no such speaker, the person is no enabled user, or the guest name is refused"),
     @ApiResponse(responseCode = "403", description = "The file cannot be edited by the caller"),
     @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
     @ApiResponse(responseCode = "409", description = "Another change of the file held the naming up: try again"),
@@ -330,10 +341,16 @@ public class TranscriptionRest {
                                          @Parameter(description = "The speaker's number in the transcript", required = true)
                                          @PathVariable("speaker")
                                          String speaker,
-                                         @Parameter(description = "The person's identity id", required = true)
-                                         @RequestParam("identityId")
-                                         long identityId) {
-    return updateSpeaker(request, documentId, speaker, identityId);
+                                         @Parameter(description = "The person's identity id, for a person with an account")
+                                         @RequestParam(name = "identityId", required = false)
+                                         Long identityId,
+                                         @Parameter(description = "The guest's name, for a guest with no account: trimmed, at most 80 characters, no '|', line break or control character")
+                                         @RequestParam(name = "name", required = false)
+                                         String name) {
+    if ((identityId == null) == (name == null)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, IDENTITY_OR_NAME_MESSAGE);
+    }
+    return updateSpeaker(request, documentId, speaker, identityId, name);
   }
 
   /**
@@ -362,7 +379,7 @@ public class TranscriptionRest {
                                            @Parameter(description = "The speaker's number in the transcript", required = true)
                                            @PathVariable("speaker")
                                            String speaker) {
-    return updateSpeaker(request, documentId, speaker, null);
+    return updateSpeaker(request, documentId, speaker, null, null);
   }
 
   /**
@@ -404,12 +421,22 @@ public class TranscriptionRest {
    * @param request the HTTP request, which names the caller
    * @param documentId the file's UUID
    * @param speaker the speaker's number in the transcript
-   * @param identityId the person's identity id, or null to unname
+   * @param identityId the person's identity id, or null for a guest or to
+   *          unname
+   * @param name the guest's name, or null for a person or to unname
    * @return 204 once done
    */
-  private ResponseEntity<Void> updateSpeaker(HttpServletRequest request, String documentId, String speaker, Long identityId) {
+  private ResponseEntity<Void> updateSpeaker(HttpServletRequest request,
+                                             String documentId,
+                                             String speaker,
+                                             Long identityId,
+                                             String name) {
     try {
-      documentTranscriptionService.setSpeaker(documentId, speaker, identityId, getCurrentIdentityId(request));
+      if (name == null) {
+        documentTranscriptionService.setSpeaker(documentId, speaker, identityId, getCurrentIdentityId(request));
+      } else {
+        documentTranscriptionService.setGuestSpeaker(documentId, speaker, name, getCurrentIdentityId(request));
+      }
       return ResponseEntity.noContent().build();
     } catch (TranscriptionBusyException e) {
       LOG.debug("Naming a speaker of file {} was held up by another change of it", documentId, e);
