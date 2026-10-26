@@ -18,13 +18,19 @@ package org.exoplatform.documents.rest.model;
 
 /**
  * A speaker of a transcript whom someone named, as the REST answers it
- * (EXO-92123): the person, for every reader of the file to see.
+ * (EXO-92123): the person or the guest, for every reader of the file to see.
  *
  * @param speaker the speaker's number in the transcript
- * @param identityId the person's identity id
- * @param username the person's user name
- * @param fullName the person's full name
- * @param avatarUrl the person's avatar
+ * @param identityId the person's identity id, null for a guest
+ * @param username the person's user name, null for a guest
+ * @param fullName the person's full name, or the guest's name
+ * @param avatarUrl the person's avatar, null for a guest
+ * @param guest true for a guest with no account, named by a plain name
  */
-public record TranscriptionSpeakerEntity(String speaker, String identityId, String username, String fullName, String avatarUrl) {
+public record TranscriptionSpeakerEntity(String speaker,
+                                         String identityId,
+                                         String username,
+                                         String fullName,
+                                         String avatarUrl,
+                                         boolean guest) {
 }
