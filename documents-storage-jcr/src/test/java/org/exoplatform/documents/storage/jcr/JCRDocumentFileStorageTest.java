@@ -3601,6 +3601,32 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * A person who names, renames or unnames a speaker drops the proposal the
+   * platform applied to it, in the same save: the « named from the call's
+   * attendees » mark never shows on a name a person gave. A proposal still
+   * waiting for a person is kept.
+   */
+  @Test
+  public void aPersonNamingASpeakerDropsTheProposalThePlatformAppliedToIt() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSpeakers(node, "1=42");
+    mockSuggestions(node, "1=42|strong|auto|1|", "2=43|likely|manual|2|");
+
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", null, viewer);
+
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION, new String[] { "2=43|likely|manual|2|" });
+    verify(session).save();
+
+    mockSuggestions(node, "2=43|likely|manual|2|");
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "2", "44", viewer);
+
+    verify(node, times(1)).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION), any(String[].class));
+  }
+
+  /**
    * A user who cannot edit the file names no speaker.
    */
   @Test
@@ -3851,9 +3877,10 @@ public class JCRDocumentFileStorageTest {
    * A proposal names its speaker, as a user who can edit the file, only when
    * everything it depends on still holds when the name is written: the same
    * transcript, the proposal still stored (not dismissed), neither the speaker
-   * nor the person named, and for one made by elimination its other voice still
-   * named after the person it was taken to be. The name and the proposal's
-   * applied mark are written in one save under the file's lock.
+   * nor the person named. One made by elimination is never applied, even while
+   * its other voice is still named after the person it was taken to be. The
+   * name and the proposal's applied mark are written in one save under the
+   * file's lock.
    */
   @Test
   public void applyingAProposalRereadsEverythingItDependsOn() throws Exception {
@@ -3862,19 +3889,19 @@ public class JCRDocumentFileStorageTest {
     Node node = mockMediaNode(session, "video/mp4");
     mockSpeakers(node, "1=42");
     mockDoneTranscript(node, 1000L);
-    mockSuggestions(node, "2=43|strong|manual|1|1=42", "3=44|strong|manual|2|", "4=42|strong|manual|2|", "1=44|strong|manual|2|");
-    TranscriptionSpeakerSuggestion byElimination = new TranscriptionSpeakerSuggestion("2", 43, true, false, List.of(1), "1", 42L);
+    mockSuggestions(node, "2=43|strong|manual|1|", "3=44|strong|manual|2|", "4=42|strong|manual|2|", "1=44|strong|manual|2|", "6=46|strong|manual|1|1=42");
+    TranscriptionSpeakerSuggestion strong = new TranscriptionSpeakerSuggestion("2", 43, true, false, List.of(1));
     java.util.concurrent.atomic.AtomicBoolean lockedWhileWriting = new java.util.concurrent.atomic.AtomicBoolean();
     doAnswer(invocation -> {
       lockedWhileWriting.set(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
       return null;
     }).when(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
 
-    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", byElimination, 1000L, owner));
+    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", strong, 1000L, owner));
 
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
     assertFalse("Expected no voice of a transcript made since named",
-                jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", byElimination, 999L, owner));
+                jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", strong, 999L, owner));
     assertFalse("Expected a dismissed proposal not applied",
                 jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
                                                                            new TranscriptionSpeakerSuggestion("5", 45, true, false, List.of()),
@@ -3895,17 +3922,17 @@ public class JCRDocumentFileStorageTest {
                                                                            new TranscriptionSpeakerSuggestion("4", 42, true, false, List.of(2)),
                                                                            1000L,
                                                                            owner));
-    assertFalse("Expected a proposal by elimination refused once its premise fails",
+    assertFalse("Expected a proposal by elimination never applied, even while its premise holds",
                 jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
-                                                                           new TranscriptionSpeakerSuggestion("2", 43, true, false, List.of(1), "1", 41L),
+                                                                           new TranscriptionSpeakerSuggestion("6", 46, true, false, List.of(1), "1", 42L),
                                                                            1000L,
                                                                            owner));
     verify(session, never()).save();
 
-    assertTrue(jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", byElimination, 1000L, owner));
+    assertTrue(jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", strong, 1000L, owner));
     verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=42", "2=43" });
     verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION,
-                             new String[] { "2=43|strong|auto|1|1=42", "3=44|strong|manual|2|", "4=42|strong|manual|2|", "1=44|strong|manual|2|" });
+                             new String[] { "2=43|strong|auto|1|", "3=44|strong|manual|2|", "4=42|strong|manual|2|", "1=44|strong|manual|2|", "6=46|strong|manual|1|1=42" });
     verify(session).save();
     assertTrue("Expected the name written under the file's lock", lockedWhileWriting.get());
     assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
