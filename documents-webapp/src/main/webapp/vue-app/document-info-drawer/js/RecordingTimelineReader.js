@@ -25,19 +25,20 @@ const POLLING_MILLIS = 15000;
 const STALE_MILLIS = 3600000;
 
 /**
- * The reading of what a recording's timeline shows (EXO-92127): its timed
- * segments, its chapters and the speakers someone named, with the names they
- * go by. The component using it has a documentId prop; it names the speakers
- * as the transcript does, telling a failure in an alert, follows the names
- * given there, asks once for the chapters of a transcript that has none, and
- * reads the state again while the transcript is made or its chapters may
- * still come, as the Transcript tab does.
+ * The reading of what a recording's timeline shows (EXO-92127): its stored
+ * duration, its timed segments, its chapters and the speakers someone named,
+ * with the names they go by. The component using it has a documentId prop; it
+ * names the speakers as the transcript does, telling a failure in an alert,
+ * follows the names given there, asks once for the chapters of a transcript
+ * that has none, and reads the state again while the transcript is made or
+ * its chapters may still come, as the Transcript tab does.
  */
 export default {
   mixins: [TranscriptSpeakerNaming, TranscriptChaptersRequest],
   data: () => ({
     segments: null,
     rawChapters: null,
+    durationSeconds: null,
     lastRead: 0,
     pollingTimer: null,
     closed: false,
@@ -58,6 +59,7 @@ export default {
       handler() {
         this.segments = null;
         this.rawChapters = null;
+        this.durationSeconds = null;
         this.speakers = null;
         this.canNameSpeakers = false;
         this.speakersRead++;
@@ -99,6 +101,7 @@ export default {
           if (read !== this.lastRead) {
             return null;
           }
+          this.durationSeconds = state?.durationSeconds ?? null;
           if (this.mayChange(state)) {
             this.pollingTimer = window.setTimeout(this.read, POLLING_MILLIS);
           }
