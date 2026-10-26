@@ -46,8 +46,7 @@
           icon
           small
           v-on="on"
-          @keydown.space.stop
-          @keydown.esc="closeMenuFromActivator">
+          @keydown.space.stop>
           <v-icon size="14">fas fa-pen</v-icon>
         </v-btn>
         <span
@@ -59,7 +58,6 @@
           :tabindex="canEdit ? 0 : null"
           class="d-inline-flex align-center"
           v-on="on"
-          @keydown.esc="closeMenuFromActivator"
           @keydown.enter.stop.prevent="openFromKeyboard"
           @keydown.space.stop.prevent="openFromKeyboard">
           <v-chip
@@ -70,11 +68,9 @@
           </v-chip>
         </span>
       </template>
-      <!-- on capture: the person search answers Escape itself; stopped, so that the views around close not with the menu -->
       <v-card
         class="pa-3"
-        flat
-        @keydown.esc.capture.stop="closeMenu">
+        flat>
         <div class="text-subtitle-2 mb-2">{{ $t('documents.transcript.speaker.who', {0: speaker}) }}</div>
         <identity-suggester
           v-if="menu"
@@ -178,10 +174,21 @@ export default {
       }
     },
     menu(menu) {
-      if (!menu) {
+      // on the window and on capture, wherever the focus is: before the person search, which answers Escape itself, and the views around, which close on it
+      if (menu) {
+        window.addEventListener('keydown', this.closeMenuOnEscape, true);
+      } else {
+        window.removeEventListener('keydown', this.closeMenuOnEscape, true);
         this.chosen = null;
       }
     },
+  },
+  /**
+   * Stops listening for Escape when the speaker goes while its menu is open.
+   * @returns {void}
+   */
+  beforeDestroy() {
+    window.removeEventListener('keydown', this.closeMenuOnEscape, true);
   },
   methods: {
     /**
@@ -204,15 +211,14 @@ export default {
       this.$nextTick(() => this.$el?.querySelector?.('.documentTranscriptSpeakerChange, [role=button]')?.focus());
     },
     /**
-     * Closes the open menu on Escape from the chip or the pencil, the key then
-     * going no further; with the menu closed, Escape goes on to the views
-     * around.
+     * Closes the open menu on Escape, the key then going no further; with the
+     * menu closed, Escape goes on to the views around.
      *
      * @param {KeyboardEvent} event the key
      * @returns {void}
      */
-    closeMenuFromActivator(event) {
-      if (this.menu) {
+    closeMenuOnEscape(event) {
+      if (event.key === 'Escape') {
         event.stopPropagation();
         this.closeMenu();
       }
