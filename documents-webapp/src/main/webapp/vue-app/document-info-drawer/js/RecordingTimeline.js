@@ -189,14 +189,17 @@ export function itemDescription(name, label, from, to) {
  * The blocks of the chapters on their track, in the colours the transcript
  * gives them: every other block is a light tint of its colour, so two
  * chapters side by side differ by lightness and not by hue alone. A block's
- * caption is white where white reads on its colour, dark otherwise.
+ * caption is white where white reads on its colour, the colour the page gives
+ * a theme colour, dark otherwise.
  *
  * @param {Array<Object>} chapters the spans, as chapterSpans gives them
  * @param {Function} describe gives a chapter's tooltip and accessible label,
  *          as {title, label}
+ * @param {Function} readProperty gives a CSS custom property's value on the
+ *          page, the page's own by default
  * @returns {Array<Object>} the track's items
  */
-export function chapterItems(chapters, describe) {
+export function chapterItems(chapters, describe, readProperty = pageProperty) {
   return (chapters || []).map(chapter => {
     const solid = chapter.position % 2 === 0;
     return {
@@ -204,7 +207,7 @@ export function chapterItems(chapters, describe) {
       ...describe(chapter),
       key: `chapter-${chapter.position}`,
       caption: chapter.title,
-      text: solid && readsWhite(chapter.color) && 'white--text' || null,
+      text: solid && readsWhite(resolveColor(chapter.color, readProperty)) && 'white--text' || null,
       style: {backgroundColor: solid ? chapter.color : `${chapter.color}33`},
     };
   });
@@ -238,6 +241,33 @@ export function turnItems(lane, background, describe) {
  */
 export function turnKey(turn) {
   return `${turn.speaker}-${turn.start}`;
+}
+
+/**
+ * The colour a CSS colour stands for: a custom property's value on the page,
+ * or the fallback it is written with when the page sets none.
+ *
+ * @param {string} color the colour, as #rrggbb or var(--name, #rrggbb)
+ * @param {Function} readProperty gives a CSS custom property's value on the page
+ * @returns {string} the colour itself, the property's value, or its fallback
+ */
+export function resolveColor(color, readProperty = pageProperty) {
+  const property = /^var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)$/.exec(color || '');
+  if (!property) {
+    return color;
+  }
+  return (readProperty(property[1]) || '').trim() || (property[2] || '').trim() || null;
+}
+
+/**
+ * The value of a CSS custom property on the page, where the site's branding
+ * sets the theme colours.
+ *
+ * @param {string} name the property's name, with its leading dashes
+ * @returns {string} its value, empty when unset
+ */
+function pageProperty(name) {
+  return typeof document === 'undefined' ? '' : window.getComputedStyle(document.documentElement).getPropertyValue(name);
 }
 
 /**
