@@ -104,7 +104,7 @@ export default {
     },
     /**
      * Names a speaker after the person proposed for it, then reads the named
-     * speakers again.
+     * speakers again and tells the other views of the file.
      *
      * @param {{speaker: string, identityId: string}} proposal the proposal
      * @returns {Promise<void>} resolved once done
@@ -116,7 +116,7 @@ export default {
       const documentId = this.documentId;
       this.savingSpeaker = speaker;
       return this.$transcriptionService.setSpeaker(documentId, speaker, identityId)
-        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
+        .then(() => this.reloadSpeakers(documentId).then(() => this.announceSpeakers(documentId)), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
     },
     /**
