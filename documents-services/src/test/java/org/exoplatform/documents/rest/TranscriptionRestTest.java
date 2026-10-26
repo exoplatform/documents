@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
@@ -186,7 +187,7 @@ class TranscriptionRestTest {
    */
   @Test
   void theNamedSpeakersComeWithTheirPerson_andWhetherTheCallerMayNameThem() throws Exception {
-    when(documentTranscriptionService.getSpeakers(DOCUMENT_ID, 7L)).thenReturn(new TreeMap<>(Map.of("1", "42", "2", "43")));
+    when(documentTranscriptionService.getSpeakers(DOCUMENT_ID, 7L)).thenReturn(new TreeMap<>(Map.of("1", "42", "2", "43", "3", "name:Jean-Luc <b>")));
     when(documentTranscriptionService.canNameSpeakers(DOCUMENT_ID, 7L)).thenReturn(true);
     Identity julien = mock(Identity.class);
     Profile profile = mock(Profile.class);
@@ -204,8 +205,10 @@ class TranscriptionRestTest {
 
     assertEquals("no-store", answer.getHeaders().getCacheControl());
     assertTrue(answer.getBody().canEdit());
-    assertEquals(List.of(new TranscriptionSpeakerEntity("1", "42", "julien", "Julien Dupont", "/avatar/julien")),
+    assertEquals(List.of(new TranscriptionSpeakerEntity("1", "42", "julien", "Julien Dupont", "/avatar/julien", false),
+                         new TranscriptionSpeakerEntity("3", null, null, "Jean-Luc <b>", null, true)),
                  answer.getBody().speakers());
+    verify(identityManager, never()).getIdentity("name:Jean-Luc <b>");
   }
 
   /**
@@ -214,7 +217,7 @@ class TranscriptionRestTest {
    */
   @Test
   void namingASpeakerAnswersItsStatus() throws Exception {
-    assertEquals(HttpStatus.NO_CONTENT, rest.setSpeaker(request, DOCUMENT_ID, "1", 42L).getStatusCode());
+    assertEquals(HttpStatus.NO_CONTENT, rest.setSpeaker(request, DOCUMENT_ID, "1", 42L, null).getStatusCode());
     verify(documentTranscriptionService).setSpeaker(DOCUMENT_ID, "1", 42L, 7L);
 
     assertEquals(HttpStatus.NO_CONTENT, rest.unsetSpeaker(request, DOCUMENT_ID, "1").getStatusCode());
@@ -222,19 +225,58 @@ class TranscriptionRestTest {
 
     doThrow(new IllegalArgumentException("documents.transcription.speaker.unknown")).when(documentTranscriptionService)
                                                                                     .setSpeaker(DOCUMENT_ID, "9", 42L, 7L);
-    ResponseStatusException refused = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "9", 42L));
+    ResponseStatusException refused = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "9", 42L, null));
     assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
     assertEquals("documents.transcription.speaker.unknown", refused.getReason());
 
     doThrow(new TranscriptionBusyException("held up")).when(documentTranscriptionService).setSpeaker(DOCUMENT_ID, "3", 42L, 7L);
-    ResponseStatusException busy = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "3", 42L));
+    ResponseStatusException busy = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "3", 42L, null));
     assertEquals(HttpStatus.CONFLICT, busy.getStatusCode());
     assertEquals("documents.transcription.speaker.busy", busy.getReason());
 
     doThrow(new IllegalAccessException("john may not edit /x")).when(documentTranscriptionService).setSpeaker(DOCUMENT_ID, "2", 42L, 7L);
-    ResponseStatusException forbidden = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "2", 42L));
+    ResponseStatusException forbidden = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "2", 42L, null));
     assertEquals(HttpStatus.FORBIDDEN, forbidden.getStatusCode());
     assertEquals("documents.transcription.forbidden", forbidden.getReason(), "Expected no repository path in the answer");
+  }
+
+  /**
+   * A guest is named by a plain name, handed to the service as typed: the
+   * service trims and validates it (EXO-92123).
+   */
+  @Test
+  void namingASpeakerAfterAGuestAnswers204() throws Exception {
+    assertEquals(HttpStatus.NO_CONTENT, rest.setSpeaker(request, DOCUMENT_ID, "2", null, " Jean-Luc ").getStatusCode());
+
+    verify(documentTranscriptionService).setGuestSpeaker(DOCUMENT_ID, "2", " Jean-Luc ", 7L);
+    verify(documentTranscriptionService, never()).setSpeaker(anyString(), anyString(), any(), anyLong());
+
+    doThrow(new IllegalArgumentException("documents.transcription.speaker.invalidName")).when(documentTranscriptionService)
+                                                                                        .setGuestSpeaker(DOCUMENT_ID, "2", "a|b", 7L);
+    ResponseStatusException refused = assertThrows(ResponseStatusException.class,
+                                                   () -> rest.setSpeaker(request, DOCUMENT_ID, "2", null, "a|b"));
+    assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+    assertEquals("documents.transcription.speaker.invalidName", refused.getReason());
+  }
+
+  /**
+   * Naming a speaker takes exactly one of a person and a guest name: both, or
+   * neither, is refused with 400 before the service is asked.
+   */
+  @Test
+  void namingASpeakerTakesExactlyOneOfAPersonAndAGuestName() throws Exception {
+    for (Object[] params : new Object[][] { { 42L, "Jean-Luc" }, { null, null } }) {
+      ResponseStatusException refused = assertThrows(ResponseStatusException.class,
+                                                      () -> rest.setSpeaker(request,
+                                                                            DOCUMENT_ID,
+                                                                            "1",
+                                                                            (Long) params[0],
+                                                                            (String) params[1]));
+      assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+      assertEquals("documents.transcription.speaker.identityOrName", refused.getReason());
+    }
+    verify(documentTranscriptionService, never()).setSpeaker(anyString(), anyString(), any(), anyLong());
+    verify(documentTranscriptionService, never()).setGuestSpeaker(anyString(), anyString(), any(), anyLong());
   }
 
   /**
