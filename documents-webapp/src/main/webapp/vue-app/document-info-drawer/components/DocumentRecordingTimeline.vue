@@ -118,7 +118,7 @@ export default {
     },
     /** @returns {Array<Object>} the chapters as spans of the timeline, none when the transcript shows none */
     chapters() {
-      return this.duration && chapterSpans(this.segments, this.rawChapters, this.duration) || [];
+      return this.duration && chapterSpans(this.segments, this.rawChapters, this.duration, this.durationSeconds) || [];
     },
     /** @returns {Array<Object>} the turns of speech, consecutive segments of one speaker merged */
     turns() {
