@@ -356,15 +356,18 @@ class DocumentTranscriptionServiceTest {
   }
 
   /**
-   * A guest name is refused when it is empty once trimmed, longer than the
-   * most characters allowed, or holds the suggestions' separator, a line break
-   * or a control character; nothing is stored.
+   * A guest name is refused when it holds no letter or digit, is longer than
+   * the most characters allowed, or holds the suggestions' separator, a line
+   * break, a control character or a Unicode format character other than the
+   * zero-width joiner and non-joiner, which Persian and Indic names are spelt
+   * with; nothing is stored.
    */
   @Test
   void aGuestNameIsRefusedWhenEmptyTooLongOrHoldingASeparatorOrControl() throws Exception {
     mockNameableTranscript();
     String[] refusedNames = { null, "", "   ", "a".repeat(DocumentTranscriptionService.GUEST_NAME_MAX_LENGTH + 1), "Jean|Luc",
-      "Jean\nLuc", "Jean\rLuc", "Jean\u2028Luc", "Jean\u2029Luc", "Jean\tLuc", "Jean\u0000Luc", "Jean\u007FLuc", "Jean\u0085Luc" };
+      "Jean\nLuc", "Jean\rLuc", "Jean\u2028Luc", "Jean\u2029Luc", "Jean\tLuc", "Jean\u0000Luc", "Jean\u007FLuc", "Jean\u0085Luc",
+      "\u200B", " \u200B ", "Jean\u202ELuc", "Jean\uFEFFLuc", "\u200C", "\u200D\u200C", "- .", "|" };
 
     for (String refused : refusedNames) {
       assertEquals(DocumentTranscriptionService.INVALID_NAME_MESSAGE,
@@ -374,6 +377,9 @@ class DocumentTranscriptionServiceTest {
     }
     assertEquals("a".repeat(DocumentTranscriptionService.GUEST_NAME_MAX_LENGTH),
                  DocumentTranscriptionService.toGuestName(" " + "a".repeat(DocumentTranscriptionService.GUEST_NAME_MAX_LENGTH) + " "));
+    for (String accepted : new String[] { "\u0645\u06CC\u200C\u0631\u0648\u062F", "\u0915\u094D\u200D\u0937", "R2", "7" }) {
+      assertEquals(accepted, DocumentTranscriptionService.toGuestName(accepted), "Expected the name '" + accepted + "' accepted");
+    }
     verify(documentFileService, never()).setTranscriptionSpeaker(anyString(), anyString(), any(), anyLong());
   }
 
