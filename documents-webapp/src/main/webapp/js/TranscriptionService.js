@@ -194,7 +194,9 @@ export function unsetSpeaker(documentId, speaker) {
  * @param {string} documentId the file's UUID
  * @returns {Promise<Array<object>>} the proposals: speaker, identityId,
  *          username, fullName, avatarUrl, strong, autoApplied, quotes
- *          (start, speaker, text) and premiseSpeaker
+ *          (start, speaker, text), and for a proposal made by elimination
+ *          premiseSpeaker and premiseFullName (the other voice and who it is
+ *          taken to be)
  */
 export function getSpeakerProposals(documentId) {
   return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/speakers/proposals`, {
