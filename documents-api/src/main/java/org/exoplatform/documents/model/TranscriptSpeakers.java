@@ -67,15 +67,21 @@ public final class TranscriptSpeakers {
    * the guest's name, or {@code Speaker N} when nobody is named, when the
    * person is gone, or when the lookup finds no name.
    *
-   * @param speaker the speaker's number in the transcript
+   * @param speaker the speaker's number in the transcript, or null for a
+   *          sentence the transcript gives no speaker
    * @param speakers the stored value of each named speaker, by speaker number
    * @param fullNameOfIdentity gives the full name of a person from their
    *          identity id, or null when there is none
-   * @return the speaker's name, never null
+   * @return the speaker's name; null when the sentence has no speaker, which
+   *         {@link #formatLine} and {@link #formatTurn} then write without a
+   *         name
    */
   public static String speakerName(String speaker,
                                    Map<String, String> speakers,
                                    Function<String, String> fullNameOfIdentity) {
+    if (speaker == null || speaker.isBlank()) {
+      return null;
+    }
     String value = speakers == null ? null : speakers.get(speaker);
     String name = null;
     if (isGuest(value)) {
