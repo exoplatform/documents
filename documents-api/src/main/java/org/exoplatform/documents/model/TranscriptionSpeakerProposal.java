@@ -31,11 +31,14 @@ import java.util.List;
  * @param quotes the sentences that show it, in order
  * @param premiseSpeaker for a proposal made by elimination, the other voice it
  *          follows from; null otherwise
+ * @param premiseIdentityId for a proposal made by elimination, the person that
+ *          other voice is taken to be; null otherwise
  */
 public record TranscriptionSpeakerProposal(String speaker,
                                            long identityId,
                                            boolean strong,
                                            boolean autoApplied,
                                            List<TranscriptionQuote> quotes,
-                                           String premiseSpeaker) {
+                                           String premiseSpeaker,
+                                           Long premiseIdentityId) {
 }

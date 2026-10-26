@@ -351,7 +351,10 @@ class DocumentTranscriptionSpeakerProposalsTest {
   /**
    * An editor is shown a waiting proposal while neither its speaker nor its
    * person is named, and an applied one while its speaker is still named after
-   * its person, each with the sentences that show it.
+   * its person, each with the sentences that show it. One made by elimination
+   * is shown only while its other voice is named after its premise person, or,
+   * unnamed, still carries a strong proposal for that person: a likely one, a
+   * name changed or undone, leaves it no reason.
    */
   @Test
   void anEditorIsShownTheProposalsThatStillHold() throws Exception {
@@ -361,7 +364,12 @@ class DocumentTranscriptionSpeakerProposalsTest {
         new TranscriptionSpeakerSuggestion("2", 43, false, false, List.of(1, 9), "1", 42L),
         new TranscriptionSpeakerSuggestion("3", 44, false, false, List.of(0)),
         new TranscriptionSpeakerSuggestion("4", 45, true, true, List.of(0)),
-        new TranscriptionSpeakerSuggestion("6", 47, false, false, List.of(0))));
+        new TranscriptionSpeakerSuggestion("6", 47, false, false, List.of(0)),
+        new TranscriptionSpeakerSuggestion("7", 49, false, false, List.of(), "3", 44L),
+        new TranscriptionSpeakerSuggestion("8", 50, false, false, List.of(), "9", 51L),
+        new TranscriptionSpeakerSuggestion("9", 51, true, false, List.of()),
+        new TranscriptionSpeakerSuggestion("10", 52, false, false, List.of(), "1", 41L),
+        new TranscriptionSpeakerSuggestion("11", 53, false, false, List.of(), "12", 54L)));
     when(documentFileService.getTranscriptionSpeakers(DOCUMENT_ID, EDITOR_ID)).thenReturn(Map.of("1", "42", "5", "44", "4", "46", "6", "48"));
     when(documentFileService.getTranscriptionSegments(DOCUMENT_ID, EDITOR_ID)).thenReturn(SEGMENTS);
 
@@ -371,8 +379,11 @@ class DocumentTranscriptionSpeakerProposalsTest {
                                                           true,
                                                           List.of(new TranscriptionQuote(0, "1", "Julien, à toi."),
                                                                   new TranscriptionQuote(4, "1", "Merci Julien.")),
+                                                          null,
                                                           null),
-                         new TranscriptionSpeakerProposal("2", 43, false, false, List.of(new TranscriptionQuote(2.5, "2", "Oui.")), "1")),
+                         new TranscriptionSpeakerProposal("2", 43, false, false, List.of(new TranscriptionQuote(2.5, "2", "Oui.")), "1", 42L),
+                         new TranscriptionSpeakerProposal("8", 50, false, false, List.of(), "9", 51L),
+                         new TranscriptionSpeakerProposal("9", 51, true, false, List.of(), null, null)),
                  service.getSpeakerProposals(DOCUMENT_ID, EDITOR_ID));
   }
 
