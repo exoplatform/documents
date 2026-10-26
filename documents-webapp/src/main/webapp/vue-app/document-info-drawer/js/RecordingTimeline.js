@@ -55,12 +55,14 @@ export function timelineDuration(segments, mediaDuration) {
  * @param {Array<Object>} segments the transcript's segments
  * @param {Array<Object>} chapters the chapters, each with start, index and title
  * @param {number} duration the timeline's length, in seconds
+ * @param {number} durationSeconds the recording's stored duration, which
+ *          decides as in the transcript whether it shows chapters, or null
  * @returns {Array<Object>} the spans in order, each with its position, title,
  *          colour (the transcript's), start (where a click plays from), from
  *          and to (where it is drawn)
  */
-export function chapterSpans(segments, chapters, duration) {
-  const groups = groupByChapters(segments, chapters).filter(group => group.chapter);
+export function chapterSpans(segments, chapters, duration, durationSeconds) {
+  const groups = groupByChapters(segments, chapters, durationSeconds).filter(group => group.chapter);
   return groups.map((group, position) => ({
     position,
     title: group.chapter.title,
