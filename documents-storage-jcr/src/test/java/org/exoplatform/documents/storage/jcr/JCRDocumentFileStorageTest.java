@@ -3431,6 +3431,35 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * Chapters are written under the file's speaker lock, and the lock is
+   * released after the save and after a refusal: the chapters mixin and the
+   * speakers mixin are written with the file's whole mixin list, so a naming
+   * and a chapters save never drop one another's (EXO-92123).
+   */
+  @Test
+  public void saveTranscriptionChaptersWritesUnderTheSpeakerLock() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    Calendar updated = Calendar.getInstance();
+    Property updatedProperty = mock(Property.class);
+    when(updatedProperty.getDate()).thenReturn(updated);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(updatedProperty);
+    List<Boolean> lockedWhileWriting = new ArrayList<>();
+    doAnswer(invocation -> lockedWhileWriting.add(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread())).when(node)
+                                                                                                                 .addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+
+    assertTrue(jcrDocumentFileStorage.saveTranscriptionChapters("1", "[]", updated.getTimeInMillis()));
+    assertEquals("Expected the chapters mixin added under the file's lock", List.of(true), lockedWhileWriting);
+    assertFalse("Expected the lock released after the save", JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionChapters("1", "[]", updated.getTimeInMillis() + 1));
+    assertFalse("Expected the lock released after a refusal", JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+  }
+
+  /**
    * Blank chapters are refused rather than stored as an empty list.
    */
   @Test
