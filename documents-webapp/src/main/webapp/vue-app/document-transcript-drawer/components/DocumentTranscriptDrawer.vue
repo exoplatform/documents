@@ -85,8 +85,11 @@
             :speakers="speakers"
             :can-name-speakers="canNameSpeakers"
             :saving-speaker="savingSpeaker"
+            :speaker-proposals="speakerProposals"
             @name-speaker="nameSpeaker"
             @unname-speaker="unnameSpeaker"
+            @confirm-proposal="confirmSpeakerProposal"
+            @dismiss-proposal="dismissSpeakerProposal"
             @seek="seek" />
           <document-transcript-status
             v-else-if="state || unreadable"
