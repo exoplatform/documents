@@ -272,6 +272,42 @@
       "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["timestamps"] }
     },
     {
+      "name": "get_transcript_excerpt",
+      "title": "Read part of a recording's transcript",
+      "description": "Read only one part of an audio or video recording's transcript instead of the whole of it. Called with only document_id, it lists the transcript's chapters, numbered, each with its moment, title and summary: call it that way first whenever you do not know the number of the chapter a question is about, and never guess a number. Then read one chapter (chapter, its number from that list or from get_meeting_recordings), or the lines said between two moments (from and to); pass either chapter, or from and to. Every line of that part is given as [mm:ss · Ns] Name: text, with the moment it was said (N in whole seconds) and who said it (Speaker N when nobody named that speaker). A chapter runs to the next chapter's start, the last one to the end of the recording. One call reads 30 minutes at most: a longer part stops there and says the from and to to call again with. Quote the moments and speakers in your answer.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The recording's document id."
+          },
+          "chapter": {
+            "type": "integer",
+            "description": "The chapter to read: its number in the chapter list. Leave out to read a time range; leave out with from and to as well to list the chapters."
+          },
+          "from": {
+            "type": "string",
+            "description": "Where a time range starts: mm:ss (23:00), h:mm:ss (1:02:30) or seconds (1380). Leave out to read a chapter."
+          },
+          "to": {
+            "type": "string",
+            "description": "Where a time range ends, in the same forms, after from. Leave out to read a chapter."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["chapter", "from", "to"] }
+    },
+    {
       "name": "search_documents",
       "title": "Search for files",
       "description": "Searches for documents matching the specified query and optional filters. With updated_since, returns the files changed since that date, the most recent first, with or without a query: use it to keep a folder in sync instead of opening each document. It searches the whole tree under the folder or the space, files only, as the search index holds them (a change can take a moment to show). Each file says whether you can edit or delete it (can_edit, can_delete); a shortcut the search finds is answered as its target, with the target's id and rights.",
