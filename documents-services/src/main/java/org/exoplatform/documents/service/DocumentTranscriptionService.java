@@ -495,12 +495,11 @@ public class DocumentTranscriptionService {
    * were made from it. A strong proposal names its speaker as the recording's
    * owner, so only while the owner can still edit the file, and only when
    * neither the speaker nor the person is named yet: it never replaces a name a
-   * person gave. A proposal made by elimination is applied after the others,
-   * and only if, when its name is written, the voice it follows from is still
-   * named after the person it was taken to be: the storage reads it again under
-   * the file's lock, as it reads again that the proposal was not dismissed. Every proposal is kept, the applied ones marked so, the
-   * others shown to the people who can edit the file until one confirms or
-   * dismisses them.
+   * person gave. A proposal made by elimination is never applied, strong or
+   * not: a call deletes its guests when it stops, so the voice left over may be
+   * a guest's rather than the invited person's. Every proposal is kept, the
+   * applied ones marked so, the others shown to the people who can edit the
+   * file until one confirms or dismisses them.
    *
    * @param documentId the recording file's UUID
    * @param suggestions the proposals, one per speaker at most
@@ -526,15 +525,12 @@ public class DocumentTranscriptionService {
     if (ownerIdentityId == null) {
       return kept;
     }
-    // the proposals shown by the names said first: one made by elimination follows from them
-    for (boolean byElimination : new boolean[] { false, true }) {
-      for (int i = 0; i < kept.size(); i++) {
-        TranscriptionSpeakerSuggestion suggestion = kept.get(i);
-        if (suggestion.strong()
-            && (suggestion.premiseSpeaker() != null) == byElimination
-            && autoName(documentId, suggestion, ownerIdentityId, transcriptUpdated)) {
-          kept.set(i, suggestion.withAutoApplied(true));
-        }
+    for (int i = 0; i < kept.size(); i++) {
+      TranscriptionSpeakerSuggestion suggestion = kept.get(i);
+      if (suggestion.strong()
+          && suggestion.premiseSpeaker() == null
+          && autoName(documentId, suggestion, ownerIdentityId, transcriptUpdated)) {
+        kept.set(i, suggestion.withAutoApplied(true));
       }
     }
     return kept;

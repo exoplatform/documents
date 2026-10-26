@@ -271,25 +271,29 @@ class DocumentTranscriptionSpeakerProposalsTest {
   }
 
   /**
-   * A proposal made by elimination is applied after the others, so that its
-   * premise, which the storage checks when it writes the name, can hold.
+   * A proposal made by elimination is kept but never applied, even marked
+   * strong, while the strong proposal beside it is: a call deletes its guests
+   * when it stops, so the voice left over may be a guest's.
    */
   @Test
-  void aProposalByEliminationIsAppliedAfterTheOthers() throws Exception {
+  void aProposalByEliminationIsNeverApplied() throws Exception {
     mockNameableBy(OWNER_ID);
     mockUser("42", true);
-    mockUser("43", true);
+    Identity eliminatedPerson = mock(Identity.class);
+    lenient().when(eliminatedPerson.getId()).thenReturn("43");
+    lenient().when(eliminatedPerson.isUser()).thenReturn(true);
+    lenient().when(eliminatedPerson.isEnable()).thenReturn(true);
+    lenient().when(identityManager.getIdentity("43")).thenReturn(eliminatedPerson);
     TranscriptionSpeakerSuggestion eliminated = new TranscriptionSpeakerSuggestion("2", 43, true, false, List.of(0), "1", 42L);
     TranscriptionSpeakerSuggestion found = new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(0, 2));
     when(documentFileService.saveTranscriptionSpeakerSuggestions(eq(DOCUMENT_ID), any(), eq(UPDATED))).thenReturn(true);
     when(documentFileService.applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, found, UPDATED, OWNER_ID)).thenReturn(true);
-    when(documentFileService.applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, eliminated, UPDATED, OWNER_ID)).thenReturn(true);
+    lenient().when(documentFileService.applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, eliminated, UPDATED, OWNER_ID))
+             .thenReturn(true);
 
-    assertEquals(List.of(eliminated.withAutoApplied(true), found.withAutoApplied(true)),
+    assertEquals(List.of(eliminated, found.withAutoApplied(true)),
                  service.applySpeakerSuggestions(DOCUMENT_ID, List.of(eliminated, found), OWNER_ID, UPDATED));
-    InOrder order = inOrder(documentFileService);
-    order.verify(documentFileService).applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, found, UPDATED, OWNER_ID);
-    order.verify(documentFileService).applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, eliminated, UPDATED, OWNER_ID);
+    verify(documentFileService, never()).applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, eliminated, UPDATED, OWNER_ID);
   }
 
   /**
