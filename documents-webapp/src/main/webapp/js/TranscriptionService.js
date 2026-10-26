@@ -162,6 +162,20 @@ export function setSpeaker(documentId, speaker, identityId) {
 }
 
 /**
+ * Says that a speaker of a file's transcript is a guest with no account,
+ * known by a plain name (EXO-92123).
+ *
+ * @param {string} documentId the file's UUID
+ * @param {string} speaker the speaker's number
+ * @param {string} name the guest's name
+ * @returns {Promise<void>} resolved once named; rejected with the refusal's
+ *          message code
+ */
+export function setGuestSpeaker(documentId, speaker, name) {
+  return updateSpeaker(documentId, speaker, 'PUT', `?name=${encodeURIComponent(name)}`);
+}
+
+/**
  * Says that a speaker of a file's transcript is nobody named any more
  * (EXO-92123).
  *
