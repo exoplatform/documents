@@ -35,9 +35,9 @@ import java.util.List;
  * @param premiseSpeaker for a proposal made by elimination (two voices, two
  *          attendees), the other voice, whose person it follows from; null
  *          otherwise
- * @param premiseIdentityId the person that other voice is taken to be: the
- *          proposal is applied only while that voice is named after that
- *          person; null otherwise
+ * @param premiseIdentityId the person that other voice is taken to be, kept
+ *          to explain the proposal: one made by elimination is never applied,
+ *          only suggested; null otherwise
  */
 public record TranscriptionSpeakerSuggestion(String speaker,
                                              long identityId,
