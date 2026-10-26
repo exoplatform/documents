@@ -196,12 +196,11 @@
       color: @transcriptSpeakerChangeActiveColor;
     }
   }
-  // a speaker's chip shows the keyboard focus with a light ring, not the browser's heavy outline
+  // a speaker's chip shows the keyboard focus with a ring in its own colour, not the browser's heavy outline
   [role=button] {
     outline: none;
-    border-radius: 12px;
-    &:focus-visible {
-      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+    &:focus-visible .v-chip {
+      box-shadow: 0 0 0 2px currentColor;
     }
   }
 }
