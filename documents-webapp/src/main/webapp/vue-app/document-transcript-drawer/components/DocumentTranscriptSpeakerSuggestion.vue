@@ -27,6 +27,9 @@
         <span class="text-sub-title me-1">{{ $t('documents.transcript.speaker.suggestion.suggested') }}</span>
         <span class="font-weight-bold me-2">{{ proposal.fullName }}</span>
       </template>
+      <template v-else-if="premiseSpeaker">
+        <span class="text-sub-title me-2">{{ $t('documents.transcript.speaker.suggestion.maybeFrom', {0: proposal.fullName, 1: premiseSpeaker, 2: proposal.premiseFullName}) }}</span>
+      </template>
       <template v-else>
         <span class="text-sub-title me-2">{{ $t('documents.transcript.speaker.suggestion.maybe', {0: proposal.fullName}) }}</span>
       </template>
@@ -114,6 +117,18 @@ export default {
     },
     hasQuotes() {
       return !!this.proposal.quotes?.length;
+    },
+    /**
+     * Names the other voice a proposal made by elimination follows from, as
+     * the transcript labels it.
+     *
+     * @returns {string} the other voice's label, or null for a proposal that
+     *          follows from no other voice
+     */
+    premiseSpeaker() {
+      return this.proposal.premiseSpeaker && this.proposal.premiseFullName
+        && this.$t('documents.transcript.speaker.label', {0: this.proposal.premiseSpeaker})
+        || null;
     },
   },
   methods: {
