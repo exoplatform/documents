@@ -20,11 +20,13 @@
  * the details' Transcript tab (EXO-92123): the component using it has a
  * documentId and an alert(message, type) method. A view saves one speaker at
  * a time, the server running the saves of a file one after the other, and
- * shows only its latest read of the names.
+ * shows only its latest read of the names. A user who can name the speakers
+ * also reads the proposals of who they are (EXO-92126).
  */
 export default {
   data: () => ({
     speakers: null,
+    speakerProposals: [],
     canNameSpeakers: false,
     savingSpeaker: null,
     speakersRead: 0,
@@ -42,6 +44,7 @@ export default {
       if (!segments?.some(segment => segment.speaker)) {
         this.speakersRead++;
         this.speakers = null;
+        this.speakerProposals = [];
         this.canNameSpeakers = false;
         return Promise.resolve();
       }
@@ -85,9 +88,45 @@ export default {
         .finally(() => this.savingSpeaker = null);
     },
     /**
-     * Reads the named speakers again, whatever the sentences say. Only the
-     * latest read of the file shown changes the names, failed or not: a failed
-     * one shows no names and no naming. Never rejected.
+     * Names a speaker after the person proposed for it, then reads the named
+     * speakers again.
+     *
+     * @param {{speaker: string, identityId: string}} proposal the proposal
+     * @returns {Promise<void>} resolved once done
+     */
+    confirmSpeakerProposal({speaker, identityId}) {
+      if (this.savingSpeaker) {
+        return Promise.resolve();
+      }
+      const documentId = this.documentId;
+      this.savingSpeaker = speaker;
+      return this.$transcriptionService.setSpeaker(documentId, speaker, identityId)
+        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
+        .finally(() => this.savingSpeaker = null);
+    },
+    /**
+     * Dismisses the person proposed for a speaker, for good, then reads the
+     * named speakers and the proposals again.
+     *
+     * @param {{speaker: string}} proposal the proposal
+     * @returns {Promise<void>} resolved once done
+     */
+    dismissSpeakerProposal({speaker}) {
+      if (this.savingSpeaker) {
+        return Promise.resolve();
+      }
+      const documentId = this.documentId;
+      this.savingSpeaker = speaker;
+      return this.$transcriptionService.dismissSpeakerProposal(documentId, speaker)
+        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
+        .finally(() => this.savingSpeaker = null);
+    },
+    /**
+     * Reads the named speakers again, whatever the sentences say, and for a
+     * user who can name them the proposals. Only the latest read of the file
+     * shown changes them, failed or not: a failed one shows no names, no
+     * naming and no proposal; failed proposals alone show none. Never
+     * rejected.
      *
      * @param {string} documentId the file's UUID
      * @returns {Promise<void>} resolved once read
@@ -96,13 +135,19 @@ export default {
       const read = ++this.speakersRead;
       const isLatest = () => read === this.speakersRead && documentId === this.documentId;
       return this.$transcriptionService.getSpeakers(documentId).then(answer => {
-        if (isLatest()) {
-          this.speakers = answer?.speakers || [];
-          this.canNameSpeakers = !!answer?.canEdit;
-        }
+        const canEdit = !!answer?.canEdit;
+        const proposals = canEdit && this.$transcriptionService.getSpeakerProposals(documentId).catch(() => []) || Promise.resolve([]);
+        return proposals.then(speakerProposals => {
+          if (isLatest()) {
+            this.speakers = answer?.speakers || [];
+            this.speakerProposals = speakerProposals || [];
+            this.canNameSpeakers = canEdit;
+          }
+        });
       }, () => {
         if (isLatest()) {
           this.speakers = [];
+          this.speakerProposals = [];
           this.canNameSpeakers = false;
         }
       });
