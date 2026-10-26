@@ -618,6 +618,22 @@ public class DocumentMcpToolTest {
   }
 
   /**
+   * Asked with timestamps, a transcript whose segments fail to be read from the
+   * repository is given as without timestamps: the failure never takes the
+   * transcript away.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsWhenTheSegmentsReadFailsGivesThePlainTranscript() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+
+    assertEquals("Expected a failure on the segments never to take the transcript away",
+                 "the transcription",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
    * Without timestamps, the plain transcript is given and its segments are
    * never read.
    */
