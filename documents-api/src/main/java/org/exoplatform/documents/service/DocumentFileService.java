@@ -689,7 +689,9 @@ public interface DocumentFileService {
 
   /**
    * Says which person a speaker of a media file's transcript is, or that it is
-   * nobody named any more, as a user who can edit the file (EXO-92123).
+   * nobody named any more, as a user who can edit the file (EXO-92123). A
+   * proposal the platform applied to that speaker is dropped in the same save
+   * (EXO-92126): the name is a person's from then on.
    *
    * @param documentId the file's UUID
    * @param speaker the speaker's number in the transcript
@@ -783,9 +785,10 @@ public interface DocumentFileService {
    * one save under the file's lock (EXO-92126). What the proposal rests on in
    * the file is read again at that moment: the transcript must still be the
    * one it was made from, the proposal must still be stored (not dismissed),
-   * neither the speaker nor the person may be named, and a proposal made by
-   * elimination needs its other voice still named after the person it was
-   * taken to be. A name applied this way never replaces one a person gave, nor
+   * and neither the speaker nor the person may be named. A proposal made by
+   * elimination is never applied: it is only ever suggested, since the voice
+   * left over may be a guest's. A name applied this way never replaces one a
+   * person gave, nor
    * names a voice of another transcript. Whether the person is still an
    * enabled user is not read here: the caller checks it just before, so a
    * person disabled in between is still named.

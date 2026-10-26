@@ -3090,6 +3090,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER,
                          speakers.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new));
       }
+      // a name a person gives, changes or clears is no longer the one the platform applied
+      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
+      if (suggestions.removeIf(suggestion -> suggestion.speaker().equals(speaker) && suggestion.autoApplied())) {
+        writeTranscriptionSpeakerSuggestions(node, suggestions);
+      }
       session.save();
     } catch (AccessDeniedException e) {
       throw new IllegalAccessException(e.getMessage());
@@ -3277,13 +3282,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
       }
       Map<String, String> speakers = new TreeMap<>(readTranscriptionSpeakers(node));
-      boolean premiseHolds = suggestion.premiseSpeaker() == null
-          || String.valueOf(suggestion.premiseIdentityId()).equals(speakers.get(suggestion.premiseSpeaker()));
-      if (!isTranscriptAt(node, transcriptUpdated)
+      if (suggestion.premiseSpeaker() != null
+          || !isTranscriptAt(node, transcriptUpdated)
           || stored < 0
           || speakers.containsKey(suggestion.speaker())
-          || speakers.containsValue(identityId)
-          || !premiseHolds) {
+          || speakers.containsValue(identityId)) {
         return false;
       }
       speakers.put(suggestion.speaker(), identityId);
