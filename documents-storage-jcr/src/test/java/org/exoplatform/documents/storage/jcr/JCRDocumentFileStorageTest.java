@@ -3560,6 +3560,26 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * A guest's name is stored and read back as is beside a person's identity
+   * id, an {@code =} or a non-ASCII character in the name included: only the
+   * first {@code =} ends the speaker number (EXO-92123).
+   */
+  @Test
+  public void aGuestNameIsStoredAndReadBackAsIs() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSpeakers(node, "1=42", "2=name:Jean-Luc =Ö");
+
+    assertEquals(Map.of("1", "42", "2", "name:Jean-Luc =Ö"), jcrDocumentFileStorage.getTranscriptionSpeakers("1", viewer));
+
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "3", "name:Zoé", viewer);
+
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=42", "2=name:Jean-Luc =Ö", "3=name:Zoé" });
+  }
+
+  /**
    * Unnaming the last named speaker removes the mixin, and any other one only
    * its value.
    */

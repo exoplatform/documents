@@ -593,8 +593,9 @@ public interface DocumentFileStorage {
    *
    * @param documentId the file's UUID
    * @param aclIdentity the user reading it
-   * @return the identity id of each named speaker, by speaker number; empty when
-   *         none is named
+   * @return who each named speaker is, by speaker number: an identity id, or a
+   *         guest's name after {@link org.exoplatform.documents.model.TranscriptSpeakers#GUEST_PREFIX};
+   *         empty when none is named
    * @throws IllegalAccessException when the user may not read the file
    * @throws ObjectNotFoundException when the file does not exist, or the user
    *           cannot see it
@@ -611,8 +612,10 @@ public interface DocumentFileStorage {
    *
    * @param documentId the file's UUID
    * @param speaker the speaker's number in the transcript
-   * @param identityId the identity id of the person, or null to unname the
-   *          speaker
+   * @param identityId who the speaker is: the identity id of the person, or a
+   *          guest's name after
+   *          {@link org.exoplatform.documents.model.TranscriptSpeakers#GUEST_PREFIX};
+   *          null to unname the speaker
    * @param aclIdentity the user naming it
    * @throws IllegalAccessException when the user may not edit the file
    * @throws ObjectNotFoundException when the file does not exist, or the user
