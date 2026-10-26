@@ -84,20 +84,18 @@
         class="pa-3"
         flat>
         <div class="text-subtitle-2 mb-2">{{ $t('documents.transcript.speaker.who', {0: speaker}) }}</div>
-        <!-- above the field: the person list opens below it and would cover the offer; the line is reserved so the field never moves while typing -->
-        <div class="documentTranscriptSpeakerGuest mb-1">
-          <v-list-item
-            v-if="guestOffered"
-            :input-value="guestChosen"
-            class="px-2"
-            color="primary"
-            dense
-            @click="guestChosen = !guestChosen">
-            <v-list-item-title class="text-truncate">
-              {{ $t('documents.transcript.speaker.useGuest', {0: guestName}) }}
-            </v-list-item-title>
-          </v-list-item>
-        </div>
+        <!-- above the field: the person list opens below it and would cover the offer -->
+        <v-list-item
+          v-if="guestOffered"
+          :input-value="guestChosen"
+          class="px-2 mb-1"
+          color="primary"
+          dense
+          @click="guestChosen = !guestChosen">
+          <v-list-item-title class="text-truncate">
+            {{ $t('documents.transcript.speaker.useGuest', {0: guestName}) }}
+          </v-list-item-title>
+        </v-list-item>
         <identity-suggester
           v-if="menu"
           v-model="chosen"
