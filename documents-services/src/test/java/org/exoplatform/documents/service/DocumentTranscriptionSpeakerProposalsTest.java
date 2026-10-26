@@ -45,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.DocumentAudience;
+import org.exoplatform.documents.model.TranscriptionBusyException;
 import org.exoplatform.documents.model.TranscriptionQuote;
 import org.exoplatform.documents.model.TranscriptionSpeakerCandidates;
 import org.exoplatform.documents.model.TranscriptionSpeakerProposal;
@@ -268,6 +269,54 @@ class DocumentTranscriptionSpeakerProposalsTest {
     mockUser("42", true);
     when(documentFileService.applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, strong, UPDATED, OWNER_ID)).thenReturn(false);
     assertEquals(List.of(strong), service.applySpeakerSuggestions(DOCUMENT_ID, List.of(strong), OWNER_ID, UPDATED));
+  }
+
+  /**
+   * A speaker whose naming cannot be checked or saved (the file busy, the
+   * person's identity unreadable) stays a proposal, and the next strong
+   * proposal is still applied: one speaker never stops the others.
+   */
+  @Test
+  void aSpeakerThatCannotBeNamedLeavesTheNextOneNamed() throws Exception {
+    mockNameableBy(OWNER_ID);
+    mockUser("42", true);
+    mockUser("44", true);
+    when(identityManager.getIdentity("43")).thenThrow(new RuntimeException("identity store down"));
+    TranscriptionSpeakerSuggestion busy = new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(0));
+    TranscriptionSpeakerSuggestion unreadable = new TranscriptionSpeakerSuggestion("1", 43, true, false, List.of(0));
+    TranscriptionSpeakerSuggestion named = new TranscriptionSpeakerSuggestion("2", 44, true, false, List.of(2));
+    when(documentFileService.saveTranscriptionSpeakerSuggestions(eq(DOCUMENT_ID), any(), eq(UPDATED))).thenReturn(true);
+    when(documentFileService.applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, busy, UPDATED, OWNER_ID)).thenThrow(new TranscriptionBusyException("busy"));
+    when(documentFileService.applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, named, UPDATED, OWNER_ID)).thenReturn(true);
+
+    assertEquals(List.of(busy, named.withAutoApplied(true)),
+                 service.applySpeakerSuggestions(DOCUMENT_ID, List.of(busy, named), OWNER_ID, UPDATED));
+    assertEquals(List.of(unreadable, named.withAutoApplied(true)),
+                 service.applySpeakerSuggestions(DOCUMENT_ID, List.of(unreadable, named), OWNER_ID, UPDATED));
+    verify(documentFileService, never()).applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, unreadable, UPDATED, OWNER_ID);
+  }
+
+  /**
+   * A name one proposal applies is read again by the next: a second strong
+   * proposal for the same person, refused by the storage once that person is
+   * named, stays a proposal.
+   */
+  @Test
+  void aNameAppliedByOneProposalIsReadByTheNext() throws Exception {
+    mockNameableBy(OWNER_ID);
+    mockUser("42", true);
+    TranscriptionSpeakerSuggestion first = new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(0));
+    TranscriptionSpeakerSuggestion second = new TranscriptionSpeakerSuggestion("2", 42, true, false, List.of(2));
+    java.util.concurrent.atomic.AtomicBoolean personNamed = new java.util.concurrent.atomic.AtomicBoolean();
+    when(documentFileService.saveTranscriptionSpeakerSuggestions(eq(DOCUMENT_ID), any(), eq(UPDATED))).thenReturn(true);
+    when(documentFileService.applyTranscriptionSpeakerSuggestion(eq(DOCUMENT_ID), any(), eq(UPDATED), eq(OWNER_ID)))
+             .thenAnswer(invocation -> !personNamed.getAndSet(true));
+
+    assertEquals(List.of(first.withAutoApplied(true), second),
+                 service.applySpeakerSuggestions(DOCUMENT_ID, List.of(first, second), OWNER_ID, UPDATED));
+    InOrder order = inOrder(documentFileService);
+    order.verify(documentFileService).applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, first, UPDATED, OWNER_ID);
+    order.verify(documentFileService).applyTranscriptionSpeakerSuggestion(DOCUMENT_ID, second, UPDATED, OWNER_ID);
   }
 
   /**
