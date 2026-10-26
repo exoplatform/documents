@@ -38,8 +38,14 @@
         :open="!!opened[group.key]"
         :current="group.key === activeGroupKey"
         :color="group.color"
+        :speakers-by-number="speakersByNumber"
+        :speaker-heads="speakerHeads"
+        :can-name-speakers="canNameSpeakers"
+        :saving-speaker="savingSpeaker"
         @toggle="toggleChapter(group.key)"
-        @seek="$emit('seek', $event)" />
+        @seek="$emit('seek', $event)"
+        @name-speaker="$emit('name-speaker', $event)"
+        @unname-speaker="$emit('unname-speaker', $event)" />
     </template>
     <template v-else-if="hasSegments">
       <div
@@ -175,12 +181,17 @@ export default {
     },
     /**
      * Tells, sentence by sentence, whether it opens a run of its speaker, the
-     * speaker then showing on its first line, beside its moment.
+     * speaker then showing on its first line, beside its moment. Under
+     * chapters, the first line of a chapter opens a run too.
      *
      * @returns {Array<boolean>} true for each sentence that shows its speaker
      */
     speakerHeads() {
-      return (this.segments || []).map((segment, index) => opensSpeakerRun(this.segments, index, false, this.speakerKey));
+      const chapterFirsts = new Set();
+      if (this.hasChapters) {
+        this.groups.forEach(group => group.rows.forEach(row => row.firstOfChapter && chapterFirsts.add(row.index)));
+      }
+      return (this.segments || []).map((segment, index) => opensSpeakerRun(this.segments, index, chapterFirsts.has(index), this.speakerKey));
     },
   },
   watch: {
