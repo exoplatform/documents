@@ -15,6 +15,7 @@
  * along with this program. If not, see <gnu.org/licenses>.
  */
 import {groupByChapters} from '../../document-transcript-drawer/js/TranscriptChapters.js';
+import {formatMoment} from '../../document-transcript-drawer/js/TranscriptSearch.js';
 
 /** The most speakers shown each on a lane of their own; one more and the least active share « Others ». */
 export const MAX_SPEAKER_LANES = 5;
@@ -167,6 +168,19 @@ export function timelineTicks(duration) {
   }
   ticks.push(duration);
   return ticks;
+}
+
+/**
+ * The tooltip and the accessible label of a block or a bar.
+ *
+ * @param {string} name what it shows: a chapter's title or a speaker's name
+ * @param {string} label its accessible label
+ * @param {number} from where it begins, in seconds
+ * @param {number} to where it ends, in seconds
+ * @returns {{title: string, label: string}} its tooltip and its label
+ */
+export function itemDescription(name, label, from, to) {
+  return {title: `${name} · ${formatMoment(from)}–${formatMoment(to)}`, label};
 }
 
 /**
