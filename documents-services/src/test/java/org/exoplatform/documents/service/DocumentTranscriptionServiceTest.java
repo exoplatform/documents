@@ -336,6 +336,66 @@ class DocumentTranscriptionServiceTest {
     verify(documentFileService).setTranscriptionSpeaker(DOCUMENT_ID, "2", null, VIEWER_ID);
   }
 
+  /**
+   * A guest with no account is named by a plain name, trimmed and stored
+   * after the guest prefix with no escaping; a name of exactly the most
+   * characters allowed, counted as characters and not as UTF-16 units, is
+   * kept (EXO-92123).
+   */
+  @Test
+  void aSpeakerIsNamedAfterAGuest() throws Exception {
+    mockNameableTranscript();
+    String longest = "é".repeat(79) + "\uD83D\uDE00";
+
+    service.setGuestSpeaker(DOCUMENT_ID, "2", "  Jean-Luc <b>=Ö  ", VIEWER_ID);
+    service.setGuestSpeaker(DOCUMENT_ID, "1", longest, VIEWER_ID);
+
+    verify(documentFileService).setTranscriptionSpeaker(DOCUMENT_ID, "2", "name:Jean-Luc <b>=Ö", VIEWER_ID);
+    verify(documentFileService).setTranscriptionSpeaker(DOCUMENT_ID, "1", "name:" + longest, VIEWER_ID);
+    verify(identityManager, never()).getIdentity(anyString());
+  }
+
+  /**
+   * A guest name is refused when it is empty once trimmed, longer than the
+   * most characters allowed, or holds the suggestions' separator, a line break
+   * or a control character; nothing is stored.
+   */
+  @Test
+  void aGuestNameIsRefusedWhenEmptyTooLongOrHoldingASeparatorOrControl() throws Exception {
+    mockNameableTranscript();
+    String[] refusedNames = { null, "", "   ", "a".repeat(DocumentTranscriptionService.GUEST_NAME_MAX_LENGTH + 1), "Jean|Luc",
+      "Jean\nLuc", "Jean\rLuc", "Jean\u2028Luc", "Jean\u2029Luc", "Jean\tLuc", "Jean\u0000Luc", "Jean\u007FLuc", "Jean\u0085Luc" };
+
+    for (String refused : refusedNames) {
+      assertEquals(DocumentTranscriptionService.INVALID_NAME_MESSAGE,
+                   assertThrows(IllegalArgumentException.class,
+                                () -> service.setGuestSpeaker(DOCUMENT_ID, "1", refused, VIEWER_ID)).getMessage(),
+                   "Expected the name '" + refused + "' refused");
+    }
+    assertEquals("a".repeat(DocumentTranscriptionService.GUEST_NAME_MAX_LENGTH),
+                 DocumentTranscriptionService.toGuestName(" " + "a".repeat(DocumentTranscriptionService.GUEST_NAME_MAX_LENGTH) + " "));
+    verify(documentFileService, never()).setTranscriptionSpeaker(anyString(), anyString(), any(), anyLong());
+  }
+
+  /**
+   * Naming a guest takes the same checks as naming a person: a user who
+   * cannot edit the file is refused, and only a speaker the transcript holds
+   * can be named.
+   */
+  @Test
+  void aGuestIsNamedOnlyByAnEditorForASpeakerTheTranscriptHolds() throws Exception {
+    when(documentFileService.getTranscriptionState(DOCUMENT_ID, VIEWER_ID)).thenReturn(done());
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, VIEWER_ID)).thenReturn(false);
+    assertThrows(IllegalAccessException.class, () -> service.setGuestSpeaker(DOCUMENT_ID, "1", "Jean-Luc", VIEWER_ID));
+
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, VIEWER_ID)).thenReturn(true);
+    when(documentFileService.getTranscriptionSegments(DOCUMENT_ID, VIEWER_ID)).thenReturn(SPEAKER_SEGMENTS);
+    assertEquals(DocumentTranscriptionService.UNKNOWN_SPEAKER_MESSAGE,
+                 assertThrows(IllegalArgumentException.class,
+                              () -> service.setGuestSpeaker(DOCUMENT_ID, "3", "Jean-Luc", VIEWER_ID)).getMessage());
+    verify(documentFileService, never()).setTranscriptionSpeaker(anyString(), anyString(), any(), anyLong());
+  }
+
   private void mockNameableTranscript() throws Exception {
     when(documentFileService.getTranscriptionState(DOCUMENT_ID, VIEWER_ID)).thenReturn(done());
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, VIEWER_ID)).thenReturn(true);
