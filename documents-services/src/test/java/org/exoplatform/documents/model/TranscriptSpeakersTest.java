@@ -51,7 +51,8 @@ class TranscriptSpeakersTest {
 
   /**
    * A speaker is named after the person, the guest, or {@code Speaker N} when
-   * nobody is named, the person is gone, or the lookup has no name.
+   * nobody is named, the person is gone, or the lookup has no name; a sentence
+   * with no speaker has no name.
    */
   @Test
   void aSpeakerIsNamedAfterThePersonTheGuestOrItsNumber() {
@@ -64,6 +65,8 @@ class TranscriptSpeakersTest {
     assertEquals("Speaker 5", TranscriptSpeakers.speakerName("5", speakers, FULL_NAMES), "Expected an empty guest name unnamed");
     assertEquals("Speaker 6", TranscriptSpeakers.speakerName("6", speakers, FULL_NAMES));
     assertEquals("Speaker 1", TranscriptSpeakers.speakerName("1", null, FULL_NAMES));
+    assertNull(TranscriptSpeakers.speakerName(null, speakers, FULL_NAMES), "Expected a sentence with no speaker to have no name");
+    assertNull(TranscriptSpeakers.speakerName(" ", speakers, FULL_NAMES));
     assertEquals("Speaker 1", TranscriptSpeakers.speakerName("1", speakers, null));
     assertEquals("Jean-Luc", TranscriptSpeakers.speakerName("2", speakers, id -> {
       throw new AssertionError("A guest is never looked up: " + id);
