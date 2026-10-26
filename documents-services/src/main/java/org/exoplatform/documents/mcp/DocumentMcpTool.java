@@ -959,13 +959,17 @@ public class DocumentMcpTool implements McpToolPlugin {
       JSONArray segments = readSegments(documentId, identityId);
       Map<String, String> speakers = hasSpeaker(segments) ? readSpeakers(documentId, identityId) : null;
       Map<String, String> namesBySpeaker = new HashMap<>();
-      String speakersList = speakers == null ? null : toSpeakersList(segments, speakers, namesBySpeaker);
+      Map<String, String> keysBySpeaker = new HashMap<>();
+      if (speakers != null) {
+        resolveSpeakers(segments, speakers, namesBySpeaker, keysBySpeaker);
+      }
+      String speakersList = speakers == null ? null : toSpeakersList(segments, namesBySpeaker, keysBySpeaker);
       String lines = null;
       if (segments != null && Boolean.TRUE.equals(timestamps)) {
-        lines = toTimedLines(segments, speakers, namesBySpeaker);
+        lines = toTimedLines(segments, namesBySpeaker);
       }
       if (lines == null && speakers != null) {
-        lines = toTurns(segments, speakers, namesBySpeaker);
+        lines = toTurns(segments, namesBySpeaker, keysBySpeaker);
       }
       String transcription = lines == null ? audioTranscription : lines;
       String outline = chapters == null ? speakersList : speakersList == null ? chapters : chapters + "\n\n" + speakersList;
@@ -1116,25 +1120,57 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Writes the speakers of a transcript, one per line, in the order they first
-   * speak, each with its talk time. Two speaker numbers named after the same
-   * person or the same guest are one speaker.
+   * Names each speaker of a transcript once per answer, so that the list of
+   * speakers, the lines and the turns always agree, and tells who each speaker
+   * is: two numbers named after the same person or the same guest are one
+   * speaker. A number named after a person who is gone, or cannot be read now,
+   * is a speaker of its own, {@code Speaker N}, as the transcript's other
+   * readers show it; a guest is known by its name, whatever that name.
    *
    * @param segments the transcript's segments
    * @param speakers the stored value of each named speaker, by speaker number
-   * @param namesBySpeaker the names already found in this answer, by speaker
-   *          number
+   * @param namesBySpeaker filled with the name of each speaker number: the
+   *          person's full name, the guest's name or {@code Speaker N}
+   * @param keysBySpeaker filled with who each speaker number is: its stored
+   *          value, or {@code speaker:<number>} when it is given by its number
+   */
+  private void resolveSpeakers(JSONArray segments,
+                               Map<String, String> speakers,
+                               Map<String, String> namesBySpeaker,
+                               Map<String, String> keysBySpeaker) {
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String speaker = getSegmentSpeaker(segment);
+      if (speaker != null && getSegmentText(segment) != null && !namesBySpeaker.containsKey(speaker)) {
+        String value = speakers.get(speaker);
+        boolean guest = TranscriptSpeakers.isGuest(value);
+        String fullName = guest || StringUtils.isBlank(value) ? null : getIdentityFullName(value.trim());
+        namesBySpeaker.put(speaker, TranscriptSpeakers.speakerName(speaker, speakers, identityId -> fullName));
+        boolean named = guest ? StringUtils.isNotBlank(TranscriptSpeakers.guestName(value)) : fullName != null;
+        keysBySpeaker.put(speaker, named ? value : "speaker:" + speaker);
+      }
+    }
+  }
+
+  /**
+   * Writes the speakers of a transcript, one per line, in the order they first
+   * speak, each with its talk time.
+   *
+   * @param segments the transcript's segments
+   * @param namesBySpeaker the name of each speaker number
+   * @param keysBySpeaker who each speaker number is, two numbers of one person
+   *          or guest sharing it
    * @return the list, starting with {@code Speakers:}
    */
-  private String toSpeakersList(JSONArray segments, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
+  private String toSpeakersList(JSONArray segments, Map<String, String> namesBySpeaker, Map<String, String> keysBySpeaker) {
     Map<String, String> names = new LinkedHashMap<>();
     Map<String, Double> talkTimes = new HashMap<>();
     for (int i = 0; i < segments.length(); i++) {
       JSONObject segment = segments.optJSONObject(i);
       String speaker = getSegmentSpeaker(segment);
       if (speaker != null && getSegmentText(segment) != null) {
-        String key = getSpeakerKey(speaker, speakers, namesBySpeaker);
-        names.computeIfAbsent(key, k -> getSpeakerName(speaker, speakers, namesBySpeaker));
+        String key = keysBySpeaker.get(speaker);
+        names.computeIfAbsent(key, k -> namesBySpeaker.get(speaker));
         double start = segment.optDouble("start", Double.NaN);
         double end = segment.optDouble("end", Double.NaN);
         double talkTime = Double.isFinite(start) && Double.isFinite(end) && end > start ? end - start : 0;
@@ -1155,13 +1191,11 @@ public class DocumentMcpTool implements McpToolPlugin {
    * moment it was said, then who said it when the transcript tells.
    *
    * @param segments the transcript's segments
-   * @param speakers the stored value of each named speaker, by speaker number,
-   *          or null when the transcript does not tell who speaks
-   * @param namesBySpeaker the names already found in this answer, by speaker
-   *          number
+   * @param namesBySpeaker the name of each speaker number, empty when the
+   *          transcript does not tell who speaks
    * @return the timed transcript, or null when no segment can be used
    */
-  private String toTimedLines(JSONArray segments, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
+  private String toTimedLines(JSONArray segments, Map<String, String> namesBySpeaker) {
     StringBuilder timedTranscription = new StringBuilder();
     for (int i = 0; i < segments.length(); i++) {
       JSONObject segment = segments.optJSONObject(i);
@@ -1171,7 +1205,7 @@ public class DocumentMcpTool implements McpToolPlugin {
         if (!timedTranscription.isEmpty()) {
           timedTranscription.append('\n');
         }
-        String name = speakers == null ? null : getSpeakerName(getSegmentSpeaker(segment), speakers, namesBySpeaker);
+        String name = namesBySpeaker.get(getSegmentSpeaker(segment));
         timedTranscription.append(TranscriptSpeakers.formatLine(start, name, text));
       }
     }
@@ -1183,12 +1217,12 @@ public class DocumentMcpTool implements McpToolPlugin {
    * the following segments of one speaker make one turn.
    *
    * @param segments the transcript's segments
-   * @param speakers the stored value of each named speaker, by speaker number
-   * @param namesBySpeaker the names already found in this answer, by speaker
-   *          number
+   * @param namesBySpeaker the name of each speaker number
+   * @param keysBySpeaker who each speaker number is, two numbers of one person
+   *          or guest sharing it
    * @return the transcript in turns, or null when no segment can be used
    */
-  private String toTurns(JSONArray segments, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
+  private String toTurns(JSONArray segments, Map<String, String> namesBySpeaker, Map<String, String> keysBySpeaker) {
     StringBuilder turns = new StringBuilder();
     String turnKey = null;
     StringBuilder turnText = null;
@@ -1198,13 +1232,13 @@ public class DocumentMcpTool implements McpToolPlugin {
       String text = getSegmentText(segment);
       if (text != null) {
         String speaker = getSegmentSpeaker(segment);
-        String key = speaker == null ? null : getSpeakerKey(speaker, speakers, namesBySpeaker);
+        String key = speaker == null ? null : keysBySpeaker.get(speaker);
         if (turnText != null && StringUtils.equals(key, turnKey)) {
           turnText.append(' ').append(text);
         } else {
           appendTurn(turns, turnName, turnText);
           turnKey = key;
-          turnName = getSpeakerName(speaker, speakers, namesBySpeaker);
+          turnName = speaker == null ? null : namesBySpeaker.get(speaker);
           turnText = new StringBuilder(text);
         }
       }
@@ -1227,52 +1261,6 @@ public class DocumentMcpTool implements McpToolPlugin {
       }
       turns.append(TranscriptSpeakers.formatTurn(name, text.toString()));
     }
-  }
-
-  /**
-   * Tells who a speaker number is, so that two numbers named after the same
-   * person or the same guest are one speaker. A number whose person is gone,
-   * or cannot be read now, is a speaker of its own, {@code Speaker N}, as the
-   * transcript's other readers show it; a guest is always known by its name,
-   * whatever that name.
-   *
-   * @param speaker the speaker's number in the transcript
-   * @param speakers the stored value of each named speaker, by speaker number
-   * @param namesBySpeaker the names already found in this answer, by speaker
-   *          number
-   * @return the stored value of the speaker, or {@code speaker:<number>} when
-   *         it is given by its number
-   */
-  private String getSpeakerKey(String speaker, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
-    String value = StringUtils.trimToNull(speakers.get(speaker));
-    boolean byNumber;
-    if (value == null) {
-      byNumber = true;
-    } else if (TranscriptSpeakers.isGuest(value)) {
-      byNumber = StringUtils.isBlank(TranscriptSpeakers.guestName(value));
-    } else {
-      byNumber = (TranscriptSpeakers.SPEAKER_LABEL + " " + speaker).equals(getSpeakerName(speaker, speakers, namesBySpeaker));
-    }
-    return byNumber ? "speaker:" + speaker : value;
-  }
-
-  /**
-   * Names a speaker, looking each speaker number up once per answer, so that
-   * the list of speakers and the lines always agree.
-   *
-   * @param speaker the speaker's number in the transcript, or null
-   * @param speakers the stored value of each named speaker, by speaker number
-   * @param namesBySpeaker the names already found in this answer, by speaker
-   *          number
-   * @return the person's full name, the guest's name or {@code Speaker N};
-   *         null when the speaker is null
-   */
-  private String getSpeakerName(String speaker, Map<String, String> speakers, Map<String, String> namesBySpeaker) {
-    return speaker == null ? null
-                           : namesBySpeaker.computeIfAbsent(speaker,
-                                                            s -> TranscriptSpeakers.speakerName(s,
-                                                                                                speakers,
-                                                                                                this::getIdentityFullName));
   }
 
   /**
