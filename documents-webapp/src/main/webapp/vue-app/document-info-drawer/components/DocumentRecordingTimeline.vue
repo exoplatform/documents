@@ -91,7 +91,7 @@
 </template>
 <script>
 import {chapterItems, chapterSpans, itemAt, itemDescription, speakerLanes, speakerTurns, talkShares, timelineDuration, timelineTicks, turnItems, turnKey} from '../js/RecordingTimeline.js';
-import {speakerColor} from '../../document-transcript-drawer/js/TranscriptSpeakers.js';
+import {speakerColor, speakerIdentity} from '../../document-transcript-drawer/js/TranscriptSpeakers.js';
 import RecordingTimelineReader from '../js/RecordingTimelineReader.js';
 import {formatMoment} from '../../document-transcript-drawer/js/TranscriptSearch.js';
 
@@ -125,16 +125,13 @@ export default {
       return speakerTurns(this.segments);
     },
     /**
-     * The speakers' lanes, one per person: a person named for two speakers
-     * holds both on one lane, as in the transcript; the least active are
-     * grouped beyond five.
+     * The speakers' lanes, one per person: a person or a guest named for two
+     * speakers holds both on one lane, as in the transcript; the least
+     * active are grouped beyond five.
      * @returns {Array<Object>} the lanes
      */
     lanes() {
-      return speakerLanes(this.turns, speaker => {
-        const identityId = this.speakersByNumber[speaker]?.identityId;
-        return identityId ? `person-${identityId}` : `speaker-${speaker}`;
-      });
+      return speakerLanes(this.turns, speaker => speakerIdentity(speaker, this.speakersByNumber));
     },
     /** @returns {Object} each lane's share of the speaking time, in percents, by its key */
     shares() {
