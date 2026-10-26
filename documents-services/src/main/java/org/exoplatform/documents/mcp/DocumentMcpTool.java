@@ -1032,14 +1032,21 @@ public class DocumentMcpTool implements McpToolPlugin {
    *
    * @param documentId the file's UUID
    * @param identityId the identity id of the user reading it
-   * @return the timed transcript, or null when the file has no segment, or none
-   *         that can be read
+   * @return the timed transcript, or null when the file has no segment, none
+   *         that can be read, or its segments cannot be read now
    * @throws IllegalAccessException when the user may not read the file
    * @throws ObjectNotFoundException when the file does not exist
    */
   private String toTimedTranscription(String documentId, long identityId) throws IllegalAccessException,
                                                                              ObjectNotFoundException {
-    String segments = documentFileService.getTranscriptionSegments(documentId, identityId);
+    String segments;
+    try {
+      segments = documentFileService.getTranscriptionSegments(documentId, identityId);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its segments never takes it away
+      LOG.debug("The timed segments of media file {} cannot be read, its plain transcript is given", documentId, e);
+      return null;
+    }
     if (StringUtils.isBlank(segments)) {
       return null;
     }
