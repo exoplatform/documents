@@ -35,6 +35,8 @@ import org.exoplatform.documents.model.TranscriptionQuote;
  * @param quotes the sentences that show it, each with its moment
  * @param premiseSpeaker for a proposal made by elimination, the other voice it
  *          follows from; null otherwise
+ * @param premiseFullName for a proposal made by elimination, the full name of
+ *          the person that other voice is taken to be; null otherwise
  */
 public record TranscriptionSpeakerProposalEntity(String speaker,
                                                  String identityId,
@@ -44,5 +46,6 @@ public record TranscriptionSpeakerProposalEntity(String speaker,
                                                  boolean strong,
                                                  boolean autoApplied,
                                                  List<TranscriptionQuote> quotes,
-                                                 String premiseSpeaker) {
+                                                 String premiseSpeaker,
+                                                 String premiseFullName) {
 }
