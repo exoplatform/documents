@@ -27,10 +27,10 @@ const STALE_MILLIS = 3600000;
 /**
  * The reading of what a recording's timeline shows (EXO-92127): its timed
  * segments, its chapters and the speakers someone named, with the names they
- * go by. The component using it has a documentId prop and an alert(message,
- * type) method; it names the speakers as the transcript does, follows the
- * names given there, and reads the state again while the transcript is made
- * or its chapters may still come, as the Transcript tab does.
+ * go by. The component using it has a documentId prop; it names the speakers
+ * as the transcript does, telling a failure in an alert, follows the names
+ * given there, and reads the state again while the transcript is made or its
+ * chapters may still come, as the Transcript tab does.
  */
 export default {
   mixins: [TranscriptSpeakerNaming],
@@ -186,6 +186,15 @@ export default {
      */
     laneName(lane) {
       return lane.speaker && this.speakerName(lane.speaker) || this.$t('documents.timeline.others', {0: lane.count});
+    },
+    /**
+     * Shows a message to the user, as the Transcript tab does.
+     * @param {string} message the message
+     * @param {string} type its kind: success or error
+     * @returns {void}
+     */
+    alert(message, type) {
+      document.dispatchEvent(new CustomEvent('alert-message', {detail: {alertMessage: message, alertType: type}}));
     },
   },
 };
