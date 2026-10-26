@@ -196,6 +196,14 @@
       color: @transcriptSpeakerChangeActiveColor;
     }
   }
+  // a speaker's chip shows the keyboard focus with a light ring, not the browser's heavy outline
+  [role=button] {
+    outline: none;
+    border-radius: 12px;
+    &:focus-visible {
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+    }
+  }
 }
 
 // a guest speaker's initials, in the neutral 20px avatar beside the name
@@ -203,9 +211,4 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-}
-
-// the line of the speaker menu that offers a typed name as a guest's, reserved so the field below it never moves: a dense list item's height
-.documentTranscriptSpeakerGuest {
-  min-height: 40px;
 }
