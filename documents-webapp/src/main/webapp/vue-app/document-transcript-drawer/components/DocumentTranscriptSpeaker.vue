@@ -19,8 +19,20 @@
     class="documentTranscriptSpeaker d-flex align-center"
     @click.stop
     @keydown.enter.stop>
+    <div
+      v-if="person && person.guest"
+      class="d-flex align-center text-truncate">
+      <v-avatar
+        :size="20"
+        color="grey lighten-2"
+        class="flex-shrink-0 me-2">
+        <span class="documentTranscriptSpeakerInitials text-sub-title">{{ guestInitials }}</span>
+      </v-avatar>
+      <span class="text-subtitle-2 text-truncate">{{ person.fullName }}</span>
+      <span class="text-caption text-sub-title text-no-wrap ms-1">{{ $t('documents.transcript.speaker.guest') }}</span>
+    </div>
     <user-avatar
-      v-if="person"
+      v-else-if="person"
       :profile-id="person.username"
       :identity="avatarIdentity"
       :size="20"
@@ -72,6 +84,20 @@
         class="pa-3"
         flat>
         <div class="text-subtitle-2 mb-2">{{ $t('documents.transcript.speaker.who', {0: speaker}) }}</div>
+        <!-- above the field: the person list opens below it and would cover the offer; the line is reserved so the field never moves while typing -->
+        <div class="documentTranscriptSpeakerGuest mb-1">
+          <v-list-item
+            v-if="guestOffered"
+            :input-value="guestChosen"
+            class="px-2"
+            color="primary"
+            dense
+            @click="guestChosen = !guestChosen">
+            <v-list-item-title class="text-truncate">
+              {{ $t('documents.transcript.speaker.useGuest', {0: guestName}) }}
+            </v-list-item-title>
+          </v-list-item>
+        </div>
         <identity-suggester
           v-if="menu"
           v-model="chosen"
@@ -80,7 +106,8 @@
           :include-spaces="false"
           name="transcriptSpeaker"
           type-of-relations="user_to_invite"
-          include-users />
+          include-users
+          @input.native="typed = $event.target.value || ''" />
         <div class="d-flex justify-end mt-2">
           <v-btn
             v-if="person"
@@ -91,7 +118,7 @@
             {{ $t('documents.transcript.speaker.clear') }}
           </v-btn>
           <v-btn
-            :disabled="!chosen || saving"
+            :disabled="!chosen && !guestChosen || saving"
             :loading="saving"
             class="btn btn-primary"
             small
@@ -133,6 +160,8 @@ export default {
   data: () => ({
     menu: false,
     chosen: null,
+    typed: '',
+    guestChosen: false,
     // without options the suggester's user search fails; an empty current user leaves the viewer among the users found
     searchOptions: {
       currentUser: '',
@@ -160,6 +189,33 @@ export default {
     color() {
       return speakerColor(this.speaker);
     },
+    /**
+     * The name typed in the person search, as a guest would be named.
+     *
+     * @returns {string} the name, trimmed
+     */
+    guestName() {
+      return this.typed.trim();
+    },
+    /**
+     * Tells whether to offer naming the speaker after the typed name, as a
+     * guest with no account: once a name is typed and no user is chosen, even
+     * when the search finds people, a guest's name being often a first name
+     * some user also holds.
+     *
+     * @returns {boolean} true to offer it
+     */
+    guestOffered() {
+      return !!this.guestName && !this.chosen;
+    },
+    /**
+     * The initials of a guest's name: its first two words' first letters.
+     *
+     * @returns {string} the initials, upper case
+     */
+    guestInitials() {
+      return (this.person?.fullName || '').trim().split(/\s+/).slice(0, 2).map(word => Array.from(word)[0] || '').join('').toUpperCase();
+    },
     suggesterLabels() {
       return {
         placeholder: this.$t('documents.transcript.speaker.search'),
@@ -180,7 +236,19 @@ export default {
       } else {
         window.removeEventListener('keydown', this.closeMenuOnEscape, true);
         this.chosen = null;
+        this.typed = '';
+        this.guestChosen = false;
       }
+    },
+    chosen(chosen) {
+      if (chosen) {
+        // the search forgets its text once a user is picked: a removed pick leaves no name to offer
+        this.typed = '';
+        this.guestChosen = false;
+      }
+    },
+    guestName() {
+      this.guestChosen = false;
     },
   },
   /**
@@ -228,7 +296,11 @@ export default {
      * @returns {void}
      */
     name() {
-      this.$emit('name', {speaker: this.speaker, user: this.chosen});
+      if (this.guestChosen) {
+        this.$emit('name', {speaker: this.speaker, guestName: this.guestName});
+      } else {
+        this.$emit('name', {speaker: this.speaker, user: this.chosen});
+      }
     },
     /**
      * Asks to unname the speaker.
