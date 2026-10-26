@@ -196,6 +196,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                       EOO_COMMENT_ID              = "eoo:commentId";
 
+  private static final String                       NODE_NOT_FOUND_MESSAGE      = "Node with id %s not found";
+
   private static final String                       ADD_TAG_DOCUMENT            = "add_tag_document";
 
   private static final String                       KEEP_BOTH                   = "keepBoth";
@@ -2545,12 +2547,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
       AbstractNode abstractNode = getDocumentById(session, documentId, identity);
       if (abstractNode == null) {
-        throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
+        throw new ObjectNotFoundException(String.format(NODE_NOT_FOUND_MESSAGE, documentId));
       }  else {
         return abstractNode;
       }
     } catch (ItemNotFoundException e) {
-      throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
+      throw new ObjectNotFoundException(String.format(NODE_NOT_FOUND_MESSAGE, documentId));
     } catch (RepositoryException e) {
       throw new IllegalAccessException(String.format("Node with id %s not accessible to user %s", documentId, username));
     }
@@ -2576,7 +2578,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    */
   @Override
   public String getDocumentPathInDrive(String documentId, long ownerId, Identity aclIdentity) throws ObjectNotFoundException {
-    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
     if (ownerIdentity == null) {
       throw new ObjectNotFoundException(String.format("Owner identity with id %s not found", ownerId));
     }
@@ -2586,7 +2588,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getNodeByIdentifier(session, documentId);
       if (node == null) {
-        throw new ObjectNotFoundException(String.format("Node with id %s not found", documentId));
+        throw new ObjectNotFoundException(String.format(NODE_NOT_FOUND_MESSAGE, documentId));
       }
       Node driveRootNode = getDriveRootNode(ownerIdentity, aclIdentity.getUserId(), sessionProvider);
       if (driveRootNode == null) {

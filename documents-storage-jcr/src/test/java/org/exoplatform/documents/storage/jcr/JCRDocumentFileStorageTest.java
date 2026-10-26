@@ -2068,7 +2068,7 @@ public class JCRDocumentFileStorageTest {
 
     assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentPathInDrive("docA", 2L, aclIdentity));
 
-    when(identityManager.getIdentity("2")).thenReturn(spaceIdentity);
+    when(identityManager.getIdentity(2L)).thenReturn(spaceIdentity);
     assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentPathInDrive("docA", 2L, aclIdentity));
 
     ExtendedNode docNode = mock(ExtendedNode.class);
@@ -2132,7 +2132,7 @@ public class JCRDocumentFileStorageTest {
     // A user drive ignores the same grand parent shortcut: its folder URL would not open
     Identity userIdentity = new Identity(OrganizationIdentityProvider.NAME, "john");
     userIdentity.setId("3");
-    when(identityManager.getIdentity("3")).thenReturn(userIdentity);
+    when(identityManager.getIdentity(3L)).thenReturn(userIdentity);
     Node privateNode = mock(Node.class);
     when(privateNode.getPath()).thenReturn("/Users/j___/jo___/joh___/john/Private");
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
