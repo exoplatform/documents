@@ -44,6 +44,7 @@
       v-model="menu"
       :disabled="!canEdit || busy"
       :close-on-content-click="false"
+      :top="menuTop"
       class="d-flex"
       offset-y
       max-width="300">
@@ -151,6 +152,15 @@ export default {
     },
     /** Another speaker is being saved: this one waits, its controls in place but disabled. */
     busy: {
+      type: Boolean,
+      default: false,
+    },
+    /**
+     * Opens the menu above the speaker, for a speaker shown low in the view: the
+     * person search then has room to open its list below its field, under the
+     * guest offer.
+     */
+    menuTop: {
       type: Boolean,
       default: false,
     },
