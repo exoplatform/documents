@@ -292,7 +292,8 @@ export default {
       }
     },
     /**
-     * Asks to name the speaker after the chosen user.
+     * Asks to name the speaker after the chosen user, or after the typed name
+     * as a guest's.
      * @returns {void}
      */
     name() {
