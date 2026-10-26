@@ -620,8 +620,8 @@ public class DocumentTranscriptionService {
    *          proposal was made from
    * @return true when the speaker was named; false when it, or the person,
    *         already was named, the transcript changed, the proposal was
-   *         dismissed meanwhile, its premise no longer holds, or the owner may
-   *         no longer name it
+   *         dismissed meanwhile, the owner may no longer name it, or what it
+   *         rests on cannot be read
    */
   private boolean autoName(String documentId,
                            TranscriptionSpeakerSuggestion suggestion,
@@ -632,6 +632,13 @@ public class DocumentTranscriptionService {
       return documentFileService.applyTranscriptionSpeakerSuggestion(documentId, suggestion, transcriptUpdated, ownerIdentityId);
     } catch (IllegalAccessException | ObjectNotFoundException | IllegalArgumentException | IllegalStateException e) {
       LOG.debug("Speaker {} of recording '{}' is left to a person to name", suggestion.speaker(), documentId, e);
+      return false;
+    } catch (RuntimeException e) {
+      // one speaker that cannot be checked never stops the others from being named
+      LOG.warn("Error naming speaker {} of recording '{}' after its proposal, left to a person to name",
+               suggestion.speaker(),
+               documentId,
+               e);
       return false;
     }
   }
