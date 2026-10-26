@@ -790,6 +790,27 @@ public class DocumentMcpToolTest {
   }
 
   /**
+   * A guest is known by its name, even a name that reads as a speaker's number:
+   * two numbers named after that guest are one speaker (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesOneSpeakerToTheNumbersOfOneGuestNamedLikeANumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":2,\"end\":5,\"text\":\"Encore moi.\",\"speaker\":\"3\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "name:Speaker 1", "3", "name:Speaker 1"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:05)
+
+        Transcript:
+        Speaker 1: Bonjour. Encore moi.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
    * Asked with timestamps, a transcript whose segments tell who speaks but
    * have no usable moment is given in turns, so that its lines still name who
    * said them (EXO-92123).
