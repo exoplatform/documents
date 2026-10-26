@@ -46,7 +46,8 @@
           icon
           small
           v-on="on"
-          @keydown.space.stop>
+          @keydown.space.stop
+          @keydown.esc="closeMenuFromActivator">
           <v-icon size="14">fas fa-pen</v-icon>
         </v-btn>
         <span
@@ -58,6 +59,7 @@
           :tabindex="canEdit ? 0 : null"
           class="d-inline-flex align-center"
           v-on="on"
+          @keydown.esc="closeMenuFromActivator"
           @keydown.enter.stop.prevent="openFromKeyboard"
           @keydown.space.stop.prevent="openFromKeyboard">
           <v-chip
@@ -68,7 +70,11 @@
           </v-chip>
         </span>
       </template>
-      <v-card class="pa-3" flat>
+      <!-- on capture: the person search answers Escape itself; stopped, so that the views around close not with the menu -->
+      <v-card
+        class="pa-3"
+        flat
+        @keydown.esc.capture.stop="closeMenu">
         <div class="text-subtitle-2 mb-2">{{ $t('documents.transcript.speaker.who', {0: speaker}) }}</div>
         <identity-suggester
           v-if="menu"
@@ -186,6 +192,29 @@ export default {
     openFromKeyboard() {
       if (this.canEdit && !this.busy) {
         this.menu = true;
+      }
+    },
+    /**
+     * Closes the menu, the keyboard focus going back to the chip or the pencil
+     * that opens it, as the menu's own Escape would.
+     * @returns {void}
+     */
+    closeMenu() {
+      this.menu = false;
+      this.$nextTick(() => this.$el?.querySelector?.('.documentTranscriptSpeakerChange, [role=button]')?.focus());
+    },
+    /**
+     * Closes the open menu on Escape from the chip or the pencil, the key then
+     * going no further; with the menu closed, Escape goes on to the views
+     * around.
+     *
+     * @param {KeyboardEvent} event the key
+     * @returns {void}
+     */
+    closeMenuFromActivator(event) {
+      if (this.menu) {
+        event.stopPropagation();
+        this.closeMenu();
       }
     },
     /**
