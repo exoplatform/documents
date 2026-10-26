@@ -48,20 +48,23 @@ export default {
       return this.reloadSpeakers(documentId);
     },
     /**
-     * Names a speaker after the user chosen in the suggester, then reads the
-     * named speakers again.
+     * Names a speaker after the user chosen in the suggester, or after a
+     * guest's plain name, then reads the named speakers again.
      *
-     * @param {{speaker: string, user: object}} choice the speaker and the user
+     * @param {{speaker: string, user: object, guestName: string}} choice the
+     *          speaker, and the user or the guest's name
      * @returns {Promise<void>} resolved once done
      */
-    nameSpeaker({speaker, user}) {
+    nameSpeaker({speaker, user, guestName}) {
       if (this.savingSpeaker) {
         return Promise.resolve();
       }
       const documentId = this.documentId;
       this.savingSpeaker = speaker;
-      return this.identityIdOf(user)
-        .then(identityId => this.$transcriptionService.setSpeaker(documentId, speaker, identityId))
+      const saved = guestName
+        ? this.$transcriptionService.setGuestSpeaker(documentId, speaker, guestName)
+        : this.identityIdOf(user).then(identityId => this.$transcriptionService.setSpeaker(documentId, speaker, identityId));
+      return saved
         .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
     },
