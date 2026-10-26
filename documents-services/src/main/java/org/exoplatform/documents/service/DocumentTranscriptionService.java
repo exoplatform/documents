@@ -540,8 +540,9 @@ public class DocumentTranscriptionService {
    * The proposals of who the speakers of a file's transcript are, for a user
    * who can edit the file (EXO-92126), each with the sentences that show it. A
    * proposal waiting for a person is shown while neither its speaker nor its
-   * person is named; an applied one while its speaker is still named after its
-   * person.
+   * person is named, and, for one made by elimination, while what it follows
+   * from still holds (see {@link #premiseHolds}); an applied one while its
+   * speaker is still named after its person.
    *
    * @param documentId the file's UUID
    * @param aclIdentity the identity id of the user
@@ -565,7 +566,8 @@ public class DocumentTranscriptionService {
     for (TranscriptionSpeakerSuggestion suggestion : suggestions) {
       String person = String.valueOf(suggestion.identityId());
       boolean shown = suggestion.autoApplied() ? person.equals(named.get(suggestion.speaker()))
-                                               : !named.containsKey(suggestion.speaker()) && !named.containsValue(person);
+                                               : !named.containsKey(suggestion.speaker()) && !named.containsValue(person)
+                                                   && premiseHolds(suggestion, named, suggestions);
       if (shown) {
         List<TranscriptionQuote> quotes = new ArrayList<>();
         for (int index : suggestion.evidence()) {
@@ -581,10 +583,45 @@ public class DocumentTranscriptionService {
                                                        suggestion.strong(),
                                                        suggestion.autoApplied(),
                                                        quotes,
-                                                       suggestion.premiseSpeaker()));
+                                                       suggestion.premiseSpeaker(),
+                                                       suggestion.premiseIdentityId()));
       }
     }
     return proposals;
+  }
+
+  /**
+   * Tells whether what a proposal follows from still holds. One made by
+   * elimination follows from its other voice being its premise person: that
+   * voice must still be named after that person, or, while nobody named it,
+   * still carry a strong proposal for that person, waiting for a confirmation.
+   * Once a person undoes or changes that name, or dismisses that proposal, the
+   * proposal made by elimination has no reason left and is no longer shown.
+   *
+   * @param suggestion the proposal
+   * @param named the identity id of the person each named speaker is, by
+   *          speaker
+   * @param suggestions every proposal stored for the transcript
+   * @return true for a proposal that follows from no other voice, or whose
+   *         premise still holds
+   */
+  private static boolean premiseHolds(TranscriptionSpeakerSuggestion suggestion,
+                                      Map<String, String> named,
+                                      List<TranscriptionSpeakerSuggestion> suggestions) {
+    if (suggestion.premiseSpeaker() == null) {
+      return true;
+    } else if (suggestion.premiseIdentityId() == null) {
+      return false;
+    }
+    String premiseName = named.get(suggestion.premiseSpeaker());
+    if (premiseName != null) {
+      return premiseName.equals(String.valueOf(suggestion.premiseIdentityId()));
+    }
+    return suggestions.stream()
+                      .anyMatch(other -> other.speaker().equals(suggestion.premiseSpeaker())
+                                         && other.identityId() == suggestion.premiseIdentityId()
+                                         && other.strong()
+                                         && other.premiseSpeaker() == null);
   }
 
   /**
