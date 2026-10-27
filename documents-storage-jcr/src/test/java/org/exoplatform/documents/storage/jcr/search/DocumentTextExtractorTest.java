@@ -138,7 +138,27 @@ class DocumentTextExtractorTest {
   void cutsTheTextAtTheMaximumLength() throws Exception {
     readerReturning("0123456789 and much more text");
 
-    assertEquals("0123456789", extractor.extract(DOCUMENT_ID).text());
+    DocumentTextContent text = extractor.extract(DOCUMENT_ID);
+
+    assertEquals("0123456789", text.text());
+    assertTrue(text.truncated());
+  }
+
+  /**
+   * A text of exactly the most characters read is whole, not cut: the
+   * extractor reads one character past the limit to tell the two apart.
+   * Mutants: the probe character dropped, a text at the limit marked cut.
+   *
+   * @throws Exception never, the mocks do not throw
+   */
+  @Test
+  void doesNotMarkATextOfExactlyTheMaximumLengthAsCut() throws Exception {
+    readerReturning("0123456789");
+
+    DocumentTextContent text = extractor.extract(DOCUMENT_ID);
+
+    assertEquals("0123456789", text.text());
+    assertFalse(text.truncated());
   }
 
   @Test
@@ -147,7 +167,10 @@ class DocumentTextExtractorTest {
     when(reader.getContentAsText(any())).thenReturn("0123456789 and much more text");
     when(documentReaderService.getDocumentReader(MIME_TYPE)).thenReturn(reader);
 
-    assertEquals("0123456789", extractor.extract(DOCUMENT_ID).text());
+    DocumentTextContent text = extractor.extract(DOCUMENT_ID);
+
+    assertEquals("0123456789", text.text());
+    assertTrue(text.truncated());
   }
 
   @Test
