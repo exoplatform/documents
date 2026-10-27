@@ -128,3 +128,72 @@ export function retry(documentId) {
     }
   });
 }
+
+/**
+ * Reads the speakers of a file's transcript whom someone named, and whether
+ * the current user may name them (EXO-92123).
+ *
+ * @param {string} documentId the file's UUID
+ * @returns {Promise<{canEdit: boolean, speakers: Array<object>}>} the named speakers
+ */
+export function getSpeakers(documentId) {
+  return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/speakers`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw new Error(`Error ${resp?.status} when reading the speakers of '${documentId}'`);
+    }
+    return resp.json();
+  });
+}
+
+/**
+ * Says which person a speaker of a file's transcript is (EXO-92123).
+ *
+ * @param {string} documentId the file's UUID
+ * @param {string} speaker the speaker's number
+ * @param {string|number} identityId the person's identity id
+ * @returns {Promise<void>} resolved once named; rejected with the refusal's
+ *          message code
+ */
+export function setSpeaker(documentId, speaker, identityId) {
+  return updateSpeaker(documentId, speaker, 'PUT', `?identityId=${encodeURIComponent(identityId)}`);
+}
+
+/**
+ * Says that a speaker of a file's transcript is nobody named any more
+ * (EXO-92123).
+ *
+ * @param {string} documentId the file's UUID
+ * @param {string} speaker the speaker's number
+ * @returns {Promise<void>} resolved once unnamed
+ */
+export function unsetSpeaker(documentId, speaker) {
+  return updateSpeaker(documentId, speaker, 'DELETE', '');
+}
+
+/**
+ * Sends a change of a speaker, rejecting with the message code the server
+ * answers with when it refuses it.
+ *
+ * @param {string} documentId the file's UUID
+ * @param {string} speaker the speaker's number
+ * @param {string} method PUT or DELETE
+ * @param {string} query the query string, empty for none
+ * @returns {Promise<void>} resolved once done
+ */
+function updateSpeaker(documentId, speaker, method, query) {
+  return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/speakers/${encodeURIComponent(speaker)}${query}`, {
+    method,
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp?.ok) {
+      return resp.json()
+        .catch(() => ({}))
+        .then(body => {
+          throw new Error(body?.message || `Error ${resp?.status} when changing a speaker of '${documentId}'`);
+        });
+    }
+  });
+}

@@ -46,6 +46,11 @@
       :term="term"
       :seconds="seconds"
       :playing-seconds="playingSeconds"
+      :speakers="speakers"
+      :can-name-speakers="canNameSpeakers"
+      :saving-speaker="savingSpeaker"
+      @name-speaker="nameSpeaker"
+      @unname-speaker="unnameSpeaker"
       @seek="$emit('seek', $event)" />
     <document-transcript-status
       v-else-if="state || unreadable"
@@ -58,13 +63,14 @@
 </template>
 <script>
 import TranscriptChaptersRequest from '../../document-transcript-drawer/js/TranscriptChaptersRequest.js';
+import TranscriptSpeakerNaming from '../../document-transcript-drawer/js/TranscriptSpeakerNaming.js';
 
 const POLLING_MILLIS = 15000;
 
 const STALE_MILLIS = 3600000;
 
 export default {
-  mixins: [TranscriptChaptersRequest],
+  mixins: [TranscriptChaptersRequest, TranscriptSpeakerNaming],
   props: {
     documentId: {
       type: String,
@@ -123,6 +129,8 @@ export default {
         this.segments = null;
         this.chapters = null;
         this.resetChaptersRequest();
+        this.speakers = null;
+        this.canNameSpeakers = false;
         this.term = this.initialTerm || '';
         this.refresh();
       },
@@ -177,7 +185,7 @@ export default {
             if (Array.isArray(timedSegments) && timedSegments.length) {
               this.segments = timedSegments;
               this.chapters = Array.isArray(transcriptChapters) && transcriptChapters || null;
-              return;
+              return this.loadSpeakers(documentId, timedSegments);
             }
             return this.$transcriptionService.getText(documentId).then(text => {
               if (read === this.lastRead) {

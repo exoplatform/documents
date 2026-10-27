@@ -82,6 +82,11 @@
             :term="term"
             :seconds="seconds"
             :playing-seconds="playerUrl && playerSeconds"
+            :speakers="speakers"
+            :can-name-speakers="canNameSpeakers"
+            :saving-speaker="savingSpeaker"
+            @name-speaker="nameSpeaker"
+            @unname-speaker="unnameSpeaker"
             @seek="seek" />
           <document-transcript-status
             v-else-if="state || unreadable"
@@ -96,13 +101,14 @@
 </template>
 <script>
 import TranscriptChaptersRequest from '../js/TranscriptChaptersRequest.js';
+import TranscriptSpeakerNaming from '../js/TranscriptSpeakerNaming.js';
 
 const POLLING_MILLIS = 15000;
 
 const STALE_MILLIS = 3600000;
 
 export default {
-  mixins: [TranscriptChaptersRequest],
+  mixins: [TranscriptChaptersRequest, TranscriptSpeakerNaming],
   data: () => ({
     drawer: false,
     loading: false,
@@ -194,6 +200,8 @@ export default {
         this.segments = null;
         this.chapters = null;
         this.resetChaptersRequest();
+        this.speakers = null;
+        this.canNameSpeakers = false;
         this.playerUrl = null;
         this.fileUnknown = false;
         this.loadFile();
@@ -329,7 +337,7 @@ export default {
         }
         if (Array.isArray(timedSegments) && timedSegments.length) {
           this.segments = timedSegments;
-          return;
+          return this.loadSpeakers(documentId, timedSegments);
         }
         return this.$transcriptionService.getText(documentId).then(text => {
           if (documentId === this.documentId) {
@@ -557,6 +565,10 @@ export default {
         return;
       }
       this.$refs.drawer.filterText = detail.term || '';
+      // the names may have changed in the full view
+      if (this.segments?.some(segment => segment.speaker)) {
+        this.reloadSpeakers(this.documentId);
+      }
       const media = this.playerMedia();
       if (media && Number.isFinite(detail.seconds)) {
         media.currentTime = detail.seconds;

@@ -38,8 +38,14 @@
         :open="!!opened[group.key]"
         :current="group.key === activeGroupKey"
         :color="group.color"
+        :speakers-by-number="speakersByNumber"
+        :speaker-heads="speakerHeads"
+        :can-name-speakers="canNameSpeakers"
+        :saving-speaker="savingSpeaker"
         @toggle="toggleChapter(group.key)"
-        @seek="$emit('seek', $event)" />
+        @seek="$emit('seek', $event)"
+        @name-speaker="$emit('name-speaker', $event)"
+        @unname-speaker="$emit('unname-speaker', $event)" />
     </template>
     <template v-else-if="hasSegments">
       <div
@@ -48,16 +54,33 @@
         :data-segment-index="index"
         :title="$t('documents.transcript.playFrom', {0: formatMoment(segment.start)})"
         :class="index === activeIndex && 'light-grey-background-color'"
-        class="d-flex align-start py-1 px-2 clickable border-radius"
+        class="d-flex flex-column py-1 px-2 clickable border-radius"
         role="button"
         tabindex="0"
         @click="$emit('seek', segment.start)"
         @keydown.enter="$emit('seek', segment.start)">
-        <span class="text-caption primary--text text-no-wrap pt-1 me-3">{{ formatMoment(segment.start) }}</span>
-        <document-transcript-highlight
-          :text="segment.text"
-          :term="term"
-          class="text-body-1" />
+        <div v-if="speakerHeads[index]" class="d-flex align-center mb-1">
+          <span class="text-caption primary--text text-no-wrap me-3">{{ formatMoment(segment.start) }}</span>
+          <document-transcript-speaker
+            :speaker="segment.speaker"
+            :person="speakersByNumber[segment.speaker]"
+            :can-edit="canNameSpeakers"
+            :busy="!!savingSpeaker && savingSpeaker !== segment.speaker"
+            :saving="savingSpeaker === segment.speaker"
+            class="text-truncate"
+            @name="$emit('name-speaker', $event)"
+            @unname="$emit('unname-speaker', $event)" />
+        </div>
+        <div class="d-flex align-start">
+          <span
+            :class="speakerHeads[index] && 'invisible'"
+            :aria-hidden="speakerHeads[index] && 'true' || null"
+            class="text-caption primary--text text-no-wrap pt-1 me-3">{{ formatMoment(segment.start) }}</span>
+          <document-transcript-highlight
+            :text="segment.text"
+            :term="term"
+            class="text-body-1 flex-grow-1" />
+        </div>
       </div>
     </template>
     <template v-else>
@@ -74,6 +97,7 @@
 import {countOccurrences, formatMoment} from '../js/TranscriptSearch.js';
 import {groupByChapters} from '../js/TranscriptChapters.js';
 import TranscriptChapterFolds from '../js/TranscriptChapterFolds.js';
+import {opensSpeakerRun} from '../js/TranscriptSpeakers.js';
 
 export default {
   mixins: [TranscriptChapterFolds],
@@ -106,6 +130,18 @@ export default {
       type: Number,
       default: null,
     },
+    speakers: {
+      type: Array,
+      default: null,
+    },
+    canNameSpeakers: {
+      type: Boolean,
+      default: false,
+    },
+    savingSpeaker: {
+      type: String,
+      default: null,
+    },
   },
   computed: {
     hasSegments() {
@@ -132,6 +168,30 @@ export default {
     },
     hasChapters() {
       return this.groups.some(group => group.chapter);
+    },
+    speakersByNumber() {
+      return Object.fromEntries((this.speakers || []).map(person => [person.speaker, person]));
+    },
+    speakerKey() {
+      // one person named for two numbers is one run; a person and a number never compare equal
+      return speaker => {
+        const identityId = this.speakersByNumber[speaker]?.identityId;
+        return identityId ? `person:${identityId}` : `speaker:${speaker}`;
+      };
+    },
+    /**
+     * Tells, sentence by sentence, whether it opens a run of its speaker, the
+     * speaker then showing on its first line, beside its moment. Under
+     * chapters, the first line of a chapter opens a run too.
+     *
+     * @returns {Array<boolean>} true for each sentence that shows its speaker
+     */
+    speakerHeads() {
+      const chapterFirsts = new Set();
+      if (this.hasChapters) {
+        this.groups.forEach(group => group.rows.forEach(row => row.firstOfChapter && chapterFirsts.add(row.index)));
+      }
+      return (this.segments || []).map((segment, index) => opensSpeakerRun(this.segments, index, chapterFirsts.has(index), this.speakerKey));
     },
   },
   watch: {

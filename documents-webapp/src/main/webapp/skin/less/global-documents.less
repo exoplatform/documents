@@ -179,3 +179,21 @@
     padding-top: 2px;
   }
 }
+
+// a transcript's change-speaker button: a light pencil right after the name, darker on the speaker's hover or focus, its button 24px square;
+// under .VuetifyApp, as Vuetify's own rules are, to outrank them though Vuetify's stylesheet loads after this one, and on the button, whose colour its icon inherits
+@transcriptSpeakerChangeColor: #8a949e;
+@transcriptSpeakerChangeActiveColor: #4a5560;
+.VuetifyApp .documentTranscriptSpeaker {
+  .documentTranscriptSpeakerChange.v-btn.v-btn--icon {
+    width: 24px;
+    height: 24px;
+    color: @transcriptSpeakerChangeColor;
+  }
+  &:hover,
+  &:focus-within {
+    .documentTranscriptSpeakerChange.v-btn.v-btn--icon {
+      color: @transcriptSpeakerChangeActiveColor;
+    }
+  }
+}
