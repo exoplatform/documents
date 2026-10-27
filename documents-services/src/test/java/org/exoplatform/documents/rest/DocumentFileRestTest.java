@@ -1885,11 +1885,49 @@ public class DocumentFileRestTest {
     when(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", userName, 250, 250)).thenReturn(fileThumbnail);
     response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", null, "250x250");
     assertEquals(200, response.getStatus());
+    javax.ws.rs.core.CacheControl previewCacheControl =
+                                                    (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
+    assertTrue(previewCacheControl.isPrivate());
     response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
     assertEquals(404, response.getStatus());
     when(documentFileService.getDocumentContent("docId", userName)).thenReturn(fileThumbnail);
     response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
     assertEquals(200, response.getStatus());
+    when(documentFileService.getImageThumbnailContent("file", "12", userName, 0, 0)).thenThrow(IllegalAccessException.class);
+    response = documentFileRest.getDocumentContent(uriInfo, request, "12", "file", null, "0x0");
+    assertEquals(403, response.getStatus());
+  }
+
+  @Test
+  public void testCreateVideoThumbnailRefusals() throws Exception {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
+                                                             spaceService,
+                                                             identityManager,
+                                                             metadataService,
+                                                             settingService,
+                                                             publicDocumentAccessService,
+                                                             externalDownloadService,
+                                                             documentWebDavService);
+    ConversationState.setCurrent(new ConversationState(new org.exoplatform.services.security.Identity("user")));
+    String data = Base64.getEncoder().encodeToString(new byte[] { 1 });
+
+    Response response = documentFileRest.createVideoThumbnail(null, "docId", "videoThumbnail", "axb", data);
+    assertEquals(400, response.getStatus());
+    assertEquals("size_invalid", response.getEntity());
+    response = documentFileRest.createVideoThumbnail(null, "docId", "videoThumbnail", "250x250", "not base64!");
+    assertEquals(400, response.getStatus());
+    assertEquals("data_not_base64", response.getEntity());
+    verifyNoInteractions(documentFileService);
+
+    when(documentFileService.createThumbnail(eq("file"), any(), eq("user"), anyInt(), anyInt())).thenThrow(IllegalArgumentException.class);
+    response = documentFileRest.createVideoThumbnail(null, "12", "file", "250x250", data);
+    assertEquals(400, response.getStatus());
+    assertEquals("thumbnail_type_not_supported", response.getEntity());
+
+    when(documentFileService.createThumbnail(eq("videoThumbnail"), any(), eq("user"), anyInt(), anyInt())).thenThrow(IllegalAccessException.class);
+    response = documentFileRest.createVideoThumbnail(null, "docId", "videoThumbnail", "250x250", data);
+    assertEquals(403, response.getStatus());
   }
 
   @Test

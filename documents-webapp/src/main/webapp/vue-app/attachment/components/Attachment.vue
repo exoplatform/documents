@@ -283,7 +283,9 @@ export default {
         canvas.height = video.videoHeight;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = canvas.toDataURL('image/jpeg').split(',')[1];
-        this.$attachmentService.createThumbnail('videoThumbnail',file.id, imageData);
+        this.$attachmentService.createThumbnail('videoThumbnail',file.id, imageData).catch(() => {
+          // a user who can't edit the video keeps its existing thumbnail
+        });
       }.bind(this);
     }
   }
