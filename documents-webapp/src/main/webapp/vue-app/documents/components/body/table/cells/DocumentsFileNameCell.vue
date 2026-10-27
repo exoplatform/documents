@@ -330,10 +330,10 @@ export default {
       return new Date(this.file.date).toLocaleString(lang, options).split('/').join('-');
     },
     openInEditMode(file) {
-      this.$documentsUtils.openLink(this.$documentsUtils.getEditorUrl(file, ''), '_blank');
+      this.$root.openInEditMode(file);
     },
     openInReadOnlyMode(file) {
-      this.$documentsUtils.openLink(this.$documentsUtils.getEditorUrl(file, 'view'), '_blank');
+      this.$root.openInReadOnlyMode(file);
     },
     openPreview() {
       this.loading = true;
