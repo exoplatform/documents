@@ -157,11 +157,15 @@
                   @available="transcriptAvailable = $event"
                   @transcript="showTranscript" />
                 <!-- Rows other add-ons contribute to a file's details, each
-                     deciding from the file whether it shows. -->
+                     deciding from the file whether it shows. A name of its
+                     own and strict-type: a non-strict slot renders every
+                     component registered under its name, whatever the type,
+                     and DocumentsInfo also holds the menu's contributions. -->
                 <extension-registry-components
                   :params="detailsContributionParams"
-                  name="DocumentsInfo"
+                  name="DocumentsInfoDetails"
                   type="documents-info-details"
+                  strict-type
                   parent-element="div"
                   element="div"
                   class="documentInfoDetailsContributions" />
