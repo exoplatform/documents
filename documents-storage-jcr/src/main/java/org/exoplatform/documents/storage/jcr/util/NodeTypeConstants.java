@@ -173,6 +173,17 @@ public class NodeTypeConstants {
   public static final String EXO_TRANSCRIPTION_SEGMENTS        = "exo:transcriptionSegments";
 
   /**
+   * The mixin of a transcribed file whose speakers someone named (EXO-92123): a
+   * mixin of its own, since the platform registers its node types only when they
+   * do not exist yet, so a property added to an existing one would never reach
+   * an instance that has it.
+   */
+  public static final String EXO_TRANSCRIPTION_SPEAKERS        = "exo:transcriptionSpeakers";
+
+  /** The person each named speaker is, one {@code <speaker>=<identity id>} value per speaker. */
+  public static final String EXO_TRANSCRIPTION_SPEAKER         = "exo:transcriptionSpeaker";
+
+  /**
    * The mixin, and its one Binary property, holding the chapters of a
    * transcript as a JSON list (EXO-92122): a mixin of its own, since an
    * existing repository never takes a property added to a registered one.

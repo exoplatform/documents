@@ -23,12 +23,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,10 +46,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.TranscriptionStatus;
+import org.exoplatform.documents.model.TranscriptionBusyException;
 import org.exoplatform.documents.model.TranscriptionState;
+import org.exoplatform.documents.rest.model.TranscriptionSpeakerEntity;
+import org.exoplatform.documents.rest.model.TranscriptionSpeakersEntity;
 import org.exoplatform.documents.rest.model.TranscriptionStateEntity;
 import org.exoplatform.documents.service.DocumentTranscriptionService;
 import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -170,6 +178,63 @@ class TranscriptionRestTest {
     e = assertThrows(ResponseStatusException.class, () -> rest.requestChapters(request, DOCUMENT_ID));
     assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
     assertEquals("documents.transcription.notFound", e.getReason());
+  }
+
+  /**
+   * The named speakers come with the person each is, a deleted person left
+   * out, and whether the caller may name them (EXO-92123).
+   */
+  @Test
+  void theNamedSpeakersComeWithTheirPerson_andWhetherTheCallerMayNameThem() throws Exception {
+    when(documentTranscriptionService.getSpeakers(DOCUMENT_ID, 7L)).thenReturn(new TreeMap<>(Map.of("1", "42", "2", "43")));
+    when(documentTranscriptionService.canNameSpeakers(DOCUMENT_ID, 7L)).thenReturn(true);
+    Identity julien = mock(Identity.class);
+    Profile profile = mock(Profile.class);
+    when(julien.getRemoteId()).thenReturn("julien");
+    when(julien.getProfile()).thenReturn(profile);
+    when(profile.getFullName()).thenReturn("Julien Dupont");
+    when(profile.getAvatarUrl()).thenReturn("/avatar/julien");
+    Identity deleted = mock(Identity.class);
+    when(deleted.isDeleted()).thenReturn(true);
+    lenient().when(deleted.getProfile()).thenReturn(profile);
+    when(identityManager.getIdentity("42")).thenReturn(julien);
+    when(identityManager.getIdentity("43")).thenReturn(deleted);
+
+    ResponseEntity<TranscriptionSpeakersEntity> answer = rest.getSpeakers(request, DOCUMENT_ID);
+
+    assertEquals("no-store", answer.getHeaders().getCacheControl());
+    assertTrue(answer.getBody().canEdit());
+    assertEquals(List.of(new TranscriptionSpeakerEntity("1", "42", "julien", "Julien Dupont", "/avatar/julien")),
+                 answer.getBody().speakers());
+  }
+
+  /**
+   * Naming a speaker answers 204, a refused value 400 with its message code,
+   * and a caller who cannot edit 403; unnaming sends no person.
+   */
+  @Test
+  void namingASpeakerAnswersItsStatus() throws Exception {
+    assertEquals(HttpStatus.NO_CONTENT, rest.setSpeaker(request, DOCUMENT_ID, "1", 42L).getStatusCode());
+    verify(documentTranscriptionService).setSpeaker(DOCUMENT_ID, "1", 42L, 7L);
+
+    assertEquals(HttpStatus.NO_CONTENT, rest.unsetSpeaker(request, DOCUMENT_ID, "1").getStatusCode());
+    verify(documentTranscriptionService).setSpeaker(DOCUMENT_ID, "1", null, 7L);
+
+    doThrow(new IllegalArgumentException("documents.transcription.speaker.unknown")).when(documentTranscriptionService)
+                                                                                    .setSpeaker(DOCUMENT_ID, "9", 42L, 7L);
+    ResponseStatusException refused = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "9", 42L));
+    assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+    assertEquals("documents.transcription.speaker.unknown", refused.getReason());
+
+    doThrow(new TranscriptionBusyException("held up")).when(documentTranscriptionService).setSpeaker(DOCUMENT_ID, "3", 42L, 7L);
+    ResponseStatusException busy = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "3", 42L));
+    assertEquals(HttpStatus.CONFLICT, busy.getStatusCode());
+    assertEquals("documents.transcription.speaker.busy", busy.getReason());
+
+    doThrow(new IllegalAccessException("john may not edit /x")).when(documentTranscriptionService).setSpeaker(DOCUMENT_ID, "2", 42L, 7L);
+    ResponseStatusException forbidden = assertThrows(ResponseStatusException.class, () -> rest.setSpeaker(request, DOCUMENT_ID, "2", 42L));
+    assertEquals(HttpStatus.FORBIDDEN, forbidden.getStatusCode());
+    assertEquals("documents.transcription.forbidden", forbidden.getReason(), "Expected no repository path in the answer");
   }
 
   /**

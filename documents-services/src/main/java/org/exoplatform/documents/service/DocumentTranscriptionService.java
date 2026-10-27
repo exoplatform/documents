@@ -18,6 +18,11 @@ package org.exoplatform.documents.service;
 
 import java.util.List;
 
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +30,11 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.services.listener.ListenerService;
+import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.manager.IdentityManager;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * What a user can know and ask about the transcription of an audio or video
@@ -47,6 +57,12 @@ public class DocumentTranscriptionService {
 
   public static final String                   ALREADY_DONE_MESSAGE                = "documents.transcription.alreadyDone";
 
+  public static final String                   NO_SPEAKERS_MESSAGE                 = "documents.transcription.speaker.noSpeakers";
+
+  public static final String                   UNKNOWN_SPEAKER_MESSAGE             = "documents.transcription.speaker.unknown";
+
+  public static final String                   NOT_A_USER_MESSAGE                  = "documents.transcription.speaker.notAUser";
+
   /** How long a queued or running transcription may go unchanged before its run is taken as lost. */
   static final long                            STALE_TRANSCRIPTION_MILLIS          = TranscriptionState.STALE_MILLIS;
 
@@ -61,6 +77,11 @@ public class DocumentTranscriptionService {
 
   @Autowired(required = false)
   private List<TranscriptChaptersRequester>    chaptersRequesters;
+
+  @Autowired
+  private IdentityManager                      identityManager;
+
+  private final ObjectMapper                   objectMapper                        = new ObjectMapper();
 
   /**
    * Tells whether media files can be transcribed on this server.
@@ -133,6 +154,69 @@ public class DocumentTranscriptionService {
   }
 
   /**
+   * The person each named speaker of a file's transcript is, read with the
+   * user's rights (EXO-92123).
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user
+   * @return the identity id of each named speaker, by speaker number; empty when
+   *         none is named
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   */
+  public Map<String, String> getSpeakers(String documentId, long aclIdentity) throws IllegalAccessException,
+                                                                              ObjectNotFoundException {
+    return documentFileService.getTranscriptionSpeakers(documentId, aclIdentity);
+  }
+
+  /**
+   * Tells whether a user may say who the speakers of a file's transcript are:
+   * anyone who can edit the file (EXO-92123).
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user
+   * @return true when the user can edit the file
+   * @throws IllegalAccessException when the user's identity cannot be resolved
+   */
+  public boolean canNameSpeakers(String documentId, long aclIdentity) throws IllegalAccessException {
+    return documentFileService.hasEditPermissionOnDocument(documentId, aclIdentity);
+  }
+
+  /**
+   * Says which person a speaker of a file's transcript is, or that it is nobody
+   * named any more, for anyone who can edit the file (EXO-92123). The speaker
+   * must be one the transcript holds, and the person an enabled user.
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param identityId the identity id of the person, or null to unname the
+   *          speaker
+   * @param aclIdentity the identity id of the user naming it
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   * @throws IllegalArgumentException when the transcript tells no speakers
+   *           apart, holds no such speaker, or the person is no enabled user
+   */
+  public void setSpeaker(String documentId, String speaker, Long identityId, long aclIdentity) throws IllegalAccessException,
+                                                                                                ObjectNotFoundException {
+    TranscriptionState state = getState(documentId, aclIdentity);
+    if (!canNameSpeakers(documentId, aclIdentity)) {
+      throw new IllegalAccessException("User may not name the speakers of file " + documentId);
+    }
+    Set<String> speakers = state.status() == TranscriptionStatus.DONE ? readSpeakers(getSegments(documentId, aclIdentity)) : Set.of();
+    if (speakers.isEmpty()) {
+      throw new IllegalArgumentException(NO_SPEAKERS_MESSAGE);
+    } else if (!speakers.contains(speaker)) {
+      throw new IllegalArgumentException(UNKNOWN_SPEAKER_MESSAGE);
+    } else if (identityId != null && !isEnabledUser(identityId)) {
+      throw new IllegalArgumentException(NOT_A_USER_MESSAGE);
+    }
+    documentFileService.setTranscriptionSpeaker(documentId, speaker, identityId == null ? null : String.valueOf(identityId), aclIdentity);
+  }
+
+  /**
    * Asks to transcribe a file again, for any user who can read it. A failed file,
    * or one never transcribed, is handed to the transcriber; one queued or being
    * transcribed is left as it is, unless its state has not changed for
@@ -169,6 +253,37 @@ public class DocumentTranscriptionService {
       throw new IllegalStateException("Error asking to transcribe media file '%s' again".formatted(documentId), e);
     }
     return true;
+  }
+
+  /**
+   * Reads the speakers a transcript's segments name.
+   *
+   * @param segments the segments as a JSON list, possibly null
+   * @return the speakers, empty when the segments name none
+   */
+  private Set<String> readSpeakers(String segments) {
+    Set<String> speakers = new HashSet<>();
+    if (StringUtils.isNotBlank(segments)) {
+      for (JsonNode segment : objectMapper.readTree(segments)) {
+        JsonNode segmentSpeaker = segment.get("speaker");
+        if (segmentSpeaker != null && segmentSpeaker.isString()) {
+          speakers.add(segmentSpeaker.asString());
+        }
+      }
+    }
+    return speakers;
+  }
+
+  /**
+   * Tells whether an identity is a user who may be named: one that exists, is
+   * not deleted and is enabled.
+   *
+   * @param identityId the identity id
+   * @return true for an enabled user
+   */
+  private boolean isEnabledUser(long identityId) {
+    Identity identity = identityManager.getIdentity(String.valueOf(identityId));
+    return identity != null && identity.isUser() && !identity.isDeleted() && identity.isEnable();
   }
 
   /**
