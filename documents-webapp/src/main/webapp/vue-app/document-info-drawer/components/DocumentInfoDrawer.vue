@@ -1,20 +1,38 @@
 <template>
-  <exo-drawer 
+  <exo-drawer
     ref="documentInfoDrawer"
     v-model="drawer"
+    :expanded="openExpanded"
     class="documentInfoDrawer"
-    @closed="close"
-    right>
+    allow-expand
+    right
+    @expand-updated="updateExpanded"
+    @closed="handleClosed">
     <template #title>
-      {{ $t('documents.drawer.details.title') }}
+      <div
+        v-if="sideBySide && file"
+        :title="file.name"
+        class="d-flex align-center text-truncate">
+        <v-icon
+          :class="icon.class"
+          :color="icon.color"
+          size="20"
+          class="me-2" />
+        <span class="text-truncate">{{ file.name }}</span>
+      </div>
+      <template v-else>
+        {{ $t('documents.drawer.details.title') }}
+      </template>
     </template>
     <template v-if="drawer && file" #titleIcons>
-      <extension-registry-components
-        :params="params"
-        name="DocumentsInfo"
-        type="documents-info-header"
-        parent-element="div"
-        element="div" />
+      <v-btn
+        v-if="openLabel && sideBySide"
+        class="primary me-2"
+        depressed
+        small
+        @click="openPreview">
+        {{ openLabel }}
+      </v-btn>
       <documents-favorite-button
         v-if="!file.folder"
         :id="fileId"
@@ -22,28 +40,13 @@
         :small="false"
         @added="favoriteAdded"
         @removed="favoriteRemoved" />
-      <document-transcript-button
-        v-if="!file.folder"
-        :document-id="fileId"
-        :mimetype="file.mimeType" />
-      <v-tooltip bottom>
-        <template #activator="{on, bind}">
-          <div v-on="on" v-bind="bind">
-            <v-btn
-              icon
-              @click="copyLink">
-              <v-icon size="18">fas fa-link</v-icon>
-            </v-btn>
-          </div>
-        </template>
-        <span>{{ $t('documents.label.copy.link') }}</span>
-      </v-tooltip>
       <v-tooltip
         v-if="!$downloadDocumentSuspended"
         bottom>
         <template #activator="{on, bind}">
           <v-btn
             :href="downloadUrl"
+            :aria-label="$t('documents.label.download')"
             icon
             v-on="on"
             v-bind="bind"
@@ -53,196 +56,111 @@
         </template>
         <span>{{ $t('documents.label.download') }}</span>
       </v-tooltip>
+      <document-info-menu
+        :file="file"
+        :transcript-available="!!mediaKind && transcriptAvailable && !sideBySide"
+        @transcript="showTranscript"
+        @copy-link="copyLink" />
     </template>
     <template v-if="drawer && file" #content>
-      <v-card
-        class="d-flex flex-column elevation-0 pt-2">
-        <v-card
-          class="d-flex flex-column"
-          elevation="0">
-          <v-card-text class="font-weight-bold pb-4 pt-0 py-auto">
-            <v-icon
-              size="20"
-              :class="icon.class"
-              :color="icon.color" />
-            <span>{{ file.name }}</span>
-          </v-card-text>
-        </v-card>
-        <v-hover v-slot="{hover}">
-          <v-card
-            :id="id"
-            :elevation="hover ? 4 : 0"
-            :class="{ 'border-color': !hover }"
-            :loading="loading"
-            height="210px"
-            max-height="210px"
-            width="252px"
-            max-width="100%"
-            class="overflow-hidden d-flex flex-column  border-box-sizing mx-auto no-border-radius mb-3"
-            @click="openPreview">
-            <v-card-text
-              class="d-flex flex-grow-1 pa-0">
-              <document-media-thumbnail
-                v-if="mediaKind && !mediaFailed"
-                :src="downloadUrl"
-                :kind="mediaKind"
-                :icon="icon"
-                @duration="readMediaDuration"
-                @loaded="loading = false"
-                @failed="handleMediaError" />
-              <img
-                v-else-if="!showIcon && !mediaKind"
-                :src="getThumbnailUrl()"
-                class="ma-auto"
-                alt="No thumbnail"
-                @load="loading = false"
-                @error="handleError">
-              <v-icon
-                v-else
-                size="80px"
-                :class="icon.class"
-                :color="icon.color"
-                class="ma-auto" />  
-            </v-card-text>
-          </v-card>
-        </v-hover>
-        <v-divider dark />
-        <v-list-item dense two-line>
-          <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-subtitle>{{ $t('documents.drawer.details.type') }}</v-list-item-subtitle>
-            <v-list-item-title> {{ $t(`documents.label.type.${icon.type}`) }} </v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item
-          v-if="!file.folder"
-          dense
-          two-line>
-          <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-subtitle>{{ $t('documents.drawer.details.size') }}</v-list-item-subtitle>
-            <v-list-item-title class="text-body">
-              {{ fileSize.value }} {{ $t(`document.size.label.unit.${fileSize.unit}`) }} ({{ fileWithVersionsSize.value }} {{ $t(`document.size.label.unit.${fileWithVersionsSize.unit}`) }} {{ $t('documents.drawer.details.sizeWithVersions') }})
-            </v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
-        <document-recording-details
-          v-if="mediaKind"
-          :document-id="fileId"
-          :mimetype="file.mimeType"
-          :measured-duration="mediaDuration"
-          @available="transcriptAvailable = $event" />
-        <v-list-item dense two-line>
-          <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-subtitle>{{ $t('documents.drawer.details.created') }}</v-list-item-subtitle>
-            <v-list-item-title class="d-flex flex-row">
-              <date-format
-                :value="fileCreated"
-                :format="fullDateFormat" />
-              <span class="mx-1">{{ $t('documents.drawer.details.by') }}</span>
-              <exo-user-avatar
-                v-if="identityCreated && !isCurrentUserCreator"
-                :profile-id="identityCreated"
-                avatar-class="me-2"
-                size="42"
-                fullname
-                popover
-                bold-title
-                link-style
-                class="text-truncate font-weight-bold mt-0"
-                username-class />
-              <span v-else class="primary--text not-clickable font-weight-bold mx-1">
-                {{ infoDrawerCreatorLabel }}
-              </span>
-            </v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item dense two-line>
-          <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-subtitle>{{ $t('documents.drawer.details.modified') }}</v-list-item-subtitle>
-            <v-list-item-title class="d-flex flex-row">
-              <date-format
-                :value="lastUpdated"
-                :format="fullDateFormat" />
-              <span class="mx-1">{{ $t('documents.drawer.details.by') }}</span>
-              <exo-user-avatar
-                v-if="identityModifier && !isCurrentUserModifier"
-                :profile-id="identityModifier"
-                avatar-class="me-2"
-                size="42"
-                fullname
-                popover
-                bold-title
-                link-style
-                class="text-truncate font-weight-bold mt-0"
-                username-class />
-              <span v-else class="primary--text font-weight-bold mx-1">
-                {{ infoDrawerModifierLabel }}
-              </span>
-            </v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item
-          v-if="!file.folder"
-          dense
-          two-line>
-          <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-subtitle>{{ $t('documents.details.view.label') }}</v-list-item-subtitle>
-            <v-list-item-title>{{ $t('documents.details.views.label', {0: `${file.views}`}) }}</v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item
-          v-if="file.ownerIdentity"
-          dense
-          two-line>
-          <v-list-item-content class="pt-0 pb-2">
-            <v-list-item-subtitle>{{ $t('documents.details.drive.label') }}</v-list-item-subtitle>
-            <div class="d-flex">
-              <v-list-item-avatar 
-                size="20"
-                class="mx-0 my-1"
-                :class="file.ownerIdentity.providerId === 'space' && 'spaceAvatar' || 'userAvatar'"
-                tile>
-                <v-avatar :size="20">
+      <div :class="sideBySide && 'd-flex fill-height'">
+        <div v-if="sideBySide" class="documentInfoContentPane light-grey-background-color flex-grow-1 fill-height">
+          <document-info-content
+            ref="content"
+            :file="file"
+            :icon="icon"
+            :media-kind="mediaKind"
+            :download-url="downloadUrl"
+            :readable="isFileReadable"
+            :start="transcriptMoment || 0"
+            :autoplay="transcriptPlaying"
+            :subtitle="compactSubtitle"
+            @time="playerSeconds = $event"
+            @open="openPreview" />
+        </div>
+        <div :class="sideBySide && 'documentInfoSidePane d-flex flex-column fill-height'">
+          <v-tabs
+            v-if="sideBySide"
+            v-model="tab"
+            class="documentInfoTabs flex-grow-0">
+            <v-tab href="#details">{{ $t('documents.drawer.details.tab.details') }}</v-tab>
+            <v-tab v-if="!file.folder" href="#versions">{{ $t('documents.drawer.details.versions') }}</v-tab>
+            <v-tab v-if="mediaKind && (transcriptAvailable || tab === 'transcript')" href="#transcript">{{ $t('documents.drawer.details.transcript') }}</v-tab>
+          </v-tabs>
+          <div
+            v-show="!sideBySide || tab === 'details'"
+            :class="sideBySide && 'overflow-y-auto'"
+            class="px-4 pt-3 pb-4">
+            <template v-if="!sideBySide">
+              <template v-if="hasPreview">
+                <div class="d-flex align-start mb-3">
+                  <v-icon
+                    :class="icon.class"
+                    :color="icon.color"
+                    size="20"
+                    class="me-2 mt-1" />
+                  <div :title="file.name" class="documentInfoName font-weight-bold">{{ file.name }}</div>
+                </div>
+                <v-card
+                  :loading="loading"
+                  :title="$t('documents.drawer.details.clickToOpen')"
+                  class="documentInfoPreview overflow-hidden d-flex mb-2"
+                  outlined
+                  @click="openPreview">
+                  <document-media-thumbnail
+                    v-if="mediaKind"
+                    :src="downloadUrl"
+                    :kind="mediaKind"
+                    :icon="icon"
+                    @duration="readMediaDuration"
+                    @loaded="loading = false"
+                    @failed="handleMediaError" />
                   <img
-                    :src="file.ownerIdentity.avatar"
-                    alt=""
-                    class="rounded"
-                    width="20"
-                    height="20">
+                    v-else
+                    :src="thumbnailUrl"
+                    :alt="file.name"
+                    class="ma-auto"
+                    @load="handleThumbnailLoaded"
+                    @error="handleError">
+                </v-card>
+              </template>
+              <v-card
+                v-else
+                :title="$t('documents.drawer.details.clickToOpen')"
+                class="documentInfoCompactHeader d-flex align-center pa-3 mb-2"
+                outlined
+                @click="openPreview">
+                <v-avatar
+                  size="52"
+                  class="flex-shrink-0 light-grey-background-color"
+                  rounded>
+                  <v-icon
+                    :class="icon.class"
+                    :color="icon.color"
+                    size="28" />
                 </v-avatar>
-              </v-list-item-avatar>
-              <v-list-item-title class="ms-3">
-                <a :href="getDrivePath()" class="font-weight-bold">{{ file.ownerIdentity.providerId === 'space' && file.ownerIdentity.name || $t('documents.label.userHomeDocuments') }}</a>
-              </v-list-item-title>
-            </div>
-          </v-list-item-content>
-        </v-list-item>
-        
-
-        <v-list-item dense two-line>
-          <v-list-item-content class="pt-1 pb-2">
-            <v-list-item-subtitle>{{ $t('documents.drawer.details.location') }}</v-list-item-subtitle>
-            <v-list-item-title>
-              <breadcrumb :folder-id="file.parentFolderId" :is-mobile="isMobile" />
-            </v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item dense two-line>
-          <v-list-item-content class="py-0 pt-1">
-            <v-list-item-subtitle>{{ $t('documents.drawer.details.category') }}</v-list-item-subtitle>
-            <v-list-item-title class="my-1">
-              <document-categories v-if="file" :file="file" />
-            </v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item>
-          <v-list-item-content class="py-1">
-            <v-list-item-subtitle>
-              {{ $t('documents.drawer.details.description') }}
-            </v-list-item-subtitle>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item>
-          <v-list-item-content class="pt-0 pb-4">
+                <div class="ms-3 overflow-hidden text-start">
+                  <div :title="file.name" class="documentInfoName font-weight-bold">{{ file.name }}</div>
+                  <div class="text-sub-title text-truncate">{{ compactSubtitle }}</div>
+                </div>
+              </v-card>
+            </template>
+            <document-info-details
+              :file="file"
+              :icon="icon">
+              <template #about>
+                <document-recording-details
+                  v-if="mediaKind"
+                  :document-id="fileId"
+                  :mimetype="file.mimeType"
+                  :measured-duration="mediaDuration"
+                  @available="transcriptAvailable = $event"
+                  @transcript="showTranscript" />
+              </template>
+            </document-info-details>
+            <div class="documentInfoGroupTitle">{{ $t('documents.drawer.details.category') }}</div>
+            <document-categories :file="file" />
+            <div class="documentInfoGroupTitle">{{ $t('documents.drawer.details.description') }}</div>
             <div v-if="showNoDescription" class="d-flex documentDescription">
               <v-icon size="20" class="descriptionIcon"> fas fa-file-alt </v-icon>
               <a
@@ -266,7 +184,7 @@
                     </div>
                   </v-col>
                   <v-col class="col-1 px-0 py-0">
-                    <v-tooltip :disabled="isMobile" bottom> 
+                    <v-tooltip :disabled="isMobile" bottom>
                       <template #activator="{ on, attrs }">
                         <v-icon
                           v-show="showDescription && (hover || isMobile)"
@@ -294,10 +212,24 @@
                 autofocus
                 class="flex" />
             </div>
-          </v-list-item-content>
-        </v-list-item>
-      </v-card>
-    </template>   
+          </div>
+          <document-info-versions
+            v-if="sideBySide && tab === 'versions'"
+            :file="file"
+            @restored="refreshFile"
+            class="px-4 overflow-y-auto" />
+          <document-info-transcript
+            v-if="sideBySide && tab === 'transcript'"
+            :document-id="fileId"
+            :playing-seconds="playerSeconds"
+            :seconds="transcriptMoment"
+            :initial-term="transcriptTerm"
+            class="px-4 overflow-y-auto"
+            @term="transcriptTerm = $event"
+            @seek="seek" />
+        </div>
+      </div>
+    </template>
     <template v-if="drawer" #footer>
       <div v-if="displayEditor" class="d-flex">
         <v-spacer />
@@ -316,6 +248,7 @@
 </template>
 <script>
 import {mediaKind} from '../js/RecordingLength.js';
+import {isBlankImage} from '../js/BlankImage.js';
 
 export default {
   props: {
@@ -329,15 +262,17 @@ export default {
     }
   },
   data: () => ({
-    fullDateFormat: {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    },
-    currentUser: eXo.env.portal.userName,
     drawer: false,
+    expanded: false,
+    tab: 'details',
+    thumbnailUrl: null,
+    playerSeconds: null,
+    openExpanded: false,
+    transcriptMoment: null,
+    transcriptPlaying: false,
+    transcriptTerm: '',
+    origin: null,
+    returning: false,
     file: null,
     fileName: null,
     displayEditor: false,
@@ -372,31 +307,6 @@ export default {
     lastUpdated() {
       return this.file && (this.modifiedDate || this.file.createdDate) || '';
     },
-    fileCreated() {
-      return this.file && this.file.createdDate || '';
-    },
-    infoDrawerCreatorLabel() {
-      return this.currentUser === this.file?.creatorIdentity?.remoteId ?
-        this.$t('documents.drawer.details.me') :
-        this.$t('documents.drawer.details.system');
-    },
-    infoDrawerModifierLabel() {
-      return this.currentUser === this.file?.modifierIdentity?.remoteId ?
-        this.$t('documents.drawer.details.me') :
-        this.$t('documents.drawer.details.system');
-    },
-    isCurrentUserModifier() {
-      return this.currentUser === this.file?.modifierIdentity?.remoteId;
-    },
-    isCurrentUserCreator() {
-      return this.currentUser === this.file?.creatorIdentity?.remoteId;
-    },
-    identityModifier(){
-      return this.file?.modifierIdentity?.remoteId;
-    },
-    identityCreated(){
-      return this.file?.creatorIdentity?.remoteId;
-    },
     disableButton() {
       return this.file?.description && this.file?.description.replace( /(<([^>]+)>)/ig, '').length>1300
       || this.file?.description === this.fileInitialDescription
@@ -411,16 +321,53 @@ export default {
     downloadUrl() {
       return this.$documentsUtils.getDownloadUrl(this.fileId, this.modifiedDate);
     },
-    fileSize() {
-      return this.$documentsUtils.getSize(this.file.size);
+    /**
+     * Lays the content beside the tabs once the drawer is expanded on a wide
+     * screen.
+     * @returns {boolean} true when the drawer shows content and tabs side by side
+     */
+    sideBySide() {
+      return this.expanded && !this.$vuetify.breakpoint.smAndDown;
     },
-    fileWithVersionsSize() {
-      return this.$documentsUtils.getSize(this.file.sizeWithVersions);
+    /**
+     * Keeps the large preview for a file that has one: a video frame, or a
+     * thumbnail the server renders and the browser loads; any other file gets
+     * the compact header.
+     * @returns {boolean} true when the large preview shows
+     */
+    hasPreview() {
+      if (!this.file || this.file.folder) {
+        return false;
+      } else if (this.mediaKind) {
+        return this.mediaKind === 'video' && !this.mediaFailed;
+      }
+      return !!this.thumbnailUrl && !this.showIcon;
     },
-    params() {
-      return {
-        file: this.file,
-      };
+    /**
+     * Names the header's open action as Documents opens the file: Edit in
+     * the online editor when the viewer may edit it and the editor can, else
+     * View, in the viewer or the preview; none for a folder, or for an audio
+     * or video file, whose player is the content. Shown in the full view
+     * only: the narrow drawer's preview or card opens the file on click.
+     * @returns {string} the label, or null when there is no action
+     */
+    openLabel() {
+      if (!this.file || this.file.folder || this.mediaKind) {
+        return null;
+      }
+      return this.isFileEditable && this.file.acl?.canEdit && this.$t('documents.drawer.details.edit') || this.$t('documents.drawer.details.view');
+    },
+    /**
+     * Sums up the file in the compact header: its type, and its size.
+     * @returns {string} the subtitle, as « PDF · 2 MB »
+     */
+    compactSubtitle() {
+      const type = this.$t(`documents.label.type.${this.icon?.type}`);
+      if (this.file.folder) {
+        return type;
+      }
+      const size = this.$documentsUtils.getSize(this.file.size);
+      return `${type} · ${size.value} ${this.$t(`document.size.label.unit.${size.unit}`)}`;
     },
   },
   watch: {
@@ -437,15 +384,124 @@ export default {
     document.addEventListener('document-views-updated', this.handleUpdateViews);
     document.addEventListener('search-metadata-tag', this.close);
     document.addEventListener('document-category-selected', this.close);
-    document.addEventListener('click', (event) => {
-      if (event.target.closest('.documentInfoDrawer') || event.target.closest('.documentDescription') || event.target.closest('.documentCategories')) {return;}
-      this.close();
-    });
+    document.addEventListener('click', this.closeOnClickOutside);
+    document.addEventListener('closeDisplayedDrawer', this.collapseOnMaskOrEscape, true);
   },
   methods: {
+    /**
+     * Follows the drawer's expansion. Collapsing the full view opened from
+     * the transcript drawer closes it onto that drawer, still open underneath
+     * with its mask: the moment and the search go back to it, and the full
+     * view's player pauses. Opened from the details, it collapses to them,
+     * narrow.
+     * @param {boolean} expanded whether the drawer is expanded
+     * @returns {void}
+     */
+    updateExpanded(expanded) {
+      this.expanded = expanded;
+      if (!expanded && this.origin === 'transcript' && this.fileId) {
+        // synced now: the full view's player leaves the page with the re-render
+        this.syncTranscript();
+        this.returning = 'synced';
+        this.close();
+      }
+    },
+    /**
+     * The full view's audio or video element.
+     * @returns {HTMLMediaElement} the element, or null when the full view
+     *          shows no recording
+     */
+    contentMedia() {
+      return this.$refs.content?.$refs?.player?.$refs?.player || null;
+    },
+    /**
+     * Gives the transcript drawer underneath the moment and the search the
+     * full view reached, and whether it was playing; then pauses the full
+     * view's player.
+     * @returns {void}
+     */
+    syncTranscript() {
+      const media = this.contentMedia();
+      const playing = !!media && !media.paused;
+      const moment = media ? media.currentTime : (this.playerSeconds ?? this.transcriptMoment);
+      media?.pause?.();
+      document.dispatchEvent(new CustomEvent('documents-transcript-sync', {detail: {
+        documentId: this.fileId,
+        seconds: Number.isFinite(moment) ? Math.floor(moment) : null,
+        term: this.transcriptTerm,
+        playing,
+      }}));
+    },
+    /**
+     * Before the drawer forgets the file: opened from the transcript drawer,
+     * a collapse, a click on the mask or Esc returns to that drawer with the
+     * moment and the search, while the close button leaves both.
+     * @returns {void}
+     */
+    handleClosed() {
+      if (this.origin === 'transcript' && this.fileId) {
+        if (this.returning === true) {
+          this.syncTranscript();
+        } else if (!this.returning) {
+          this.contentMedia()?.pause?.();
+          document.dispatchEvent(new CustomEvent('documents-transcript-close', {detail: {documentId: this.fileId}}));
+        }
+      }
+      this.returning = false;
+      this.close();
+    },
+    /**
+     * Treats a click on the mask or Esc, which close the top drawer, as a
+     * collapse when this drawer is that drawer and was opened from the
+     * transcript drawer.
+     * @returns {void}
+     */
+    collapseOnMaskOrEscape() {
+      const openedDrawers = eXo.openedDrawers || [];
+      if (this.drawer && this.origin === 'transcript' && openedDrawers[openedDrawers.length - 1] === this.$refs.documentInfoDrawer) {
+        this.returning = true;
+      }
+    },
+    /**
+     * Closes the drawer on a click outside it. A link opened by script, as a
+     * version in a new tab, and a click in a dialog over the drawer, as the
+     * preview of a version, are not a click outside: the drawer stays. The
+     * click's path is read as it was dispatched, since closing a preview
+     * removes the clicked button from the page before the click reaches here.
+     * @param {MouseEvent} event a click anywhere in the page
+     * @returns {void}
+     */
+    closeOnClickOutside(event) {
+      if (!event.isTrusted) {
+        return;
+      }
+      const path = event.composedPath?.() || [];
+      const inside = path.some(element => element.classList && ['documentInfoDrawer', 'documentDescription', 'documentCategories', 'documentInfoMenu', 'v-dialog__content'].some(name => element.classList.contains(name)));
+      if (!inside) {
+        this.close();
+      }
+    },
+    /**
+     * Falls back to the compact header when the browser cannot load the
+     * file's thumbnail.
+     * @returns {void}
+     */
     handleError() {
       this.showIcon=true;
       this.loading = false;
+    },
+    /**
+     * Falls back to the compact header when the page the server rendered for
+     * an office document or a PDF is blank, as for a document it could not
+     * render; an image keeps its preview, however pale.
+     * @param {Event} event the image's load event
+     * @returns {void}
+     */
+    handleThumbnailLoaded(event) {
+      this.loading = false;
+      if (this.isFileReadable && isBlankImage(event.target)) {
+        this.showIcon = true;
+      }
     },
     /**
      * Keeps how long the audio or video lasts, read from its metadata.
@@ -466,6 +522,11 @@ export default {
       this.showIcon = true;
       this.loading = false;
     },
+    /**
+     * Builds the url of the file's thumbnail, and marks the file as having
+     * none when the server renders no thumbnail for its type.
+     * @returns {string} the thumbnail's url, or null
+     */
     getThumbnailUrl() {
       if (this.file.folder) {return null;}
       const file = this.file;
@@ -477,11 +538,20 @@ export default {
       }
       return thumb;
     },
+    /**
+     * Keeps the views count of the shown file up to date.
+     * @param {CustomEvent} event its detail holds the file and its views
+     * @returns {void}
+     */
     handleUpdateViews(event) {
       if (this.file?.id === event.detail?.file?.id) {
         this.file.views = event.detail?.views;
       }
     },
+    /**
+     * Saves the description being edited.
+     * @returns {Promise} resolved once saved
+     */
     updateDescription(){
       if (this.firstCreateDescription){
         this.addDescriptionStatistics(this.file);
@@ -505,8 +575,18 @@ export default {
           this.$root.$emit('alert-message',  this.$t('documents.alert.error.description.updated'), 'error');
         });
     },
+    /**
+     * Reads the file the event names, with its creator, modifier, owner and
+     * metadata, and opens the drawer on it: narrow, on its details, unless
+     * the event asks for the full view on a tab, at a moment of the recording
+     * and with a search, as the transcript drawer does when expanded.
+     * @param {CustomEvent} event its detail is the file's id, or an object
+     *          with documentId, and optionally expanded, tab, seconds and term
+     * @returns {void}
+     */
     open(event) {
-      const fileId = event?.detail;
+      const request = event?.detail && typeof event.detail === 'object' && event.detail || {documentId: event?.detail};
+      const fileId = request.documentId;
       const expand =  'modifier,creator,owner,metadatas';
       this.$attachmentService.getDocumentDetails(fileId,expand)
         .then(file => {
@@ -524,18 +604,31 @@ export default {
           this.showDescription = this.file.description && this.file.description.length && !this.displayEditor;
           this.fileInitialDescription = this.file.description;    
           this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length; 
+          this.tab = request.tab || 'details';
+          this.openExpanded = !!request.expanded;
+          this.transcriptMoment = Number.isFinite(request.seconds) ? request.seconds : null;
+          this.transcriptPlaying = !!request.playing;
+          this.transcriptTerm = request.term || '';
+          this.origin = request.origin || null;
+          this.playerSeconds = null;
           if (file.folder){
             this.file.mimeType = 'folder';
             this.showIcon = true;
             this.loading = false;
-          } 
-          this.$root.$emit('update-breadcrumb', this.file.parentFolderId);
+            this.thumbnailUrl = null;
+          } else {
+            this.thumbnailUrl = this.mediaKind ? null : this.getThumbnailUrl();
+          }
           this.$nextTick(()=>{
             this.$refs.documentInfoDrawer.open();
           });
         });
-      
+
     },
+    /**
+     * Shows the description editor.
+     * @returns {void}
+     */
     openEditor(){
       this.firstCreateDescription = this.showNoDescription;
       this.showNoDescription = false;
@@ -546,7 +639,13 @@ export default {
         document.getElementById('descriptionMessageInput').scrollIntoView();
       });
     },
+    /**
+     * Closes the drawer and forgets the file.
+     * @returns {void}
+     */
     close() {
+      this.origin = null;
+      this.transcriptPlaying = false;
       this.file = null;
       this.displayEditor = false;
       this.showNoDescription = false;
@@ -558,6 +657,12 @@ export default {
       this.loading = true;
       this.$refs.documentInfoDrawer.close();
     },
+    /**
+     * Shows a message in the attachments' alert area, used on mobile.
+     * @param {string} message the message
+     * @param {string} type success or error
+     * @returns {void}
+     */
     displayAlert(message, type) {
       document.dispatchEvent(new CustomEvent('attachments-notification-alert', {
         detail: {
@@ -568,6 +673,11 @@ export default {
         }
       }));
     },
+    /**
+     * Records that a description was added.
+     * @param {Object} file the file
+     * @returns {void}
+     */
     addDescriptionStatistics(file) {
       document.dispatchEvent(new CustomEvent('exo-statistic-message', {
         detail: {
@@ -587,6 +697,11 @@ export default {
         }
       }));
     },
+    /**
+     * Records that a description was changed.
+     * @param {Object} file the file
+     * @returns {void}
+     */
     updateDescriptionStatistics(file) {
       document.dispatchEvent(new CustomEvent('exo-statistic-message', {
         detail: {
@@ -606,6 +721,11 @@ export default {
         }
       }));
     },
+    /**
+     * Opens a folder in the Documents application.
+     * @param {Object} folder the folder, with its path
+     * @returns {void}
+     */
     openFolder(folder) {
       let folderPath = '';
       const pathParts = folder.path.split('/');
@@ -625,6 +745,12 @@ export default {
       }
       this.$documentsUtils.openLink(folderPath,'_self');
     },
+    /**
+     * Opens the file: a folder in Documents, an audio or video with its
+     * transcript when it can be offered, an office file in its editor, anything
+     * else in the preview.
+     * @returns {void}
+     */
     openPreview() {
       if (this.file.folder) {
         this.openFolder(this.file);
@@ -675,18 +801,73 @@ export default {
         cancelable: true,
       }));
     },
+    /**
+     * Opens the file in its editor, in a new tab.
+     * @param {string} mode 'view' to open it read only
+     * @returns {void}
+     */
     openFileInEditor(mode) {
       if (this.file && this.fileId) {
         const url = this.$documentsUtils.getEditorUrl(this.file,mode);
         this.$documentsUtils.openLink(url,'_blank');
       }
     },
+    /**
+     * Reads the file again after a version was restored, so the header, the
+     * preview and the details show its new current content; the drawer stays
+     * open on the same view and tab.
+     * @returns {Promise} resolved once read
+     */
+    refreshFile() {
+      const fileId = this.fileId;
+      return this.$attachmentService.getDocumentDetails(fileId, 'modifier,creator,owner,metadatas')
+        .then(file => {
+          if (fileId === this.fileId) {
+            this.file = file;
+            this.showIcon = false;
+            this.thumbnailUrl = this.mediaKind ? null : this.getThumbnailUrl();
+          }
+        });
+    },
+    /**
+     * Shows the transcript: in its tab once the drawer is expanded, else in
+     * the transcript drawer, as the former header button did.
+     * @returns {void}
+     */
+    showTranscript() {
+      if (this.sideBySide) {
+        this.tab = 'transcript';
+      } else {
+        this.openPlayerWithTranscript();
+      }
+    },
+    /**
+     * Moves the recording beside the transcript to a moment.
+     * @param {number} seconds the moment, in seconds from the start
+     * @returns {void}
+     */
+    seek(seconds) {
+      this.$refs.content?.seek(seconds);
+    },
+    /**
+     * Notes that the file left the favorites.
+     * @returns {void}
+     */
     favoriteRemoved() {
       this.isFavorite = false;
     },
+    /**
+     * Notes that the file joined the favorites.
+     * @returns {void}
+     */
     favoriteAdded() {
       this.isFavorite = true;
     },
+    /**
+     * Copies a link to the file: its editor when it has one, else its folder
+     * with its preview open.
+     * @returns {void}
+     */
     copyLink() {
       this.loading = true;
       let path;
@@ -708,13 +889,6 @@ export default {
       document.execCommand('copy');
       document.body.removeChild(input);
       this.loading = false;
-    },
-    getDrivePath() {
-      if (this.file?.ownerIdentity?.providerId === 'space') {
-        const spaceId = this.file?.ownerIdentity?.avatar.split('social/spaces/')[1].split('/avatar')[0];
-        return `${eXo.env.portal.context}/s/${spaceId}/documents`;
-      } 
-      return this.$documentsUtils.getPersonalDriveUrl();
     },
   },
 };
