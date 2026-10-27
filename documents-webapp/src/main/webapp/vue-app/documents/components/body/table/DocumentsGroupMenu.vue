@@ -21,7 +21,7 @@
     <v-menu
       v-model="menuDisplayed"
       transition="slide-x-transition"
-      content-class="documentActionMenu layout-drawer"
+      content-class="documentActionMenu application-menu layout-drawer"
       offset-x
       close-on-click>
       <template #activator="{ on, attrs }">
