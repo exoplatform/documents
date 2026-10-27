@@ -80,7 +80,9 @@ import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentTextPage;
 import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DocumentsSize;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
@@ -909,19 +911,71 @@ public class DocumentMcpTool implements McpToolPlugin {
     return headings;
   }
 
+  /**
+   * The transcript of an audio or video file, read with the user's rights. When
+   * there is none, the answer says why, from the file's transcription state
+   * (EXO-92097): queued, in progress with its progress, stopped when its run was
+   * lost (running, unchanged for {@link TranscriptionState#STALE_MILLIS}), failed
+   * with its reason, transcribed with no speech heard; a file never
+   * sent to transcription answers as before.
+   *
+   * @param documentId the file's UUID
+   * @return the transcript
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   * @throws IllegalStateException when the file has no transcript, saying why
+   */
   public String getDocumentTranscriptionById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode document = checkCanAccessDocument(documentId);
-    String audioTranscription = documentFileService.getAudioTranscription(documentId, getCurrentUserIdentityId());
+    long identityId = getCurrentUserIdentityId();
+    String audioTranscription = documentFileService.getAudioTranscription(documentId, identityId);
     if (StringUtils.isNotBlank(audioTranscription)) {
       return audioTranscription;
-    } else if (document instanceof FileNode fileNode
-               && StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
-      throw new IllegalStateException("No transcription is available yet for this audio/video file. "
-          + "Transcriptions are generated automatically once the media is processed; tell the user to try again later.");
-    } else {
+    } else if (!(document instanceof FileNode fileNode)
+               || !StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
       throw new IllegalStateException("The document with id %s isn't an audio nor a video file, so it has no transcription."
           .formatted(documentId));
     }
+    TranscriptionState state = documentFileService.getTranscriptionState(documentId, identityId);
+    TranscriptionStatus status = state == null ? null : state.status();
+    if (status == null) {
+      throw new IllegalStateException("No transcription is available yet for this audio/video file. "
+          + "Transcriptions are generated automatically once the media is processed; tell the user to try again later.");
+    } else if (status == TranscriptionStatus.PROCESSING && !state.isInProgress(System.currentTimeMillis())) {
+      // A running transcription writes its progress after each piece: unchanged for long, its run was lost.
+      // A queued one may wait that long behind other runs, and is not.
+      throw new IllegalStateException("The transcription of this audio/video file stopped without finishing: "
+          + "tell the user it did not complete.");
+    }
+    throw new IllegalStateException(switch (status) {
+    case QUEUED -> StringUtils.isBlank(state.error()) ? "The transcription of this audio/video file is queued and has not started yet: "
+        + "tell the user it is on its way and to ask again later."
+                                                      : "The last attempt to transcribe this audio/video file failed (%s), and a new attempt is scheduled: tell the user it will be tried again and to ask later."
+                                                          .formatted(toTranscriptionFailure(state.error()));
+    case PROCESSING -> "The transcription of this audio/video file is in progress%s: tell the user it is being produced and to ask again in a few minutes."
+        .formatted(StringUtils.isBlank(state.progress()) ? "" : " (" + state.progress() + " pieces transcribed)");
+    case FAILED -> "The transcription of this audio/video file failed: %s. Tell the user it failed, and why."
+        .formatted(toTranscriptionFailure(state.error()));
+    case DONE -> "This audio/video file was transcribed, but no speech was heard in it.";
+    });
+  }
+
+  /**
+   * Says in words why a transcription failed, from its failure code.
+   *
+   * @param error the failure's message code
+   * @return the reason, for the assistant to tell the user
+   */
+  private String toTranscriptionFailure(String error) {
+    return switch (StringUtils.defaultString(error)) {
+    case "ffmpeg.unavailable" -> "the server has no tool to convert this recording, which its format or its size needs";
+    case "media.unreadable" -> "the file could not be read";
+    case "transcription.disabled" -> "transcription is switched off, or its transcription assistant is not available";
+    case "attempts.exhausted" -> "every attempt failed";
+    case "provider.timeout" -> "the transcription service did not answer in time";
+    case "provider.rejected" -> "the transcription service refused it";
+    default -> "no reason was recorded";
+    };
   }
 
   /**

@@ -63,6 +63,8 @@ import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.TranscriptionState;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
@@ -571,6 +573,110 @@ public class DocumentMcpToolTest {
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn(null);
 
     assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAQueuedOrRunningTranscription() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build(),
+                                                                                         TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.PROCESSING)
+                                                                                                   .progress("3/9")
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage().contains("queued"));
+    String running = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+    assertTrue(running, running.contains("in progress (3/9 pieces transcribed)"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsARunLostLongAgoAsStopped() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.PROCESSING)
+                                                                                                   .progress("3/9")
+                                                                                                   .updated(System.currentTimeMillis()
+                                                                                                       - TranscriptionState.STALE_MILLIS
+                                                                                                       - 1000)
+                                                                                                   .build());
+
+    String stopped = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+
+    assertTrue(stopped, stopped.contains("stopped without finishing"));
+    assertFalse("Expected a lost run never told as in progress", stopped.contains("in progress"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFileQueuedForLongAsStillQueued() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .updated(System.currentTimeMillis()
+                                                                                                       - TranscriptionState.STALE_MILLIS
+                                                                                                       - 1000)
+                                                                                                   .build());
+
+    String queued = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+
+    assertTrue("Expected a file waiting behind other runs told queued, not stopped: " + queued, queued.contains("queued"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFailedAttemptAsScheduledAgain() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .error("provider.timeout")
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build());
+
+    String retried = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+
+    assertTrue(retried, retried.contains("failed (the transcription service did not answer in time), and a new attempt is scheduled"));
+    assertFalse("Expected a pending retry never told as failed for good", retried.contains("Tell the user it failed"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFailedTranscriptionAndWhy() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.FAILED)
+                                                                                                   .error("ffmpeg.unavailable")
+                                                                                                   .build());
+
+    String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+
+    assertTrue(failed, failed.contains("failed: the server has no tool to convert this recording, which its format or its size needs"));
+    assertFalse("Expected a failed transcription never told as not ready yet", failed.contains("try again later"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsADisabledTranscriptionAsSwitchedOffOrUnavailable() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/ogg"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.FAILED)
+                                                                                                   .error("transcription.disabled")
+                                                                                                   .build());
+
+    String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage();
+
+    assertTrue(failed, failed.contains("transcription is switched off, or its transcription assistant is not available"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsATranscriptWithNoSpeech() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/ogg"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.DONE)
+                                                                                                   .build());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID)).getMessage().contains("no speech"));
   }
 
   @Test
