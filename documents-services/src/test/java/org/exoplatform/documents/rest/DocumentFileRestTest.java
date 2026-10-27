@@ -1934,6 +1934,15 @@ public class DocumentFileRestTest {
     response = documentFileRest.getDocumentPathInDrive("docA", spaceIdentityId);
     assertEquals(403, response.getStatus());
     assertEquals("user_identity_not_resolved", response.getEntity());
+    assertNotStored(response);
+
+    when(identityManager.getIdentity(userIdentityId)).thenReturn(userIdentity);
+    doThrow(new IllegalStateException("Error")).when(documentFileStorage)
+                                               .getDocumentPathInDrive("docA", spaceIdentityId, userAclIdentity);
+    response = documentFileRest.getDocumentPathInDrive("docA", spaceIdentityId);
+    assertEquals(500, response.getStatus());
+    assertEquals("error_retrieving_document_path_in_drive", response.getEntity());
+    assertNotStored(response);
   }
 
   private void assertNotStored(Response response) {

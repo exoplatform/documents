@@ -227,10 +227,10 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (ObjectNotFoundException e) {
       return Response.status(Status.NOT_FOUND).entity("document_or_drive_not_found").cacheControl(noStore).build();
     } catch (IllegalAccessException e) {
-      return Response.status(Status.FORBIDDEN).entity("user_identity_not_resolved").build();
+      return Response.status(Status.FORBIDDEN).entity("user_identity_not_resolved").cacheControl(noStore).build();
     } catch (Exception e) {
       LOG.warn("Error retrieving the path of document '{}' in the drive of owner '{}'", documentId, ownerId, e);
-      return Response.serverError().entity("error_retrieving_document_path_in_drive").build();
+      return Response.serverError().entity("error_retrieving_document_path_in_drive").cacheControl(noStore).build();
     }
   }
 

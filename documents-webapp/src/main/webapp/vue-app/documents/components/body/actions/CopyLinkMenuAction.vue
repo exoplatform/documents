@@ -17,6 +17,7 @@ export default {
     spaceId: eXo.env.portal.spaceId,
     publicAccessVisibilityChoice: 'COLLABORATORS_AND_PUBLIC_ACCESS',
     fileInDrive: null,
+    fileInDriveRequest: null,
   }),
   watch: {
     file: {
@@ -29,21 +30,23 @@ export default {
   methods: {
     resolveFileInDrive() {
       this.fileInDrive = null;
+      this.fileInDriveRequest = null;
       const file = this.file;
       if (file && !file.folder) {
-        this.$documentsUtils.getFileInDrive(file, this.$root.ownerId)
-          .then(fileInDrive => {
-            if (file === this.file) {
-              this.fileInDrive = fileInDrive;
-            }
-          });
+        this.fileInDriveRequest = this.$documentsUtils.getFileInDrive(file, this.$root.ownerId);
+        this.fileInDriveRequest.then(fileInDrive => {
+          if (file === this.file) {
+            this.fileInDrive = fileInDrive;
+          }
+        });
       }
     },
 
-    copyLink() {
+    async copyLink() {
       this.loading = true;
       let path;
-      const file = this.fileInDrive || this.file;
+      // Waits only while the drive path is still being resolved
+      const file = this.fileInDrive || this.fileInDriveRequest && await this.fileInDriveRequest || this.file;
       if (this.file.folder){
         path = `${window.location.origin}${eXo.env.portal.context}`;
         if (this.$root.ownerId !== eXo.env.portal.userIdentityId && this.$root.spaceId){

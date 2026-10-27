@@ -112,8 +112,11 @@ function isInPageDrive(path, ownerId) {
   if (`${ownerId}` !== `${eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId}`) {
     return false;
   }
-  const drivePath = eXo.env.portal.spaceGroup ? `/spaces/${eXo.env.portal.spaceGroup}/` : `/${eXo.env.portal.userName}/Private/`;
-  return path.includes(drivePath);
+  if (eXo.env.portal.spaceGroup) {
+    return path.startsWith(`/Groups/spaces/${eXo.env.portal.spaceGroup}/`);
+  }
+  const userName = eXo.env.portal.userName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^/Users/(?:[^/]+___/)*${userName}/Private/`).test(path);
 }
 
 export function getPersonalDriveUrl() {

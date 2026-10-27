@@ -321,6 +321,7 @@ export default {
     drawer: false,
     file: null,
     fileInDrive: null,
+    fileInDriveRequest: null,
     contextOwnerId: null,
     fileName: null,
     displayEditor: false,
@@ -503,6 +504,7 @@ export default {
     close() {
       this.file = null;
       this.fileInDrive = null;
+      this.fileInDriveRequest = null;
       this.displayEditor = false;
       this.showNoDescription = false;
       this.showDescription = true;
@@ -612,9 +614,9 @@ export default {
       this.close();
       this.loading = false;
     },
-    openFileInEditor(mode) {
+    async openFileInEditor(mode) {
       if (this.file && this.fileId) {
-        const url = this.$documentsUtils.getEditorUrl(this.fileInDrive || this.file,mode);
+        const url = this.$documentsUtils.getEditorUrl(await this.getFileInDrive(), mode);
         this.$documentsUtils.openLink(url,'_blank');
       }
     },
@@ -626,19 +628,24 @@ export default {
     },
     resolveFileInDrive(file) {
       this.fileInDrive = null;
+      this.fileInDriveRequest = null;
       if (!file.folder) {
-        this.$documentsUtils.getFileInDrive(file, this.contextOwnerId || eXo.env.portal.spaceIdentityId || eXo.env.portal.userIdentityId)
-          .then(fileInDrive => {
-            if (file === this.file) {
-              this.fileInDrive = fileInDrive;
-            }
-          });
+        this.fileInDriveRequest = this.$documentsUtils.getFileInDrive(file, this.contextOwnerId || eXo.env.portal.spaceIdentityId);
+        this.fileInDriveRequest.then(fileInDrive => {
+          if (file === this.file) {
+            this.fileInDrive = fileInDrive;
+          }
+        });
       }
     },
-    copyLink() {
+    // Waits only while the drive path is still being resolved
+    async getFileInDrive() {
+      return this.fileInDrive || this.fileInDriveRequest && await this.fileInDriveRequest || this.file;
+    },
+    async copyLink() {
       this.loading = true;
       let path;
-      const file = this.fileInDrive || this.file;
+      const file = await this.getFileInDrive();
       if (this.isFileEditable)  {
         if (this.file?.acl?.canEdit){
           path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,null)}`;
