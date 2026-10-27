@@ -18,7 +18,8 @@
 <template>
   <video
     v-if="supported"
-    :src="`${thumbnailUrl}#t=0.001`"
+    ref="player"
+    :src="`${thumbnailUrl}#t=${startTime}`"
     controls="controls"
     class="black mx-auto full-height full-width position-absolute"
     @error="playError($event)">
@@ -52,12 +53,56 @@ export default {
     thumbnailUrl() {
       return this.attachment.downloadUrl || `${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/social/attachments/${this.objectType}/${this.objectId}/${this.attachment.id}`;
     },
+    startTime() {
+      const seconds = Number(this.attachment.startSeconds);
+      return Number.isFinite(seconds) && seconds > 0 && seconds || 0.001;
+    },
     isMobile() {
       return this.$vuetify.breakpoint.name === 'sm' || this.$vuetify.breakpoint.name === 'xs' || this.$vuetify.breakpoint.name === 'md';
     }
   },
 
+  created() {
+    document.addEventListener('document-preview-seek', this.seek);
+    document.addEventListener('document-preview-showing', this.answerShowing);
+  },
+  beforeDestroy() {
+    document.removeEventListener('document-preview-seek', this.seek);
+    document.removeEventListener('document-preview-showing', this.answerShowing);
+  },
   methods: {
+    /**
+     * Moves the recording to the moment the event names, when it names this
+     * file, and plays it from there.
+     *
+     * @param {CustomEvent} event its detail holds documentId and seconds; it is
+     *          marked handled once the recording moved
+     * @returns {void}
+     */
+    seek(event) {
+      const seconds = Number(event?.detail?.seconds);
+      const player = this.$refs.player;
+      if (!player || event?.detail?.documentId !== this.attachment?.id || !Number.isFinite(seconds) || seconds < 0) {
+        return;
+      }
+      event.preventDefault();
+      player.currentTime = seconds;
+      player.play()?.catch(() => {
+        // a browser that refuses to play without a user gesture still shows the moment
+      });
+    },
+    /**
+     * Tells whoever asks that this preview plays the file the event names, by
+     * marking the event handled.
+     *
+     * @param {CustomEvent} event its detail holds documentId
+     * @returns {void}
+     */
+    answerShowing(event) {
+      if (this.$refs.player && event?.detail?.documentId === this.attachment?.id) {
+        event.preventDefault();
+      }
+    },
     playError(event){
       const video = event.target;
       if (video.error && video.error.code === 3 || video.error.code === 4) {

@@ -48,6 +48,7 @@ module.exports = {
     documentsFolderPicker: './src/main/webapp/vue-app/documents-folder-picker/main.js',
     documentsFolderPickerApp: './src/main/webapp/vue-app/documents-folder-picker-app/main.js',
     documentsInfoDrawer: './src/main/webapp/vue-app/document-info-drawer/main.js',
+    documentsTranscriptDrawer: './src/main/webapp/vue-app/document-transcript-drawer/main.js',
     documentsOffline: './src/main/webapp/vue-app/documents-offline/main.js',
     documentsOfflineSettings: './src/main/webapp/vue-app/documents-offline-settings/main.js',
     documentsPwaExtension: './src/main/webapp/vue-app/documents-pwa-extension/main.js',

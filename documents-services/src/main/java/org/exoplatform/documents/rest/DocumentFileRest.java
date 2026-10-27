@@ -19,6 +19,7 @@ package org.exoplatform.documents.rest;
 import static org.exoplatform.documents.constant.DocumentSortField.getFromAlias;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -34,6 +35,7 @@ import javax.jcr.AccessDeniedException;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -42,12 +44,14 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.CacheControl;
 import javax.ws.rs.core.EntityTag;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
+import org.apache.commons.io.input.BoundedInputStream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.json.JSONObject;
@@ -64,6 +68,7 @@ import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.DocumentFavoriteFilter;
+import org.exoplatform.documents.model.DocumentFileContent;
 import org.exoplatform.documents.model.DocumentFolderFilter;
 import org.exoplatform.documents.model.DocumentGroupsSize;
 import org.exoplatform.documents.model.DocumentNodeFilter;
@@ -73,6 +78,7 @@ import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
+import org.exoplatform.documents.rest.model.ByteRange;
 import org.exoplatform.documents.rest.model.DocumentsUserSettings;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
 import org.exoplatform.documents.rest.model.NodePermissionEntity;
@@ -123,6 +129,16 @@ public class DocumentFileRest implements ResourceContainer {
   private static final int                  CACHE_IN_SECONDS       = 7 * 86400;
 
   private static final int                  CACHE_IN_MILLI_SECONDS = CACHE_IN_SECONDS * 1000;
+
+  private static final String               BYTES_UNIT             = "bytes";
+
+  private static final String               ACCEPT_RANGES_HEADER   = "Accept-Ranges";
+
+  private static final String               CONTENT_RANGE_HEADER   = "Content-Range";
+
+  private static final int                  PARTIAL_CONTENT_STATUS = 206;
+
+  private static final int                  RANGE_NOT_SATISFIABLE_STATUS = 416;
 
   private final DocumentFileService         documentFileService;
 
@@ -1700,7 +1716,9 @@ public class DocumentFileRest implements ResourceContainer {
   @Operation(summary = "Get content of a given document", method = "GET", description = "Get content a a given document")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "206", description = "The part of the content the Range header asks for"),
       @ApiResponse(responseCode = "404", description = "Not found"),
+      @ApiResponse(responseCode = "416", description = "The Range header asks for bytes beyond the content"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response getDocumentContent(@javax.ws.rs.core.Context
   UriInfo uriInfo, @javax.ws.rs.core.Context
@@ -1717,7 +1735,13 @@ public class DocumentFileRest implements ResourceContainer {
                                      @Parameter(description = "Resized image size. Use 250x250 as default size.")
                                      @DefaultValue("0x0")
                                      @QueryParam("size")
-                                     String size) {
+                                     String size,
+                                     @Parameter(description = "A single byte range of the content, as bytes=start-end")
+                                     @HeaderParam("Range")
+                                     String range,
+                                     @Parameter(description = "The entity tag the byte range must belong to; another one serves the whole content")
+                                     @HeaderParam("If-Range")
+                                     String ifRange) {
 
     if (StringUtils.isBlank(documentId)) {
       return Response.status(Status.BAD_REQUEST).entity("document id is mandatory").build();
@@ -1749,7 +1773,12 @@ public class DocumentFileRest implements ResourceContainer {
         if (StringUtils.isBlank(mimeType)) {
           mimeType = MediaType.APPLICATION_OCTET_STREAM;
         }
-        builder = Response.ok(inputStream).type(mimeType);
+        if (file instanceof DocumentFileContent documentFileContent) {
+          String servedRange = ifRange == null || isSameEntityTag(ifRange, eTag) ? range : null;
+          builder = buildContentResponse(inputStream, documentFileContent.getSize(), servedRange).type(mimeType);
+        } else {
+          builder = Response.ok(inputStream).type(mimeType);
+        }
         builder.cacheControl(CACHE_CONTROL);
         builder.lastModified(new Date(lastUpdated));
         builder.tag(eTag);
@@ -1766,6 +1795,59 @@ public class DocumentFileRest implements ResourceContainer {
       }
       return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
     }
+  }
+
+  /**
+   * Answers a document's content, or the single byte range the Range header
+   * asks for, so that a player can start an audio or video file anywhere
+   * without downloading what comes before.
+   *
+   * @param inputStream the content
+   * @param size the size of the content, in bytes
+   * @param range the Range header, or null
+   * @return a 200 with the whole content, a 206 with the asked range, or a 416
+   *         when the range starts beyond the content
+   * @throws IOException when the content cannot be skipped to the range
+   */
+  private Response.ResponseBuilder buildContentResponse(InputStream inputStream, long size, String range) throws IOException {
+    ByteRange byteRange = ByteRange.parse(range, size);
+    if (byteRange == null) {
+      return Response.ok(inputStream).header(ACCEPT_RANGES_HEADER, BYTES_UNIT).header(HttpHeaders.CONTENT_LENGTH, size);
+    } else if (byteRange == ByteRange.NOT_SATISFIABLE) {
+      inputStream.close();
+      return Response.status(RANGE_NOT_SATISFIABLE_STATUS)
+                     .header(ACCEPT_RANGES_HEADER, BYTES_UNIT)
+                     .header(CONTENT_RANGE_HEADER, BYTES_UNIT + " */" + size);
+    }
+    try {
+      inputStream.skipNBytes(byteRange.start());
+    } catch (IOException e) {
+      inputStream.close();
+      throw e;
+    }
+    InputStream part = BoundedInputStream.builder().setInputStream(inputStream).setMaxCount(byteRange.length()).get();
+    return Response.status(PARTIAL_CONTENT_STATUS)
+                   .entity(part)
+                   .header(ACCEPT_RANGES_HEADER, BYTES_UNIT)
+                   .header(CONTENT_RANGE_HEADER,
+                           BYTES_UNIT + " " + byteRange.start() + "-" + byteRange.end() + "/" + size)
+                   .header(HttpHeaders.CONTENT_LENGTH, byteRange.length());
+  }
+
+  /**
+   * Tells whether an If-Range header names the current version of the
+   * content; a weak tag or a date never does, so the whole content is served.
+   *
+   * @param ifRange the If-Range header
+   * @param eTag the entity tag of the content
+   * @return true when the header is the strong tag of the content
+   */
+  private boolean isSameEntityTag(String ifRange, EntityTag eTag) {
+    String value = ifRange.trim();
+    if (value.startsWith("W/")) {
+      return false;
+    }
+    return value.equals("\"" + eTag.getValue() + "\"");
   }
 
   @POST
