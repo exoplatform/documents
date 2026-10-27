@@ -96,6 +96,27 @@ public interface DocumentFileService {
   AbstractNode getDocumentById(String documentId);
 
   /**
+   * Retrieves the path of a document as reached from the drive of an owner:
+   * the document's own path when it lies in that drive, otherwise the path
+   * through a shortcut of that drive targeting the document or one of its
+   * ancestors; in a user drive, only the document or its parent folder.
+   *
+   * @param documentId Id of the given document
+   * @param ownerId identity id of the drive owner (space or user)
+   * @param authenticatedUserId current user identity id
+   * @return the path of the document from the owner's drive, null when no
+   *         shortcut of that drive leads to it
+   * @throws ObjectNotFoundException when the document or the owner's drive
+   *           isn't found or isn't accessible to the user
+   * @throws IllegalAccessException when the user's identity can't be resolved
+   */
+  default String getDocumentPathInDrive(String documentId,
+                                        long ownerId,
+                                        long authenticatedUserId) throws ObjectNotFoundException, IllegalAccessException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Retrieves a file content by its identifier.
    *
    * @param documentId  Id of the given document

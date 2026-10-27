@@ -49,7 +49,7 @@ export default {
 
   methods: {
     displayDetails(){
-      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.fileId}));
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: {id: this.fileId, ownerId: this.$root.ownerId}}));
     }
   },
 };
