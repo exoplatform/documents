@@ -1862,7 +1862,7 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.BAD_REQUEST).entity("size_invalid").build();
     }
     try {
-      imageBytes = Base64.getDecoder().decode(data.replaceAll("^\"|\"$", ""));
+      imageBytes = Base64.getDecoder().decode(data.replaceAll("(^\")|(\"$)", ""));
     } catch (IllegalArgumentException e) {
       return Response.status(Status.BAD_REQUEST).entity("data_not_base64").build();
     }

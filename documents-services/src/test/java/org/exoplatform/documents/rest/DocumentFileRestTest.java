@@ -1900,9 +1900,9 @@ public class DocumentFileRestTest {
 
   @Test
   public void testCreateVideoThumbnailRefusals() throws Exception {
-    DocumentFileService documentFileService = mock(DocumentFileService.class);
-    DocumentFileRest documentFileRest = new DocumentFileRest(documentFileService,
-                                                             spaceService,
+    DocumentFileService thumbnailFileService = mock(DocumentFileService.class);
+    DocumentFileRest thumbnailRest = new DocumentFileRest(thumbnailFileService,
+                                                          spaceService,
                                                              identityManager,
                                                              metadataService,
                                                              settingService,
@@ -1912,21 +1912,21 @@ public class DocumentFileRestTest {
     ConversationState.setCurrent(new ConversationState(new org.exoplatform.services.security.Identity("user")));
     String data = Base64.getEncoder().encodeToString(new byte[] { 1 });
 
-    Response response = documentFileRest.createVideoThumbnail(null, "docId", "videoThumbnail", "axb", data);
+    Response response = thumbnailRest.createVideoThumbnail(null, "docId", "videoThumbnail", "axb", data);
     assertEquals(400, response.getStatus());
     assertEquals("size_invalid", response.getEntity());
-    response = documentFileRest.createVideoThumbnail(null, "docId", "videoThumbnail", "250x250", "not base64!");
+    response = thumbnailRest.createVideoThumbnail(null, "docId", "videoThumbnail", "250x250", "not base64!");
     assertEquals(400, response.getStatus());
     assertEquals("data_not_base64", response.getEntity());
-    verifyNoInteractions(documentFileService);
+    verifyNoInteractions(thumbnailFileService);
 
-    when(documentFileService.createThumbnail(eq("file"), any(), eq("user"), anyInt(), anyInt())).thenThrow(IllegalArgumentException.class);
-    response = documentFileRest.createVideoThumbnail(null, "12", "file", "250x250", data);
+    when(thumbnailFileService.createThumbnail(eq("file"), any(), eq("user"), anyInt(), anyInt())).thenThrow(IllegalArgumentException.class);
+    response = thumbnailRest.createVideoThumbnail(null, "12", "file", "250x250", data);
     assertEquals(400, response.getStatus());
     assertEquals("thumbnail_type_not_supported", response.getEntity());
 
-    when(documentFileService.createThumbnail(eq("videoThumbnail"), any(), eq("user"), anyInt(), anyInt())).thenThrow(IllegalAccessException.class);
-    response = documentFileRest.createVideoThumbnail(null, "docId", "videoThumbnail", "250x250", data);
+    when(thumbnailFileService.createThumbnail(eq("videoThumbnail"), any(), eq("user"), anyInt(), anyInt())).thenThrow(IllegalAccessException.class);
+    response = thumbnailRest.createVideoThumbnail(null, "docId", "videoThumbnail", "250x250", data);
     assertEquals(403, response.getStatus());
   }
 
