@@ -190,4 +190,17 @@ public class NodeTypeConstants {
    */
   public static final String EXO_TRANSCRIPTION_CHAPTERS        = "exo:transcriptionChapters";
 
+  /**
+   * The mixin of a transcribed file for whose speakers the platform proposed
+   * people (EXO-92126), apart from the names people gave, which every reader
+   * takes as confirmed.
+   */
+  public static final String EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS = "exo:transcriptionSpeakerSuggestions";
+
+  /**
+   * One proposal per speaker:
+   * {@code <speaker>=<identity id>|strong|likely|auto|manual|<segment>,<segment>…|<premise speaker>=<premise identity id>}.
+   */
+  public static final String EXO_TRANSCRIPTION_SPEAKER_SUGGESTION  = "exo:transcriptionSpeakerSuggestion";
+
 }

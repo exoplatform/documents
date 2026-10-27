@@ -253,6 +253,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final long                         DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS  = 20;
 
+  /** How a stored speaker proposal says its evidence is strong (EXO-92126). */
+  private static final String                       SUGGESTION_STRONG                        = "strong";
+
+  /** How a stored speaker proposal says its evidence is not strong. */
+  private static final String                       SUGGESTION_LIKELY                        = "likely";
+
+  /** How a stored speaker proposal says it was applied without waiting for a person. */
+  private static final String                       SUGGESTION_AUTO                          = "auto";
+
+  /** How a stored speaker proposal says it waits for a person. */
+  private static final String                       SUGGESTION_MANUAL                        = "manual";
+
   private volatile DocumentTextExtractor            textExtractor;
 
   private volatile DocumentPagedTextExtractor       pagedTextExtractor;
@@ -2831,7 +2843,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         return false;
       }
       node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
-      removeTranscriptionSpeakers(node);
+      forgetTranscriptAnnotations(node);
       session.save();
       return true;
     } catch (RepositoryException e) {
@@ -2864,7 +2876,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                        new ByteArrayInputStream(Objects.toString(transcription, "").getBytes(StandardCharsets.UTF_8)));
       writeTranscriptionState(node, state.toBuilder().hasSegments(StringUtils.isNotBlank(segments)).build());
       // A new transcript numbers its speakers anew: the people named for the previous one no longer apply
-      removeTranscriptionSpeakers(node);
+      forgetTranscriptAnnotations(node);
       if (StringUtils.isBlank(segments)) {
         if (node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)) {
           node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS).remove();
@@ -3072,6 +3084,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER,
                          speakers.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new));
       }
+      // a name a person gives, changes or clears is no longer the one the platform applied
+      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
+      if (suggestions.removeIf(suggestion -> suggestion.speaker().equals(speaker) && suggestion.autoApplied())) {
+        writeTranscriptionSpeakerSuggestions(node, suggestions);
+      }
       session.save();
     } catch (AccessDeniedException e) {
       throw new IllegalAccessException(e.getMessage());
@@ -3110,6 +3127,182 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    */
   static ReentrantLock speakerLock(String documentId) {
     return SPEAKER_LOCKS[Math.floorMod(Objects.hashCode(documentId), SPEAKER_LOCKS.length)];
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DocumentAudience getDocumentAudience(String documentId) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node == null) {
+        throw new ObjectNotFoundException("File '%s' doesn't exist".formatted(documentId));
+      }
+      String owner = node.hasProperty(NodeTypeConstants.EXO_OWNER) ? node.getProperty(NodeTypeConstants.EXO_OWNER).getString() : null;
+      Set<String> users = new LinkedHashSet<>();
+      for (AccessControlEntry entry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
+        String identity = entry.getIdentity();
+        if (entry.getMembershipEntry() == null
+            && StringUtils.isNotBlank(identity)
+            && !IdentityConstants.ANY.equals(identity)
+            && !IdentityConstants.SYSTEM.equals(identity)) {
+          users.add(identity);
+        }
+      }
+      return new DocumentAudience(owner, new ArrayList<>(users), spaceGroupIdOfDrivePath(node.getPath()));
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading whom file '%s' is for".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean saveTranscriptionSpeakerSuggestions(String documentId,
+                                                     List<TranscriptionSpeakerSuggestion> suggestions,
+                                                     long transcriptUpdated) throws ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    // the same lock as a new transcript's, which forgets the proposals: never a stale one written after it
+    lock.lock();
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!isTranscriptAt(node, transcriptUpdated)) {
+        return false;
+      }
+      writeTranscriptionSpeakerSuggestions(node, suggestions);
+      session.save();
+      return true;
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error writing the speaker proposals of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+      lock.unlock();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
+                                                                                 Identity aclIdentity) throws IllegalAccessException,
+                                                                                                       ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return readTranscriptionSpeakerSuggestions(getTranscribedNode(session, documentId));
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the speaker proposals of media file '%s'".formatted(documentId), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void removeTranscriptionSpeakerSuggestion(String documentId,
+                                                   String speaker,
+                                                   Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    if (!acquireOnRequest(lock)) {
+      throw new TranscriptionBusyException("Timed out waiting to dismiss a speaker proposal of media file '%s'".formatted(documentId));
+    }
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new IllegalAccessException("User may not edit file '%s'".formatted(documentId));
+      }
+      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
+      if (suggestions.removeIf(suggestion -> suggestion.speaker().equals(speaker))) {
+        writeTranscriptionSpeakerSuggestions(node, suggestions);
+        session.save();
+      }
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error dismissing a speaker proposal of media file '%s'".formatted(documentId), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+      lock.unlock();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean applyTranscriptionSpeakerSuggestion(String documentId,
+                                                     TranscriptionSpeakerSuggestion suggestion,
+                                                     long transcriptUpdated,
+                                                     Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    if (!acquireOnRequest(lock)) {
+      throw new TranscriptionBusyException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
+    }
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new IllegalAccessException("User may not edit file '%s'".formatted(documentId));
+      }
+      String identityId = String.valueOf(suggestion.identityId());
+      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
+      int stored = -1;
+      for (int i = 0; i < suggestions.size() && stored < 0; i++) {
+        if (suggestions.get(i).speaker().equals(suggestion.speaker()) && suggestions.get(i).identityId() == suggestion.identityId()) {
+          stored = i;
+        }
+      }
+      Map<String, String> speakers = new TreeMap<>(readTranscriptionSpeakers(node));
+      if (suggestion.premiseSpeaker() != null
+          || !isTranscriptAt(node, transcriptUpdated)
+          || stored < 0
+          || speakers.containsKey(suggestion.speaker())
+          || speakers.containsValue(identityId)) {
+        return false;
+      }
+      speakers.put(suggestion.speaker(), identityId);
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)) {
+        node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+      }
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER,
+                       speakers.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new));
+      suggestions.set(stored, suggestions.get(stored).withAutoApplied(true));
+      writeTranscriptionSpeakerSuggestions(node, suggestions);
+      session.save();
+      return true;
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error naming a speaker of media file '%s'".formatted(documentId), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+      lock.unlock();
+    }
   }
 
   @Override
@@ -4150,6 +4343,132 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)) {
       node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
     }
+  }
+
+  /**
+   * Forgets everything said about the speakers of a file's previous
+   * transcript, the people named and the proposals (EXO-92126): a new transcript
+   * numbers its speakers anew. The save is the caller's.
+   *
+   * @param node the file
+   * @throws RepositoryException when the file cannot be written
+   */
+  private void forgetTranscriptAnnotations(Node node) throws RepositoryException {
+    removeTranscriptionSpeakers(node);
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)) {
+      node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+    }
+  }
+
+  /**
+   * Writes the proposals of who the speakers of a file's transcript are, the
+   * save being the caller's; none removes them.
+   *
+   * @param node the file
+   * @param suggestions the proposals
+   * @throws RepositoryException when the file cannot be written
+   */
+  private void writeTranscriptionSpeakerSuggestions(Node node, List<TranscriptionSpeakerSuggestion> suggestions) throws RepositoryException {
+    if (suggestions == null || suggestions.isEmpty()) {
+      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)) {
+        node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+      }
+      return;
+    }
+    if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)) {
+      node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+    }
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION,
+                     suggestions.stream().map(JCRDocumentFileStorage::toSuggestionValue).toArray(String[]::new));
+  }
+
+  /**
+   * Reads the proposals of who the speakers of a file's transcript are; a value
+   * that cannot be read is skipped.
+   *
+   * @param node the file
+   * @return the proposals, in the order they were written
+   * @throws RepositoryException when the file cannot be read
+   */
+  private List<TranscriptionSpeakerSuggestion> readTranscriptionSpeakerSuggestions(Node node) throws RepositoryException {
+    List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>();
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)
+        && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION)) {
+      for (Value value : node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION).getValues()) {
+        TranscriptionSpeakerSuggestion suggestion = toSuggestion(value.getString());
+        if (suggestion != null) {
+          suggestions.add(suggestion);
+        }
+      }
+    }
+    return suggestions;
+  }
+
+  /**
+   * Tells whether a file's transcript is done and still the one of the given
+   * update time.
+   *
+   * @param node the file
+   * @param transcriptUpdated an update time of its transcription state, in
+   *          milliseconds since the epoch
+   * @return true when its state is done and was last updated then
+   * @throws RepositoryException when the file cannot be read
+   */
+  private boolean isTranscriptAt(Node node, long transcriptUpdated) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)) {
+      return false;
+    }
+    TranscriptionState state = toTranscriptionState(node);
+    return state.status() == TranscriptionStatus.DONE && Long.valueOf(transcriptUpdated).equals(state.updated());
+  }
+
+  /**
+   * @param suggestion a proposal
+   * @return its stored value:
+   *         {@code <speaker>=<identity id>|strong|likely|auto|manual|<segment>,<segment>…|<premise speaker>=<premise identity id>},
+   *         the premise empty for a proposal that follows from no other voice
+   */
+  static String toSuggestionValue(TranscriptionSpeakerSuggestion suggestion) {
+    return suggestion.speaker() + "=" + suggestion.identityId()
+        + "|" + (suggestion.strong() ? SUGGESTION_STRONG : SUGGESTION_LIKELY)
+        + "|" + (suggestion.autoApplied() ? SUGGESTION_AUTO : SUGGESTION_MANUAL)
+        + "|" + suggestion.evidence().stream().map(String::valueOf).collect(Collectors.joining(","))
+        + "|" + (suggestion.premiseSpeaker() == null ? "" : suggestion.premiseSpeaker() + "=" + suggestion.premiseIdentityId());
+  }
+
+  /**
+   * @param value a stored proposal, as {@link #toSuggestionValue} writes it
+   * @return the proposal, or null when the value cannot be read
+   */
+  static TranscriptionSpeakerSuggestion toSuggestion(String value) {
+    String[] parts = StringUtils.splitPreserveAllTokens(value, '|');
+    if (parts == null || parts.length != 5) {
+      return null;
+    }
+    String premiseSpeaker = StringUtils.trimToNull(StringUtils.substringBefore(parts[4], "="));
+    String premiseIdentityId = StringUtils.substringAfter(parts[4], "=");
+    if (premiseSpeaker != null && !StringUtils.isNumeric(premiseIdentityId)) {
+      return null;
+    }
+    String speaker = StringUtils.substringBefore(parts[0], "=");
+    String identityId = StringUtils.substringAfter(parts[0], "=");
+    if (StringUtils.isBlank(speaker) || !StringUtils.isNumeric(identityId)) {
+      return null;
+    }
+    List<Integer> evidence = new ArrayList<>();
+    for (String index : StringUtils.split(parts[3], ',')) {
+      if (!StringUtils.isNumeric(index)) {
+        return null;
+      }
+      evidence.add(Integer.valueOf(index));
+    }
+    return new TranscriptionSpeakerSuggestion(speaker,
+                                              Long.parseLong(identityId),
+                                              SUGGESTION_STRONG.equals(parts[1]),
+                                              SUGGESTION_AUTO.equals(parts[2]),
+                                              evidence,
+                                              premiseSpeaker,
+                                              premiseSpeaker == null ? null : Long.valueOf(premiseIdentityId));
   }
 
   /**

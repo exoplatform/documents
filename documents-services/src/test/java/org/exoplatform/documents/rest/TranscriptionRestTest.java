@@ -48,8 +48,11 @@ import org.springframework.web.server.ResponseStatusException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.TranscriptionBusyException;
+import org.exoplatform.documents.model.TranscriptionQuote;
+import org.exoplatform.documents.model.TranscriptionSpeakerProposal;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakerEntity;
+import org.exoplatform.documents.rest.model.TranscriptionSpeakerProposalEntity;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakersEntity;
 import org.exoplatform.documents.rest.model.TranscriptionStateEntity;
 import org.exoplatform.documents.service.DocumentTranscriptionService;
@@ -354,6 +357,90 @@ class TranscriptionRestTest {
     e = assertThrows(ResponseStatusException.class, () -> rest.getChapters(request, DOCUMENT_ID));
     assertEquals(HttpStatus.FORBIDDEN, e.getStatusCode());
     assertEquals("documents.transcription.forbidden", e.getReason());
+  }
+
+  /**
+   * The proposals come with the person each names, a deleted person left out,
+   * and a disabled one too unless the proposal was applied; one made by
+   * elimination comes with the full name of its premise person, and is left out
+   * once that person is deleted; never stored by a shared cache; a caller who
+   * cannot edit the file is answered 403 (EXO-92126).
+   */
+  @Test
+  void theSpeakerProposalsComeWithTheirPerson_andAreForEditorsOnly() throws Exception {
+    List<TranscriptionQuote> quotes = List.of(new TranscriptionQuote(4, "1", "Merci Julien."));
+    when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenReturn(List.of(
+        new TranscriptionSpeakerProposal("2", 42, false, false, quotes, "1", 41L),
+        new TranscriptionSpeakerProposal("3", 43, false, false, List.of(), null, null),
+        new TranscriptionSpeakerProposal("4", 44, false, false, List.of(), null, null),
+        new TranscriptionSpeakerProposal("5", 44, true, true, List.of(), null, null),
+        new TranscriptionSpeakerProposal("6", 42, false, false, List.of(), "1", 43L)));
+    Identity julien = mock(Identity.class);
+    Profile profile = mock(Profile.class);
+    when(julien.getId()).thenReturn("42");
+    when(julien.isEnable()).thenReturn(true);
+    when(julien.getRemoteId()).thenReturn("julien");
+    when(julien.getProfile()).thenReturn(profile);
+    when(profile.getFullName()).thenReturn("Julien Dupont");
+    when(profile.getAvatarUrl()).thenReturn("/avatar/julien");
+    Identity deleted = mock(Identity.class);
+    when(deleted.isDeleted()).thenReturn(true);
+    when(identityManager.getIdentity("42")).thenReturn(julien);
+    when(identityManager.getIdentity("43")).thenReturn(deleted);
+    Identity disabled = mock(Identity.class);
+    when(disabled.isEnable()).thenReturn(false);
+    when(disabled.getId()).thenReturn("44");
+    when(disabled.getRemoteId()).thenReturn("jane");
+    when(disabled.getProfile()).thenReturn(profile);
+    when(identityManager.getIdentity("44")).thenReturn(disabled);
+    Identity premise = mock(Identity.class);
+    Profile premiseProfile = mock(Profile.class);
+    when(premise.getProfile()).thenReturn(premiseProfile);
+    when(premiseProfile.getFullName()).thenReturn("Benjamin Martin");
+    when(identityManager.getIdentity("41")).thenReturn(premise);
+
+    ResponseEntity<List<TranscriptionSpeakerProposalEntity>> answer = rest.getSpeakerProposals(request, DOCUMENT_ID);
+
+    assertEquals("no-store", answer.getHeaders().getCacheControl());
+    assertEquals(List.of(new TranscriptionSpeakerProposalEntity("2",
+                                                                "42",
+                                                                "julien",
+                                                                "Julien Dupont",
+                                                                "/avatar/julien",
+                                                                false,
+                                                                false,
+                                                                quotes,
+                                                                "1",
+                                                                "Benjamin Martin"),
+                         new TranscriptionSpeakerProposalEntity("5", "44", "jane", "Julien Dupont", "/avatar/julien", true, true, List.of(), null, null)),
+                 answer.getBody());
+
+    when(documentTranscriptionService.getSpeakerProposals(DOCUMENT_ID, 7L)).thenThrow(new IllegalAccessException("no"));
+    assertEquals(HttpStatus.FORBIDDEN,
+                 assertThrows(ResponseStatusException.class, () -> rest.getSpeakerProposals(request, DOCUMENT_ID)).getStatusCode());
+  }
+
+  /**
+   * Dismissing a proposal answers 204, 403 to a caller who cannot edit the
+   * file, 404 for a file the caller cannot see, 409 when another change of
+   * the file held it up (EXO-92126).
+   */
+  @Test
+  void dismissingASpeakerProposalAnswersItsStatus() throws Exception {
+    assertEquals(HttpStatus.NO_CONTENT, rest.dismissSpeakerProposal(request, DOCUMENT_ID, "2").getStatusCode());
+    verify(documentTranscriptionService).dismissSpeakerProposal(DOCUMENT_ID, "2", 7L);
+
+    doThrow(new IllegalAccessException("no")).when(documentTranscriptionService).dismissSpeakerProposal(DOCUMENT_ID, "3", 7L);
+    assertEquals(HttpStatus.FORBIDDEN,
+                 assertThrows(ResponseStatusException.class, () -> rest.dismissSpeakerProposal(request, DOCUMENT_ID, "3")).getStatusCode());
+
+    doThrow(new ObjectNotFoundException("none")).when(documentTranscriptionService).dismissSpeakerProposal(DOCUMENT_ID, "4", 7L);
+    assertEquals(HttpStatus.NOT_FOUND,
+                 assertThrows(ResponseStatusException.class, () -> rest.dismissSpeakerProposal(request, DOCUMENT_ID, "4")).getStatusCode());
+    doThrow(new TranscriptionBusyException("held up")).when(documentTranscriptionService).dismissSpeakerProposal(DOCUMENT_ID, "5", 7L);
+    ResponseStatusException busy = assertThrows(ResponseStatusException.class, () -> rest.dismissSpeakerProposal(request, DOCUMENT_ID, "5"));
+    assertEquals(HttpStatus.CONFLICT, busy.getStatusCode());
+    assertEquals("documents.transcription.speaker.busy", busy.getReason());
   }
 
 }

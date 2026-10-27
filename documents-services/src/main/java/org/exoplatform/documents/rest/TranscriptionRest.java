@@ -38,8 +38,10 @@ import org.springframework.web.server.ResponseStatusException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.TranscriptSpeakers;
 import org.exoplatform.documents.model.TranscriptionBusyException;
+import org.exoplatform.documents.model.TranscriptionSpeakerProposal;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakerEntity;
+import org.exoplatform.documents.rest.model.TranscriptionSpeakerProposalEntity;
 import org.exoplatform.documents.rest.model.TranscriptionSpeakersEntity;
 import org.exoplatform.documents.rest.model.TranscriptionStateEntity;
 import org.exoplatform.documents.service.DocumentTranscriptionService;
@@ -380,6 +382,99 @@ public class TranscriptionRest {
                                            @PathVariable("speaker")
                                            String speaker) {
     return updateSpeaker(request, documentId, speaker, null, null);
+  }
+
+  /**
+   * Answers the proposals of who the speakers of a file's transcript are, with
+   * the sentences that show each, to a user who can edit the file
+   * (EXO-92126). A proposal naming a person deleted since is left out, and so
+   * is one still waiting for a confirmation that names a person disabled since,
+   * who can no longer be named; an applied one stays, as it explains a name the
+   * speaker still bears. A proposal made by elimination comes with the full
+   * name of the person its other voice is taken to be, and is left out once
+   * that person is deleted, since nothing is left to explain it.
+   *
+   * @param request the HTTP request, which names the caller
+   * @param documentId the file's UUID
+   * @return the proposals, never stored by a shared cache
+   */
+  @GetMapping(path = "{documentId}/speakers/proposals", produces = MediaType.APPLICATION_JSON_VALUE)
+  @Secured("users")
+  @Operation(summary = "Proposed speakers of the transcript of an audio or video file", method = "GET")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+    @ApiResponse(responseCode = "403", description = "The file cannot be edited by the caller"),
+    @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
+  })
+  public ResponseEntity<List<TranscriptionSpeakerProposalEntity>> getSpeakerProposals(HttpServletRequest request,
+                                                                                      @Parameter(description = "The file's UUID", required = true)
+                                                                                      @PathVariable("documentId")
+                                                                                      String documentId) {
+    try {
+      List<TranscriptionSpeakerProposalEntity> proposals = new ArrayList<>();
+      for (TranscriptionSpeakerProposal proposal : documentTranscriptionService.getSpeakerProposals(documentId,
+                                                                                                    getCurrentIdentityId(request))) {
+        Identity person = identityManager.getIdentity(String.valueOf(proposal.identityId()));
+        Identity premise = proposal.premiseSpeaker() == null
+            || proposal.premiseIdentityId() == null ? null : identityManager.getIdentity(String.valueOf(proposal.premiseIdentityId()));
+        boolean explained = proposal.premiseSpeaker() == null || premise != null && !premise.isDeleted();
+        if (person != null && !person.isDeleted() && (proposal.autoApplied() || person.isEnable()) && explained) {
+          proposals.add(new TranscriptionSpeakerProposalEntity(proposal.speaker(),
+                                                               person.getId(),
+                                                               person.getRemoteId(),
+                                                               person.getProfile().getFullName(),
+                                                               person.getProfile().getAvatarUrl(),
+                                                               proposal.strong(),
+                                                               proposal.autoApplied(),
+                                                               proposal.quotes(),
+                                                               proposal.premiseSpeaker(),
+                                                               premise == null ? null : premise.getProfile().getFullName()));
+        }
+      }
+      return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(proposals);
+    } catch (IllegalAccessException e) {
+      throw forbidden(documentId, e);
+    } catch (ObjectNotFoundException e) {
+      throw notFound(documentId, e);
+    }
+  }
+
+  /**
+   * Dismisses the proposal for one speaker of a file's transcript (EXO-92126).
+   *
+   * @param request the HTTP request, which names the caller
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @return 204 once dismissed, 409 when another change of the file held it
+   *         up
+   */
+  @DeleteMapping(path = "{documentId}/speakers/proposals/{speaker}")
+  @Secured("users")
+  @Operation(summary = "Dismiss the proposed person for a speaker of the transcript of an audio or video file", method = "DELETE")
+  @ApiResponses(value = {
+    @ApiResponse(responseCode = "204", description = "Proposal dismissed"),
+    @ApiResponse(responseCode = "403", description = "The file cannot be edited by the caller"),
+    @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
+    @ApiResponse(responseCode = "409", description = "Another change of the file held it up; the request can be sent again"),
+  })
+  public ResponseEntity<Void> dismissSpeakerProposal(HttpServletRequest request,
+                                                     @Parameter(description = "The file's UUID", required = true)
+                                                     @PathVariable("documentId")
+                                                     String documentId,
+                                                     @Parameter(description = "The speaker's number in the transcript", required = true)
+                                                     @PathVariable("speaker")
+                                                     String speaker) {
+    try {
+      documentTranscriptionService.dismissSpeakerProposal(documentId, speaker, getCurrentIdentityId(request));
+      return ResponseEntity.noContent().build();
+    } catch (TranscriptionBusyException e) {
+      LOG.debug("Dismissing a speaker proposal of file {} was held up by another change of it", documentId, e);
+      throw new ResponseStatusException(HttpStatus.CONFLICT, BUSY_MESSAGE);
+    } catch (IllegalAccessException e) {
+      throw forbidden(documentId, e);
+    } catch (ObjectNotFoundException e) {
+      throw notFound(documentId, e);
+    }
   }
 
   /**

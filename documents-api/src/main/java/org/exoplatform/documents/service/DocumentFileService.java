@@ -668,7 +668,9 @@ public interface DocumentFileService {
 
   /**
    * Says which person a speaker of a media file's transcript is, or that it is
-   * nobody named any more, as a user who can edit the file (EXO-92123).
+   * nobody named any more, as a user who can edit the file (EXO-92123). A
+   * proposal the platform applied to that speaker is dropped in the same save
+   * (EXO-92126): the name is a person's from then on.
    *
    * @param documentId the file's UUID
    * @param speaker the speaker's number in the transcript
@@ -688,6 +690,103 @@ public interface DocumentFileService {
                                        String speaker,
                                        String identityId,
                                        long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Who a file is for, read as the system: its owner, the users it is shared
+   * with one by one, and the space whose documents hold it (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @return who the file is for
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default DocumentAudience getDocumentAudience(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Replaces, as the system, the proposals of who the speakers of a media
+   * file's transcript are (EXO-92126), only while the transcript they were made
+   * from is still the stored one; none removes them.
+   *
+   * @param documentId the file's UUID
+   * @param suggestions the proposals, one per speaker at most
+   * @param transcriptUpdated the update time of the transcription state the
+   *          proposals were made from, in milliseconds since the epoch
+   * @return true when written, false when the transcript changed since, or is
+   *         not done
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default boolean saveTranscriptionSpeakerSuggestions(String documentId,
+                                                      List<TranscriptionSpeakerSuggestion> suggestions,
+                                                      long transcriptUpdated) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The proposals of who the speakers of a media file's transcript are, read
+   * with the rights of the given user (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user reading them
+   * @return the proposals, in the order they were saved; empty when none
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
+                                                                                  long aclIdentity) throws IllegalAccessException,
+                                                                                                         ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Removes the proposal for one speaker of a media file's transcript, as a
+   * user who can edit the file (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param aclIdentity the identity id of the user removing it
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default void removeTranscriptionSpeakerSuggestion(String documentId,
+                                                    String speaker,
+                                                    long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Names a speaker of a media file's transcript after a proposal the platform
+   * made, as a user who can edit the file, and marks that proposal applied, in
+   * one save under the file's lock (EXO-92126). What the proposal rests on in
+   * the file is read again at that moment: the transcript must still be the
+   * one it was made from, the proposal must still be stored (not dismissed),
+   * and neither the speaker nor the person may be named. A proposal made by
+   * elimination is never applied: it is only ever suggested, since the voice
+   * left over may be a guest's. A name applied this way never replaces one a
+   * person gave, nor
+   * names a voice of another transcript. Whether the person is still an
+   * enabled user is not read here: the caller checks it just before, so a
+   * person disabled in between is still named.
+   *
+   * @param documentId the file's UUID
+   * @param suggestion the proposal
+   * @param transcriptUpdated the update time of the transcription state the
+   *          proposal was made from, in milliseconds since the epoch
+   * @param aclIdentity the identity id of the user naming it
+   * @return true when the speaker was named; false when any of these no longer
+   *         holds
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default boolean applyTranscriptionSpeakerSuggestion(String documentId,
+                                                      TranscriptionSpeakerSuggestion suggestion,
+                                                      long transcriptUpdated,
+                                                      long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     throw new UnsupportedOperationException();
   }
 
