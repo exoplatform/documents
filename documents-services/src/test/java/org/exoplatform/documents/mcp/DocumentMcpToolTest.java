@@ -501,7 +501,6 @@ public class DocumentMcpToolTest {
   public void getDocumentContentByIdStatesWhyThereIsNoText() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     assertNoTextMessage(DocumentTextContent.Status.UNSUPPORTED_FORMAT, "its format is not supported for text extraction.");
-    assertNoTextMessage(DocumentTextContent.Status.TOO_LARGE, "the file is too large for its text to be read.");
     assertNoTextMessage(DocumentTextContent.Status.NO_TEXT, "no text was found in the file");
     assertNoTextMessage(DocumentTextContent.Status.UNREADABLE, "the file could not be read.");
     assertNoTextMessage(DocumentTextContent.Status.NOT_A_FILE, "is not a file with a content, so it has no text.");
@@ -2060,6 +2059,256 @@ public class DocumentMcpToolTest {
     marketing.setPrettyName("marketing");
     when(spaceService.getMemberSpaces(USERNAME)).thenReturn(SpaceNameResolverTest.listAccessOf(marketing, legal));
     return legal;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reading a large document part by part, and its outline
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Builds a part of a document's text with an outline: "Intro" (level 1) at
+   * 0, "Sub" (level 2) at 5, "Next" (level 1) at 12, over a 20-character
+   * text.
+   *
+   * @param text the part's text
+   * @param offset where it starts
+   * @return the part
+   */
+  private static org.exoplatform.documents.model.DocumentTextPage textPage(String text, long offset) {
+    return new org.exoplatform.documents.model.DocumentTextPage(text,
+                                                               offset,
+                                                               20,
+                                                               false,
+                                                               List.of(new org.exoplatform.documents.model.DocumentOutlineEntry(0, 1, "Intro", 0, null),
+                                                                       new org.exoplatform.documents.model.DocumentOutlineEntry(1, 2, "Sub", 5, null),
+                                                                       new org.exoplatform.documents.model.DocumentOutlineEntry(2, 1, "Next", 12, 3)),
+                                                               DocumentTextContent.Status.EXTRACTED);
+  }
+
+  /**
+   * read_document_text checks the user can read the document, then reads by
+   * offset 40000 characters when no number is set, and gives where the next
+   * part starts, none at the end of the text; a number past the largest is
+   * brought back to it.
+   * Mutants: the access check dropped, the default or the cap changed, the
+   * next offset given at the end of the text.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void readDocumentTextReadsByOffsetAndGivesTheNextOne() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, DocumentMcpTool.DEFAULT_TEXT_PART_CHARS)).thenReturn(textPage("0123456789", 0));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 10, DocumentMcpTool.MAX_TEXT_PART_CHARS)).thenReturn(textPage("abcdefghij", 10));
+
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel first = documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, null);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel last = documentMcpTool.readDocumentText(DOCUMENT_ID, 10L, 999_999, null);
+
+    assertEquals("0123456789", first.text());
+    assertEquals(Long.valueOf(10), first.nextOffset());
+    assertEquals(20, first.totalChars());
+    assertEquals(20, last.endOffset());
+    assertEquals(null, last.nextOffset());
+    assertEquals(null, last.section());
+    when(documentFileService.getDocumentById("ce0688cd7f00010134384ab7e1b15a49", USERNAME)).thenThrow(new IllegalAccessException("no"));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.readDocumentText("ce0688cd7f00010134384ab7e1b15a49", null, null, null));
+    verify(documentFileService, never()).getFileTextPage(eq("ce0688cd7f00010134384ab7e1b15a49"), anyLong(), anyInt());
+  }
+
+  /**
+   * A section is read from its heading's offset up to the next heading of
+   * the same or a higher level, a deeper one not ending it; the next offset it
+   * gives, passed back unchanged, reads the rest of the section, and an offset
+   * before the section starts at its heading; there is no next part past the
+   * section's end.
+   * Mutants: the section's start ignored, the offset counted from the
+   * section's start, a deeper heading ending it, the read going past its end,
+   * the next offset past it.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void readDocumentTextReadsOneSectionUpToTheNextHeadingOfItsLevel() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    String text = "01234567890123456789";
+    when(documentFileService.getFileTextPage(eq(DOCUMENT_ID), anyLong(), anyInt())).thenAnswer(invocation -> {
+      int from = (int) Math.min((long) invocation.getArgument(1), text.length());
+      int length = invocation.getArgument(2);
+      return textPage(text.substring(from, Math.min(text.length(), from + length)), from);
+    });
+
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel intro = documentMcpTool.readDocumentText(DOCUMENT_ID, 2L, 100, 0);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel sub = documentMcpTool.readDocumentText(DOCUMENT_ID, null, 4, 1);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel subEnd = documentMcpTool.readDocumentText(DOCUMENT_ID,
+                                                                                                         sub.nextOffset(),
+                                                                                                         100,
+                                                                                                         1);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel before = documentMcpTool.readDocumentText(DOCUMENT_ID, 1L, 4, 1);
+
+    assertEquals("Intro", intro.section().title());
+    assertEquals("2345678901", intro.text());
+    assertEquals(12, intro.section().endOffset());
+    assertEquals(null, intro.nextOffset());
+    assertEquals("5678", sub.text());
+    assertEquals(Long.valueOf(9), sub.nextOffset());
+    assertEquals(12, sub.section().endOffset());
+    assertEquals("901", subEnd.text());
+    assertEquals(null, subEnd.nextOffset());
+    assertEquals("5678", before.text());
+  }
+
+  /**
+   * A section the outline doesn't have is refused with the number of
+   * headings and the tool listing them.
+   * Mutants: the bound check dropped or off by one.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void readDocumentTextRefusesASectionTheOutlineDoesNotHave() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, 0)).thenReturn(textPage("", 0));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, 3));
+    assertTrue(error.getMessage().contains("3 headings"));
+    assertTrue(error.getMessage().contains("get_document_outline"));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, -1));
+  }
+
+  /**
+   * get_document_outline lists the headings, each section ending at the
+   * next heading of the same or a higher level or at the end of the text,
+   * with its page when it has one.
+   * Mutants: a section ended by a deeper heading, the last one not ending at
+   * the text's end, the page dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentOutlineListsTheHeadingsAndWhereTheirSectionsEnd() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, 0)).thenReturn(textPage("", 0));
+
+    org.exoplatform.documents.mcp.model.DocumentOutlineModel outline = documentMcpTool.getDocumentOutline(DOCUMENT_ID);
+
+    assertEquals(20, outline.totalChars());
+    assertEquals(List.of(12L, 12L, 20L), outline.headings().stream().map(h -> h.endOffset()).toList());
+    assertEquals(Integer.valueOf(3), outline.headings().get(2).page());
+  }
+
+  /**
+   * Two headings of one level starting at one offset, two bookmarks on one
+   * PDF page, do not give the first an empty section: it ends at the next
+   * heading starting after it.
+   * Mutants: the section ended at a heading sharing its start.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentOutlineEndsASectionAtAHeadingStartingAfterIt() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, 0))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("",
+                                                                         0,
+                                                                         20,
+                                                                         false,
+                                                                         List.of(new org.exoplatform.documents.model.DocumentOutlineEntry(0, 1, "One", 4, 2),
+                                                                                 new org.exoplatform.documents.model.DocumentOutlineEntry(1, 1, "Two", 4, 2),
+                                                                                 new org.exoplatform.documents.model.DocumentOutlineEntry(2, 1, "Three", 10, 3)),
+                                                                         DocumentTextContent.Status.EXTRACTED));
+
+    org.exoplatform.documents.mcp.model.DocumentOutlineModel outline = documentMcpTool.getDocumentOutline(DOCUMENT_ID);
+
+    assertEquals(10, outline.headings().get(0).endOffset());
+    assertEquals(10, outline.headings().get(1).endOffset());
+    assertEquals(20, outline.headings().get(2).endOffset());
+  }
+
+  /**
+   * A large document still being read, or waiting behind other large ones,
+   * says to call again, one too large even for parts says so, and any other
+   * reason is the one-shot tool's.
+   * Mutants: the being-read answer worded as a failure or naming only this
+   * document's reading, the reasons swapped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void readDocumentTextSaysWhyThereIsNoText() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(eq(DOCUMENT_ID), anyLong(), anyInt()))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.BUSY))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.TOO_LARGE))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.NO_TEXT));
+
+    String busy = assertThrows(IllegalStateException.class,
+                               () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, null)).getMessage();
+    assertTrue(busy.contains("Call the same tool again"));
+    assertTrue(busy.contains("or other large documents are"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentOutline(DOCUMENT_ID)).getMessage().contains("even part by part"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, null)).getMessage()
+                                                                                                    .contains("no text was found"));
+  }
+
+  /**
+   * A file too large to be read in one go gives the first part read part by
+   * part, with the text's length and the offset to read on; a text that fits
+   * in that part comes whole, a cut one says so; a file too large even part
+   * by part, or one still being read, says it.
+   * Mutants: the refusal kept, the note dropped or with the wrong offset, a
+   * part smaller than the largest, the cut not told, whether the whole text
+   * fits in the part or not.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentContentByIdReadsTheFirstPartOfAFileTooLargeForOneGo() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(DocumentTextContent.none(DocumentTextContent.Status.TOO_LARGE));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, DocumentMcpTool.MAX_TEXT_PART_CHARS))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("0123456789", 0, 500_000, false, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("whole", 0, 5, false, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("cut", 0, 3, true, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("start", 0, 900, true, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.TOO_LARGE))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.BUSY));
+
+    String first = documentMcpTool.getDocumentContentById(DOCUMENT_ID);
+    assertTrue(first.startsWith("0123456789\n\n["));
+    assertTrue(first.contains("500000 characters long"));
+    assertTrue(first.contains("read_document_text with offset=10"));
+    assertEquals("whole", documentMcpTool.getDocumentContentById(DOCUMENT_ID));
+    assertTrue(documentMcpTool.getDocumentContentById(DOCUMENT_ID).contains("it was cut at the most characters read"));
+    String cutFirst = documentMcpTool.getDocumentContentById(DOCUMENT_ID);
+    assertTrue(cutFirst.contains("900 characters long once cut at the most characters read"));
+    assertTrue(cutFirst.contains("offset=5"));
+    assertFalse(first.contains("once cut"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID)).getMessage().contains("even part by part"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID)).getMessage().contains("Call the same tool again"));
+  }
+
+  /**
+   * The one-shot read says when its text was cut and where to read on.
+   * Mutants: the cut not told, an offset given, the pointer dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentContentByIdTellsACutTextAndPointsToThePartTools() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(DocumentTextContent.truncated("0123456789"));
+
+    String text = documentMcpTool.getDocumentContentById(DOCUMENT_ID);
+
+    assertTrue(text.startsWith("0123456789"));
+    assertTrue(text.contains("get_document_outline and read_document_text"));
+    // this text's length is no position in the text read part by part, so none is given
+    assertFalse(text.contains("offset 10"));
   }
 
   // ---------------------------------------------------------------------------
