@@ -178,6 +178,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getFileTextContent(documentId);
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DocumentTextPage getFileTextPage(String documentId, long offset, int maxChars) {
+    return documentFileStorage.getFileTextPage(documentId, offset, maxChars);
+  }
+
   @Override
   @SneakyThrows
   public InputStream getFileContentAsStream(String docId, long userIdentityId) {
