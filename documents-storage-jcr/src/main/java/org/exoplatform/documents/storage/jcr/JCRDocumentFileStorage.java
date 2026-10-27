@@ -1379,6 +1379,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void validateUploadedFile(String fileName, String mimeType, Path file) {
+    try {
+      validateFile(fileName, mimeType, () -> Files.newInputStream(file));
+    } catch (IOException e) {
+      throw new IllegalStateException("The file '" + fileName + "' couldn't be checked", e);
+    }
+  }
+
+  /**
    * Runs every upload validator that supports a file on its content, each
    * from a fresh stream.
    *

@@ -1226,7 +1226,7 @@ public class DocumentMcpToolTest {
     fileUploadsAs(fileNodeNamed("upl-1", "hello.txt"));
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
 
-    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null, null, null, "New_Version");
+    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null, null, null, "New_Version", null);
 
     assertEquals("upl-1", model.getId());
     ArgumentCaptor<String> uploadId = ArgumentCaptor.forClass(String.class);
@@ -1239,7 +1239,7 @@ public class DocumentMcpToolTest {
     verify(uploadService).removeUploadResource(uploadId.getValue());
 
     assertTrue(assertThrows(IllegalArgumentException.class,
-                            () -> documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null, null, null, "merge")).getMessage()
+                            () -> documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null, null, null, "merge", null)).getMessage()
                                                                                                                          .contains("keep_both"));
     verify(documentFileService).saveUploadedDocument(any(), any(), any(), any(), anyLong());
   }
@@ -1261,7 +1261,7 @@ public class DocumentMcpToolTest {
     when(fileService.getFile(999L)).thenReturn(fileItem);
 
     // name left blank -> reused from the resolved attachment file name.
-    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null);
+    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null, null);
 
     assertNotNull(model);
     assertEquals("upl-att", model.getId());
@@ -1278,26 +1278,26 @@ public class DocumentMcpToolTest {
         .thenReturn(java.util.Collections.emptyList());
 
     assertThrows(ObjectNotFoundException.class,
-                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null));
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null, null));
   }
 
   @Test
   public void uploadDocumentRequiresExactlyOneSource() {
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
     // no source at all
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", null, null, null, null, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", null, null, null, null, null, null));
     // both base64 and url
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, "https://example.com/x.txt", null, null, null));
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, "https://example.com/x.txt", null, null, null, null));
     // both an attachment and base64
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, null, "activity", "77", null));
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, null, "activity", "77", null, null));
   }
 
   @Test
   public void uploadDocumentBase64RequiresName() {
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, " ", base64, null, null, null, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, " ", base64, null, null, null, null, null));
   }
 
   @Test
@@ -1575,7 +1575,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
 
-    DocumentModel model = documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, null);
+    DocumentModel model = documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, null, null);
 
     assertNotNull(model);
     assertEquals(DOCUMENT_ID, model.getId());
@@ -1590,7 +1590,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
     when(documentFileService.getFileVersions(DOCUMENT_ID, USERNAME)).thenReturn(List.of(fileVersion()));
 
-    documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, "reworded intro");
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, "reworded intro", null);
 
     verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
     verify(documentFileService).updateVersionSummary(eq(DOCUMENT_ID), eq("version-1"), eq("reworded intro"), eq(USERNAME));
@@ -1616,10 +1616,10 @@ public class DocumentMcpToolTest {
     org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
     try {
       assertThrows(IllegalArgumentException.class,
-                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, overText, null, null, null, null, null));
+                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, overText, null, null, null, null, null, null));
       verify(documentFileService, never()).createNewVersion(any(), any(), any());
 
-      documentMcpTool.addDocumentVersion(DOCUMENT_ID, "a".repeat(limit), null, null, null, null, null);
+      documentMcpTool.addDocumentVersion(DOCUMENT_ID, "a".repeat(limit), null, null, null, null, null, null);
     } finally {
       org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
     }
@@ -1632,7 +1632,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
 
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null));
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, null));
   }
 
   @Test
@@ -1640,7 +1640,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
 
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.addDocumentVersion(FOLDER_ID, "body", null, null, null, null, null));
+                 () -> documentMcpTool.addDocumentVersion(FOLDER_ID, "body", null, null, null, null, null, null));
   }
 
   @Test
@@ -1649,7 +1649,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
 
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null));
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null, null));
   }
 
   @Test
@@ -2836,7 +2836,7 @@ public class DocumentMcpToolTest {
     org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
     try {
       assertTrue(assertThrows(IllegalArgumentException.class,
-                              () -> documentMcpTool.uploadDocument(FOLDER_ID, "big.bin", null, null, "activity", "77", null)).getMessage()
+                              () -> documentMcpTool.uploadDocument(FOLDER_ID, "big.bin", null, null, "activity", "77", null, null)).getMessage()
                                                                                                                           .contains("1 MB"));
     } finally {
       org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
@@ -3013,7 +3013,7 @@ public class DocumentMcpToolTest {
                             () -> documentMcpTool.startDocumentUpload(DOCUMENT_ID, "a.pdf", 10L, null)).getMessage()
                                                                                                       .contains("add_document_version"));
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.uploadDocument(DOCUMENT_ID, "a.pdf", base64, null, null, null, null));
+                 () -> documentMcpTool.uploadDocument(DOCUMENT_ID, "a.pdf", base64, null, null, null, null, null));
     verify(uploadService, never()).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
     verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
   }
@@ -3055,7 +3055,7 @@ public class DocumentMcpToolTest {
                                                                                                               eq(svg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, svg, null, null, null, null, null));
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, svg, null, null, null, null, null, null));
     verify(documentFileService, never()).createNewVersion(any(), any(), any());
   }
 
@@ -3072,7 +3072,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById("target-id", USERNAME)).thenReturn(fileNode("target-id", "text/plain"));
     when(documentFileService.hasEditPermissionOnDocument("target-id", USER_IDENTITY_ID)).thenReturn(true);
 
-    documentMcpTool.addDocumentVersion("shortcut-id", "new text", null, null, null, null, null);
+    documentMcpTool.addDocumentVersion("shortcut-id", "new text", null, null, null, null, null, null);
 
     verify(documentFileService).createNewVersion(eq("target-id"), eq(USERNAME), any());
     verify(documentFileService, never()).hasEditPermissionOnDocument(eq("shortcut-id"), anyLong());
@@ -3101,7 +3101,7 @@ public class DocumentMcpToolTest {
     org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
     try {
       assertThrows(IllegalArgumentException.class,
-                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, "activity", "77", null));
+                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, "activity", "77", null, null));
     } finally {
       org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
     }
@@ -3152,35 +3152,38 @@ public class DocumentMcpToolTest {
 
     try (MockedStatic<UploadToolUtils> utils = Mockito.mockStatic(UploadToolUtils.class, Mockito.CALLS_REAL_METHODS)) {
       String uploadRefusal = assertThrows(IllegalArgumentException.class,
-                                          () -> documentMcpTool.uploadDocument(FOLDER_ID, "big.bin", tooLong, null, null, null, null))
+                                          () -> documentMcpTool.uploadDocument(FOLDER_ID, "big.bin", tooLong, null, null, null, null, null))
                                                                                                                                  .getMessage();
       assertTrue(uploadRefusal, uploadRefusal.contains("at most " + DocumentMcpTool.CHUNK_CHARS));
       assertTrue(uploadRefusal, uploadRefusal.contains("start_document_upload"));
       assertTrue(uploadRefusal, uploadRefusal.contains("append_document_upload_chunk"));
+      assertTrue(uploadRefusal, uploadRefusal.contains("start_upload"));
 
       String versionRefusal = assertThrows(IllegalArgumentException.class,
-                                           () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, tooLong, null, null, null, null))
+                                           () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, tooLong, null, null, null, null, null))
                                                                                                                                   .getMessage();
       assertTrue(versionRefusal, versionRefusal.contains("at most " + DocumentMcpTool.CHUNK_CHARS));
       assertTrue(versionRefusal, versionRefusal.contains("start_document_upload"));
       assertTrue(versionRefusal, versionRefusal.contains("on_conflict=new_version"));
+      assertTrue(versionRefusal, versionRefusal.contains("start_upload"));
 
       // a call limited to a space isn't offered the tools that send a file in pieces
       scopeSpaceId = 12L;
       String scopedRefusal = assertThrows(IllegalArgumentException.class,
-                                          () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, tooLong, null, null, null, null))
+                                          () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, tooLong, null, null, null, null, null))
                                                                                                                                  .getMessage();
       scopeSpaceId = null;
       assertTrue(scopedRefusal, scopedRefusal.contains("at most " + DocumentMcpTool.CHUNK_CHARS));
       assertTrue(scopedRefusal, scopedRefusal.contains("limited to a space"));
       assertFalse(scopedRefusal, scopedRefusal.contains("start_document_upload"));
+      assertFalse(scopedRefusal, scopedRefusal.contains("start_upload"));
 
       utils.verify(() -> UploadToolUtils.decodeBase64(anyString()), never());
       verify(uploadService, never()).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
       verify(documentFileService, never()).createNewVersion(any(), any(), any());
 
-      documentMcpTool.uploadDocument(FOLDER_ID, "max.bin", longest, null, null, null, null);
-      documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, longest, null, null, null, null);
+      documentMcpTool.uploadDocument(FOLDER_ID, "max.bin", longest, null, null, null, null, null);
+      documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, longest, null, null, null, null, null);
     }
     verify(documentFileService).saveUploadedDocument(eq(FOLDER_ID), anyString(), eq("max.bin"), any(), eq(USER_IDENTITY_ID));
     verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
@@ -3217,31 +3220,32 @@ public class DocumentMcpToolTest {
       utils.when(() -> UploadToolUtils.fetchUrl(eq(privateUrl), anyLong(), any()))
            .thenThrow(new IllegalArgumentException(privateHost));
 
-      documentMcpTool.uploadDocument(FOLDER_ID, "report.pdf", null, url, null, null, null);
-      documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, url, null, null, null);
+      documentMcpTool.uploadDocument(FOLDER_ID, "report.pdf", null, url, null, null, null, null);
+      documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, url, null, null, null, null);
       utils.verify(() -> UploadToolUtils.fetchUrl(eq(url), eq(DocumentUploadLimit.URL_FETCH_MAX_BYTES), any()), Mockito.times(2));
 
       for (String refusal : List.of(assertThrows(IllegalArgumentException.class,
-                                                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, bigUrl, null, null, null))
+                                                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, bigUrl, null, null, null, null))
                                                                                                                                 .getMessage(),
                                     assertThrows(IllegalArgumentException.class,
-                                                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, bigUrl, null, null, null))
+                                                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, bigUrl, null, null, null, null))
                                                                                                                                     .getMessage())) {
         assertTrue(refusal, refusal.startsWith(tooLarge));
         assertTrue(refusal, refusal.contains("up to 15 MB"));
-        assertTrue(refusal, refusal.contains("start_document_upload"));
+        assertTrue(refusal, refusal.contains("start_upload"));
+        assertTrue(refusal, refusal.contains("upload_id"));
       }
       assertEquals(privateHost,
                    assertThrows(IllegalArgumentException.class,
-                                () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, privateUrl, null, null, null)).getMessage());
+                                () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, privateUrl, null, null, null, null)).getMessage());
 
       // an upload size limit below 15 MB bounds the read, for a new version as for a new file
       org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
       try {
-        documentMcpTool.uploadDocument(FOLDER_ID, "report.pdf", null, url, null, null, null);
-        documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, url, null, null, null);
+        documentMcpTool.uploadDocument(FOLDER_ID, "report.pdf", null, url, null, null, null, null);
+        documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, url, null, null, null, null);
         String refusal = assertThrows(IllegalArgumentException.class,
-                                      () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, bigUrl, null, null, null))
+                                      () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, bigUrl, null, null, null, null))
                                                                                                                               .getMessage();
         assertTrue(refusal, refusal.contains("up to 1 MB"));
       } finally {
@@ -3249,6 +3253,402 @@ public class DocumentMcpToolTest {
       }
       utils.verify(() -> UploadToolUtils.fetchUrl(eq(url), eq(1024L * 1024), any()), Mockito.times(2));
     }
+  }
+
+  /** The files the tests staged as uploads, deleted after each test. */
+  private final List<java.nio.file.Path> stagedFiles  = new java.util.ArrayList<>();
+
+  /**
+   * An attached file whose stored size is over the upload size limit is
+   * refused before its bytes are read, by both tools.
+   * Mutants: the stored size unchecked, the file read first.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anAttachmentOverTheLimitIsRefusedBeforeItIsRead() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(socialAttachmentService.getAttachmentFileIds(eq("activity"), eq("77"), eq(currentIdentity))).thenReturn(List.of("999"));
+    org.exoplatform.commons.file.model.FileItem fileItem = Mockito.mock(org.exoplatform.commons.file.model.FileItem.class);
+    org.exoplatform.commons.file.model.FileInfo fileInfo = Mockito.mock(org.exoplatform.commons.file.model.FileInfo.class);
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    when(fileInfo.getSize()).thenReturn(1024L * 1024 + 1);
+    when(fileService.getFile(999L)).thenReturn(fileItem);
+
+    org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
+    try {
+      assertTrue(assertThrows(IllegalArgumentException.class,
+                              () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null, null)).getMessage()
+                                                                                                                             .contains("1 MB"));
+      assertThrows(IllegalArgumentException.class,
+                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, "activity", "77", null, null));
+    } finally {
+      org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
+    }
+    verify(fileItem, never()).getAsByte();
+  }
+
+  // ---------------------------------------------------------------------------
+  // A file sent through an upload link (upload_id)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Stages one of the current user's uploads: its file on disk holds the
+   * given bytes, and the owner-checked accessor answers it for the current
+   * user only.
+   *
+   * @param uploadId the upload id
+   * @param fileName the name it was uploaded under
+   * @param bytes the file's bytes
+   * @param status the upload's status
+   * @return the staged file
+   * @throws Exception never
+   */
+  private java.nio.file.Path stagedUpload(String uploadId, String fileName, byte[] bytes, int status) throws Exception {
+    java.nio.file.Path file = java.nio.file.Files.createTempFile("upload", ".bin");
+    stagedFiles.add(file);
+    java.nio.file.Files.write(file, bytes);
+    org.exoplatform.upload.UploadResource resource = new org.exoplatform.upload.UploadResource(uploadId);
+    resource.setFileName(fileName);
+    resource.setMimeType("application/octet-stream");
+    resource.setStoreLocation(file.toString());
+    resource.setStatus(status);
+    when(uploadService.getUploadResource(uploadId, USERNAME)).thenReturn(resource);
+    return file;
+  }
+
+  /**
+   * Deletes the files the tests staged.
+   *
+   * @throws Exception never
+   */
+  @org.junit.After
+  public void deleteStagedFiles() throws Exception {
+    for (java.nio.file.Path file : stagedFiles) {
+      java.nio.file.Files.deleteIfExists(file);
+    }
+  }
+
+  /**
+   * A file sent through an upload link is filed from its staged file, by its
+   * upload id, under the name it was uploaded under or the name given, with
+   * the conflict action given: the tool never reads it nor stages a copy, and
+   * releases it through the owner-checked remove once filed. The upload is
+   * read through the owner-checked accessor only, its id trimmed, and takes
+   * the name it is filed under, which the filing types the file from.
+   * Mutants: the id not trimmed, the upload left under its own name, the
+   * upload id not handed to the filing, a copy staged, the
+   * upload's name or the given name ignored, the conflict action dropped,
+   * the remove dropped or not owner-checked, the unchecked accessor used.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIsFiledFromItsStagedFileWithoutACopy() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    Map<String, String> typedAs = new HashMap<>();
+    when(documentFileService.saveUploadedDocument(eq(FOLDER_ID), anyString(), anyString(), any(), eq(USER_IDENTITY_ID)))
+        .thenAnswer(invocation -> {
+          String uploadId = invocation.getArgument(1);
+          typedAs.put(uploadId, uploadService.getUploadResource(uploadId, USERNAME).getFileName());
+          return fileNodeNamed("up-doc", "deck.pptx");
+        });
+    stagedUpload("up-1", "deck.pptx", "PPTX".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("up-2", "deck.pptx", "PPTX".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+
+    try (MockedStatic<UploadToolUtils> utils = Mockito.mockStatic(UploadToolUtils.class, Mockito.CALLS_REAL_METHODS)) {
+      assertEquals("up-doc", documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, " up-1 ").getId());
+      documentMcpTool.uploadDocument(FOLDER_ID, "Final deck.pdf", null, null, null, null, "new_version", "up-2");
+
+      utils.verify(() -> UploadToolUtils.materialize(any(), any(), any(), any()), never());
+      utils.verify(() -> UploadToolUtils.decodeBase64(any()), never());
+    }
+    verify(documentFileService).saveUploadedDocument(FOLDER_ID, "up-1", "deck.pptx", UploadConflictAction.KEEP_BOTH, USER_IDENTITY_ID);
+    verify(documentFileService).saveUploadedDocument(FOLDER_ID,
+                                                     "up-2",
+                                                     "Final deck.pdf",
+                                                     UploadConflictAction.NEW_VERSION,
+                                                     USER_IDENTITY_ID);
+    // the filing types the file from the upload's name, which must be the one it is filed under
+    assertEquals(Map.of("up-1", "deck.pptx", "up-2", "Final deck.pdf"), typedAs);
+    verify(uploadService, never()).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
+    verify(uploadService).removeUploadResource("up-1", USERNAME);
+    verify(uploadService).removeUploadResource("up-2", USERNAME);
+    verify(uploadService, never()).getUploadResource(anyString());
+    verify(uploadService, never()).removeUploadResource(anyString());
+  }
+
+  /**
+   * An upload id the owner-checked accessor doesn't answer for the current
+   * user, unknown or another user's, is refused alike by both tools, naming
+   * start_upload and get_upload, before anything is filed or versioned, and
+   * nothing is removed: another user's upload stays theirs.
+   * Mutants: the accessor's answer unchecked, the unchecked accessor used, a
+   * refusal naming neither tool, something removed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUnknownOrAnotherUsersUploadIsRefused() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    org.exoplatform.upload.UploadResource theirs = new org.exoplatform.upload.UploadResource("theirs");
+    theirs.setStatus(org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    lenient().when(uploadService.getUploadResource("theirs")).thenReturn(theirs);
+    lenient().when(uploadService.getUploadResource("theirs", "mary")).thenReturn(theirs);
+
+    for (String refusal : List.of(assertThrows(IllegalArgumentException.class,
+                                               () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.pdf", null, null, null, null, null, "theirs"))
+                                                                                                                                    .getMessage(),
+                                  assertThrows(IllegalArgumentException.class,
+                                               () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "theirs"))
+                                                                                                                                         .getMessage(),
+                                  assertThrows(IllegalArgumentException.class,
+                                               () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.pdf", null, null, null, null, null, "unknown"))
+                                                                                                                                     .getMessage())) {
+      assertTrue(refusal, refusal.contains("start_upload"));
+      assertTrue(refusal, refusal.contains("get_upload"));
+    }
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+    verify(uploadService, never()).removeUploadResource(anyString(), anyString());
+    verify(uploadService, never()).removeUploadResource(anyString());
+  }
+
+  /**
+   * An upload still being sent is refused and left in place for a later
+   * call, removing it would delete a file still being written; one that
+   * failed is refused and dropped; by both tools.
+   * Mutants: the status unchecked, an upload being sent removed, a failed one
+   * kept.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadNotCompleteIsRefused() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    stagedUpload("sending", "x.pdf", "PDF".getBytes(), org.exoplatform.upload.UploadResource.UPLOADING_STATUS);
+    stagedUpload("failed", "x.pdf", "PDF".getBytes(), org.exoplatform.upload.UploadResource.FAILED_STATUS);
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "sending")).getMessage()
+                                                                                                                         .contains("get_upload"));
+    assertThrows(IllegalStateException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "sending"));
+    verify(uploadService, never()).removeUploadResource(anyString(), anyString());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "failed")).getMessage()
+                                                                                                                        .contains("start_upload"));
+    assertThrows(IllegalStateException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "failed"));
+    verify(uploadService, Mockito.times(2)).removeUploadResource("failed", USERNAME);
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+  }
+
+  /**
+   * An upload is capped at the upload size limit, measured on its staged
+   * file, by both tools: one byte over is refused and dropped, the limit
+   * itself is filed; an empty file is refused and dropped.
+   * Mutants: the cap removed, off by one, not the upload limit, an empty
+   * file filed, a refused upload kept.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadOverTheLimitOrEmptyIsRefusedAndDropped() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(documentFileService.saveUploadedDocument(eq(FOLDER_ID), anyString(), anyString(), any(), eq(USER_IDENTITY_ID)))
+        .thenReturn(fileNodeNamed("up-max", "max.bin"));
+    int limit = 1024 * 1024;
+    stagedUpload("over", "over.bin", new byte[limit + 1], org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("over-v", "over.bin", new byte[limit + 1], org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("max", "max.bin", new byte[limit], org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("empty", "empty.bin", new byte[0], org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+
+    org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
+    try {
+      assertTrue(assertThrows(IllegalArgumentException.class,
+                              () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "over")).getMessage()
+                                                                                                                         .contains("1 MB"));
+      assertThrows(IllegalArgumentException.class,
+                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "over-v"));
+      assertThrows(IllegalArgumentException.class,
+                   () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "empty"));
+      verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+      verify(documentFileService, never()).createNewVersion(any(), any(), any());
+
+      documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "max");
+    } finally {
+      org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
+    }
+    verify(documentFileService).saveUploadedDocument(FOLDER_ID, "max", "max.bin", UploadConflictAction.KEEP_BOTH, USER_IDENTITY_ID);
+    for (String uploadId : List.of("over", "over-v", "max", "empty")) {
+      verify(uploadService).removeUploadResource(uploadId, USERNAME);
+    }
+  }
+
+  /**
+   * An upload id is one source among the others, exclusive of each, for both
+   * tools: given with another one, the call is refused before the upload is
+   * read, and the upload is left in place.
+   * Mutants: the upload id not counted as a source, or read before the
+   * count.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIdIsOneSourceAmongTheOthers() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, null, null, null, null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", null, "https://example.com/x.txt", null, null, null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "text", null, null, null, null, null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, base64, null, null, null, null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, "activity", "77", null, "up-1"));
+
+    verify(uploadService, never()).getUploadResource(anyString(), anyString());
+    verify(uploadService, never()).removeUploadResource(anyString(), anyString());
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+  }
+
+  /**
+   * An upload refused at its filing (a validator, a conflict, the storage) is
+   * dropped all the same; a folder the user can't write in is refused before
+   * the upload is read, which leaves it in place.
+   * Mutants: the remove not in a finally, the folder checked after the read.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIsDroppedWhenItsFilingFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.saveUploadedDocument(eq(FOLDER_ID), anyString(), anyString(), any(), eq(USER_IDENTITY_ID)))
+        .thenThrow(new IllegalArgumentException("The file 'x.svg' is refused: Infected file detected"))
+        .thenThrow(new IllegalStateException("The file 'x.svg' couldn't be filed"));
+    stagedUpload("refused", "x.svg", "<svg/>".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("broken", "x.svg", "<svg/>".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("kept", "x.svg", "<svg/>".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "refused"));
+    assertThrows(IllegalStateException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "broken"));
+    verify(uploadService).removeUploadResource("refused", USERNAME);
+    verify(uploadService).removeUploadResource("broken", USERNAME);
+
+    when(documentFileService.hasEditPermissionOnDocument(eq(FOLDER_ID), anyLong())).thenReturn(false);
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "kept"));
+    verify(uploadService, never()).getUploadResource("kept", USERNAME);
+    verify(uploadService, never()).removeUploadResource("kept", USERNAME);
+  }
+
+  /**
+   * A new version from an upload is checked by the upload validators on its
+   * staged file, under the versioned file's name and type, then streamed
+   * from that file into the version, never read into memory by the tool;
+   * the upload is dropped once read, whether the version is added or
+   * refused. A file the user can't edit is refused before the upload is
+   * read.
+   * Mutants: the staged file not validated or validated in memory, the
+   * version given a byte array, another file streamed, the remove dropped,
+   * the edit right checked after the read.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aNewVersionIsStreamedFromTheStagedUpload() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(documentFileService.getFileVersions(DOCUMENT_ID, USERNAME)).thenReturn(List.of(fileVersion()));
+    java.nio.file.Path staged = stagedUpload("up-v", "new.pdf", "PDF v2".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    List<String> streamed = new java.util.ArrayList<>();
+    doAnswer(invocation -> {
+      java.io.InputStream content = invocation.getArgument(2);
+      assertFalse(content instanceof java.io.ByteArrayInputStream);
+      streamed.add(new String(content.readAllBytes()));
+      return null;
+    }).when(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
+
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, "from my machine", "up-v");
+
+    assertEquals(List.of("PDF v2"), streamed);
+    verify(documentFileService).validateUploadedFile("report.pdf", "application/pdf", staged);
+    verify(documentFileService, never()).validateUploadedContent(any(), any(), any());
+    verify(documentFileService).updateVersionSummary(DOCUMENT_ID, "version-1", "from my machine", USERNAME);
+    verify(uploadService).removeUploadResource("up-v", USERNAME);
+
+    java.nio.file.Path refused = stagedUpload("up-svg", "x.svg", "<svg/>".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    doThrow(new IllegalArgumentException("The file 'report.pdf' is refused: Infected file detected")).when(documentFileService)
+                                                                                                   .validateUploadedFile(any(),
+                                                                                                                         any(),
+                                                                                                                         eq(refused));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "up-svg"));
+    verify(uploadService).removeUploadResource("up-svg", USERNAME);
+    assertEquals(1, streamed.size());
+
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
+    stagedUpload("kept", "x.pdf", "PDF".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "kept"));
+    verify(uploadService, never()).getUploadResource("kept", USERNAME);
+  }
+
+  /**
+   * In a call limited to a space, where start_upload is not offered, an
+   * upload id is refused by both tools before the upload is read, and when
+   * the call's space can't be read too; the upload is left in place. (The
+   * server refuses the argument before the tool runs as well, its
+   * declaration not accepting it: {@code DocumentToolDefinitionSpaceScopeTest}.)
+   * Mutants: the scope unchecked, an unreadable scope taken as unlimited.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIdIsRefusedInACallLimitedToASpace() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    stagedUpload("up-1", "x.pdf", "PDF".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+
+    scopeSpaceId = 12L;
+    assertTrue(assertThrows(IllegalAccessException.class,
+                            () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "up-1")).getMessage()
+                                                                                                                             .contains("limited to a space"));
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "up-1"));
+    scopeSpaceId = null;
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "up-1"));
+    scopeUnreadable = false;
+
+    verify(uploadService, never()).getUploadResource(anyString(), anyString());
+    verify(uploadService, never()).removeUploadResource(anyString(), anyString());
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "up-1");
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
   }
 
 }
