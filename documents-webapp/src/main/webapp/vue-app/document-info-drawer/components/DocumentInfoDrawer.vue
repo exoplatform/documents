@@ -156,6 +156,19 @@
                   :measured-duration="mediaDuration"
                   @available="transcriptAvailable = $event"
                   @transcript="showTranscript" />
+                <!-- Rows other add-ons contribute to a file's details, each
+                     deciding from the file whether it shows. A name of its
+                     own and strict-type: a non-strict slot renders every
+                     component registered under its name, whatever the type,
+                     and DocumentsInfo also holds the menu's contributions. -->
+                <extension-registry-components
+                  :params="detailsContributionParams"
+                  name="DocumentsInfoDetails"
+                  type="documents-info-details"
+                  strict-type
+                  parent-element="div"
+                  element="div"
+                  class="documentInfoDetailsContributions" />
               </template>
             </document-info-details>
             <div class="documentInfoGroupTitle">{{ $t('documents.drawer.details.category') }}</div>
@@ -296,6 +309,18 @@ export default {
     },
     fileId() {
       return this.file?.id;
+    },
+    /**
+     * What the details rows contributed by other add-ons receive: the file,
+     * its identifier and its media type.
+     * @returns {Object} the props of each contributed row
+     */
+    detailsContributionParams() {
+      return {
+        file: this.file,
+        documentId: this.fileId,
+        mimetype: this.file?.mimeType,
+      };
     },
     modifiedDate() {
       return this.file?.modifiedDate;
