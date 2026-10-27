@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -32,6 +33,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +44,7 @@ import java.util.Locale;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
@@ -124,7 +127,7 @@ public class DocumentMcpToolTest {
   private boolean                        scopeUnreadable;
 
   @Before
-  public void setUp() {
+  public void setUp() throws Exception {
     documentFileService = Mockito.mock(DocumentFileService.class);
     attachmentService = Mockito.mock(AttachmentService.class);
     socialAttachmentService = Mockito.mock(org.exoplatform.social.attachment.AttachmentService.class);
@@ -143,6 +146,8 @@ public class DocumentMcpToolTest {
     org.exoplatform.social.core.identity.model.Identity socialIdentity =
                                                                        new org.exoplatform.social.core.identity.model.Identity(String.valueOf(USER_IDENTITY_ID));
     lenient().when(identityManager.getOrCreateUserIdentity(USERNAME)).thenReturn(socialIdentity);
+    // A folder a test writes into is writable unless the test says otherwise
+    lenient().when(documentFileService.hasEditPermissionOnDocument(eq(FOLDER_ID), anyLong())).thenReturn(true);
 
     documentMcpTool = new DocumentMcpTool(documentFileService,
                                           attachmentService,
@@ -205,6 +210,8 @@ public class DocumentMcpToolTest {
     when(spaceService.getSpaceByGroupId("/spaces/hr")).thenReturn(otherSpace);
     lenient().when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     lenient().when(documentFileService.getDocumentById(spaceFolder, USERNAME)).thenReturn(folderNode(spaceFolder));
+    lenient().when(documentFileService.getDocumentById(otherSpaceFolder, USERNAME)).thenReturn(folderNode(otherSpaceFolder));
+    lenient().when(documentFileService.getDocumentById(driveLessFolder, USERNAME)).thenReturn(folderNode(driveLessFolder));
     lenient().when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
 
     scopeSpaceId = 12L;
@@ -571,6 +578,20 @@ public class DocumentMcpToolTest {
     assertEquals(2, models.size());
   }
 
+  /**
+   * A negative limit lists nothing and reads nothing, as list_folder_children
+   * does: given to the storage, it would read every child of the folder.
+   * Mutant: the clamp dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentsByFolderIdWithANegativeLimitListsNothing() throws Exception {
+    assertEquals(List.of(), documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, null, null, -1));
+
+    verify(documentFileService, never()).getDocumentItems(any(), any(), anyInt(), anyInt(), anyLong(), anyBoolean());
+  }
+
   @Test
   public void getDocumentsByFolderIdFilesOnlyExcludesFolders() throws Exception {
     List<AbstractNode> items = List.of(fileNode(DOCUMENT_ID, "application/pdf"), folderNode(FOLDER_ID));
@@ -604,7 +625,7 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    List<DocumentFileModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null, null);
+    List<DocumentFileModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null, null, null);
 
     assertNotNull(models);
     assertEquals(1, models.size());
@@ -616,7 +637,7 @@ public class DocumentMcpToolTest {
     when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(null);
 
     assertThrows(ObjectNotFoundException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null, null));
   }
 
   @Test
@@ -628,7 +649,7 @@ public class DocumentMcpToolTest {
     when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(false);
 
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null, null));
   }
 
   @Test
@@ -682,7 +703,7 @@ public class DocumentMcpToolTest {
                                                                                                                     "application/pdf"),
                                                                                                            folderNode(FOLDER_ID)));
 
-    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null);
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
 
     assertNotNull(models);
     assertEquals(2, models.size());
@@ -690,7 +711,7 @@ public class DocumentMcpToolTest {
 
   @Test
   public void listFolderChildrenBlankFolderFails() {
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.listFolderChildren(" ", null, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.listFolderChildren(" ", null, null, null));
   }
 
   @Test
@@ -1344,6 +1365,7 @@ public class DocumentMcpToolTest {
     // the tool must re-resolve the newly added file in the destination folder, by
     // name (the copy keeps the source's "report.pdf" name).
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -1364,6 +1386,7 @@ public class DocumentMcpToolTest {
     // folder-diff + reduce((a,b)->b) heuristic returns the last added id (here the
     // concurrent "other.pdf"); the name-aware resolver must return the real copy.
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -1381,6 +1404,7 @@ public class DocumentMcpToolTest {
     // ("report.pdf" and its " (1)" counter variant). The resolver must refuse to
     // guess and throw a clear error rather than silently return one of them.
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -1410,6 +1434,7 @@ public class DocumentMcpToolTest {
     duplicated.setName("Copy of Projects");
     FileNode sameNamedFile = fileNodeNamed("file-1", "Projects");
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(source);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(List.of())
@@ -1960,7 +1985,7 @@ public class DocumentMcpToolTest {
                                             () -> documentMcpTool.getRootFolderBySpace(null, "Marketing"));
     assertTrue(e.getMessage(), e.getMessage().contains("limited to the space with id 6"));
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.searchDocuments("report", null, "Marketing", null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", null, "Marketing", null, null, null, null, null));
     verify(documentFileService, never()).getSpaceRootFolder(eq(5L), any());
 
     scopeSpaceId = null;
@@ -1985,14 +2010,14 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    assertEquals(1, documentMcpTool.searchDocuments("report", null, "legal", null, null, null, null).size());
+    assertEquals(1, documentMcpTool.searchDocuments("report", null, "legal", null, null, null, null, null).size());
 
     verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> Long.valueOf(306L).equals(filter.getOwnerId())),
                                        eq(currentIdentity),
                                        anyInt(),
                                        anyInt());
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.searchDocuments("report", 6L, "legal", null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", 6L, "legal", null, null, null, null, null));
   }
 
   /**
@@ -2035,6 +2060,528 @@ public class DocumentMcpToolTest {
     marketing.setPrettyName("marketing");
     when(spaceService.getMemberSpaces(USERNAME)).thenReturn(SpaceNameResolverTest.listAccessOf(marketing, legal));
     return legal;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rights on a document, and the documents changed since a date
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Builds a child of a folder last changed at the given time.
+   *
+   * @param id the child id
+   * @param folder true for a folder, false for a file
+   * @param modifiedDate the last change, in milliseconds
+   * @return the child
+   */
+  private AbstractNode childChangedAt(String id, boolean folder, long modifiedDate) {
+    AbstractNode node = folder ? folderNode(id) : fileNode(id, "application/pdf");
+    node.setModifiedDate(modifiedDate);
+    return node;
+  }
+
+  /**
+   * Without a date, the page is the storage's, which pages over the listing
+   * itself: the offset and the limit are passed through. A negative limit
+   * asks nothing, the storage reading every child when given none.
+   * Mutants: the offset or the limit not passed, the page cut again here, a
+   * negative limit passed to the storage.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenPassesThePageToTheStorage() throws Exception {
+    when(documentFileService.getFolderChildNodes(any(), eq(2), eq(2), anyLong())).thenReturn(List.of(childChangedAt("c", false, 1L),
+                                                                                                    childChangedAt("d", false, 1L)));
+
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, 2, 2, null);
+
+    assertEquals(List.of("c", "d"), models.stream().map(DocumentModel::getId).toList());
+    assertEquals(0, documentMcpTool.listFolderChildren(FOLDER_ID, 0, -1, null).size());
+    verify(documentFileService, times(1)).getFolderChildNodes(any(), anyInt(), anyInt(), anyLong());
+  }
+
+  /**
+   * With updated_since, only the children changed since then are listed,
+   * folders and files alike, the most recent first, the page cut after the
+   * sort. A date alone, without a time, is the start of that day in UTC.
+   * Mutants: the filter dropped or inverted, the sort dropped or reversed,
+   * the page cut before the sort, the date read in another zone.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenUpdatedSinceKeepsTheChangedOnesMostRecentFirst() throws Exception {
+    long since = java.time.LocalDate.parse("2026-10-01").atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli();
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(List.of(childChangedAt("old-folder", true, since - 1),
+                            childChangedAt("new-folder", true, since + 10),
+                            childChangedAt("same-time", false, since),
+                            childChangedAt("newest", false, since + 50)));
+
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, 2, "2026-10-01");
+
+    assertEquals(List.of("newest", "new-folder"), models.stream().map(DocumentModel::getId).toList());
+  }
+
+  /**
+   * A folder holding more children than the scan reads is refused with
+   * updated_since, rather than answered with part of its changes, and the
+   * refusal names the search to use instead.
+   * Mutants: the bound check dropped, or applied at the bound itself.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenUpdatedSinceRefusesAFolderTooLargeToScan() throws Exception {
+    List<AbstractNode> children = new java.util.ArrayList<>();
+    for (int i = 0; i <= DocumentMcpTool.MAX_SCANNED_CHILDREN; i++) {
+      children.add(childChangedAt("child-" + i, false, 1L));
+    }
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(children)
+        .thenReturn(children.subList(0, DocumentMcpTool.MAX_SCANNED_CHILDREN));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "2026-10-01"));
+    assertTrue(error.getMessage().contains("search_documents"));
+    assertEquals(0, documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "2026-10-01").size());
+  }
+
+  /**
+   * A date the tool can't read is refused with the accepted forms, never
+   * taken as no date; a date-time with an offset is read with it.
+   * Mutants: an unreadable date ignored, the offset dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void updatedSinceIsReadAsAnIsoDateOrRefused() throws Exception {
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "last week"));
+    assertTrue(error.getMessage().contains("ISO-8601"));
+    // a year too far for a date in milliseconds is refused the same way, not with an overflow
+    for (String farAway : List.of("+999999999-12-31", "+999999999-12-31T00:00:00Z", "+999999999-12-31T00:00:00")) {
+      IllegalArgumentException overflow = assertThrows(IllegalArgumentException.class,
+                                                       () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, farAway));
+      assertTrue(overflow.getMessage().contains("ISO-8601"));
+    }
+
+    long since = java.time.OffsetDateTime.parse("2026-10-01T10:00:00+02:00").toInstant().toEpochMilli();
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(List.of(childChangedAt("before", false, since - 1), childChangedAt("after", false, since)));
+    assertEquals(List.of("after"),
+                 documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "2026-10-01T10:00:00+02:00")
+                                .stream()
+                                .map(DocumentModel::getId)
+                                .toList());
+  }
+
+  /**
+   * search_documents with updated_since and no query searches the files
+   * changed since then, the most recent first; with neither, it is refused
+   * before the search runs.
+   * Mutants: the date not set on the filter, the sort not set or ascending,
+   * the query still required, the refusal dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsUpdatedSinceSearchesTheChangedFilesMostRecentFirst() throws Exception {
+    long since = java.time.Instant.parse("2026-10-01T00:00:00Z").toEpochMilli();
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                    eq(currentIdentity),
+                                    anyInt(),
+                                    anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
+
+    assertEquals(1, documentMcpTool.searchDocuments(null, null, null, FOLDER_ID, null, null, null, "2026-10-01").size());
+
+    verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> Long.valueOf(since)
+                                                                                                                       .equals(filter.getAfterDate())
+        && filter.getSortField() == org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE
+        && !filter.isAscending()
+        && FOLDER_ID.equals(filter.getParentFolderId())), eq(currentIdentity), anyInt(), anyInt());
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.searchDocuments(" ", null, null, FOLDER_ID, null, null, null, null));
+    verify(documentFileService, Mockito.times(1)).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                                         any(),
+                                                         anyInt(),
+                                                         anyInt());
+  }
+
+  /**
+   * The listed folders and files carry the rights the storage computed for
+   * the user, the owner's being all of them as the repository grants, and a
+   * folder its last change; a document whose rights weren't computed leaves
+   * them unknown rather than false.
+   * Mutants: the rights not copied, edit and delete swapped, unknown rights
+   * reported as false, the owner's rights left to the entries, the folder's
+   * date dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listedDocumentsCarryTheUsersRightsAndTheFoldersLastChange() throws Exception {
+    AbstractNode folder = childChangedAt(FOLDER_ID, true, 1_000L);
+    folder.setAcl(new NodePermission(true, true, false, false, null, null, null, null));
+    AbstractNode file = childChangedAt(DOCUMENT_ID, false, 1L);
+    file.setAcl(new NodePermission(true, false, true, false, null, null, null, null));
+    AbstractNode unknown = childChangedAt("unknown", false, 1L);
+    AbstractNode owned = childChangedAt("owned", true, 1L);
+    owned.setCreatorUserName(USERNAME);
+    owned.setAcl(new NodePermission(true, false, false, false, null, null, null, null));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(folder,
+                                                                                                           file,
+                                                                                                           unknown,
+                                                                                                           owned));
+
+    List<DocumentModel> models;
+    // the creator's user card is not what this test checks
+    try (MockedStatic<io.meeds.mcp.server.tool.util.UserToolUtils> users = Mockito.mockStatic(io.meeds.mcp.server.tool.util.UserToolUtils.class)) {
+      models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
+    }
+
+    assertEquals(Boolean.TRUE, models.get(0).getCanEdit());
+    assertEquals(Boolean.FALSE, models.get(0).getCanDelete());
+    assertNotNull(((DocumentFolderModel) models.get(0)).getUpdatedDate());
+    assertEquals(Boolean.FALSE, models.get(1).getCanEdit());
+    assertEquals(Boolean.TRUE, models.get(1).getCanDelete());
+    assertEquals(null, models.get(2).getCanEdit());
+    assertEquals(null, models.get(2).getCanDelete());
+    // the repository grants every right to the owner, whatever the entries say
+    assertEquals(Boolean.TRUE, models.get(3).getCanEdit());
+    assertEquals(Boolean.TRUE, models.get(3).getCanDelete());
+  }
+
+  /**
+   * A shortcut listed in a folder carries no rights, its own not being its
+   * target's, and names its target, whose id the agent uses to add documents
+   * to the shortcut's folder, asking get_document_permissions for its rights
+   * there; the other children keep theirs. The same for
+   * get_documents_by_folder_id, which lists the same children.
+   * Mutants: the shortcut's own rights copied, the target not named, the
+   * rights of a plain child dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listedShortcutsCarryTheirTargetAndNoRights() throws Exception {
+    AbstractNode shortcut = childChangedAt("shortcut-id", true, 1L);
+    shortcut.setSourceID("target-id");
+    shortcut.setCreatorUserName(USERNAME);
+    shortcut.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
+    AbstractNode file = childChangedAt(DOCUMENT_ID, false, 1L);
+    file.setAcl(new NodePermission(true, true, false, false, null, null, null, null));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(shortcut, file));
+    Mockito.<List<? extends AbstractNode>>when(documentFileService.getDocumentItems(any(), any(), anyInt(), anyInt(), anyLong(), anyBoolean()))
+           .thenReturn(List.of(shortcut, file));
+
+    List<DocumentModel> listed;
+    List<DocumentModel> byFolder;
+    // the creator's user card is not what this test checks
+    try (MockedStatic<io.meeds.mcp.server.tool.util.UserToolUtils> users = Mockito.mockStatic(io.meeds.mcp.server.tool.util.UserToolUtils.class)) {
+      listed = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
+      byFolder = documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, null, null, null);
+    }
+
+    for (List<DocumentModel> models : List.of(listed, byFolder)) {
+      assertEquals("target-id", models.get(0).getShortcutTargetId());
+      assertNull(models.get(0).getCanEdit());
+      assertNull(models.get(0).getCanDelete());
+      assertNull(models.get(1).getShortcutTargetId());
+      assertEquals(Boolean.TRUE, models.get(1).getCanEdit());
+      assertEquals(Boolean.FALSE, models.get(1).getCanDelete());
+    }
+  }
+
+  /**
+   * A document added through a shortcut to a folder is refused before the
+   * right is checked or the import run, naming the
+   * folder it points to: the shortcut's id resolves to that folder, while the
+   * import would write under the shortcut node. The same document added with
+   * the folder's own id goes on.
+   * Mutants: the check dropped, the target not named, the folder's own id
+   * refused too.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void createDocumentThroughAFolderShortcutIsRefusedNamingItsTarget() throws Exception {
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folderNode(FOLDER_ID));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.createDocument("shortcut-id", "notes.txt", "body"));
+
+    assertTrue(error.getMessage().contains(FOLDER_ID));
+    assertTrue(error.getMessage().contains("parent_folder_id"));
+    verify(documentFileService, never()).hasEditPermissionOnDocument(eq("shortcut-id"), anyLong());
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "body"));
+  }
+
+  /**
+   * Every tool that writes in a folder refuses a shortcut's id as that folder
+   * before writing anything, naming the folder it points to and the argument
+   * to pass it as: create_folder, create_document_from_template,
+   * upload_document, move_document, copy_document and
+   * create_document_shortcut, as create_document does. A shortcut's id
+   * resolves to its target for the reads and the rights, while the storage
+   * would write under the shortcut node itself.
+   * Mutants: the check dropped from any one of the tools, the argument not
+   * named.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void everyToolWritingInAFolderRefusesAFolderShortcutNamingItsTarget() throws Exception {
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getRootFolderOwnerId(anyString())).thenReturn(OWNER_ID);
+
+    assertRefusedAsAShortcut(() -> documentMcpTool.createFolder("shortcut-id", "New"), "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createFolder("shortcut-id", "A/B"), "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createDocumentFromTemplate("shortcut-id", "Q3 report", "docx"),
+                             "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.uploadDocument("shortcut-id", "report.pdf", "aGVsbG8=", null, null, null),
+                             "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.moveDocument(DOCUMENT_ID, "shortcut-id", null), "destination_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.copyDocument(DOCUMENT_ID, "shortcut-id"), "destination_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, "shortcut-id", null),
+                             "destination_folder_id");
+
+    verify(documentFileService, never()).createFolder(anyLong(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).getFolderChildNodes(any(), anyInt(), anyInt(), anyLong());
+    verify(documentFileService, never()).createDocumentFromTemplate(anyLong(), any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+    verify(documentFileService, never()).copyDocument(any(), any(), anyLong());
+    verify(documentFileService, never()).createShortcut(any(), any(), any(), any());
+  }
+
+  /**
+   * A shortcut to a file given as the folder a tool writes in is refused as no
+   * folder, naming the file, never as a shortcut to a folder whose id the
+   * agent would then pass.
+   * Mutant: a shortcut to a file refused as a shortcut to a folder.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileShortcutGivenAsTheFolderIsRefusedAsNoFolder() throws Exception {
+    when(documentFileService.getDocumentById("file-shortcut-id", USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.moveDocument(DOCUMENT_ID, "file-shortcut-id", null));
+
+    assertTrue(error.getMessage(), error.getMessage().contains("shortcut to the file " + DOCUMENT_ID + ", not a folder"));
+    assertTrue(error.getMessage(), error.getMessage().contains("destination_folder_id"));
+    assertFalse(error.getMessage(), error.getMessage().contains("shortcut to the folder"));
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+  }
+
+  /**
+   * A file's own id given as the folder a tool writes in is refused as no
+   * folder before any write: an upload never starts a background import
+   * under a file, and a move never reaches the storage.
+   * Mutant: a node whose id is the one given returned as the folder whatever
+   * its kind.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileGivenAsTheFolderIsRefusedAsNoFolder() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+
+    IllegalArgumentException upload =
+                                    assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.uploadDocument(DOCUMENT_ID,
+                                                                                      "report.pdf",
+                                                                                      "aGVsbG8=",
+                                                                                      null,
+                                                                                      null,
+                                                                                      null));
+    IllegalArgumentException move = assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.moveDocument(DOCUMENT_ID, DOCUMENT_ID, null));
+
+    assertTrue(upload.getMessage(), upload.getMessage().contains("The id " + DOCUMENT_ID + " is a file, not a folder"));
+    assertTrue(upload.getMessage(), upload.getMessage().contains("parent_folder_id"));
+    assertTrue(move.getMessage(), move.getMessage().contains("destination_folder_id"));
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+  }
+
+  /**
+   * In a call limited to a space, a folder shortcut given as the destination
+   * of a move, a copy or a link is refused as a shortcut, naming the folder to
+   * pass, not as a destination outside the space: a shortcut node belongs to
+   * no space drive.
+   * Mutant: the space checked before the destination is resolved.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceRefusesAFolderShortcutAsAShortcut() throws Exception {
+    String shortcutId = "00000000000000000000000000000005";
+    when(documentFileService.getDocumentById(shortcutId, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    lenient().when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    // reached only if the space were checked first: a shortcut node belongs to no space drive
+    lenient().when(documentFileService.getDocumentSpaceGroupId(shortcutId)).thenReturn(null);
+    scopeSpaceId = 12L;
+
+    for (ThrowingRunnable call : List.<ThrowingRunnable> of(() -> documentMcpTool.moveDocument(DOCUMENT_ID, shortcutId, null),
+                                                            () -> documentMcpTool.copyDocument(DOCUMENT_ID, shortcutId),
+                                                            () -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID,
+                                                                                                         shortcutId,
+                                                                                                         null))) {
+      IllegalArgumentException error = assertThrows(IllegalArgumentException.class, call);
+      assertTrue(error.getMessage(), error.getMessage().contains(shortcutId + " is a shortcut to the folder " + FOLDER_ID));
+      assertTrue(error.getMessage(), error.getMessage().contains("destination_folder_id"));
+    }
+    scopeSpaceId = null;
+  }
+
+  /**
+   * A file shortcut's id is still taken where a tool acts on a document, not
+   * on a folder: a version added through a shortcut to a file, and a move of
+   * that shortcut into a folder, go on.
+   * Mutant: the folder check applied to the document a tool acts on.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileShortcutIsStillTakenAsTheDocumentAToolActsOn() throws Exception {
+    when(documentFileService.getDocumentById("file-shortcut-id", USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.hasEditPermissionOnDocument("file-shortcut-id", USER_IDENTITY_ID)).thenReturn(true);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(anyString())).thenReturn(OWNER_ID);
+
+    documentMcpTool.addDocumentVersion("file-shortcut-id", "updated body", null, null, null, null, null);
+    documentMcpTool.moveDocument("file-shortcut-id", FOLDER_ID, null);
+
+    verify(documentFileService).createNewVersion(eq("file-shortcut-id"), eq(USERNAME), any());
+    verify(documentFileService).moveDocument(eq(OWNER_ID),
+                                             eq("file-shortcut-id"),
+                                             eq("/documents/Projects"),
+                                             eq(USER_IDENTITY_ID),
+                                             eq("keepBoth"));
+  }
+
+  /**
+   * Asserts a tool call is refused as given a folder shortcut's id, naming the
+   * folder it points to and the argument to pass it as.
+   *
+   * @param call the tool call
+   * @param argumentName the argument the refusal names
+   */
+  private void assertRefusedAsAShortcut(ThrowingRunnable call, String argumentName) {
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class, call);
+    assertTrue(error.getMessage(), error.getMessage().contains("shortcut-id is a shortcut to the folder " + FOLDER_ID));
+    assertTrue(error.getMessage(), error.getMessage().contains(argumentName));
+  }
+
+  /**
+   * get_document_permissions takes the edit right from the repository's
+   * check for the user, not from the listing's computed flag, and the
+   * delete right from the computed one.
+   * Mutants: the edit right taken from the acl, the delete right dropped,
+   * the folder flag dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentPermissionsTellsTheEditRightTheRepositoryChecks() throws Exception {
+    FolderNode folder = folderNode(FOLDER_ID);
+    folder.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(FOLDER_ID);
+
+    assertEquals(FOLDER_ID, permissions.getId());
+    assertTrue(permissions.isFolder());
+    assertTrue(permissions.isCanRead());
+    assertFalse(permissions.isCanEdit());
+    assertEquals(Boolean.TRUE, permissions.getCanDelete());
+  }
+
+  /**
+   * get_document_permissions adds the owner's delete right as a listing
+   * does, so both tell the same about a document the user owns whose entries
+   * grant nothing.
+   * Mutants: the owner's delete right left to the entries.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentPermissionsTellsTheOwnersDeleteRightAsAListingDoes() throws Exception {
+    FileNode file = fileNode(DOCUMENT_ID, "application/pdf");
+    file.setCreatorUserName(USERNAME);
+    file.setAcl(new NodePermission(true, false, false, false, null, null, null, null));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(file);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(DOCUMENT_ID);
+
+    assertTrue(permissions.isCanEdit());
+    assertEquals(Boolean.TRUE, permissions.getCanDelete());
+  }
+
+  /**
+   * A document added to a folder the user can only read is refused before
+   * anything is staged or imported, with a reason naming the folder and the
+   * tool that tells the rights, instead of failing later in the background.
+   * Mutants: the check dropped, or run after the import.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void createDocumentInAReadOnlyFolderIsRefusedBeforeTheImport() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    IllegalAccessException error = assertThrows(IllegalAccessException.class,
+                                                () -> documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "body"));
+
+    assertTrue(error.getMessage().contains("get_document_permissions"));
+    assertTrue(error.getMessage().contains("Projects"));
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+  }
+
+  /**
+   * get_document_permissions on a shortcut answers for the id asked, names
+   * the target its rights are read on, checks the edit right on the target,
+   * and leaves the delete right out, deleting the shortcut removing only the
+   * shortcut.
+   * Mutants: the target's id returned as the one asked, the edit right
+   * checked on the shortcut, the target's delete right given.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentPermissionsOnAShortcutTellsTheTargetsEditRightAndNoDeleteRight() throws Exception {
+    String shortcutId = "de0688cd7f00010134384ab7e1b15a40";
+    FileNode target = fileNode(DOCUMENT_ID, "application/pdf");
+    target.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
+    when(documentFileService.getDocumentById(shortcutId, USERNAME)).thenReturn(target);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(target);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(shortcutId);
+
+    assertEquals(shortcutId, permissions.getId());
+    assertEquals(DOCUMENT_ID, permissions.getShortcutTargetId());
+    assertTrue(permissions.isCanEdit());
+    assertEquals(null, permissions.getCanDelete());
+    verify(documentFileService, never()).hasEditPermissionOnDocument(eq(shortcutId), anyLong());
+    // get_document_by_id on the shortcut leaves its delete right out the same way
+    assertEquals(null, documentMcpTool.getDocumentById(shortcutId).getCanDelete());
+    assertEquals(Boolean.TRUE, documentMcpTool.getDocumentById(DOCUMENT_ID).getCanDelete());
   }
 
 }

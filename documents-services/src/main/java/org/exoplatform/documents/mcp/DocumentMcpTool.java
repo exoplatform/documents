@@ -23,6 +23,14 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -42,11 +50,13 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
 import org.exoplatform.container.ExoContainerContext;
+import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
+import org.exoplatform.documents.mcp.model.DocumentPermissionsModel;
 import org.exoplatform.documents.mcp.model.DocumentPublicLinkModel;
 import org.exoplatform.documents.mcp.model.DocumentTreeItemModel;
 import org.exoplatform.documents.mcp.model.DocumentVersionModel;
@@ -117,6 +127,12 @@ public class DocumentMcpTool implements McpToolPlugin {
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
 
   /**
+   * The most children {@code list_folder_children} reads to keep those changed
+   * since a date.
+   */
+  static final int                 MAX_SCANNED_CHILDREN   = 1000;
+
+  /**
    * Same password policy DocumentFileRest applies to public-link passwords
    * (min length 9), so a link created here is openable with the given password.
    */
@@ -183,6 +199,36 @@ public class DocumentMcpTool implements McpToolPlugin {
   /** The refusal of a space name when the call's space can't be read. */
   private static final String      MSG_NAME_SCOPE_UNREADABLE =
                                                              "The space this call is limited to can't be read, so a space can't be named by its space_name. Call it again with its space_id.";
+
+  /** The refusal of a date-limited listing of a folder holding too many children. */
+  private static final String      MSG_TOO_MANY_CHILDREN  =
+                                                          "The folder holds more than %d documents, too many to keep the changed ones here. Call search_documents with parent_folder_id and updated_since instead (it searches the whole folder tree, files only).";
+
+  /** The refusal of an unreadable {@code updated_since}. */
+  private static final String      MSG_UPDATED_SINCE_UNREADABLE =
+                                                                "The date '%s' can't be read. Pass updated_since as an ISO-8601 date or date-time, such as 2026-10-01 or 2026-10-01T08:00:00Z.";
+
+  /** The refusal of a file added to a folder the user can't write in. */
+  private static final String      MSG_FOLDER_NOT_WRITABLE =
+                                                           "You can't add documents to the folder '%s' (%s): you can read it but not write in it. Pick a folder whose can_edit is true (get_document_permissions tells it), or ask a space manager for the right.";
+
+  /** The refusal of a shortcut's id given as the folder a tool writes in. */
+  private static final String      MSG_FOLDER_IS_SHORTCUT  =
+                                                           "The folder id %s is a shortcut to the folder %s: pass that folder's id as %s to write there (get_document_permissions tells whether you can write in it).";
+
+  /** The refusal of a shortcut to a file given as the folder a tool writes in. */
+  private static final String      MSG_FILE_SHORTCUT_IS_NO_FOLDER =
+                                                                  "The id %s is a shortcut to the file %s, not a folder: pass a folder's id as %s.";
+
+  /** The refusal of a file's id given as the folder a tool writes in. */
+  private static final String      MSG_FILE_IS_NO_FOLDER   =
+                                                           "The id %s is a file, not a folder: pass a folder's id as %s.";
+
+  /** The argument of the tools that add a document or a folder to a folder. */
+  private static final String      PARENT_FOLDER_ID_ARG      = "parent_folder_id";
+
+  /** The argument of the tools that move, copy or link a document to a folder. */
+  private static final String      DESTINATION_FOLDER_ID_ARG = "destination_folder_id";
 
   /** The creator of the nodes the platform creates for a space. */
   private static final String      SYSTEM_USER            = "__system";
@@ -442,19 +488,39 @@ public class DocumentMcpTool implements McpToolPlugin {
     documentFileService.updateDocumentDescription(ownerId, documentId, htmlDescription, getCurrentUserIdentityId());
   }
 
+  /**
+   * Lists a page of a folder's children, folders first. A negative limit
+   * lists nothing, as list_folder_children does: the storage would read every
+   * child.
+   *
+   * @param folderId the folder
+   * @param filesOnly whether only the files are kept
+   * @param foldersOnly whether only the folders are kept
+   * @param offset the first child listed, 0 by default
+   * @param limit the most children listed, the default page size when null
+   *          or 0
+   * @return the folder's children on that page
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read the folder
+   */
   public List<DocumentModel> getDocumentsByFolderId(String folderId,
                                                     Boolean filesOnly,
                                                     Boolean foldersOnly,
                                                     Integer offset,
                                                     Integer limit) throws ObjectNotFoundException,
                                                                    IllegalAccessException {
+    int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
+    if (size == 0) {
+      // a negative limit; the storage reads every child when given none
+      return List.of();
+    }
     List<? extends AbstractNode> documentItems = documentFileService.getDocumentItems(FileListingType.FOLDER,
                                                                                       new DocumentFolderFilter(folderId,
                                                                                                                null,
                                                                                                                null,
                                                                                                                null),
                                                                                       getInteger(offset, DEFAULT_OFFSET),
-                                                                                      getInteger(limit, DEFAULT_LIMIT),
+                                                                                      size,
                                                                                       getCurrentUserIdentityId(),
                                                                                       true);
     return documentItems.stream()
@@ -469,10 +535,26 @@ public class DocumentMcpTool implements McpToolPlugin {
     return toDocumentFolderModel(personalRootFolder);
   }
 
+  /**
+   * Returns a document's metadata, with the user's rights on it. A shortcut
+   * resolves to its target, whose metadata and edit right are returned; its
+   * delete right is left out, deleting the shortcut removing only the
+   * shortcut.
+   *
+   * @param documentId the document id
+   * @return the document
+   * @throws IllegalAccessException when the user can't read it
+   * @throws ObjectNotFoundException when it doesn't exist
+   */
   public DocumentModel getDocumentById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
     AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
-    return toDocumentModel(document);
+    DocumentModel model = toDocumentModel(document);
+    if (!StringUtils.equals(documentId, document.getId())) {
+      // a shortcut resolves to its target: deleting the shortcut removes only the shortcut
+      model.setCanDelete(null);
+    }
+    return model;
   }
 
   /**
@@ -550,12 +632,15 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param offset the first result
    * @param limit the most results
    * @param isFavorites true to search the user's favorites only
+   * @param updatedSince an ISO-8601 date or date-time: only the files changed
+   *          since then, the most recent first; blank for any date
    * @return the matching documents
    * @throws ObjectNotFoundException when the space doesn't exist, or no space
    *           of the user carries the name
    * @throws IllegalAccessException when the user can't view the space
    * @throws IllegalArgumentException when both a space id and a name are
-   *           given, or several of the user's spaces carry the name
+   *           given, several of the user's spaces carry the name, the date
+   *           can't be read, or neither a query nor a date is given
    */
   public List<DocumentFileModel> searchDocuments(String query,
                                                  Long spaceId,
@@ -563,11 +648,21 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                  String parentFolderId,
                                                  Integer offset,
                                                  Integer limit,
-                                                 Boolean isFavorites) throws ObjectNotFoundException, IllegalAccessException {
+                                                 Boolean isFavorites,
+                                                 String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
+    Long updatedSinceTime = parseUpdatedSince(updatedSince);
+    if (StringUtils.isBlank(query) && updatedSinceTime == null) {
+      throw new IllegalArgumentException("Pass a 'query', or 'updated_since' to list the files changed since a date.");
+    }
     DocumentTimelineFilter filter = new DocumentTimelineFilter();
     filter.setQuery(query);
     if (isFavorites != null && isFavorites.booleanValue()) {
       filter.setFavorites(true);
+    }
+    if (updatedSinceTime != null) {
+      filter.setAfterDate(updatedSinceTime);
+      filter.setSortField(DocumentSortField.MODIFIED_DATE);
+      filter.setAscending(false);
     }
     Long searchedSpaceId = resolveSpaceId(spaceId, spaceName, "search_documents");
     if (StringUtils.isNotBlank(parentFolderId)) {
@@ -593,16 +688,96 @@ public class DocumentMcpTool implements McpToolPlugin {
   // Folder navigation and metadata (reads)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Lists the direct children of a folder, folders first, or with a date only
+   * the children changed since then, the most recent first.
+   * <p>
+   * Without a date, the storage pages over the listing itself. A date is
+   * checked against the same last-change date the listing shows, over the
+   * folder's children read in one go, up to {@link #MAX_SCANNED_CHILDREN}: the
+   * storage fills a page up to its limit whenever the folder holds more
+   * children, however many rows it leaves out (a shortcut whose target is
+   * gone), so a listing asked for one child more than the bound returns it
+   * exactly when the folder holds more, and such a folder is refused rather
+   * than answered with part of its changes.
+   *
+   * @param folderId the folder id
+   * @param offset the first child
+   * @param limit the most children
+   * @param updatedSince an ISO-8601 date or date-time, blank for any date
+   * @return the children
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read the folder
+   * @throws IllegalArgumentException when the folder id is blank, the date
+   *           can't be read, or the folder holds too many children to filter
+   */
   public List<DocumentModel> listFolderChildren(String folderId,
                                                 Integer offset,
-                                                Integer limit) throws ObjectNotFoundException, IllegalAccessException {
+                                                Integer limit,
+                                                String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
     checkFolderIdParameter(folderId);
+    Long updatedSinceTime = parseUpdatedSince(updatedSince);
+    int first = Math.max(getInteger(offset, DEFAULT_OFFSET), 0);
+    int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
+    if (size == 0) {
+      // a negative limit; the storage reads every child when given none
+      return List.of();
+    } else if (updatedSinceTime == null) {
+      return documentFileService.getFolderChildNodes(filter, first, size, getCurrentUserIdentityId())
+                                .stream()
+                                .map(this::toDocumentModel)
+                                .toList();
+    }
     List<AbstractNode> children = documentFileService.getFolderChildNodes(filter,
-                                                                          getInteger(offset, DEFAULT_OFFSET),
-                                                                          getInteger(limit, DEFAULT_LIMIT),
+                                                                          0,
+                                                                          MAX_SCANNED_CHILDREN + 1,
                                                                           getCurrentUserIdentityId());
-    return children.stream().map(this::toDocumentModel).toList();
+    if (children.size() > MAX_SCANNED_CHILDREN) {
+      throw new IllegalArgumentException(MSG_TOO_MANY_CHILDREN.formatted(MAX_SCANNED_CHILDREN));
+    }
+    return children.stream()
+                   .filter(child -> child.getModifiedDate() >= updatedSinceTime)
+                   .sorted(Comparator.comparingLong(AbstractNode::getModifiedDate).reversed())
+                   .skip(first)
+                   .limit(size)
+                   .map(this::toDocumentModel)
+                   .toList();
+  }
+
+  /**
+   * Tells what the current user may do on a folder or a file: the edit right
+   * as the repository checks it for the user; the delete right as the
+   * storage computes it (the document's permission entries, and any document
+   * of the user's own drive), plus the owner's, whom the repository grants
+   * every right although that computation leaves the owner out. For a
+   * shortcut, the rights are its target's, named in the answer, and the delete
+   * right is left out: deleting the shortcut removes only the shortcut.
+   *
+   * @param documentId the folder or file id
+   * @return the user's rights on it
+   * @throws ObjectNotFoundException when the document doesn't exist
+   * @throws IllegalAccessException when the user can't read the document
+   */
+  public DocumentPermissionsModel getDocumentPermissions(String documentId) throws ObjectNotFoundException,
+                                                                            IllegalAccessException {
+    checkDocumentIdParameter(documentId);
+    AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
+    if (document == null) {
+      throw new ObjectNotFoundException("No document has the id %s.".formatted(documentId));
+    }
+    // a shortcut's id resolves to its target: the rights are the target's, but
+    // deleting the shortcut removes only the shortcut, so its delete right isn't the target's
+    boolean shortcut = !StringUtils.equals(documentId, document.getId());
+    boolean canEdit = documentFileService.hasEditPermissionOnDocument(document.getId(), getCurrentUserIdentityId());
+    NodePermission acl = document.getAcl();
+    return new DocumentPermissionsModel(documentId,
+                                        document.getName(),
+                                        document.isFolder(),
+                                        shortcut ? document.getId() : null,
+                                        true,
+                                        canEdit,
+                                        shortcut ? null : isOwner(document) || (acl != null && acl.isCanDelete()));
   }
 
   public List<BreadcrumbItemModel> getFolderBreadcrumb(String folderId) throws ObjectNotFoundException,
@@ -689,7 +864,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     // fails with a clean ObjectNotFoundException / IllegalAccessException before
     // reaching the JCR storage.
     try {
-      getNode(parentFolderId);
+      getDestinationFolder(parentFolderId, PARENT_FOLDER_ID_ARG);
     } catch (ObjectNotFoundException e) {
       throw new ObjectNotFoundException(PARENT_FOLDER_NOT_FOUND_MESSAGE.formatted(parentFolderId));
     }
@@ -789,7 +964,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     // Validate the parent folder exists and is readable by the user, so a bad id
     // fails with a clean ObjectNotFoundException / IllegalAccessException before
     // reaching the JCR storage.
-    getNode(parentFolderId);
+    getDestinationFolder(parentFolderId, PARENT_FOLDER_ID_ARG);
     // ecms names the file after the title and does NOT append the extension, so
     // build a title that ends with '.<type>' (stripping a duplicate extension the
     // user may have typed to avoid 'report.docx.docx').
@@ -951,9 +1126,9 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_document_by_id or get_documents_by_folder_id to find the target folder id.");
     }
+    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     checkDestinationInScopeSpace(destinationFolderId);
     checkScopedChange(documentId, false);
-    AbstractNode destination = getNode(destinationFolderId);
     try {
       documentFileService.moveDocument(getOwnerId(documentId),
                                        documentId,
@@ -984,6 +1159,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_document_by_id or get_documents_by_folder_id to find the target folder id.");
     }
+    getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     checkDestinationInScopeSpace(destinationFolderId);
     checkScopedChange(documentId, false);
     // The storage copyDocument returns the DESTINATION folder node, not the copy,
@@ -1250,12 +1426,12 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_documents_by_folder_id or get_root_folder_for_user to find the target folder id.");
     }
+    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
     checkDestinationInScopeSpace(destinationFolderId);
     checkScopedChange(documentId, false);
-    // Validate the source and the destination folder exist and are readable by
-    // the user before touching the JCR storage.
+    // Validate the source exists and is readable by the user before touching
+    // the JCR storage.
     checkCanAccessDocument(documentId);
-    AbstractNode destination = getNode(destinationFolderId);
     try {
       documentFileService.createShortcut(documentId,
                                          destination.getPath(),
@@ -1569,6 +1745,38 @@ public class DocumentMcpTool implements McpToolPlugin {
     return documentFileService.getDocumentById(documentId, getCurrentUserName());
   }
 
+  /**
+   * Resolves the folder a tool writes in, refusing a shortcut's id with a
+   * message naming the folder it points to. A shortcut's id resolves to its
+   * target for the reads and the rights, while the storage writes under the
+   * node of the id it is given, the shortcut node itself, which takes no
+   * child: the right would be checked on one node and the write attempted on
+   * another. A file, or a shortcut to one, is refused as no folder: the
+   * storage would otherwise try to write under a file node.
+   *
+   * @param folderId the folder id the tool was given
+   * @param argumentName the tool argument that carries it, named in the
+   *          refusal
+   * @return the folder
+   * @throws IllegalAccessException when the user can't read the folder
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalArgumentException when the id is a file's or a shortcut's
+   */
+  private AbstractNode getDestinationFolder(String folderId,
+                                            String argumentName) throws IllegalAccessException, ObjectNotFoundException {
+    AbstractNode folder = getNode(folderId);
+    if (StringUtils.equals(folderId, folder.getId())) {
+      if (!(folder instanceof FolderNode)) {
+        throw new IllegalArgumentException(MSG_FILE_IS_NO_FOLDER.formatted(folderId, argumentName));
+      }
+      return folder;
+    } else if (folder instanceof FolderNode) {
+      throw new IllegalArgumentException(MSG_FOLDER_IS_SHORTCUT.formatted(folderId, folder.getId(), argumentName));
+    } else {
+      throw new IllegalArgumentException(MSG_FILE_SHORTCUT_IS_NO_FOLDER.formatted(folderId, folder.getId(), argumentName));
+    }
+  }
+
   private long getOwnerId(String documentId) {
     return documentFileService.getRootFolderOwnerId(documentId);
   }
@@ -1756,9 +1964,16 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * Maps a file to the model the tools return, with the user's rights when the
+   * listing computed them.
+   *
+   * @param fileNode the file
+   * @return the model
+   */
   private DocumentFileModel toDocumentFileModel(FileNode fileNode) {
     String documentId = fileNode.getId();
-    return new DocumentFileModel(documentId,
+    DocumentFileModel model = new DocumentFileModel(documentId,
                                  fileNode.getName(),
                                  fileNode.getPath(),
                                  getUrl(fileNode),
@@ -1771,6 +1986,45 @@ public class DocumentMcpTool implements McpToolPlugin {
                                  fileNode.getDescription(),
                                  formatDate(fileNode.getModifiedDate()),
                                  toUserModel(fileNode.getModifierId()));
+    setPermissions(model, fileNode);
+    return model;
+  }
+
+  /**
+   * Copies the user's edit and delete rights the storage computed on a
+   * document into its model, leaving them unknown when it computed none. The
+   * storage computes them from the document's permission entries, and a
+   * delete right on any document of the user's own drive, while the
+   * repository grants every right to the document's owner: the owner's rights
+   * are added here, as {@link #getDocumentPermissions} adds them. A shortcut
+   * listed in a folder is the shortcut node itself, whose rights aren't its
+   * target's: its rights are left unknown and its target named, for
+   * {@link #getDocumentPermissions} to tell them. A shortcut asked by its id
+   * resolves to its target, whose rights the storage returned.
+   *
+   * @param model the model to complete
+   * @param document the document it maps
+   */
+  private void setPermissions(DocumentModel model, AbstractNode document) {
+    NodePermission acl = document.getAcl();
+    if (StringUtils.isNotBlank(document.getSourceID())) {
+      model.setShortcutTargetId(document.getSourceID());
+    } else if (acl != null) {
+      boolean owner = isOwner(document);
+      model.setCanEdit(owner || acl.isCanEdit());
+      model.setCanDelete(owner || acl.isCanDelete());
+    }
+  }
+
+  /**
+   * Tells whether the current user owns a document, the repository granting
+   * its owner every right whatever its permission entries say.
+   *
+   * @param document the document
+   * @return true when the user is its owner
+   */
+  private boolean isOwner(AbstractNode document) {
+    return StringUtils.equals(document.getCreatorUserName(), getCurrentUserName());
   }
 
   private String getAudioTranscription(String documentId) {
@@ -1783,14 +2037,68 @@ public class DocumentMcpTool implements McpToolPlugin {
     return audioTranscription;
   }
 
+  /**
+   * Maps a folder to the model the tools return, with its last change and the
+   * user's rights when the listing computed them.
+   *
+   * @param folder the folder
+   * @return the model
+   */
   private DocumentFolderModel toDocumentFolderModel(AbstractNode folder) {
-    return new DocumentFolderModel(folder.getId(),
-                                   folder.getName(),
-                                   folder.getPath(),
-                                   getUrl(folder),
-                                   folder.getParentFolderId(),
-                                   formatDate(folder.getCreatedDate()),
-                                   toUserModel(folder.getCreatorUserName()));
+    DocumentFolderModel model = new DocumentFolderModel(folder.getId(),
+                                                        folder.getName(),
+                                                        folder.getPath(),
+                                                        getUrl(folder),
+                                                        folder.getParentFolderId(),
+                                                        formatDate(folder.getCreatedDate()),
+                                                        toUserModel(folder.getCreatorUserName()));
+    if (folder.getModifiedDate() > 0) {
+      model.setUpdatedDate(formatDate(folder.getModifiedDate()));
+    }
+    setPermissions(model, folder);
+    return model;
+  }
+
+  /**
+   * Reads the date a listing is limited to, as the model passes it: an
+   * ISO-8601 date-time with an offset, or a date-time or a date taken in UTC.
+   *
+   * @param updatedSince the date, blank for none
+   * @return the date in milliseconds, null for none
+   * @throws IllegalArgumentException when the date can't be read
+   */
+  private static Long parseUpdatedSince(String updatedSince) {
+    if (StringUtils.isBlank(updatedSince)) {
+      return null;
+    }
+    String value = updatedSince.trim();
+    try {
+      Instant instant;
+      try {
+        instant = OffsetDateTime.parse(value).toInstant();
+      } catch (DateTimeParseException e) {
+        instant = parseWithoutOffset(value);
+      }
+      return instant.toEpochMilli();
+    } catch (DateTimeException | ArithmeticException e) {
+      // unreadable, or a year too far for a date in milliseconds
+      throw new IllegalArgumentException(MSG_UPDATED_SINCE_UNREADABLE.formatted(updatedSince));
+    }
+  }
+
+  /**
+   * Reads a date-time or a date without an offset, in UTC.
+   *
+   * @param value the date-time or the date
+   * @return the instant
+   * @throws DateTimeParseException when it is neither
+   */
+  private static Instant parseWithoutOffset(String value) {
+    try {
+      return LocalDateTime.parse(value).toInstant(ZoneOffset.UTC);
+    } catch (DateTimeParseException e) {
+      return LocalDate.parse(value).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
   }
 
   // FIXME should be removed once Notes refactored and cleaned
@@ -1831,7 +2139,19 @@ public class DocumentMcpTool implements McpToolPlugin {
    * Stages the given bytes as a single file and imports it into the folder,
    * then resolves and returns the created document. {@code importFiles} expects
    * a zip and unzips it, so the file is wrapped in a one-entry zip whose entry
-   * name becomes the created document title.
+   * name becomes the created document title. A shortcut to a folder is
+   * refused, naming the folder it points to: its id resolves to that folder
+   * for the reads and the rights, while the import would write under the
+   * shortcut node itself.
+   *
+   * @param parentFolderId the folder to add the file to
+   * @param fileName the file name
+   * @param bytes the file content
+   * @return the created document
+   * @throws IllegalAccessException when the user can't write in the folder
+   * @throws ObjectNotFoundException when the folder can't be read
+   * @throws IllegalArgumentException when the content is empty, or the folder
+   *           id is a shortcut's
    */
   private DocumentModel importContent(String parentFolderId,
                                       String fileName,
@@ -1841,8 +2161,14 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     // Validate the parent folder exists and is readable before staging anything,
     // so a bad id fails with a clean ObjectNotFoundException / IllegalAccessException.
-    getNode(parentFolderId);
+    AbstractNode parentFolder = getDestinationFolder(parentFolderId, PARENT_FOLDER_ID_ARG);
     String entryName = sanitizeFileName(fileName);
+    // The import runs in the background under the user's session, which refuses
+    // the write there, out of the caller's sight: the right is checked here so
+    // the refusal reaches the caller with its reason. The session still enforces it.
+    if (!documentFileService.hasEditPermissionOnDocument(parentFolderId, getCurrentUserIdentityId())) {
+      throw new IllegalAccessException(MSG_FOLDER_NOT_WRITABLE.formatted(parentFolder.getName(), parentFolderId));
+    }
     String ownerId = String.valueOf(getOwnerId(parentFolderId));
     long userIdentityId = getCurrentUserIdentityId();
     // Snapshot the destination file ids before the import so the created node can
