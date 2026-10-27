@@ -320,6 +320,9 @@ export default {
     currentUser: eXo.env.portal.userName,
     drawer: false,
     file: null,
+    fileInDrive: null,
+    fileInDriveRequest: null,
+    contextOwnerId: null,
     fileName: null,
     displayEditor: false,
     showNoDescription: false,
@@ -462,11 +465,13 @@ export default {
         });
     },
     open(event) {
-      const fileId = event?.detail;
+      const fileId = event?.detail?.id || event?.detail;
+      this.contextOwnerId = event?.detail?.ownerId || null;
       const expand =  'modifier,creator,owner,metadatas';
       this.$attachmentService.getDocumentDetails(fileId,expand)
         .then(file => {
           this.file = file;
+          this.resolveFileInDrive(file);
           this.icon = file.icon;
           this.displayEditor = false;
           this.showIcon = false;
@@ -498,6 +503,8 @@ export default {
     },
     close() {
       this.file = null;
+      this.fileInDrive = null;
+      this.fileInDriveRequest = null;
       this.displayEditor = false;
       this.showNoDescription = false;
       this.showDescription = true;
@@ -597,7 +604,8 @@ export default {
           icon: this.icon,
           editable: this.isFileEditable,
           readable: this.isFileReadable,
-          path: this.file.path,
+          path: (this.fileInDrive || this.file).path,
+          ownerId: this.contextOwnerId,
           source: 'documents'
         });
         document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': attachments,'id': this.fileId }}));
@@ -606,9 +614,9 @@ export default {
       this.close();
       this.loading = false;
     },
-    openFileInEditor(mode) {
+    async openFileInEditor(mode) {
       if (this.file && this.fileId) {
-        const url = this.$documentsUtils.getEditorUrl(this.file,mode);
+        const url = this.$documentsUtils.getEditorUrl(await this.getFileInDrive(), mode);
         this.$documentsUtils.openLink(url,'_blank');
       }
     },
@@ -618,19 +626,36 @@ export default {
     favoriteAdded() {
       this.isFavorite = true;
     },
-    copyLink() {
+    resolveFileInDrive(file) {
+      this.fileInDrive = null;
+      this.fileInDriveRequest = null;
+      if (!file.folder) {
+        this.fileInDriveRequest = this.$documentsUtils.getFileInDrive(file, this.contextOwnerId || eXo.env.portal.spaceIdentityId);
+        this.fileInDriveRequest.then(fileInDrive => {
+          if (file === this.file) {
+            this.fileInDrive = fileInDrive;
+          }
+        });
+      }
+    },
+    // Waits only while the drive path is still being resolved
+    async getFileInDrive() {
+      return this.fileInDrive || this.fileInDriveRequest && await this.fileInDriveRequest || this.file;
+    },
+    async copyLink() {
       this.loading = true;
       let path;
+      const file = await this.getFileInDrive();
       if (this.isFileEditable)  {
         if (this.file?.acl?.canEdit){
-          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,null)}`;
+          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,null)}`;
         } else {
-          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,'view')}`;
         }
       } else if (this.isFileReadable)  {
-        path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(this.file,'view')}`;
+        path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,'view')}`;
       } else {
-        path = `${window.location.origin}${this.$documentsUtils.getParentFolderUrl(this.file)}?documentPreviewId=${this.fileId}`;
+        path = `${window.location.origin}${this.$documentsUtils.getParentFolderUrl(file)}?documentPreviewId=${this.fileId}`;
       }
       const input = document.createElement('input');
       input.value = path;

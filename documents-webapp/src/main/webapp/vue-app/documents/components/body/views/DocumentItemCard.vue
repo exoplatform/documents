@@ -397,7 +397,7 @@ export default {
         event.preventDefault();
         event.stopPropagation();
       }
-      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.fileId}));
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: {id: this.fileId, ownerId: this.$root.ownerId}}));
     },
     playMedia(event) {
       if (event) {
