@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -111,6 +112,17 @@ public class DocumentMcpToolTest {
   private static final String            DOCUMENT_ID  = "be0688cd7f00010134384ab7e1b15a48";
 
   private static final String            FOLDER_ID    = "folder-42";
+
+  /**
+   * A transcript's segments: speaker 1 then 4 are the same person, 2 a guest, 3
+   * and 5 nobody named (5 named after an identity that is gone in one test),
+   * and one segment tells no speaker.
+   */
+  private static final String SPEAKER_SEGMENTS = """
+      [{"start":0.4,"end":10,"text":"Bonjour.","speaker":"1"},{"start":10,"end":60,"text":"Le budget.","speaker":"1"},\
+      {"start":60,"end":80,"text":"Merci.","speaker":"2"},{"start":80,"end":85,"text":"Une question.","speaker":"3"},\
+      {"start":85,"end":90,"text":"Applause."},{"start":90,"end":105.5,"text":"Fin.","speaker":"4"},\
+      {"start":150,"end":151,"text":"Au revoir.","speaker":"5"}]""";
 
   private DocumentFileService            documentFileService;
 
@@ -634,18 +646,232 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * Without timestamps, the plain transcript is given and its segments are
-   * never read.
+   * Without timestamps, a transcript whose segments do not tell who speaks, or
+   * that has no segment, is given plain, and its speakers are never read.
    */
   @Test
-  public void getDocumentTranscriptionByIdWithoutTimestampsNeverReadsTheSegments() throws Exception {
+  public void getDocumentTranscriptionByIdWithoutTimestampsNorSpeakersGivesThePlainTranscript() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.2,\"end\":1,\"text\":\"Bonjour.\"},{\"start\":2,\"end\":3,\"text\":\" \",\"speaker\":\"1\"}]", null);
 
     assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
     assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
 
-    verify(documentFileService, never()).getTranscriptionSegments(anyString(), anyLong());
+    verify(documentFileService, never()).getTranscriptionSpeakers(anyString(), anyLong());
+  }
+
+  /**
+   * Asked with timestamps, a transcript whose segments tell who speaks gives,
+   * after its chapters, its speakers in the order they first speak with their
+   * talk time, then each line with its moment and who said it: the person named
+   * for the speaker, the guest's name, or Speaker N when nobody is named or the
+   * person is gone. Two numbers named after the same person are one speaker
+   * (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsGivesTheSpeakersThenEachLineItsSpeaker() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Who is here.\"}]");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn(SPEAKER_SEGMENTS);
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "25", "2", "name:Jean-Luc", "4", "25", "5", "404"));
+    mockFullName(25L, "Speakers Editor");
+
+    assertEquals("""
+        Chapters:
+        - [00:00 · 0s] Welcome: Who is here.
+
+        Speakers:
+        - Speakers Editor (talk time 01:15)
+        - Jean-Luc (talk time 00:20)
+        - Speaker 3 (talk time 00:05)
+        - Speaker 5 (talk time 00:01)
+
+        Transcript:
+        [00:00 · 0s] Speakers Editor: Bonjour.
+        [00:10 · 10s] Speakers Editor: Le budget.
+        [01:00 · 60s] Jean-Luc: Merci.
+        [01:20 · 80s] Speaker 3: Une question.
+        [01:25 · 85s] Applause.
+        [01:30 · 90s] Speakers Editor: Fin.
+        [02:30 · 150s] Speaker 5: Au revoir.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Without timestamps, a transcript whose segments tell who speaks is given
+   * one turn per line, Name: text, with no moment: the following segments of
+   * one speaker make one turn (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithoutTimestampsGivesOneTurnPerLine() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn(SPEAKER_SEGMENTS);
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "25", "2", "name:Jean-Luc", "4", "25"));
+    mockFullName(25L, "Speakers Editor");
+
+    assertEquals("""
+        Speakers:
+        - Speakers Editor (talk time 01:15)
+        - Jean-Luc (talk time 00:20)
+        - Speaker 3 (talk time 00:05)
+        - Speaker 5 (talk time 00:01)
+
+        Transcript:
+        Speakers Editor: Bonjour. Le budget.
+        Jean-Luc: Merci.
+        Speaker 3: Une question.
+        Applause.
+        Speakers Editor: Fin.
+        Speaker 5: Au revoir.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  /**
+   * Speakers whose names cannot be read are given by their number: the
+   * failure never takes the transcript away (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWhenTheSpeakersReadFailsGivesSpeakersByNumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:02)
+
+        Transcript:
+        Speaker 1: Bonjour.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * Two speaker numbers named after the same person who is gone, a deleted
+   * identity still carrying its full name, are each a speaker of their own, by
+   * their number, as the transcript's other readers show them, in the list as
+   * in the lines and the turns; an identity that cannot be read gives its
+   * speaker by its number (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesTheNumbersOfOneGonePersonByTheirNumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
+        [{"start":0,"end":2,"text":"Bonjour.","speaker":"1"},{"start":2,"end":5,"text":"Encore moi.","speaker":"4"},\
+        {"start":5,"end":6,"text":"Merci.","speaker":"2"}]""");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong())).thenReturn(Map.of("1", "404", "4", "404", "2", "26"));
+    mockFullName(404L, "Gone Person");
+    when(identityManager.getIdentity(404L).isDeleted()).thenReturn(true);
+    when(identityManager.getIdentity(26L)).thenThrow(new IllegalStateException("social"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:02)
+        - Speaker 4 (talk time 00:03)
+        - Speaker 2 (talk time 00:01)
+
+        Transcript:
+        [00:00 · 0s] Speaker 1: Bonjour.
+        [00:02 · 2s] Speaker 4: Encore moi.
+        [00:05 · 5s] Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:02)
+        - Speaker 4 (talk time 00:03)
+        - Speaker 2 (talk time 00:01)
+
+        Transcript:
+        Speaker 1: Bonjour.
+        Speaker 4: Encore moi.
+        Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * A guest is known by its name, even a name that reads as a speaker's number:
+   * two numbers named after that guest are one speaker (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesOneSpeakerToTheNumbersOfOneGuestNamedLikeANumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":2,\"end\":5,\"text\":\"Encore moi.\",\"speaker\":\"3\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "name:Speaker 1", "3", "name:Speaker 1"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:05)
+
+        Transcript:
+        Speaker 1: Bonjour. Encore moi.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * A person who can be read is known by their name, even a name that reads as
+   * a speaker's number: two numbers named after that person are one speaker
+   * (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesOneSpeakerToTheNumbersOfOnePersonNamedLikeANumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":2,\"end\":5,\"text\":\"Encore moi.\",\"speaker\":\"3\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "25", "3", "25"));
+    mockFullName(25L, "Speaker 1");
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:05)
+
+        Transcript:
+        Speaker 1: Bonjour. Encore moi.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * Asked with timestamps, a transcript whose segments tell who speaks but
+   * have no usable moment is given in turns, so that its lines still name who
+   * said them (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsAndNoUsableMomentGivesTurns() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":-1,\"text\":\"Merci.\",\"speaker\":\"2\"}]");
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:00)
+        - Speaker 2 (talk time 00:00)
+
+        Transcript:
+        Speaker 1: Bonjour.
+        Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Gives the full name of a person from their identity id.
+   *
+   * @param identityId the person's identity id
+   * @param fullName the person's full name
+   */
+  private void mockFullName(long identityId, String fullName) {
+    org.exoplatform.social.core.identity.model.Identity identity =
+                                                                Mockito.mock(org.exoplatform.social.core.identity.model.Identity.class);
+    org.exoplatform.social.core.identity.model.Profile profile =
+                                                              Mockito.mock(org.exoplatform.social.core.identity.model.Profile.class);
+    when(identity.getProfile()).thenReturn(profile);
+    when(profile.getFullName()).thenReturn(fullName);
+    when(identityManager.getIdentity(identityId)).thenReturn(identity);
   }
 
   @Test
