@@ -127,7 +127,7 @@
           <v-menu
             v-model="menuDisplayed"
             transition="slide-x-reverse-transition"
-            :content-class="`${isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'} layout-drawer`"
+            :content-class="`${isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'} application-menu layout-drawer`"
             :position-x="menuX"
             :position-y="menuY"
             :nudge-right="30"
