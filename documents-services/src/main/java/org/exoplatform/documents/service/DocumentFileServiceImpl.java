@@ -831,7 +831,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public FileItem createThumbnail(String fileType, FileContent file, String userName, int width, int height) throws Exception {
     if (!VIDEO_THUMBNAIL_TYPE.equals(fileType)) {
-      throw new IllegalArgumentException("Only " + VIDEO_THUMBNAIL_TYPE + " thumbnails can be provided, not " + fileType);
+      throw new IllegalArgumentException("thumbnail_type_not_supported");
     }
     if (!hasEditPermissionOnDocument(file.getId(), getAclUserIdentity(userName))) {
       throw new IllegalAccessException("User " + userName + " can't edit document " + file.getId());

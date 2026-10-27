@@ -845,7 +845,9 @@ public class DocumentFileServiceTest {
     FileContent content = new FileContent("docId", "docId", "image/jpeg", new ByteArrayInputStream(new byte[] { 1 }));
     when(documentFileStorage.hasEditPermissions("docId", aclIdentity)).thenReturn(true);
 
-    assertThrows(IllegalArgumentException.class, () -> documentFileService.createThumbnail("file", content, "user", 250, 250));
+    IllegalArgumentException typeException = assertThrows(IllegalArgumentException.class,
+                                                           () -> documentFileService.createThumbnail("file", content, "user", 250, 250));
+    assertEquals("thumbnail_type_not_supported", typeException.getMessage());
     verify(imageThumbnailService, never()).deleteThumbnails(anyString(), anyString());
     verify(imageThumbnailService, never()).createThumbnail(anyString(), any(), anyString(), anyInt(), anyInt());
 

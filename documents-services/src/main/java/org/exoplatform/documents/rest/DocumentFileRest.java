@@ -1800,10 +1800,10 @@ public class DocumentFileRest implements ResourceContainer {
           mimeType = MediaType.APPLICATION_OCTET_STREAM;
         }
         builder = Response.ok(inputStream).type(mimeType);
-        builder.cacheControl(CACHE_CONTROL);
         builder.lastModified(new Date(lastUpdated));
         builder.tag(eTag);
       }
+      builder.cacheControl(CACHE_CONTROL);
       String fileName = URLEncoder.encode(file.getName(), StandardCharsets.UTF_8).replace("+", "%20");
       builder.header("Content-Disposition", "filename=\"" + fileName + "\"; filename*=UTF-8''" + fileName);
       if (StringUtils.isNotBlank(lastModified)) {
@@ -1882,8 +1882,8 @@ public class DocumentFileRest implements ResourceContainer {
       LOG.debug("User is not allowed to replace the thumbnail of document {}", documentId, e);
       return Response.status(Status.FORBIDDEN).entity("document_not_editable").build();
     } catch (IllegalArgumentException e) {
-      LOG.debug("Unsupported thumbnail type {} for document {}", fileType, documentId, e);
-      return Response.status(Status.BAD_REQUEST).entity("thumbnail_type_not_supported").build();
+      LOG.debug("Invalid thumbnail {} for document {}", fileType, documentId, e);
+      return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.error("Error creating video thumbnail with Id {}", documentId, e);
       return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();

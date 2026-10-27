@@ -29,6 +29,7 @@ import java.util.*;
 
 import javax.jcr.AccessDeniedException;
 import javax.jcr.RepositoryException;
+import javax.ws.rs.core.EntityTag;
 import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
@@ -1888,6 +1889,13 @@ public class DocumentFileRestTest {
     javax.ws.rs.core.CacheControl previewCacheControl =
                                                     (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
     assertTrue(previewCacheControl.isPrivate());
+    when(request.evaluatePreconditions(any(EntityTag.class))).thenReturn(Response.notModified());
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", "1", "250x250");
+    assertEquals(304, response.getStatus());
+    previewCacheControl = (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
+    assertNotNull(previewCacheControl);
+    assertTrue(previewCacheControl.isPrivate());
+    when(request.evaluatePreconditions(any(EntityTag.class))).thenReturn(null);
     response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
     assertEquals(404, response.getStatus());
     when(documentFileService.getDocumentContent("docId", userName)).thenReturn(fileThumbnail);
@@ -1920,7 +1928,7 @@ public class DocumentFileRestTest {
     assertEquals("data_not_base64", response.getEntity());
     verifyNoInteractions(thumbnailFileService);
 
-    when(thumbnailFileService.createThumbnail(eq("file"), any(), eq("user"), anyInt(), anyInt())).thenThrow(IllegalArgumentException.class);
+    when(thumbnailFileService.createThumbnail(eq("file"), any(), eq("user"), anyInt(), anyInt())).thenThrow(new IllegalArgumentException("thumbnail_type_not_supported"));
     response = thumbnailRest.createVideoThumbnail(null, "12", "file", "250x250", data);
     assertEquals(400, response.getStatus());
     assertEquals("thumbnail_type_not_supported", response.getEntity());
