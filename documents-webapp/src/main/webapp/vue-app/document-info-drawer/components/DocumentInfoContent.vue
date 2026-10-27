@@ -15,16 +15,28 @@
  * along with this program. If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div class="documentInfoContent d-flex flex-column align-center justify-center fill-height pa-6">
-    <document-transcript-player
-      v-if="mediaKind"
-      ref="player"
-      :url="downloadUrl"
-      :audio="mediaKind === 'audio'"
-      :start="start"
-      :autoplay="autoplay"
-      class="documentInfoContentMedia"
-      @time="$emit('time', $event)" />
+  <div
+    :class="timeline && 'documentInfoContentWithTimeline'"
+    class="documentInfoContent d-flex flex-column align-center justify-center fill-height pa-6">
+    <template v-if="mediaKind">
+      <document-transcript-player
+        ref="player"
+        :url="downloadUrl"
+        :audio="mediaKind === 'audio'"
+        :start="start"
+        :autoplay="autoplay"
+        class="documentInfoContentMedia"
+        @loadedmetadata.native="readDuration"
+        @time="updateTime" />
+      <document-recording-timeline
+        :document-id="file.id"
+        :playing-seconds="playingSeconds"
+        :media-duration="duration"
+        :class="mediaKind === 'audio' && 'order-first mb-4' || 'mt-4'"
+        class="full-width"
+        @shown="timeline = $event"
+        @seek="seek" />
+    </template>
     <button
       v-else
       :title="$t('documents.drawer.details.clickToOpen')"
@@ -92,8 +104,19 @@ export default {
   },
   data: () => ({
     imageFailed: false,
+    seconds: null,
+    duration: null,
+    timeline: false,
   }),
   computed: {
+    /**
+     * The moment the timeline marks: where the recording plays, or where it
+     * opens before it plays.
+     * @returns {number} the moment, in seconds
+     */
+    playingSeconds() {
+      return Number.isFinite(this.seconds) ? this.seconds : this.start;
+    },
     /**
      * Shows an image at its own size, and any other file through its large
      * preview image when the server can render one.
@@ -113,6 +136,17 @@ export default {
     file() {
       this.imageFailed = false;
     },
+    /**
+     * Forgets the moment, the length and the timeline of the recording shown
+     * when another file is shown; the same file read again, as after a
+     * version restore, keeps them.
+     * @returns {void}
+     */
+    'file.id'() {
+      this.seconds = null;
+      this.duration = null;
+      this.timeline = false;
+    },
   },
   methods: {
     /**
@@ -126,6 +160,26 @@ export default {
       if (this.readable && isBlankImage(event.target)) {
         this.imageFailed = true;
       }
+    },
+    /**
+     * Follows the moment the recording plays, for the timeline under it and
+     * for the details.
+     * @param {number} seconds the moment, in seconds from the start
+     * @returns {void}
+     */
+    updateTime(seconds) {
+      this.seconds = seconds;
+      this.$emit('time', seconds);
+    },
+    /**
+     * Keeps how long the recording lasts once the player read its metadata,
+     * so that the timeline spans the whole of it.
+     * @param {Event} event the player's loadedmetadata event
+     * @returns {void}
+     */
+    readDuration(event) {
+      const duration = event?.target?.duration;
+      this.duration = Number.isFinite(duration) && duration > 0 ? duration : null;
     },
     /**
      * Moves the recording to a moment and plays it from there.

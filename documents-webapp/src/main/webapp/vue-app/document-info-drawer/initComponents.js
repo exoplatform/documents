@@ -39,6 +39,9 @@ import DocumentInfoContent from './components/DocumentInfoContent.vue';
 import DocumentInfoVersions from './components/DocumentInfoVersions.vue';
 import DocumentInfoTranscript from './components/DocumentInfoTranscript.vue';
 import DocumentInfoPath from './components/DocumentInfoPath.vue';
+import DocumentRecordingTimeline from './components/DocumentRecordingTimeline.vue';
+import DocumentTimelineTrack from './components/DocumentTimelineTrack.vue';
+import DocumentTimelineSpeaker from './components/DocumentTimelineSpeaker.vue';
 
 const components = {
   'document-info-drawer': DocumentInfoDrawer,
@@ -63,6 +66,9 @@ const components = {
   'document-info-versions': DocumentInfoVersions,
   'document-info-transcript': DocumentInfoTranscript,
   'document-info-path': DocumentInfoPath,
+  'document-recording-timeline': DocumentRecordingTimeline,
+  'document-timeline-track': DocumentTimelineTrack,
+  'document-timeline-speaker': DocumentTimelineSpeaker,
 };
 
 for (const key in components) {

@@ -16,12 +16,13 @@
  */
 
 /**
- * The naming of a transcript's speakers, shared by the transcript drawer and
- * the details' Transcript tab (EXO-92123): the component using it has a
- * documentId and an alert(message, type) method. A view saves one speaker at
- * a time, the server running the saves of a file one after the other, and
- * shows only its latest read of the names. A user who can name the speakers
- * also reads the proposals of who they are (EXO-92126).
+ * The naming of a transcript's speakers, shared by the transcript drawer, the
+ * details' Transcript tab (EXO-92123) and the full view's timeline
+ * (EXO-92127): the component using it has a documentId and an alert(message,
+ * type) method. A view saves one speaker at a time, the server running the
+ * saves of a file one after the other, shows only its latest read of the
+ * names, and reads them again when another view names a speaker. A user who
+ * can name the speakers also reads the proposals of who they are (EXO-92126).
  */
 export default {
   data: () => ({
@@ -31,6 +32,20 @@ export default {
     savingSpeaker: null,
     speakersRead: 0,
   }),
+  /**
+   * Follows the names given in the other views of the transcript.
+   * @returns {void}
+   */
+  created() {
+    document.addEventListener('documents-transcript-speakers-changed', this.followSpeakers);
+  },
+  /**
+   * Stops following the names given elsewhere.
+   * @returns {void}
+   */
+  beforeDestroy() {
+    document.removeEventListener('documents-transcript-speakers-changed', this.followSpeakers);
+  },
   methods: {
     /**
      * Reads the named speakers of a transcript whose sentences tell their
@@ -68,7 +83,7 @@ export default {
         ? this.$transcriptionService.setGuestSpeaker(documentId, speaker, guestName)
         : this.identityIdOf(user).then(identityId => this.$transcriptionService.setSpeaker(documentId, speaker, identityId));
       return saved
-        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
+        .then(() => this.reloadSpeakers(documentId).then(() => this.announceSpeakers(documentId)), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
     },
     /**
@@ -84,12 +99,12 @@ export default {
       const documentId = this.documentId;
       this.savingSpeaker = speaker;
       return this.$transcriptionService.unsetSpeaker(documentId, speaker)
-        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
+        .then(() => this.reloadSpeakers(documentId).then(() => this.announceSpeakers(documentId)), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
     },
     /**
      * Names a speaker after the person proposed for it, then reads the named
-     * speakers again.
+     * speakers again and tells the other views of the file.
      *
      * @param {{speaker: string, identityId: string}} proposal the proposal
      * @returns {Promise<void>} resolved once done
@@ -101,7 +116,7 @@ export default {
       const documentId = this.documentId;
       this.savingSpeaker = speaker;
       return this.$transcriptionService.setSpeaker(documentId, speaker, identityId)
-        .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
+        .then(() => this.reloadSpeakers(documentId).then(() => this.announceSpeakers(documentId)), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
     },
     /**
@@ -120,6 +135,33 @@ export default {
       return this.$transcriptionService.dismissSpeakerProposal(documentId, speaker)
         .then(() => this.reloadSpeakers(documentId), e => this.alertSpeakerError(e))
         .finally(() => this.savingSpeaker = null);
+    },
+    /**
+     * Tells the page that the speakers of a file were named again, so that the
+     * other views of its transcript, as the full view's timeline, read the
+     * names again (EXO-92127). The view that named tells it is the source,
+     * having read the names already.
+     *
+     * @param {string} documentId the file's UUID
+     * @returns {void}
+     */
+    announceSpeakers(documentId) {
+      document.dispatchEvent(new CustomEvent('documents-transcript-speakers-changed', {detail: {documentId, source: this._uid}}));
+    },
+    /**
+     * Reads the names again once another view of the same file's transcript
+     * named a speaker, once this view has read or reset the names of the
+     * file it shows (speakersRead only grows): a read started before that
+     * naming may answer the former names, and an extra read costs one request.
+     *
+     * @param {CustomEvent} event its detail holds the file's documentId and the view that named
+     * @returns {void}
+     */
+    followSpeakers(event) {
+      const detail = event?.detail;
+      if ((this.speakers || this.speakersRead) && detail?.documentId === this.documentId && detail.source !== this._uid) {
+        this.reloadSpeakers(this.documentId);
+      }
     },
     /**
      * Reads the named speakers again, whatever the sentences say, and for a
