@@ -188,6 +188,42 @@ export function unsetSpeaker(documentId, speaker) {
 }
 
 /**
+ * Reads the proposals of who the speakers of a file's transcript are, for a
+ * user who can edit the file (EXO-92126).
+ *
+ * @param {string} documentId the file's UUID
+ * @returns {Promise<Array<object>>} the proposals: speaker, identityId,
+ *          username, fullName, avatarUrl, strong, autoApplied, quotes
+ *          (start, speaker, text), and for a proposal made by elimination
+ *          premiseSpeaker and premiseFullName (the other voice and who it is
+ *          taken to be)
+ */
+export function getSpeakerProposals(documentId) {
+  return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/speakers/proposals`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw new Error(`Error ${resp?.status} when reading the speaker proposals of '${documentId}'`);
+    }
+    return resp.json();
+  });
+}
+
+/**
+ * Dismisses the proposed person for a speaker of a file's transcript, for good
+ * (EXO-92126).
+ *
+ * @param {string} documentId the file's UUID
+ * @param {string} speaker the speaker's number
+ * @returns {Promise<void>} resolved once dismissed; rejected with the refusal's
+ *          message code
+ */
+export function dismissSpeakerProposal(documentId, speaker) {
+  return updateSpeaker(documentId, speaker, 'DELETE', '', 'proposals/');
+}
+
+/**
  * Sends a change of a speaker, rejecting with the message code the server
  * answers with when it refuses it.
  *
@@ -195,10 +231,12 @@ export function unsetSpeaker(documentId, speaker) {
  * @param {string} speaker the speaker's number
  * @param {string} method PUT or DELETE
  * @param {string} query the query string, empty for none
+ * @param {string} [path] the sub-path before the speaker, such as
+ *          'proposals/', empty for the speaker itself
  * @returns {Promise<void>} resolved once done
  */
-function updateSpeaker(documentId, speaker, method, query) {
-  return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/speakers/${encodeURIComponent(speaker)}${query}`, {
+function updateSpeaker(documentId, speaker, method, query, path = '') {
+  return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/speakers/${path}${encodeURIComponent(speaker)}${query}`, {
     method,
     credentials: 'include',
   }).then(resp => {
