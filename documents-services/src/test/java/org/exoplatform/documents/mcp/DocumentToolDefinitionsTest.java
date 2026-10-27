@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.Test;
 
@@ -52,7 +53,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class DocumentToolDefinitionsTest {
 
   /**
-   * Every public tool method has a definition, every definition has a
+   * Every public method of the module's tool classes has a definition, every definition has a
    * method, and every {@code input_schema} property of a definition names a
    * parameter of its method, once turned to camelCase.
    * Mutants: a definition dropped or renamed, a method renamed, a property
@@ -60,7 +61,8 @@ public class DocumentToolDefinitionsTest {
    */
   @Test
   public void everyToolMethodAndDefinitionMatch() {
-    Map<String, Method> methods = Arrays.stream(DocumentMcpTool.class.getDeclaredMethods())
+    Map<String, Method> methods = Stream.of(DocumentMcpTool.class, TranscriptExcerptMcpTool.class)
+                                        .flatMap(toolClass -> Arrays.stream(toolClass.getDeclaredMethods()))
                                         .filter(method -> Modifier.isPublic(method.getModifiers()))
                                         .filter(method -> !Modifier.isStatic(method.getModifiers()))
                                         .filter(method -> !method.isSynthetic())
