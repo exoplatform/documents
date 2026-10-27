@@ -286,6 +286,7 @@ export default {
     mediaDuration: null,
     mediaFailed: false,
     transcriptAvailable: false,
+    pressedInside: false,
   }),
   computed: {
     mediaKind() {
@@ -384,6 +385,7 @@ export default {
     document.addEventListener('document-views-updated', this.handleUpdateViews);
     document.addEventListener('search-metadata-tag', this.close);
     document.addEventListener('document-category-selected', this.close);
+    document.addEventListener('mousedown', this.notePress, true);
     document.addEventListener('click', this.closeOnClickOutside);
     document.addEventListener('closeDisplayedDrawer', this.collapseOnMaskOrEscape, true);
   },
@@ -468,18 +470,63 @@ export default {
      * preview of a version, are not a click outside: the drawer stays. The
      * click's path is read as it was dispatched, since closing a preview
      * removes the clicked button from the page before the click reaches here.
+     * A click in a menu opened from the drawer, as a transcript speaker's
+     * person search and its suggestions, is not a click outside either, nor a
+     * click pressed inside: a list that goes away on the press, as the person
+     * search's « No one found », leaves the click to the page itself.
      * @param {MouseEvent} event a click anywhere in the page
      * @returns {void}
      */
     closeOnClickOutside(event) {
-      if (!event.isTrusted) {
+      const pressedInside = this.pressedInside;
+      this.pressedInside = false;
+      if (!event.isTrusted || pressedInside) {
         return;
       }
-      const path = event.composedPath?.() || [];
-      const inside = path.some(element => element.classList && ['documentInfoDrawer', 'documentDescription', 'documentCategories', 'documentInfoMenu', 'v-dialog__content'].some(name => element.classList.contains(name)));
-      if (!inside) {
+      if (!this.isInside(event)) {
         this.close();
       }
+    },
+    /**
+     * Notes whether a press starts inside the drawer, before the click it
+     * leads to: what was pressed may be gone from the page by then. Only the
+     * main button's press leads to a click; another one's is never noted, so
+     * that it cannot spare the next click, such as a key on a button.
+     * @param {MouseEvent} event a press anywhere in the page
+     * @returns {void}
+     */
+    notePress(event) {
+      this.pressedInside = event.isTrusted && event.button === 0 && this.isInside(event);
+    },
+    /**
+     * Tells whether an event happened in the drawer, in what it shows over
+     * itself (its menus, its description editor, its categories, a dialog), or
+     * in a menu one of its components opened.
+     * @param {Event} event a press or a click
+     * @returns {boolean} true when the event's path goes through one of them
+     */
+    isInside(event) {
+      const path = event.composedPath?.() || [];
+      return path.some(element => element.classList && (['documentInfoDrawer', 'documentDescription', 'documentCategories', 'documentInfoMenu', 'v-dialog__content'].some(name => element.classList.contains(name))
+          || this.isMenuOpenedHere(element)));
+    },
+    /**
+     * Tells whether an element is the content of a menu one of this drawer's
+     * components opened. Vuetify renders a menu's content at the application's
+     * root, outside the drawer, and every menu of the page has the same class:
+     * the menu is the drawer's when its component is among the drawer's.
+     * @param {Element} element an element of a click's path
+     * @returns {boolean} true for the content of a menu opened from the drawer
+     */
+    isMenuOpenedHere(element) {
+      if (!element.classList.contains('v-menu__content')) {
+        return false;
+      }
+      let component = element.__vue__;
+      while (component && component !== this) {
+        component = component.$parent;
+      }
+      return !!component;
     },
     /**
      * Falls back to the compact header when the browser cannot load the
