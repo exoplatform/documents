@@ -44,33 +44,9 @@ export default {
 
     async copyLink() {
       this.loading = true;
-      let path;
       // Waits only while the drive path is still being resolved
       const file = this.fileInDrive || this.fileInDriveRequest && await this.fileInDriveRequest || this.file;
-      if (this.file.folder){
-        path = `${window.location.origin}${eXo.env.portal.context}`;
-        if (this.$root.ownerId !== eXo.env.portal.userIdentityId && this.$root.spaceId){
-          path = `${path}/s/${this.$root.spaceId}/documents?folderId=${this.file.id}`;
-        }
-        else if (eXo.env.portal.spaceId){
-          const pathParts = eXo.env.portal.selectedNodeUri.split('home');
-          const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri.substring(eXo.env.portal.selectedNodeUri.indexOf('/documents'));
-          path = `${path}/s/${eXo.env.portal.spaceId}${nodeUri}?folderId=${this.file.id}`;
-        } else {
-          path = `${path}/${eXo.env.portal.portalName}/${eXo.env.portal.selectedNodeUri}?folderId=${this.file.id}`;
-        }
-      } else if (this.isFileEditable())  {
-        if (this.file?.acl?.canEdit){
-          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,null)}`;
-        } else {
-          path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,'view')}`;
-        }
-      } else if (this.isFileReadable())  {
-        path =  `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,'view')}`;
-      } else {
-        path = `${window.location.origin}${this.$documentsUtils.getParentFolderUrl(file)}?documentPreviewId=${this.file.id}`;
-      }
-      path = encodeURI(path);
+      const path = encodeURI(this.file.folder ? this.getFolderLink() : this.getDocumentLink(file));
       if (navigator?.clipboard?.writeText) {
         navigator.clipboard.writeText(path).catch(() => {
           this.copy(path);
@@ -90,6 +66,27 @@ export default {
         }
       }));
       this.$root.$emit('close-file-action-menu');
+    },
+    getFolderLink() {
+      const path = `${window.location.origin}${eXo.env.portal.context}`;
+      if (this.$root.ownerId !== eXo.env.portal.userIdentityId && this.$root.spaceId){
+        return `${path}/s/${this.$root.spaceId}/documents?folderId=${this.file.id}`;
+      } else if (eXo.env.portal.spaceId){
+        const pathParts = eXo.env.portal.selectedNodeUri.split('home');
+        const nodeUri = pathParts.length > 1 ? pathParts[1] : eXo.env.portal.selectedNodeUri.substring(eXo.env.portal.selectedNodeUri.indexOf('/documents'));
+        return `${path}/s/${eXo.env.portal.spaceId}${nodeUri}?folderId=${this.file.id}`;
+      } else {
+        return `${path}/${eXo.env.portal.portalName}/${eXo.env.portal.selectedNodeUri}?folderId=${this.file.id}`;
+      }
+    },
+    getDocumentLink(file) {
+      if (this.isFileEditable())  {
+        return `${window.location.origin}${this.$documentsUtils.getEditorUrl(file, this.file?.acl?.canEdit ? null : 'view')}`;
+      } else if (this.isFileReadable())  {
+        return `${window.location.origin}${this.$documentsUtils.getEditorUrl(file,'view')}`;
+      } else {
+        return `${window.location.origin}${this.$documentsUtils.getParentFolderUrl(file)}?documentPreviewId=${this.file.id}`;
+      }
     },
     getDocumentView() {
       const currentUrlSearchParams = window.location.search;

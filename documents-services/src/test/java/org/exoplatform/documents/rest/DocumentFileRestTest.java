@@ -1918,8 +1918,8 @@ public class DocumentFileRestTest {
 
     when(documentFileStorage.getDocumentPathInDrive("docA", spaceIdentityId, userAclIdentity)).thenReturn(null);
     response = documentFileRest.getDocumentPathInDrive("docA", spaceIdentityId);
-    assertEquals(404, response.getStatus());
-    assertEquals("document_not_reachable_from_drive", response.getEntity());
+    assertEquals(204, response.getStatus());
+    assertNull(response.getEntity());
     assertNotStored(response);
 
     when(documentFileStorage.getDocumentPathInDrive("docA",

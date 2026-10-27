@@ -2625,9 +2625,25 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     if (nodePath.equals(drivePath) || nodePath.startsWith(drivePath + SLASH)) {
       return nodePath;
     }
-    // Nearest ancestor first, so that the deepest shortcut target wins
+    Map<String, String> ancestorPaths = getAncestorPathsById(node, anyAncestor ? Integer.MAX_VALUE : 2);
+    if (ancestorPaths.isEmpty()) {
+      return null;
+    }
+    Map<String, String> symlinkPathByTargetId = getSymlinkPathByTargetId(session, drivePath, ancestorPaths.keySet());
+    for (Map.Entry<String, String> ancestorPath : ancestorPaths.entrySet()) {
+      String symlinkPath = symlinkPathByTargetId.get(ancestorPath.getKey());
+      if (symlinkPath != null) {
+        return symlinkPath + nodePath.substring(ancestorPath.getValue().length());
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Nearest ancestor first, so that the deepest shortcut target wins
+   */
+  private static Map<String, String> getAncestorPathsById(Node node, int maxAncestors) throws RepositoryException {
     Map<String, String> ancestorPaths = new LinkedHashMap<>();
-    int maxAncestors = anyAncestor ? Integer.MAX_VALUE : 2;
     Node ancestor = node;
     while (ancestor != null && ancestorPaths.size() < maxAncestors) {
       String identifier = ((ExtendedNode) ancestor).getIdentifier();
@@ -2636,13 +2652,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       ancestor = getReadableParent(ancestor);
     }
-    if (ancestorPaths.isEmpty()) {
-      return null;
-    }
-    String targetsCondition = ancestorPaths.keySet()
-                                           .stream()
-                                           .map(id -> String.format("%s = '%s'", NodeTypeConstants.EXO_SYMLINK_UUID, id))
-                                           .collect(Collectors.joining(" OR "));
+    return ancestorPaths;
+  }
+
+  /**
+   * The shortest path of the drive's shortcuts, by target identifier
+   */
+  private static Map<String, String> getSymlinkPathByTargetId(Session session,
+                                                              String drivePath,
+                                                              Collection<String> targetIds) throws RepositoryException {
+    String targetsCondition = targetIds.stream()
+                                       .map(id -> String.format("%s = '%s'", NodeTypeConstants.EXO_SYMLINK_UUID, id))
+                                       .collect(Collectors.joining(" OR "));
     String statement = String.format(SYMLINKS_TARGETING_QUERY, drivePath, targetsCondition);
     QueryResult queryResult = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL).execute();
     NodeIterator symlinks = queryResult.getNodes();
@@ -2653,13 +2674,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                   symlink.getPath(),
                                   (path1, path2) -> path1.length() <= path2.length() ? path1 : path2);
     }
-    for (Map.Entry<String, String> ancestorPath : ancestorPaths.entrySet()) {
-      String symlinkPath = symlinkPathByTargetId.get(ancestorPath.getKey());
-      if (symlinkPath != null) {
-        return symlinkPath + nodePath.substring(ancestorPath.getValue().length());
-      }
-    }
-    return null;
+    return symlinkPathByTargetId;
   }
 
   private static Node getReadableParent(Node node) throws RepositoryException {

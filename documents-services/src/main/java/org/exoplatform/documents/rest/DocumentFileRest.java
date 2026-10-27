@@ -196,10 +196,11 @@ public class DocumentFileRest implements ResourceContainer {
   @Operation(summary = "Get the path of a document as reached from a drive", method = "GET", description = "Returns the document's own path when it lies in the drive of the given owner, else its path through a shortcut of that drive targeting the document or one of its parent folders (in a user drive, only its direct parent folder).")
   @ApiResponses(value = {
       @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "204", description = "No shortcut of the drive leads to the document"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "401", description = "Unauthenticated user"),
       @ApiResponse(responseCode = "403", description = "Current user identity can't be resolved"),
-      @ApiResponse(responseCode = "404", description = "Document or drive not found, or no shortcut of the drive leads to the document"),
+      @ApiResponse(responseCode = "404", description = "Document or drive not found"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response getDocumentPathInDrive(@Parameter(description = "Document identifier", required = true)
                                          @QueryParam("documentId")
@@ -221,7 +222,7 @@ public class DocumentFileRest implements ResourceContainer {
     try {
       String path = documentFileService.getDocumentPathInDrive(documentId, ownerId, userIdentityId);
       if (path == null) {
-        return Response.status(Status.NOT_FOUND).entity("document_not_reachable_from_drive").cacheControl(noStore).build();
+        return Response.noContent().cacheControl(noStore).build();
       }
       return Response.ok(path).cacheControl(noStore).build();
     } catch (ObjectNotFoundException e) {
