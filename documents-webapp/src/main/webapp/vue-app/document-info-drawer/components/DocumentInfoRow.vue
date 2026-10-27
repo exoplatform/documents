@@ -15,7 +15,7 @@
  * along with this program. If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div class="documentInfoRow d-flex align-center py-1">
+  <div :class="alignTop ? 'align-start' : 'align-center'" class="documentInfoRow d-flex py-1">
     <div class="documentInfoRowLabel text-sub-title text-truncate flex-shrink-0">
       {{ label }}
     </div>
@@ -35,6 +35,14 @@ export default {
     value: {
       type: String,
       default: null,
+    },
+    /**
+     * Aligns the label with the first line of a value spanning several
+     * lines, rather than centring it on the whole value.
+     */
+    alignTop: {
+      type: Boolean,
+      default: false,
     },
   },
 };
