@@ -18,6 +18,7 @@ package org.exoplatform.documents.service;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.List;
 
 import javax.jcr.RepositoryException;
@@ -361,6 +362,22 @@ public interface DocumentFileService {
    *           its message
    */
   default void validateUploadedContent(String fileName, String mimeType, byte[] content) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Checks a file on disk with the platform's upload validators, as a new file
+   * uploaded from a browser is checked, each validator reading it from a fresh
+   * stream: the file is never read whole into memory.
+   *
+   * @param fileName the file name the validators check
+   * @param mimeType the file's type
+   * @param file the file's location on disk
+   * @throws IllegalArgumentException when a validator refuses the file, with
+   *           its message
+   * @throws IllegalStateException when the file can't be read
+   */
+  default void validateUploadedFile(String fileName, String mimeType, Path file) {
     throw new UnsupportedOperationException();
   }
 

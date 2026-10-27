@@ -125,14 +125,15 @@ public class DocumentToolDefinitionSpaceScopeTest {
 
   /**
    * The schema arguments of {@link #SECOND_NODE_WRITES} the declarations
-   * refuse: a move's conflict action, and a new version's url and chat
-   * attachment.
+   * refuse: a move's conflict action, and a new version's url, chat
+   * attachment and upload id (start_upload, which gives one, is not offered
+   * in a call limited to a space).
    */
   private static final Map<String, List<String>> REFUSED_ARGUMENTS =
                                                                     Map.of("move_document",
                                                                            List.of("conflict_action"),
                                                                            "add_document_version",
-                                                                           List.of("url", "attachment_object_type", "attachment_object_id"));
+                                                                           List.of("url", "attachment_object_type", "attachment_object_id", "upload_id"));
 
   /**
    * Tools that must stay refused under a space scope, and why:

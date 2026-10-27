@@ -3052,4 +3052,50 @@ public class JCRDocumentFileStorageTest {
     assertEquals(List.of("<svg/>", "<svg/>"), read);
   }
 
+  /**
+   * A file on disk is checked by every validator that supports it, under the
+   * name and type given, each reading the whole file from its own stream
+   * opened on the disk file, a validator that doesn't support it being
+   * skipped; a refusal carries the validator's message, and a file that
+   * can't be read is reported as not checked.
+   * Mutants: the file not validated, a validator handed a used stream, the
+   * name or type not passed on, an unsupporting validator called, the
+   * refusal swallowed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileOnDiskIsValidatedByEveryValidatorThatSupportsIt() throws Exception {
+    org.exoplatform.upload.UploadFileValidator first = mock(org.exoplatform.upload.UploadFileValidator.class);
+    org.exoplatform.upload.UploadFileValidator refusing = mock(org.exoplatform.upload.UploadFileValidator.class);
+    org.exoplatform.upload.UploadFileValidator other = mock(org.exoplatform.upload.UploadFileValidator.class);
+    when(first.supports("x.svg", "image/svg+xml")).thenReturn(true);
+    when(refusing.supports("x.svg", "image/svg+xml")).thenReturn(true);
+    List<String> read = new ArrayList<>();
+    doAnswer(invocation -> read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()))).when(first)
+                                                                                                        .validate(eq("x.svg"),
+                                                                                                                  eq("image/svg+xml"),
+                                                                                                                  any());
+    doAnswer(invocation -> {
+      read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()));
+      throw new org.apache.commons.fileupload2.core.FileUploadException("Infected file detected");
+    }).when(refusing).validate(eq("x.svg"), eq("image/svg+xml"), any());
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(List.of(first, other, refusing)).when(storage).getUploadFileValidators();
+    java.nio.file.Path file = java.nio.file.Files.createTempFile("upload", ".svg");
+    try {
+      java.nio.file.Files.writeString(file, "<svg/>");
+
+      IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                      () -> storage.validateUploadedFile("x.svg", "image/svg+xml", file));
+
+      assertTrue(refusal.getMessage().contains("Infected file detected"));
+      assertEquals(List.of("<svg/>", "<svg/>"), read);
+      verify(other, never()).validate(any(), any(), any());
+    } finally {
+      java.nio.file.Files.deleteIfExists(file);
+    }
+    assertThrows(IllegalStateException.class, () -> storage.validateUploadedFile("x.svg", "image/svg+xml", file));
+  }
+
 }
