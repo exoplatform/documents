@@ -578,7 +578,7 @@
     {
       "name": "upload_document",
       "title": "Upload a file to the DMS",
-      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder, filed at once the way the Documents app files an upload; the created document is returned. Exactly one source: a file the user attached in the conversation, resolved server-side through the attachment_object_* parameters the client sets, up to the upload size limit (200 MB by default): prefer it whenever the user attached the file; an http(s) url, fetched server-side behind an SSRF guard, up to 15 MB within the upload size limit; or base64, for a small file only: at most 20000 base64 characters (about 15 KB) in this call. A larger file you hold the bytes of is sent in pieces: start_document_upload, then append_document_upload_chunk. Each piece is base64 text you write out in a tool call, so in practice pieces suit a file of up to about 1 MB; for a larger one, ask the user to attach it in the conversation or to upload it in the Documents app. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
+      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder, filed at once the way the Documents app files an upload; the created document is returned. Exactly one source, in order of choice: a file the user attached in the conversation, resolved server-side through the attachment_object_* parameters the client sets, up to the upload size limit (200 MB by default): prefer it whenever the user attached the file; an http(s) url the platform can read, fetched server-side behind an SSRF guard, up to 15 MB within the upload size limit; a file on your machine: open an upload link with start_upload (name and size), run its curl command in your shell, then pass its upload_id here, up to the upload size limit, the file never passing through the conversation; or, only when you have no shell or curl can't reach the platform, base64 for a small file: at most 20000 base64 characters (about 15 KB) in this call, and a larger one in pieces with start_document_upload then append_document_upload_chunk, each piece being base64 text you write out, so in practice up to about 1 MB. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -588,15 +588,19 @@
           },
           "name": {
             "type": "string",
-            "description": "The document file name including its extension (e.g. 'report.pdf'). Mandatory with base64; optional with url or a chat attachment (the name is then derived from the source file)."
+            "description": "The document file name including its extension (e.g. 'report.pdf'). Mandatory with base64; optional with upload_id, url or a chat attachment (the name is then the uploaded or source file's)."
           },
           "base64": {
             "type": "string",
-            "description": "The file bytes encoded in base64, at most 20000 characters (a file of about 15 KB); a longer one is refused: send it with start_document_upload and append_document_upload_chunk. Provide exactly one source: the chat attachment, base64 or url."
+            "description": "The file bytes encoded in base64, at most 20000 characters (a file of about 15 KB), only when you have no shell to send the file with start_upload and upload_id; a longer one is refused. Provide exactly one source: the chat attachment, upload_id, base64 or url."
           },
           "url": {
             "type": "string",
-            "description": "An http(s) URL to download the file from, read up to 15 MB, within the upload size limit. Provide exactly one source: the chat attachment, base64 or url."
+            "description": "An http(s) URL to download the file from, read up to 15 MB, within the upload size limit. Provide exactly one source: the chat attachment, upload_id, base64 or url."
+          },
+          "upload_id": {
+            "type": "string",
+            "description": "The upload_id start_upload returned, once its curl command answered {\"status\":\"uploaded\"}: the way to send a file that is on your machine, up to the upload size limit (200 MB by default). Only your own uploads are accepted. Once this call has checked the folder and read the upload, it consumes it, whether it files it or not: after such a refusal, open a new one with start_upload. An upload still being sent is left for a later call. Not start_document_upload's upload_id. Provide exactly one source: the chat attachment, upload_id, base64 or url."
           },
           "attachment_object_type": {
             "type": "string",
@@ -604,7 +608,7 @@
           },
           "attachment_object_id": {
             "type": "string",
-            "description": "Internal: object id of an existing platform attachment to upload (set automatically by the client — do not fill this yourself). Provide exactly one source: attachment_object_id, base64 or url."
+            "description": "Internal: object id of an existing platform attachment to upload (set automatically by the client — do not fill this yourself). Provide exactly one source: attachment_object_id, upload_id, base64 or url."
           },
           "on_conflict": {
             "type": "string",
@@ -627,7 +631,7 @@
     {
       "name": "start_document_upload",
       "title": "Start uploading a file in pieces",
-      "description": "Starts uploading a file into a folder in pieces, for a file you hold the bytes of that is too large to pass whole as base64 to upload_document (over 20000 base64 characters, about 15 KB). Each piece is base64 text you write out in a tool call, so in practice pieces suit a file of up to about 1 MB; for a larger one, ask the user to attach it in the conversation or to upload it in the Documents app. (upload_document reads an attached file up to the upload size limit.) Announces the file: its folder, name, size and what to do when a file of that name exists; checks the folder, that you can add documents to it and that the file is within the upload size limit (max_bytes, 200 MB by default) before anything is sent. Then send the file's bytes, base64-encoded, in pieces of chunk_chars (20000) characters with append_document_upload_chunk (index 0, 1, 2, ... in order): the piece that completes the size files the document and returns it. To send a new version of an existing file too large for add_document_version's base64, start it in that file's folder with the file's exact name and on_conflict=new_version. The upload is kept 30 minutes without a piece, and a user keeps at most 3 in progress.",
+      "description": "Starts uploading a file into a folder in pieces, the fallback when you have no shell, or curl can't reach the platform, for a file you hold the bytes of that is too large to pass whole as base64 to upload_document (over 20000 base64 characters, about 15 KB). With a shell, send a file on your machine with start_upload, its curl command and upload_document's upload_id instead. Each piece is base64 text you write out in a tool call, so in practice pieces suit a file of up to about 1 MB; for a larger one, ask the user to attach it in the conversation or to upload it in the Documents app. (upload_document reads an attached file up to the upload size limit.) Announces the file: its folder, name, size and what to do when a file of that name exists; checks the folder, that you can add documents to it and that the file is within the upload size limit (max_bytes, 200 MB by default) before anything is sent. Then send the file's bytes, base64-encoded, in pieces of chunk_chars (20000) characters with append_document_upload_chunk (index 0, 1, 2, ... in order): the piece that completes the size files the document and returns it. To send a new version of an existing file too large for add_document_version's base64, start it in that file's folder with the file's exact name and on_conflict=new_version. The upload is kept 30 minutes without a piece, and a user keeps at most 3 in progress.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -672,7 +676,7 @@
         "properties": {
           "upload_id": {
             "type": "string",
-            "description": "The upload_id start_document_upload returned."
+            "description": "The upload_id start_document_upload returned (not one from start_upload, which is passed to upload_document or add_document_version)."
           },
           "index": {
             "type": "integer",
@@ -959,7 +963,7 @@
     {
       "name": "add_document_version",
       "title": "Add a new version to a DMS file",
-      "description": "Uploads updated content onto an EXISTING file, creating a new version (the previous content stays retrievable via list_document_versions / restore_document_version). The file name and type are unchanged. Provide the new content from exactly one source: a file the user attached in the conversation, resolved server-side through the attachment_object_* parameters the client sets, up to the upload size limit (200 MB by default): prefer it whenever the user attached the file; a text 'content' string (for text files); an http(s) 'url', up to 15 MB within the upload size limit; or a 'base64' payload, for a small file only: at most 20000 characters (about 15 KB). A larger binary version you hold the bytes of is sent in pieces: start_document_upload into the file's folder with the file's exact name and on_conflict=new_version, then append_document_upload_chunk (no version_summary that way; in practice up to about 1 MB, each piece being text you write out). While a run is limited to a space, only 'content' and 'base64' (with version_summary) are taken, and sending in pieces is not available. Call get_document_by_id, get_documents_by_folder_id or search_documents first to get the document_id.",
+      "description": "Uploads updated content onto an EXISTING file, creating a new version (the previous content stays retrievable via list_document_versions / restore_document_version). The file name and type are unchanged. Provide the new content from exactly one source, in order of choice: a file the user attached in the conversation, resolved server-side through the attachment_object_* parameters the client sets, up to the upload size limit (200 MB by default): prefer it whenever the user attached the file; a text 'content' string (for text files); an http(s) 'url' the platform can read, up to 15 MB within the upload size limit; a file on your machine: open an upload link with start_upload (name and size), run its curl command in your shell, then pass its 'upload_id' here, up to the upload size limit, the file never passing through the conversation; or, only when you have no shell or curl can't reach the platform, a 'base64' payload for a small file: at most 20000 characters (about 15 KB), and a larger binary version in pieces: start_document_upload into the file's folder with the file's exact name and on_conflict=new_version, then append_document_upload_chunk (no version_summary that way; in practice up to about 1 MB, each piece being text you write out). While a run is limited to a space, only 'content' and 'base64' (with version_summary) are taken: an upload link and sending in pieces are not available. Call get_document_by_id, get_documents_by_folder_id or search_documents first to get the document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -969,15 +973,19 @@
           },
           "content": {
             "type": "string",
-            "description": "Plain text / markdown / HTML body to write as the new version. Use for text files. Provide exactly one source: content, base64, url or the chat attachment."
+            "description": "Plain text / markdown / HTML body to write as the new version. Use for text files. Provide exactly one source: content, upload_id, base64, url or the chat attachment."
           },
           "base64": {
             "type": "string",
-            "description": "The new file bytes encoded in base64, at most 20000 characters (a file of about 15 KB); a longer one is refused: send it with start_document_upload and on_conflict=new_version. Provide exactly one source: content, base64, url or the chat attachment."
+            "description": "The new file bytes encoded in base64, at most 20000 characters (a file of about 15 KB), only when you have no shell to send the file with start_upload and upload_id; a longer one is refused. Provide exactly one source: content, upload_id, base64, url or the chat attachment."
           },
           "url": {
             "type": "string",
-            "description": "An http(s) URL to download the new content from (fetched server-side behind an SSRF guard), read up to 15 MB, within the upload size limit. Provide exactly one source: content, base64, url or the chat attachment."
+            "description": "An http(s) URL to download the new content from (fetched server-side behind an SSRF guard), read up to 15 MB, within the upload size limit. Provide exactly one source: content, upload_id, base64, url or the chat attachment."
+          },
+          "upload_id": {
+            "type": "string",
+            "description": "The upload_id start_upload returned, once its curl command answered {\"status\":\"uploaded\"}: the way to send a new version that is a file on your machine, up to the upload size limit (200 MB by default). Only your own uploads are accepted. Once this call has checked the file and read the upload, it consumes it, whether it adds the version or not: after such a refusal, open a new one with start_upload. An upload still being sent is left for a later call. Provide exactly one source: content, upload_id, base64, url or the chat attachment."
           },
           "attachment_object_type": {
             "type": "string",
@@ -985,7 +993,7 @@
           },
           "attachment_object_id": {
             "type": "string",
-            "description": "Internal: object id of an existing platform attachment to use as the new version (set automatically by the client - do not fill this yourself). Provide exactly one source: content, base64, url or attachment_object_id."
+            "description": "Internal: object id of an existing platform attachment to use as the new version (set automatically by the client - do not fill this yourself). Provide exactly one source: content, upload_id, base64, url or attachment_object_id."
           },
           "version_summary": {
             "type": "string",
