@@ -15,7 +15,22 @@
  * along with this program. If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div class="d-flex flex-column">
+  <div
+    v-if="compact"
+    :title="tooltip"
+    class="text-truncate">
+    {{ compactMessage }}<template v-if="canRetry">
+      ·
+      <button
+        :disabled="retrying"
+        type="button"
+        class="font-weight-bold primary--text pa-0"
+        @click="$emit('retry')">
+        {{ $t('documents.transcript.retry') }}
+      </button>
+    </template>
+  </div>
+  <div v-else class="d-flex flex-column">
     <div class="text-body-1">{{ message }}</div>
     <div v-if="reason" class="text-subtitle mt-1">{{ reason }}</div>
     <div v-if="longQueued" class="text-subtitle mt-1">{{ $t('documents.transcript.status.longQueued') }}</div>
@@ -50,6 +65,10 @@ export default {
       default: false,
     },
     retrying: {
+      type: Boolean,
+      default: false,
+    },
+    compact: {
       type: Boolean,
       default: false,
     },
@@ -100,6 +119,35 @@ export default {
       } else {
         return this.$t('documents.transcript.status.queued');
       }
+    },
+    /**
+     * Says the state of a transcription under way in a few words, for a
+     * one-line row: the progress as parts transcribed, or why it waits; a
+     * failed one has no such row.
+     * @returns {string} the short message
+     */
+    compactMessage() {
+      if (this.unreadable) {
+        return this.$t('documents.transcript.status.unreadable');
+      } else if (this.stale) {
+        return this.$t('documents.transcript.compact.stopped');
+      } else if (this.rescheduled) {
+        return this.$t('documents.transcript.compact.rescheduled');
+      } else if (this.status === 'PROCESSING') {
+        return this.progressParts
+          && this.$t('documents.transcript.compact.progress', {0: this.progressParts[0], 1: this.progressParts[1]})
+          || this.$t('documents.transcript.compact.processing');
+      } else {
+        return this.$t('documents.transcript.compact.queued');
+      }
+    },
+    /**
+     * Gives the one-line row's hover the full message, and the reason of a
+     * failure.
+     * @returns {string} the message, then the reason when there is one
+     */
+    tooltip() {
+      return [this.message, this.reason, this.longQueued && this.$t('documents.transcript.status.longQueued')].filter(Boolean).join(' ');
     },
     reason() {
       if (this.unreadable || !(this.status === 'FAILED' || this.rescheduled)) {

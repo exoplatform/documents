@@ -118,6 +118,7 @@ export default {
     playerStart: 0,
     playerSeconds: null,
     inDocuments: false,
+    fromDetails: false,
   }),
   computed: {
     /**
@@ -143,12 +144,13 @@ export default {
     /**
      * Offers the file's details, from which Documents opens, to a drawer
      * opened outside Documents, once the file is known to be readable; never
-     * beside a preview or in the Documents application, which show them.
+     * beside a preview or in the Documents application, which show them, nor
+     * above the details it was opened from, which closing it returns to.
      *
      * @returns {boolean} true when the details button shows
      */
     detailsShown() {
-      return !this.inDocuments && !!this.file;
+      return !this.inDocuments && !this.fromDetails && !!this.file;
     },
   },
   created() {
@@ -169,11 +171,14 @@ export default {
      * any.
      *
      * @param {CustomEvent} event its detail holds documentId and optionally
-     *          seconds
+     *          seconds, and origin 'info' when opened from the file's details,
+     *          which stay open underneath
      * @returns {void}
      */
     open(event) {
       const detail = event?.detail || {};
+      // already open, the drawer comes above the details, which then close
+      this.fromDetails = detail.origin === 'info' && !this.drawer;
       const sameFile = this.documentId === detail.documentId;
       if (!sameFile) {
         this.documentId = detail.documentId;
@@ -438,7 +443,9 @@ export default {
      * search: one full-screen view serves both the details and the
      * transcript, playing on when this drawer's recording was playing.
      * This drawer stays open underneath, narrow, its player paused, so
-     * collapsing the full view reveals it in place.
+     * collapsing the full view reveals it in place. Opened from the details,
+     * still open underneath, it expands those details in place instead and
+     * closes (expandDetailsInPlace).
      *
      * @param {boolean} expanded whether the drawer was expanded
      * @returns {void}
@@ -450,18 +457,48 @@ export default {
       this.$refs.drawer.toogleExpand();
       const media = this.playerMedia();
       const moment = this.playerSeconds ?? this.seconds;
+      const seconds = Number.isFinite(moment) ? Math.floor(moment) : null;
       const playing = !!media && !media.paused;
       media?.pause?.();
+      if (this.fromDetails && this.expandDetailsInPlace(seconds, playing)) {
+        return;
+      }
       this.closeDetailsUnder();
       document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: {
         documentId: this.documentId,
         expanded: true,
         tab: 'transcript',
-        seconds: Number.isFinite(moment) ? Math.floor(moment) : null,
+        seconds,
         term: this.term,
         origin: 'transcript',
         playing,
       }}));
+    },
+    /**
+     * Expands the details this drawer was opened from, still open underneath,
+     * on their Transcript tab, rather than opening another full view above:
+     * the page keeps one details drawer. This drawer then closes, the full
+     * view taking its moment, search and playing.
+     *
+     * @param {number} seconds the moment the recording reached, or null
+     * @param {boolean} playing whether the recording was playing
+     * @returns {boolean} true when the details expanded, false when they
+     *          were closed meanwhile
+     */
+    expandDetailsInPlace(seconds, playing) {
+      const handled = !document.dispatchEvent(new CustomEvent('documents-transcript-expand', {
+        detail: {
+          documentId: this.documentId,
+          seconds,
+          term: this.term,
+          playing,
+        },
+        cancelable: true,
+      }));
+      if (handled) {
+        this.$refs.drawer.close();
+      }
+      return handled;
     },
     /**
      * Takes back the moment and the search the full view reached when it
@@ -517,7 +554,9 @@ export default {
       }
     },
     /**
-     * Stops the drawer's own player and the polling once the drawer closes.
+     * Stops the drawer's own player and the polling once the drawer closes,
+     * and tells the page, as the details of the same file, which read the
+     * transcription state again: it may have been asked from here.
      *
      * @returns {void}
      */
@@ -526,6 +565,8 @@ export default {
       this.stopPolling();
       this.playerUrl = null;
       this.playerSeconds = null;
+      this.fromDetails = false;
+      document.dispatchEvent(new CustomEvent('documents-transcript-drawer-closed', {detail: {documentId: this.documentId}}));
     },
     /**
      * Opens the preview of the file, its recording starting at a moment.
