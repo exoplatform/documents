@@ -46,6 +46,7 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.HTMLSanitizer;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.plugin.DocumentCategoryPlugin;
 import org.exoplatform.documents.storage.DocumentFileStorage;
@@ -388,6 +389,28 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public AbstractNode createDocumentFromTemplate(long ownerId, String folderId, String folderPath, String title, String documentType, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException, ObjectAlreadyExistsException {
     return documentFileStorage.createDocumentFromTemplate(ownerId, folderId, folderPath, title, documentType, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
+  public void validateUploadedContent(String fileName, String mimeType, byte[] content) {
+    documentFileStorage.validateUploadedContent(fileName, mimeType, content);
+  }
+
+  @Override
+  public void checkUploadConflict(String folderId,
+                                  String name,
+                                  UploadConflictAction conflictAction,
+                                  long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    documentFileStorage.checkUploadConflict(folderId, name, conflictAction, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
+  public AbstractNode saveUploadedDocument(String folderId,
+                                           String uploadId,
+                                           String name,
+                                           UploadConflictAction conflictAction,
+                                           long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.saveUploadedDocument(folderId, uploadId, name, conflictAction, getAclUserIdentity(authenticatedUserId));
   }
 
   @Override

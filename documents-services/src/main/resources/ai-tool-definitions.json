@@ -578,7 +578,7 @@
     {
       "name": "upload_document",
       "title": "Upload a file to the DMS",
-      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder. Use this when the user attaches a file or image in the conversation and asks to save it to the Documents app (the attachment is resolved automatically server-side), or from exactly one of a base64 payload or an http(s) URL (fetched server-side behind an SSRF guard). Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
+      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder, filed at once the way the Documents app files an upload; the created document is returned. Exactly one source: a file the user attached in the conversation, resolved server-side through the attachment_object_* parameters the client sets, up to the upload size limit (200 MB by default): prefer it whenever the user attached the file; an http(s) url, fetched server-side behind an SSRF guard, up to 15 MB within the upload size limit; or base64, for a small file only: at most 20000 base64 characters (about 15 KB) in this call. A larger file you hold the bytes of is sent in pieces: start_document_upload, then append_document_upload_chunk. Each piece is base64 text you write out in a tool call, so in practice pieces suit a file of up to about 1 MB; for a larger one, ask the user to attach it in the conversation or to upload it in the Documents app. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -592,11 +592,11 @@
           },
           "base64": {
             "type": "string",
-            "description": "The file bytes encoded in base64. Provide exactly one source: the chat attachment, base64 or url."
+            "description": "The file bytes encoded in base64, at most 20000 characters (a file of about 15 KB); a longer one is refused: send it with start_document_upload and append_document_upload_chunk. Provide exactly one source: the chat attachment, base64 or url."
           },
           "url": {
             "type": "string",
-            "description": "An http(s) URL to download the file from. Provide exactly one source: the chat attachment, base64 or url."
+            "description": "An http(s) URL to download the file from, read up to 15 MB, within the upload size limit. Provide exactly one source: the chat attachment, base64 or url."
           },
           "attachment_object_type": {
             "type": "string",
@@ -605,6 +605,11 @@
           "attachment_object_id": {
             "type": "string",
             "description": "Internal: object id of an existing platform attachment to upload (set automatically by the client — do not fill this yourself). Provide exactly one source: attachment_object_id, base64 or url."
+          },
+          "on_conflict": {
+            "type": "string",
+            "enum": ["keep_both", "new_version"],
+            "description": "What to do when the folder already holds a file of that name, the two choices the Documents app offers: keep_both (default) files a second one with a numbered name, new_version adds this file as a new version of the existing one, which keeps the old content in its version history; it is refused when the existing file keeps no versions, as the app then offers keep_both only. Ask the user when a file of that name exists and they didn't say."
           }
         },
         "required": [
@@ -618,6 +623,78 @@
         "openWorldHint": true
       },
       "require_approval": true
+    },
+    {
+      "name": "start_document_upload",
+      "title": "Start uploading a file in pieces",
+      "description": "Starts uploading a file into a folder in pieces, for a file you hold the bytes of that is too large to pass whole as base64 to upload_document (over 20000 base64 characters, about 15 KB). Each piece is base64 text you write out in a tool call, so in practice pieces suit a file of up to about 1 MB; for a larger one, ask the user to attach it in the conversation or to upload it in the Documents app. (upload_document reads an attached file up to the upload size limit.) Announces the file: its folder, name, size and what to do when a file of that name exists; checks the folder, that you can add documents to it and that the file is within the upload size limit (max_bytes, 200 MB by default) before anything is sent. Then send the file's bytes, base64-encoded, in pieces of chunk_chars (20000) characters with append_document_upload_chunk (index 0, 1, 2, ... in order): the piece that completes the size files the document and returns it. To send a new version of an existing file too large for add_document_version's base64, start it in that file's folder with the file's exact name and on_conflict=new_version. The upload is kept 30 minutes without a piece, and a user keeps at most 3 in progress.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The folder the file is filed into. Get it from get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The file name with its extension, e.g. 'grid.xlsx'."
+          },
+          "size": {
+            "type": "integer",
+            "description": "The file's size in bytes, before base64 encoding."
+          },
+          "on_conflict": {
+            "type": "string",
+            "enum": ["keep_both", "new_version"],
+            "description": "What to do when the folder already holds a file of that name, the two choices the Documents app offers: keep_both (default) files a second one with a numbered name, new_version adds this file as a new version of the existing one, which keeps the old content in its version history; it is refused when the existing file keeps no versions, as the app then offers keep_both only. Ask the user when a file of that name exists and they didn't say."
+          }
+        },
+        "required": [
+          "parent_folder_id",
+          "name",
+          "size"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "append_document_upload_chunk",
+      "title": "Send a piece of a file uploaded in pieces",
+      "description": "Sends the next piece of a file started with start_document_upload: the piece's index (from 0, in order) and its base64 content (chunk_chars characters, 20000: cut the file's padded base64 every chunk_chars characters, the last piece holding the rest). The answer gives next_index and received_bytes; the piece that completes the file's size files it, as start_document_upload announced, and the answer then holds the created document. Sending a piece again after a lost answer is safe: it is not added twice, and the last piece sent again returns the document already filed. Each piece is text you write out, so in practice a file of up to about 1 MB is sent this way.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "description": "The upload_id start_document_upload returned."
+          },
+          "index": {
+            "type": "integer",
+            "description": "The piece's number, from 0, one more for each piece."
+          },
+          "base64": {
+            "type": "string",
+            "description": "The piece of the file, base64-encoded."
+          }
+        },
+        "required": [
+          "upload_id",
+          "index",
+          "base64"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
     },
     {
       "name": "rename_document",
@@ -882,7 +959,7 @@
     {
       "name": "add_document_version",
       "title": "Add a new version to a DMS file",
-      "description": "Uploads updated content onto an EXISTING file, creating a new version (the previous content stays retrievable via list_document_versions / restore_document_version). The file name and type are unchanged. Provide the new content from exactly one source: a text 'content' string (for text files), a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation. Call get_document_by_id, get_documents_by_folder_id or search_documents first to get the document_id.",
+      "description": "Uploads updated content onto an EXISTING file, creating a new version (the previous content stays retrievable via list_document_versions / restore_document_version). The file name and type are unchanged. Provide the new content from exactly one source: a file the user attached in the conversation, resolved server-side through the attachment_object_* parameters the client sets, up to the upload size limit (200 MB by default): prefer it whenever the user attached the file; a text 'content' string (for text files); an http(s) 'url', up to 15 MB within the upload size limit; or a 'base64' payload, for a small file only: at most 20000 characters (about 15 KB). A larger binary version you hold the bytes of is sent in pieces: start_document_upload into the file's folder with the file's exact name and on_conflict=new_version, then append_document_upload_chunk (no version_summary that way; in practice up to about 1 MB, each piece being text you write out). While a run is limited to a space, only 'content' and 'base64' (with version_summary) are taken, and sending in pieces is not available. Call get_document_by_id, get_documents_by_folder_id or search_documents first to get the document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -896,11 +973,11 @@
           },
           "base64": {
             "type": "string",
-            "description": "The new file bytes encoded in base64. Provide exactly one source: content, base64, url or the chat attachment."
+            "description": "The new file bytes encoded in base64, at most 20000 characters (a file of about 15 KB); a longer one is refused: send it with start_document_upload and on_conflict=new_version. Provide exactly one source: content, base64, url or the chat attachment."
           },
           "url": {
             "type": "string",
-            "description": "An http(s) URL to download the new content from (fetched server-side behind an SSRF guard). Provide exactly one source: content, base64, url or the chat attachment."
+            "description": "An http(s) URL to download the new content from (fetched server-side behind an SSRF guard), read up to 15 MB, within the upload size limit. Provide exactly one source: content, base64, url or the chat attachment."
           },
           "attachment_object_type": {
             "type": "string",
