@@ -22,7 +22,7 @@ const TRANSCRIPTIONS_URL = '/documents-portlet/rest/transcriptions';
  *
  * @param {string} documentId the file's id
  * @returns {Promise<Object>} the state: available, status, progress, error,
- *          language, durationSeconds, updated, hasSegments
+ *          language, durationSeconds, updated, hasSegments, hasChapters
  */
 export function getState(documentId) {
   return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}`, {
@@ -70,6 +70,45 @@ export function getSegments(documentId) {
       throw new Error(`Error ${resp?.status} when reading the transcript segments of '${documentId}'`);
     }
     return resp.json();
+  });
+}
+
+/**
+ * Reads the chapters a transcribed file's transcript is grouped into.
+ *
+ * @param {string} documentId the file's id
+ * @returns {Promise<Array>} the chapters, each with start in seconds, the
+ *          index of its first segment, title and summary
+ */
+export function getChapters(documentId) {
+  return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/chapters`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw new Error(`Error ${resp?.status} when reading the transcript chapters of '${documentId}'`);
+    }
+    return resp.json();
+  });
+}
+
+/**
+ * Asks for the chapters of a transcribed file being read, which a transcript
+ * done before they were switched on gets the first time it is opened.
+ *
+ * @param {string} documentId the file's id
+ * @returns {Promise<boolean>} resolved with true when the chapters are coming
+ *          (the server answered 202), false when none are to be made (204)
+ */
+export function requestChapters(documentId) {
+  return fetch(`${TRANSCRIPTIONS_URL}/${encodeURIComponent(documentId)}/chapters`, {
+    method: 'POST',
+    credentials: 'include',
+  }).then(resp => {
+    if (!resp?.ok) {
+      throw new Error(`Error ${resp?.status} when asking for the transcript chapters of '${documentId}'`);
+    }
+    return resp.status === 202;
   });
 }
 

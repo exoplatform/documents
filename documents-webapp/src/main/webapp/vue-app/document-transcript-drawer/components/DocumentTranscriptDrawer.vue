@@ -76,6 +76,8 @@
           <document-transcript-content
             v-if="done"
             :segments="segments"
+            :chapters="chapters"
+            :duration-seconds="state && state.durationSeconds"
             :text="text"
             :term="term"
             :seconds="seconds"
@@ -93,11 +95,14 @@
   </exo-drawer>
 </template>
 <script>
+import TranscriptChaptersRequest from '../js/TranscriptChaptersRequest.js';
+
 const POLLING_MILLIS = 15000;
 
 const STALE_MILLIS = 3600000;
 
 export default {
+  mixins: [TranscriptChaptersRequest],
   data: () => ({
     drawer: false,
     loading: false,
@@ -109,6 +114,7 @@ export default {
     state: null,
     text: null,
     segments: null,
+    chapters: null,
     term: '',
     pollingTimer: null,
     lastRead: 0,
@@ -186,6 +192,8 @@ export default {
         this.state = null;
         this.text = null;
         this.segments = null;
+        this.chapters = null;
+        this.resetChaptersRequest();
         this.playerUrl = null;
         this.fileUnknown = false;
         this.loadFile();
@@ -267,7 +275,8 @@ export default {
       this.stopPolling();
       const documentId = this.documentId;
       const read = ++this.lastRead;
-      this.loading = true;
+      // a transcript already shown is only read again for its chapters, with no bar
+      this.loading = !this.done;
       return this.$transcriptionService.getState(documentId)
         .then(state => {
           if (read !== this.lastRead) {
@@ -281,7 +290,11 @@ export default {
           this.unreadable = false;
           this.state = state;
           if (state.status === 'DONE') {
-            return this.loadTranscript(documentId, state.hasSegments);
+            this.askChapters(documentId, state);
+            if (this.drawer && this.awaitingChapters(state)) {
+              this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
+            }
+            return Promise.all([this.loadTranscript(documentId, state.hasSegments), this.loadChapters(documentId, state.hasChapters)]);
           } else if (this.drawer && this.isRunning(state)) {
             this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
           }
@@ -324,6 +337,36 @@ export default {
           }
         });
       });
+    },
+    /**
+     * Reads the state again, while the drawer is open, for the chapters the
+     * server said are coming.
+     *
+     * @returns {void}
+     */
+    pollForChapters() {
+      if (this.drawer && !this.pollingTimer) {
+        this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
+      }
+    },
+    /**
+     * Reads the chapters the transcript is grouped into, once.
+     *
+     * @param {string} documentId the file's id
+     * @param {boolean} hasChapters whether the transcript has chapters
+     * @returns {Promise} resolved once read
+     */
+    loadChapters(documentId, hasChapters) {
+      if (!hasChapters || this.chapters !== null) {
+        return Promise.resolve();
+      }
+      return this.$transcriptionService.getChapters(documentId)
+        .catch(() => null)
+        .then(chapters => {
+          if (documentId === this.documentId && Array.isArray(chapters)) {
+            this.chapters = chapters;
+          }
+        });
     },
     /**
      * Tells whether a transcription is waiting in the queue, or running and

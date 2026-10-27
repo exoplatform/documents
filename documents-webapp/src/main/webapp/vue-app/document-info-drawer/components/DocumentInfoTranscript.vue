@@ -40,6 +40,8 @@
     <document-transcript-content
       v-if="done"
       :segments="segments"
+      :chapters="chapters"
+      :duration-seconds="state && state.durationSeconds"
       :text="text"
       :term="term"
       :seconds="seconds"
@@ -55,11 +57,14 @@
   </div>
 </template>
 <script>
+import TranscriptChaptersRequest from '../../document-transcript-drawer/js/TranscriptChaptersRequest.js';
+
 const POLLING_MILLIS = 15000;
 
 const STALE_MILLIS = 3600000;
 
 export default {
+  mixins: [TranscriptChaptersRequest],
   props: {
     documentId: {
       type: String,
@@ -82,6 +87,7 @@ export default {
     state: null,
     text: null,
     segments: null,
+    chapters: null,
     term: '',
     loading: false,
     retrying: false,
@@ -115,6 +121,8 @@ export default {
         this.state = null;
         this.text = null;
         this.segments = null;
+        this.chapters = null;
+        this.resetChaptersRequest();
         this.term = this.initialTerm || '';
         this.refresh();
       },
@@ -138,7 +146,8 @@ export default {
       }
       this.stopPolling();
       const read = ++this.lastRead;
-      this.loading = true;
+      // a transcript already shown is only read again for its chapters, with no bar
+      this.loading = !this.done;
       return this.$transcriptionService.getState(documentId)
         .then(state => {
           if (read !== this.lastRead) {
@@ -152,13 +161,22 @@ export default {
             }
             return;
           }
-          const segments = state.hasSegments && this.$transcriptionService.getSegments(documentId).catch(() => null) || Promise.resolve(null);
-          return segments.then(timedSegments => {
+          this.askChapters(documentId, state);
+          if (this.awaitingChapters(state)) {
+            this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
+          }
+          // a transcript cannot change while done: the segments already read stay
+          const segments = this.segments && Promise.resolve(this.segments)
+            || state.hasSegments && this.$transcriptionService.getSegments(documentId).catch(() => null)
+            || Promise.resolve(null);
+          const chapters = state.hasChapters && this.$transcriptionService.getChapters(documentId).catch(() => null) || Promise.resolve(null);
+          return Promise.all([segments, chapters]).then(([timedSegments, transcriptChapters]) => {
             if (read !== this.lastRead) {
               return;
             }
             if (Array.isArray(timedSegments) && timedSegments.length) {
               this.segments = timedSegments;
+              this.chapters = Array.isArray(transcriptChapters) && transcriptChapters || null;
               return;
             }
             return this.$transcriptionService.getText(documentId).then(text => {
@@ -190,6 +208,15 @@ export default {
     isRunning(state) {
       return state.status === 'QUEUED'
         || (state.status === 'PROCESSING' && !!state.updated && Date.now() - state.updated < STALE_MILLIS);
+    },
+    /**
+     * Reads the state again for the chapters the server said are coming.
+     * @returns {void}
+     */
+    pollForChapters() {
+      if (!this.pollingTimer) {
+        this.pollingTimer = window.setTimeout(this.refresh, POLLING_MILLIS);
+      }
     },
     /**
      * Stops reading the state again.

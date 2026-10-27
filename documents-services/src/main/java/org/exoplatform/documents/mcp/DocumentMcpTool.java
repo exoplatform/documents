@@ -47,6 +47,9 @@ import javax.jcr.RepositoryException;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
@@ -96,6 +99,8 @@ import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.attachments.service.AttachmentService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
@@ -168,6 +173,8 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /** The directory, under the temporary directory, of the pieces of the uploads in progress. */
   static final String              UPLOAD_DIRECTORY       = "documents-mcp-uploads";
+
+  private static final Log        LOG = ExoLogger.getLogger(DocumentMcpTool.class);
 
   /**
    * Same password policy DocumentFileRest applies to public-link passwords
@@ -917,7 +924,10 @@ public class DocumentMcpTool implements McpToolPlugin {
    * (EXO-92097): queued, in progress with its progress, stopped when its run was
    * lost (running, unchanged for {@link TranscriptionState#STALE_MILLIS}), failed
    * with its reason, transcribed with no speech heard; a file never
-   * sent to transcription answers as before.
+   * sent to transcription answers as before. A transcript grouped into
+   * chapters (EXO-92122) is given after the list of its chapters, each with the
+   * moment it starts, its title and its summary, so that the assistant can say
+   * where in the recording a subject was discussed.
    *
    * @param documentId the file's UUID
    * @return the transcript
@@ -930,7 +940,8 @@ public class DocumentMcpTool implements McpToolPlugin {
     long identityId = getCurrentUserIdentityId();
     String audioTranscription = documentFileService.getAudioTranscription(documentId, identityId);
     if (StringUtils.isNotBlank(audioTranscription)) {
-      return audioTranscription;
+      String chapters = toChaptersOutline(documentId, identityId);
+      return chapters == null ? audioTranscription : chapters + "\n\nTranscript:\n" + audioTranscription;
     } else if (!(document instanceof FileNode fileNode)
                || !StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
       throw new IllegalStateException("The document with id %s isn't an audio nor a video file, so it has no transcription."
@@ -958,6 +969,66 @@ public class DocumentMcpTool implements McpToolPlugin {
         .formatted(toTranscriptionFailure(state.error()));
     case DONE -> "This audio/video file was transcribed, but no speech was heard in it.";
     });
+  }
+
+  /**
+   * Writes the chapters a transcript is grouped into, one per line, each with
+   * the moment it starts, its title and its summary.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the outline, starting with {@code Chapters:}, or null when the
+   *         transcript has no chapter, none that can be read, or its chapters
+   *         cannot be read now
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private String toChaptersOutline(String documentId, long identityId) throws IllegalAccessException, ObjectNotFoundException {
+    String chapters;
+    try {
+      chapters = documentFileService.getTranscriptionChapters(documentId, identityId);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its chapters never takes it away
+      LOG.debug("The chapters of media file {} cannot be read, its transcript is given alone", documentId, e);
+      return null;
+    }
+    if (StringUtils.isBlank(chapters)) {
+      return null;
+    }
+    StringBuilder outline = new StringBuilder("Chapters:");
+    try {
+      JSONArray chaptersArray = new JSONArray(chapters);
+      for (int i = 0; i < chaptersArray.length(); i++) {
+        JSONObject chapter = chaptersArray.optJSONObject(i);
+        String title = chapter == null ? null : StringUtils.trimToNull(chapter.optString("title", null));
+        double start = chapter == null ? Double.NaN : chapter.optDouble("start", Double.NaN);
+        if (title != null && Double.isFinite(start) && start >= 0) {
+          String summary = StringUtils.trimToNull(chapter.optString("summary", null));
+          outline.append("\n- ").append(toChapterMoment((long) start)).append(' ').append(title);
+          if (summary != null) {
+            outline.append(": ").append(summary);
+          }
+        }
+      }
+    } catch (JSONException e) {
+      LOG.debug("The chapters of media file {} cannot be read, its transcript is given alone", documentId, e);
+      return null;
+    }
+    return outline.length() == "Chapters:".length() ? null : outline.toString();
+  }
+
+  /**
+   * @param seconds a moment, in whole seconds from the beginning of the media
+   * @return the moment as a marker: {@code [mm:ss · Ns]}, or
+   *         {@code [h:mm:ss · Ns]} past an hour, N being the moment in seconds
+   *         so that the assistant links to it without converting
+   */
+  static String toChapterMoment(long seconds) {
+    long hours = seconds / 3600;
+    long minutes = (seconds % 3600) / 60;
+    long remainder = seconds % 60;
+    String time = hours > 0 ? "%d:%02d:%02d".formatted(hours, minutes, remainder) : "%02d:%02d".formatted(minutes, remainder);
+    return "[%s · %ds]".formatted(time, seconds);
   }
 
   /**

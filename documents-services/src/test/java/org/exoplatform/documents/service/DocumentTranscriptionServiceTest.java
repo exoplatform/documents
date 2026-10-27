@@ -27,12 +27,18 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.exoplatform.documents.constant.TranscriptionStatus;
@@ -56,6 +62,12 @@ class DocumentTranscriptionServiceTest {
 
   @Mock
   private ListenerService                      listenerService;
+
+  @Spy
+  private List<TranscriptChaptersRequester>    chaptersRequesters = new ArrayList<>();
+
+  @Mock
+  private TranscriptChaptersRequester          requester;
 
   @InjectMocks
   private DocumentTranscriptionService         service;
@@ -147,6 +159,76 @@ class DocumentTranscriptionServiceTest {
                                                                                                          .build());
     when(documentFileService.getAudioTranscription(DOCUMENT_ID, VIEWER_ID)).thenReturn("hello");
     assertEquals("hello", service.getText(DOCUMENT_ID, VIEWER_ID));
+  }
+
+  /**
+   * A transcript read with timed segments and no chapters is handed to what
+   * makes chapters, whose answer tells whether they are coming (EXO-92122).
+   */
+  @Test
+  void aTranscriptReadWithNoChaptersAsksForThemAndTellsWhetherTheyAreComing() throws Exception {
+    chaptersRequesters.add(requester);
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).media(true).build());
+
+    when(requester.requestChapters(DOCUMENT_ID)).thenReturn(true);
+    assertTrue(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
+
+    when(requester.requestChapters(DOCUMENT_ID)).thenReturn(false);
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
+  }
+
+  /**
+   * With nothing to make chapters, none are coming (EXO-92122): no requester,
+   * and no list at all, which is what an optional injection leaves when the
+   * transcriber is not installed.
+   */
+  @Test
+  void noChaptersAreComingWithoutAnythingToMakeThem() throws Exception {
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).media(true).build());
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
+
+    Field requesters = DocumentTranscriptionService.class.getDeclaredField("chaptersRequesters");
+    requesters.setAccessible(true);
+    requesters.set(service, null);
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
+  }
+
+  /**
+   * Every requester is asked, whatever an earlier one answered, and
+   * the chapters are coming when one of them says so (EXO-92122).
+   */
+  @Test
+  void everyRequesterIsAskedAndOneComingIsEnough() throws Exception {
+    TranscriptChaptersRequester other = mock(TranscriptChaptersRequester.class);
+    chaptersRequesters.add(requester);
+    chaptersRequesters.add(other);
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).media(true).build());
+    when(requester.requestChapters(DOCUMENT_ID)).thenReturn(true);
+    when(other.requestChapters(DOCUMENT_ID)).thenReturn(false);
+
+    assertTrue(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
+
+    verify(requester).requestChapters(DOCUMENT_ID);
+    verify(other).requestChapters(DOCUMENT_ID);
+  }
+
+  /**
+   * Nothing is asked for a transcript that has chapters, has no timed segments
+   * or is not done, nor without a transcriber (EXO-92122).
+   */
+  @Test
+  void noChaptersAreAskedForATranscriptThatCannotGetThem() throws Exception {
+    chaptersRequesters.add(requester);
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).hasSegments(true).hasChapters(true).media(true).build());
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).media(true).build());
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.PROCESSING).hasSegments(true).media(true).build());
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
+    when(capabilityRegistry.isAvailable()).thenReturn(false);
+    assertFalse(service.requestChapters(DOCUMENT_ID, VIEWER_ID));
+
+    verifyNoInteractions(requester);
   }
 
   private void mockState(TranscriptionState state) throws Exception {

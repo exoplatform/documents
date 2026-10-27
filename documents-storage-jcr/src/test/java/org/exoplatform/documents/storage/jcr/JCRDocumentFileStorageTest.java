@@ -3284,6 +3284,111 @@ public class JCRDocumentFileStorageTest {
     verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS), any(InputStream.class));
   }
 
+  /**
+   * A new transcript drops the chapters made from the previous one, so that the
+   * transcript never shows under chapters that do not describe it (EXO-92122).
+   */
+  @Test
+  public void completeTranscriptionRemovesTheChaptersOfThePreviousTranscript() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    TranscriptionState done = TranscriptionState.builder().status(TranscriptionStatus.DONE).build();
+
+    jcrDocumentFileStorage.completeTranscription("1", "hello", null, done);
+    verify(node, never()).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenReturn(true);
+    jcrDocumentFileStorage.completeTranscription("1", "hello", null, done);
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+  }
+
+  /**
+   * Chapters are written only over the transcript they were made from: done,
+   * and with the update time read before making them; a transcript redone or
+   * queued again in between keeps no chapters (EXO-92122).
+   */
+  @Test
+  public void saveTranscriptionChaptersWritesOnlyOverTheTranscriptTheyWereMadeFrom() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    Calendar updated = Calendar.getInstance();
+    Property updatedProperty = mock(Property.class);
+    when(updatedProperty.getDate()).thenReturn(updated);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(updatedProperty);
+    String chapters = "[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Hello.\"}]";
+
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionChapters("1", chapters, updated.getTimeInMillis() - 1));
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionChapters("1", chapters, updated.getTimeInMillis() + 1));
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "QUEUED");
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionChapters("1", chapters, updated.getTimeInMillis()));
+    verify(node, never()).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+    verify(session, never()).save();
+
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    assertTrue(jcrDocumentFileStorage.saveTranscriptionChapters("1", chapters, updated.getTimeInMillis()));
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+    ArgumentCaptor<InputStream> written = ArgumentCaptor.forClass(InputStream.class);
+    verify(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS), written.capture());
+    assertEquals(chapters, new String(written.getValue().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+    verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED), any(Calendar.class));
+    verify(session).save();
+  }
+
+  /**
+   * Blank chapters are refused rather than stored as an empty list.
+   */
+  @Test
+  public void saveTranscriptionChaptersRefusesBlankChapters() {
+    assertThrows(IllegalArgumentException.class, () -> jcrDocumentFileStorage.saveTranscriptionChapters("1", " ", 1L));
+  }
+
+  /**
+   * The chapters are read with the viewer's rights, and only from the chapters
+   * mixin; the state tells whether there are any (EXO-92122).
+   */
+  @Test
+  public void getTranscriptionChaptersReadsThemWithTheViewersRights() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    Property chapters = mock(Property.class);
+    when(chapters.getStream()).thenAnswer(invocation -> new ByteArrayInputStream("[{\"title\":\"Été\"}]".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenReturn(chapters);
+
+    assertNull(jcrDocumentFileStorage.getTranscriptionChapters("1", viewer));
+    assertFalse(jcrDocumentFileStorage.getTranscriptionState("1", viewer).hasChapters());
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenReturn(true);
+    assertEquals("[{\"title\":\"Été\"}]", jcrDocumentFileStorage.getTranscriptionChapters("1", viewer));
+    assertTrue(jcrDocumentFileStorage.getTranscriptionState("1", viewer).hasChapters());
+
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenThrow(new javax.jcr.AccessDeniedException("john"));
+    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.getTranscriptionChapters("1", viewer));
+  }
+
+  /**
+   * The background work on a transcript reads its segments as the system.
+   */
+  @Test
+  public void getTranscriptionSegmentsReadsThemAsTheSystem() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+
+    assertNull(jcrDocumentFileStorage.getTranscriptionSegments("1"));
+
+    Property segments = mock(Property.class);
+    when(segments.getStream()).thenReturn(new ByteArrayInputStream("[]".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(segments);
+    assertEquals("[]", jcrDocumentFileStorage.getTranscriptionSegments("1"));
+  }
+
   private Session mockViewerSession(org.exoplatform.services.security.Identity viewer) throws Exception {
     SessionProvider sessionProvider = mock(SessionProvider.class);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, viewer)).thenReturn(sessionProvider);

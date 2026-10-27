@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -98,11 +99,13 @@ class TranscriptionRestTest {
                                                                                               .durationSeconds(5400L)
                                                                                               .updated(1000L)
                                                                                               .hasSegments(true)
+                                                                                              .hasChapters(true)
                                                                                               .build());
 
     ResponseEntity<TranscriptionStateEntity> response = rest.getState(request, DOCUMENT_ID);
 
-    assertEquals(new TranscriptionStateEntity(true, "FAILED", "2/9", "provider.timeout", "en", 5400L, 1000L, true), response.getBody());
+    assertEquals(new TranscriptionStateEntity(true, "FAILED", "2/9", "provider.timeout", "en", 5400L, 1000L, true, true),
+                 response.getBody());
     assertEquals("no-store", response.getHeaders().getCacheControl(), "Expected a viewer's read never to be kept by a shared cache");
   }
 
@@ -136,6 +139,51 @@ class TranscriptionRestTest {
 
     assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
     assertEquals("documents.transcription.noTranscript", e.getReason());
+  }
+
+  /**
+   * A request for the chapters answers 202 only when they are coming, so that
+   * the reader waits for them; 204 when none are to be made (EXO-92122).
+   */
+  @Test
+  void aChaptersRequestAnswers202OnlyWhenTheyAreComing() throws Exception {
+    when(documentTranscriptionService.requestChapters(DOCUMENT_ID, 7L)).thenReturn(true);
+    assertEquals(HttpStatus.ACCEPTED, rest.requestChapters(request, DOCUMENT_ID).getStatusCode());
+
+    when(documentTranscriptionService.requestChapters(DOCUMENT_ID, 7L)).thenReturn(false);
+    assertEquals(HttpStatus.NO_CONTENT, rest.requestChapters(request, DOCUMENT_ID).getStatusCode());
+  }
+
+  /**
+   * A chapters request on a file the viewer cannot read answers 403, on one
+   * they cannot see 404, each with a fixed code and no repository path
+   * (EXO-92122).
+   */
+  @Test
+  void aChaptersRequestOnAnUnreadableFileAnswers403Or404() throws Exception {
+    when(documentTranscriptionService.requestChapters(DOCUMENT_ID, 7L)).thenThrow(new IllegalAccessException("john may not read /x"));
+    ResponseStatusException e = assertThrows(ResponseStatusException.class, () -> rest.requestChapters(request, DOCUMENT_ID));
+    assertEquals(HttpStatus.FORBIDDEN, e.getStatusCode());
+    assertEquals("documents.transcription.forbidden", e.getReason());
+
+    doThrow(new ObjectNotFoundException("/Groups/spaces/x/secret.mp4")).when(documentTranscriptionService).requestChapters(DOCUMENT_ID, 7L);
+    e = assertThrows(ResponseStatusException.class, () -> rest.requestChapters(request, DOCUMENT_ID));
+    assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
+    assertEquals("documents.transcription.notFound", e.getReason());
+  }
+
+  /**
+   * The chapters of a file the viewer cannot see answer 404 with a fixed code
+   * and no repository path (EXO-92122).
+   */
+  @Test
+  void theChaptersOfAnUnseenFileAnswer404() throws Exception {
+    when(documentTranscriptionService.getChapters(DOCUMENT_ID, 7L)).thenThrow(new ObjectNotFoundException("/Groups/spaces/x/secret.mp4"));
+
+    ResponseStatusException e = assertThrows(ResponseStatusException.class, () -> rest.getChapters(request, DOCUMENT_ID));
+
+    assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
+    assertEquals("documents.transcription.notFound", e.getReason());
   }
 
   @Test
@@ -175,6 +223,30 @@ class TranscriptionRestTest {
     assertEquals("no-store", text.getHeaders().getCacheControl());
     assertEquals("[]", segments.getBody());
     assertEquals("no-store", segments.getHeaders().getCacheControl());
+  }
+
+  /**
+   * The chapters are the viewer's read, never kept by a shared cache, and a
+   * transcript with none answers 404 with a fixed code (EXO-92122).
+   */
+  @Test
+  void theChaptersAreTheViewersReadAndNoneAnswers404() throws Exception {
+    when(documentTranscriptionService.getChapters(DOCUMENT_ID, 7L)).thenReturn("[{\"title\":\"Welcome\"}]");
+
+    ResponseEntity<String> chapters = rest.getChapters(request, DOCUMENT_ID);
+
+    assertEquals("[{\"title\":\"Welcome\"}]", chapters.getBody());
+    assertEquals("no-store", chapters.getHeaders().getCacheControl());
+
+    when(documentTranscriptionService.getChapters(DOCUMENT_ID, 7L)).thenReturn(null);
+    ResponseStatusException e = assertThrows(ResponseStatusException.class, () -> rest.getChapters(request, DOCUMENT_ID));
+    assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
+    assertEquals("documents.transcription.noChapters", e.getReason());
+
+    when(documentTranscriptionService.getChapters(DOCUMENT_ID, 7L)).thenThrow(new IllegalAccessException("john may not read /x"));
+    e = assertThrows(ResponseStatusException.class, () -> rest.getChapters(request, DOCUMENT_ID));
+    assertEquals(HttpStatus.FORBIDDEN, e.getStatusCode());
+    assertEquals("documents.transcription.forbidden", e.getReason());
   }
 
 }

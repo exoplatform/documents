@@ -567,6 +567,51 @@ public class DocumentMcpToolTest {
     assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
   }
 
+  /**
+   * A transcript grouped into chapters is given after the list of its chapters,
+   * each with the moment it starts, in the marker the assistant links from, its
+   * title and its summary; a chapter with no title or no start is left out
+   * (EXO-92122).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdStartsWithTheChapters() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Who is here.\"},"
+            + "{\"start\":3725.6,\"index\":40,\"title\":\"Budget\",\"summary\":\"\"},"
+            + "{\"index\":41,\"title\":\"No start\"},{\"start\":3800.0,\"title\":\" \"}]");
+
+    assertEquals("""
+        Chapters:
+        - [00:00 · 0s] Welcome: Who is here.
+        - [1:02:05 · 3725s] Budget
+
+        Transcript:
+        the transcription""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+  }
+
+  /**
+   * Chapters that cannot be read, that hold no usable chapter, or whose read
+   * fails, leave the transcript alone (EXO-92122).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdIgnoresUnreadableChapters() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenReturn("not json");
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenReturn("[{\"summary\":\"untitled\"}]");
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+    assertEquals("Expected a failure on the chapters never to take the transcript away",
+                 "the transcription",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+  }
+
   @Test
   public void getDocumentTranscriptionByIdWhenPendingFails() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));

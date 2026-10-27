@@ -247,7 +247,7 @@
     {
       "name": "get_document_transcription_by_id",
       "title": "Transcript an Audio DMS file",
-      "description": "Get the file transcription when it's an audio/video media content",
+      "description": "Get the file transcription when it's an audio/video media content. When the transcript is grouped into chapters, the answer starts with the chapters, each with the moment it starts, its title and a short summary, then gives the transcript.",
       "input_schema": {
         "type": "object",
         "properties": {

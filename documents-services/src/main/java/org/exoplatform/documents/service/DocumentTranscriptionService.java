@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.service;
 
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -56,6 +58,9 @@ public class DocumentTranscriptionService {
 
   @Autowired
   private ListenerService                      listenerService;
+
+  @Autowired(required = false)
+  private List<TranscriptChaptersRequester>    chaptersRequesters;
 
   /**
    * Tells whether media files can be transcribed on this server.
@@ -113,6 +118,21 @@ public class DocumentTranscriptionService {
   }
 
   /**
+   * The chapters a file's transcript is grouped into (EXO-92122), read with the
+   * user's rights.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user
+   * @return the chapters as a JSON list, or null when there are none
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   */
+  public String getChapters(String documentId, long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileService.getTranscriptionChapters(documentId, aclIdentity);
+  }
+
+  /**
    * Asks to transcribe a file again, for any user who can read it. A failed file,
    * or one never transcribed, is handed to the transcriber; one queued or being
    * transcribed is left as it is, unless its state has not changed for
@@ -149,6 +169,40 @@ public class DocumentTranscriptionService {
       throw new IllegalStateException("Error asking to transcribe media file '%s' again".formatted(documentId), e);
     }
     return true;
+  }
+
+  /**
+   * Asks for the chapters of a transcript a user opens, for any user who can
+   * read the file (EXO-92122): a transcript done before chapters were switched
+   * on gets them the first time it is read. Only a transcript done, with timed
+   * segments and no chapters, is handed to the transcriber, which makes them at
+   * most once per file and tells whether they are coming.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user
+   * @return true when the chapters are coming: queued now, or queued earlier
+   *         and not made yet; false when none are to be made
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist or the user
+   *           cannot see it
+   */
+  public boolean requestChapters(String documentId, long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    if (!isAvailable()) {
+      return false;
+    }
+    TranscriptionState state = getState(documentId, aclIdentity);
+    if (state.status() != TranscriptionStatus.DONE || !state.hasSegments() || state.hasChapters()) {
+      return false;
+    }
+    if (chaptersRequesters == null) {
+      return false;
+    }
+    // every requester is asked, whatever an earlier one answered
+    boolean coming = false;
+    for (TranscriptChaptersRequester requester : chaptersRequesters) {
+      coming |= requester.requestChapters(documentId);
+    }
+    return coming;
   }
 
 }

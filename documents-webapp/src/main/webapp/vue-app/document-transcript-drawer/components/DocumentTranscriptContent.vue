@@ -22,11 +22,30 @@
     <div v-if="term" class="text-subtitle mb-3">
       {{ occurrences && $t('documents.transcript.occurrences', {0: occurrences}) || $t('documents.transcript.noOccurrence') }}
     </div>
-    <template v-if="hasSegments">
+    <template v-if="hasChapters">
+      <document-transcript-chapter-list
+        :groups="groups"
+        class="mb-2"
+        @select="selectChapter" />
+      <document-transcript-chapter
+        v-for="group in groups"
+        :key="group.key"
+        :ref="group.key"
+        :chapter="group.chapter"
+        :rows="group.rows"
+        :term="term"
+        :active-index="activeIndex"
+        :open="!!opened[group.key]"
+        :current="group.key === activeGroupKey"
+        :color="group.color"
+        @toggle="toggleChapter(group.key)"
+        @seek="$emit('seek', $event)" />
+    </template>
+    <template v-else-if="hasSegments">
       <div
         v-for="(segment, index) in segments"
         :key="index"
-        :ref="`segment-${index}`"
+        :data-segment-index="index"
         :title="$t('documents.transcript.playFrom', {0: formatMoment(segment.start)})"
         :class="index === activeIndex && 'light-grey-background-color'"
         class="d-flex align-start py-1 px-2 clickable border-radius"
@@ -53,8 +72,11 @@
 </template>
 <script>
 import {countOccurrences, formatMoment} from '../js/TranscriptSearch.js';
+import {groupByChapters} from '../js/TranscriptChapters.js';
+import TranscriptChapterFolds from '../js/TranscriptChapterFolds.js';
 
 export default {
+  mixins: [TranscriptChapterFolds],
   props: {
     segments: {
       type: Array,
@@ -73,6 +95,14 @@ export default {
       default: null,
     },
     playingSeconds: {
+      type: Number,
+      default: null,
+    },
+    chapters: {
+      type: Array,
+      default: null,
+    },
+    durationSeconds: {
       type: Number,
       default: null,
     },
@@ -97,9 +127,16 @@ export default {
     shownIndex() {
       return this.indexAt(this.seconds);
     },
+    groups() {
+      return groupByChapters(this.segments, this.chapters, this.durationSeconds);
+    },
+    hasChapters() {
+      return this.groups.some(group => group.chapter);
+    },
   },
   watch: {
     term() {
+      this.openMatchingChapters();
       // the highlighted occurrences exist in the DOM only once the new term is rendered
       this.$nextTick(() => this.$el?.querySelector?.('mark')?.scrollIntoView({block: 'center'}));
     },
@@ -108,7 +145,10 @@ export default {
     },
   },
   mounted() {
+    this.applyFolds();
     this.showActiveSegment();
+    // the occurrences of a term already set exist in the DOM only once its chapters are unfolded
+    this.$nextTick(this.revealCurrent);
   },
   methods: {
     /**
@@ -137,15 +177,19 @@ export default {
       return index;
     },
     /**
-     * Scrolls the sentence of the moment asked for into view, once rendered;
-     * the playing sentence is only highlighted, so reading or searching
-     * elsewhere is never pulled back.
+     * Scrolls the sentence of the moment asked for into view, once rendered,
+     * unfolding its chapter; the playing sentence is only highlighted, so
+     * reading or searching elsewhere is never pulled back. The start of the
+     * recording unfolds nothing: the chapters are folded on open.
      * @returns {void}
      */
     showActiveSegment() {
       if (this.shownIndex >= 0) {
-        // the sentence exists in the DOM only once the segments are rendered
-        this.$nextTick(() => this.$refs[`segment-${this.shownIndex}`]?.[0]?.scrollIntoView({block: 'center'}));
+        if (this.seconds > 0) {
+          this.openChapter(this.groupKeyOf(this.shownIndex));
+        }
+        // the sentence exists in the DOM only once its chapter is unfolded and rendered
+        this.$nextTick(() => this.$el?.querySelector?.(`[data-segment-index="${this.shownIndex}"]`)?.scrollIntoView({block: 'center'}));
       }
     },
   },
