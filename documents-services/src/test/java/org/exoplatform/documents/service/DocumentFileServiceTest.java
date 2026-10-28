@@ -25,10 +25,13 @@ import java.io.InputStream;
 import java.util.*;
 
 import io.meeds.analytics.api.service.AnalyticsService;
+import io.meeds.portal.thumbnail.model.FileContent;
 import org.junit.Before;
 import org.junit.Test;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.file.model.FileInfo;
+import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.listener.AttachmentsActivityCacheUpdater;
 import org.exoplatform.documents.model.*;
@@ -41,6 +44,7 @@ import org.exoplatform.services.listener.Event;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Authenticator;
 import org.exoplatform.services.security.ConversationState;
+import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.services.thumbnail.ImageThumbnailService;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -798,6 +802,64 @@ public class DocumentFileServiceTest {
     when(jcrDeleteFileStorage.getDeletedDocuments(any(TrashElementNodeFilter.class))).thenReturn(trashElementNodes);
 
     assertEquals(1, documentFileService.getDeletedDocuments(new TrashElementNodeFilter()).size());
+  }
+
+  @Test
+  public void testGetImageThumbnailContentChecksDocumentAccess() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+
+    assertThrows(IllegalAccessException.class,
+                 () -> documentFileService.getImageThumbnailContent("file", "12", "user", 0, 0));
+    verify(imageThumbnailService, never()).getOrCreateThumbnail(anyString(), anyString(), anyString(), anyInt(), anyInt());
+
+    when(documentFileStorage.canAccess("docId", aclIdentity)).thenReturn(true);
+    FileItem fileItem = mock(FileItem.class);
+    FileInfo fileInfo = new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "user", null, false);
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    when(imageThumbnailService.getOrCreateThumbnail("imageThumbnail", "docId", "user", 250, 250)).thenReturn(fileItem);
+    FileContent thumbnail = documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250);
+    assertEquals("image.png", thumbnail.getName());
+  }
+
+  @Test
+  public void testGetImageThumbnailContentChecksAnonymousAccess() throws Exception {
+    assertThrows(IllegalAccessException.class,
+                 () -> documentFileService.getImageThumbnailContent("imageThumbnail", "docId", IdentityConstants.ANONIM, 0, 0));
+    verify(authenticator, never()).createIdentity(anyString());
+    verify(imageThumbnailService, never()).getOrCreateThumbnail(anyString(), anyString(), anyString(), anyInt(), anyInt());
+
+    when(documentFileStorage.canAccess(eq("docId"),
+                                       argThat(identity -> IdentityConstants.ANONIM.equals(identity.getUserId())))).thenReturn(true);
+    FileItem fileItem = mock(FileItem.class);
+    FileInfo fileInfo = new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "user", null, false);
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    when(imageThumbnailService.getOrCreateThumbnail("imageThumbnail", "docId", IdentityConstants.ANONIM, 0, 0)).thenReturn(fileItem);
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", IdentityConstants.ANONIM, 0, 0));
+  }
+
+  @Test
+  public void testCreateThumbnailChecksTypeAndEditPermission() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+    FileContent content = new FileContent("docId", "docId", "image/jpeg", new ByteArrayInputStream(new byte[] { 1 }));
+    when(documentFileStorage.hasEditPermissions("docId", aclIdentity)).thenReturn(true);
+
+    IllegalArgumentException typeException = assertThrows(IllegalArgumentException.class,
+                                                           () -> documentFileService.createThumbnail("file", content, "user", 250, 250));
+    assertEquals("thumbnail_type_not_supported", typeException.getMessage());
+    verify(imageThumbnailService, never()).deleteThumbnails(anyString(), anyString());
+    verify(imageThumbnailService, never()).createThumbnail(anyString(), any(), anyString(), anyInt(), anyInt());
+
+    when(documentFileStorage.hasEditPermissions("docId", aclIdentity)).thenReturn(false);
+    assertThrows(IllegalAccessException.class,
+                 () -> documentFileService.createThumbnail("videoThumbnail", content, "user", 250, 250));
+    verify(imageThumbnailService, never()).deleteThumbnails(anyString(), anyString());
+    verify(imageThumbnailService, never()).createThumbnail(anyString(), any(), anyString(), anyInt(), anyInt());
+
+    when(documentFileStorage.hasEditPermissions("docId", aclIdentity)).thenReturn(true);
+    documentFileService.createThumbnail("videoThumbnail", content, "user", 250, 250);
+    verify(imageThumbnailService).createThumbnail("videoThumbnaildocId", content, "user", 250, 250);
   }
 
 }

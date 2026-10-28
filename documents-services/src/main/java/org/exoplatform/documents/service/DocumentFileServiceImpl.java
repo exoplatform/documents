@@ -54,6 +54,7 @@ import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.Authenticator;
+import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.services.thumbnail.ImageThumbnailService;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -75,6 +76,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   private static final Log      LOG               = ExoLogger.getLogger(DocumentFileServiceImpl.class);
 
   private static final String   RENAME_FILE_EVENT = "rename_file_event";
+
+  private static final String   VIDEO_THUMBNAIL_TYPE = "videoThumbnail";
 
   private DocumentFileStorage   documentFileStorage;
 
@@ -494,6 +497,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
     return aclIdentity;
   }
+
+  private org.exoplatform.services.security.Identity getViewerAclIdentity(String username) throws IllegalAccessException {
+    if (StringUtils.isBlank(username) || IdentityConstants.ANONIM.equals(username)) {
+      return new org.exoplatform.services.security.Identity(IdentityConstants.ANONIM);
+    }
+    return getAclUserIdentity(username);
+  }
+
   @Override
   public void updateDocumentDescription(long ownerId,
                                         String documentID,
@@ -802,6 +813,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                               String userName,
                                               int width,
                                               int height) throws Exception {
+    if (!canAccess(documentId, getViewerAclIdentity(userName))) {
+      throw new IllegalAccessException("User " + userName + " can't access document " + documentId);
+    }
     FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType, documentId, userName, width, height);
     if (image != null) {
       FileInfo imageInfo = image.getFileInfo();
@@ -816,6 +830,12 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   @Override
   public FileItem createThumbnail(String fileType, FileContent file, String userName, int width, int height) throws Exception {
+    if (!VIDEO_THUMBNAIL_TYPE.equals(fileType)) {
+      throw new IllegalArgumentException("thumbnail_type_not_supported");
+    }
+    if (!hasEditPermissionOnDocument(file.getId(), getAclUserIdentity(userName))) {
+      throw new IllegalAccessException("User " + userName + " can't edit document " + file.getId());
+    }
     FileItem image = imageThumbnailService.getThumbnail(fileType + file.getId(), width, height);
     if (image != null) {
       imageThumbnailService.deleteThumbnails(fileType, file.getId());

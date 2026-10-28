@@ -120,6 +120,10 @@ public class DocumentFileRest implements ResourceContainer {
 
   private static final CacheControl         CACHE_CONTROL          = new CacheControl();
 
+  static {
+    CACHE_CONTROL.setPrivate(true);
+  }
+
   private static final int                  CACHE_IN_SECONDS       = 7 * 86400;
 
   private static final int                  CACHE_IN_MILLI_SECONDS = CACHE_IN_SECONDS * 1000;
@@ -1796,16 +1800,19 @@ public class DocumentFileRest implements ResourceContainer {
           mimeType = MediaType.APPLICATION_OCTET_STREAM;
         }
         builder = Response.ok(inputStream).type(mimeType);
-        builder.cacheControl(CACHE_CONTROL);
         builder.lastModified(new Date(lastUpdated));
         builder.tag(eTag);
       }
+      builder.cacheControl(CACHE_CONTROL);
       String fileName = URLEncoder.encode(file.getName(), StandardCharsets.UTF_8).replace("+", "%20");
       builder.header("Content-Disposition", "filename=\"" + fileName + "\"; filename*=UTF-8''" + fileName);
       if (StringUtils.isNotBlank(lastModified)) {
         builder.expires(new Date(System.currentTimeMillis() + CACHE_IN_MILLI_SECONDS));
       }
       return builder.build();
+    } catch (IllegalAccessException e) {
+      LOG.debug("User is not allowed to read the preview of document {}", documentId, e);
+      return Response.status(Status.FORBIDDEN).entity("document_not_accessible").build();
     } catch (Exception e) {
       if (LOG.isDebugEnabled()) {
         LOG.error("Error getting document content with Id {}", documentId, e);
@@ -1847,9 +1854,19 @@ public class DocumentFileRest implements ResourceContainer {
     if (StringUtils.isBlank(data)) {
       return Response.status(Status.BAD_REQUEST).entity("data is mandatory").build();
     }
+    int[] dimension;
+    byte[] imageBytes;
     try {
-      int[] dimension = Utils.parseDimension(size);
-      byte[] imageBytes = Base64.getDecoder().decode(data.replaceAll("^\"|\"$", ""));
+      dimension = Utils.parseDimension(size);
+    } catch (IllegalArgumentException e) {
+      return Response.status(Status.BAD_REQUEST).entity("size_invalid").build();
+    }
+    try {
+      imageBytes = Base64.getDecoder().decode(data.replaceAll("(^\")|(\"$)", ""));
+    } catch (IllegalArgumentException e) {
+      return Response.status(Status.BAD_REQUEST).entity("data_not_base64").build();
+    }
+    try {
       FileContent file = new FileContent(documentId, documentId, "image/jpeg", new ByteArrayInputStream(imageBytes));
 
       FileItem image = documentFileService.createThumbnail(fileType,
@@ -1861,6 +1878,12 @@ public class DocumentFileRest implements ResourceContainer {
         return Response.status(Status.NOT_MODIFIED).build();
       }
       return Response.status(Status.OK).build();
+    } catch (IllegalAccessException e) {
+      LOG.debug("User is not allowed to replace the thumbnail of document {}", documentId, e);
+      return Response.status(Status.FORBIDDEN).entity("document_not_editable").build();
+    } catch (IllegalArgumentException e) {
+      LOG.debug("Invalid thumbnail {} for document {}", fileType, documentId, e);
+      return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.error("Error creating video thumbnail with Id {}", documentId, e);
       return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
