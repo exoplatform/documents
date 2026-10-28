@@ -31,6 +31,11 @@ export function installExtensions() {
     vueComponent: Vue.options.components['task-attachment'],
     rank: 10,
   });
+  extensionRegistry.registerComponent('TaskDrawer', 'task-drawer-attachments', {
+    id: 'attachments-carousel',
+    vueComponent: Vue.options.components['notes-attachment-carousel'],
+    rank: 10,
+  });
 
   extensionRegistry.registerComponent('ActivityComposerAction', 'activity-composer-action', {
     id: 'activityComposerAttachments',
