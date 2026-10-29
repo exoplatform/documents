@@ -174,6 +174,10 @@ export default {
       type: String,
       default: () => '250px',
     },
+    ownerId: {
+      type: [String, Number],
+      default: null,
+    },
   },
   data: () => ({
     loading: true,
@@ -264,15 +268,16 @@ export default {
       } else if (this.attachment.readable)  {
         this.openFileInEditor('view');
       } else {
-        document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': this.attachments.filter(doc => !doc.readable),'id': this.attachment.id }}));
+        const attachments = this.attachments.filter(doc => !doc.readable).map(doc => (this.ownerId ? {...doc, ownerId: this.ownerId} : doc));
+        document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': attachments,'id': this.attachment.id }}));
       }
       this.markDocumentAsViewed();
       this.loading = false;
     },
     openFileInEditor(mode) {
       if (this.attachment && this.attachment.id) {
-        const url = this.$documentsUtils.getEditorUrl(this.attachment,mode);
-        this.$documentsUtils.openLink(url, '_blank');
+        this.$documentsUtils.getEditorUrlInDrive(this.attachment, mode, this.ownerId || eXo.env.portal.spaceIdentityId)
+          .then(url => this.$documentsUtils.openLink(url, '_blank'));
       }
     },
     showInfo(event) {
@@ -280,7 +285,7 @@ export default {
         event.preventDefault();
         event.stopPropagation();
       }
-      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.attachment.id}));
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.ownerId ? {id: this.attachment.id, ownerId: this.ownerId} : this.attachment.id}));
     },
     playMedia(event) {
       if (event) {

@@ -1727,12 +1727,11 @@ export default {
       return this.$attachmentService.getDocumentDetails(documentPreviewId,'')
         .then(attachment => {
           if (this.isFileReadable(attachment)){
-            if (attachment?.acl?.canEdit && this.isFileEditable(attachment)){
-              this.openFileInEditor(attachment,'edit','_self');
-            } else {
-              this.openFileInEditor(attachment,'view','_self');
-
-            }
+            const mode = attachment?.acl?.canEdit && this.isFileEditable(attachment) ? 'edit' : 'view';
+            return this.$documentsUtils.getEditorUrlInDrive(attachment, mode, this.$root.ownerId)
+              .then(url => {
+                this.$documentsUtils.openLink(url, '_self');
+              });
           } else {
             const file = {'id': attachment.id,'filename': attachment.name,'mimetype': attachment.mimeType,'source': 'documents','downloadUrl': `/rest/v1/documents/content/${attachment.id}`, 'icon': this.getFileIcon(attachment)};
             document.dispatchEvent(new CustomEvent('open-attachments-preview', {detail: {'attachments': [file],'id': documentPreviewId }}));

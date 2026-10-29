@@ -31,6 +31,7 @@
         :attachments="attachments"
         :preview-width="previewWidth"
         :preview-height="previewHeight"
+        :owner-id="spaceIdentityId"
         class="note-file-item" />
     </card-carousel>
   </div>
@@ -46,9 +47,14 @@ export default {
       type: String,
       default: null,
     },
+    spaceId: {
+      type: [String, Number],
+      default: null,
+    },
   },
   data() {
     return {
+      spaceIdentityId: null,
       files: [],
       previewHeight: '152px',
       previewWidth: '250px',
@@ -99,6 +105,22 @@ export default {
       immediate: true,
       async handler() {
         this.files = await this.initEntityAttachmentsList();
+      },
+    },
+    spaceId: {
+      immediate: true,
+      handler() {
+        this.spaceIdentityId = null;
+        const spaceId = this.spaceId;
+        if (spaceId) {
+          this.$spaceService.getSpaceById(spaceId)
+            .then(space => {
+              if (spaceId === this.spaceId) {
+                this.spaceIdentityId = space?.identityId || null;
+              }
+            })
+            .catch(() => this.spaceIdentityId = null);
+        }
       },
     },
     displayAttachmentItem: {
