@@ -21,7 +21,7 @@ export default {
   }),
   methods: {
     displayDetails(){
-      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.file.id}));
+      document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: {id: this.file.id, ownerId: this.$root.ownerId}}));
       if (this.isMobile) {
         this.$root.$emit('close-file-action-menu');
       }

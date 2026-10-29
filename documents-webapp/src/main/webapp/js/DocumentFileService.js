@@ -67,6 +67,13 @@ export function getDocumentById(documentId) {
   });
 }
 
+export function getDocumentPathInDrive(documentId, ownerId) {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/drive-path?documentId=${documentId}&ownerId=${ownerId}`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then((resp) => resp?.ok && resp.text() || null);
+}
+
 export function canAddDocument(spaceId) {
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/canAddDocument?spaceId=${spaceId}`, {
     headers: {

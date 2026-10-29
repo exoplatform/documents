@@ -283,8 +283,8 @@ export default {
     },
     openFileInEditor(mode) {
       if (this.attachment && this.attachment.id) {
-        const url = this.$documentsUtils.getEditorUrl(this.attachment,mode);
-        this.$documentsUtils.openLink(url, '_blank');
+        this.$documentsUtils.getEditorUrlInDrive(this.attachment, mode, eXo.env.portal.spaceIdentityId)
+          .then(url => this.$documentsUtils.openLink(url, '_blank'));
       }
     },
     openFile() {
