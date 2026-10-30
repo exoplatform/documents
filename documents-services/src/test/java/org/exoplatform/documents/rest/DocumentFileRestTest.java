@@ -29,6 +29,7 @@ import java.util.*;
 
 import javax.jcr.AccessDeniedException;
 import javax.jcr.RepositoryException;
+import javax.ws.rs.core.EntityTag;
 import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
@@ -1885,11 +1886,56 @@ public class DocumentFileRestTest {
     when(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", userName, 250, 250)).thenReturn(fileThumbnail);
     response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", null, "250x250");
     assertEquals(200, response.getStatus());
+    javax.ws.rs.core.CacheControl previewCacheControl =
+                                                    (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
+    assertTrue(previewCacheControl.isPrivate());
+    when(request.evaluatePreconditions(any(EntityTag.class))).thenReturn(Response.notModified());
+    response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "imageThumbnail", "1", "250x250");
+    assertEquals(304, response.getStatus());
+    previewCacheControl = (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
+    assertNotNull(previewCacheControl);
+    assertTrue(previewCacheControl.isPrivate());
+    when(request.evaluatePreconditions(any(EntityTag.class))).thenReturn(null);
     response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
     assertEquals(404, response.getStatus());
     when(documentFileService.getDocumentContent("docId", userName)).thenReturn(fileThumbnail);
     response = documentFileRest.getDocumentContent(uriInfo, request, "docId", "content", null, "250x250");
     assertEquals(200, response.getStatus());
+    when(documentFileService.getImageThumbnailContent("file", "12", userName, 0, 0)).thenThrow(IllegalAccessException.class);
+    response = documentFileRest.getDocumentContent(uriInfo, request, "12", "file", null, "0x0");
+    assertEquals(403, response.getStatus());
+  }
+
+  @Test
+  public void testCreateVideoThumbnailRefusals() throws Exception {
+    DocumentFileService thumbnailFileService = mock(DocumentFileService.class);
+    DocumentFileRest thumbnailRest = new DocumentFileRest(thumbnailFileService,
+                                                          spaceService,
+                                                             identityManager,
+                                                             metadataService,
+                                                             settingService,
+                                                             publicDocumentAccessService,
+                                                             externalDownloadService,
+                                                             documentWebDavService);
+    ConversationState.setCurrent(new ConversationState(new org.exoplatform.services.security.Identity("user")));
+    String data = Base64.getEncoder().encodeToString(new byte[] { 1 });
+
+    Response response = thumbnailRest.createVideoThumbnail(null, "docId", "videoThumbnail", "axb", data);
+    assertEquals(400, response.getStatus());
+    assertEquals("size_invalid", response.getEntity());
+    response = thumbnailRest.createVideoThumbnail(null, "docId", "videoThumbnail", "250x250", "not base64!");
+    assertEquals(400, response.getStatus());
+    assertEquals("data_not_base64", response.getEntity());
+    verifyNoInteractions(thumbnailFileService);
+
+    when(thumbnailFileService.createThumbnail(eq("file"), any(), eq("user"), anyInt(), anyInt())).thenThrow(new IllegalArgumentException("thumbnail_type_not_supported"));
+    response = thumbnailRest.createVideoThumbnail(null, "12", "file", "250x250", data);
+    assertEquals(400, response.getStatus());
+    assertEquals("thumbnail_type_not_supported", response.getEntity());
+
+    when(thumbnailFileService.createThumbnail(eq("videoThumbnail"), any(), eq("user"), anyInt(), anyInt())).thenThrow(IllegalAccessException.class);
+    response = thumbnailRest.createVideoThumbnail(null, "docId", "videoThumbnail", "250x250", data);
+    assertEquals(403, response.getStatus());
   }
 
   @Test
