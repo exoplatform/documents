@@ -180,7 +180,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["html_description"] },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["html_description"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -402,7 +402,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "parent_folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["name"] },
+      "space_scope": { "object_arg": "parent_folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["name"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -437,7 +437,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "parent_folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["name", "content"] },
+      "space_scope": { "object_arg": "parent_folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["name", "content"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -477,7 +477,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "parent_folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["name", "document_type"] },
+      "space_scope": { "object_arg": "parent_folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["name", "document_type"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -551,7 +551,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["new_name"] },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["new_name"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -586,7 +586,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id"] },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -616,7 +616,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id"] },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -645,7 +645,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["prefix"] },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["prefix"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -781,7 +781,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["hidden"] },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["hidden"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -830,7 +830,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["content", "base64", "version_summary"] },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["content", "base64", "version_summary"], "space_role": "member" },
       "require_approval": true
     },
     {
@@ -897,7 +897,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
-      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id", "conflict_action"] },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id", "conflict_action"], "space_role": "member" },
       "require_approval": true
     },
     {
