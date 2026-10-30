@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +43,7 @@ import java.util.Locale;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -80,6 +82,10 @@ import org.exoplatform.social.metadata.favorite.FavoriteService;
 import org.exoplatform.social.metadata.favorite.model.Favorite;
 import org.exoplatform.upload.UploadService;
 
+import io.meeds.mcp.server.constant.Origin;
+import io.meeds.mcp.server.model.ActingIdentity;
+import io.meeds.mcp.server.tool.util.UploadToolUtils;
+import io.meeds.mcp.server.util.McpToolUtils;
 import io.meeds.social.translation.service.TranslationService;
 
 public class DocumentMcpToolTest {
@@ -113,6 +119,10 @@ public class DocumentMcpToolTest {
   private Identity                       currentIdentity;
 
   private DocumentMcpTool                documentMcpTool;
+
+  private Long                           scopeSpaceId;
+
+  private boolean                        scopeUnreadable;
 
   @Before
   public void setUp() {
@@ -157,7 +167,247 @@ public class DocumentMcpToolTest {
       public Locale getCurrentUserLocale() {
         return Locale.ENGLISH;
       }
+
+      @Override
+      protected Long getScopeSpaceId() {
+        if (scopeUnreadable) {
+          throw new IllegalStateException("No acting identity");
+        }
+        return scopeSpaceId;
+      }
     };
+  }
+
+  /**
+   * In a call limited to a space, a move, a copy or a shortcut goes only into
+   * a folder of that space: a folder of another space, a folder in no space's
+   * drive, and any folder when the call's space can't be read are refused
+   * before the storage is touched. A call that isn't limited doesn't look the
+   * destination's space up.
+   * Mutants: the check removed from one of the three tools, the comparison
+   * inverted, a destination in no space accepted, an unreadable space taken
+   * as unlimited, or an unlimited call checked.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceMovesCopiesAndLinksIntoThatSpaceOnly() throws Exception {
+    String spaceFolder = "ae0688cd7f00010134384ab7e1b15a49";
+    String otherSpaceFolder = "00000000000000000000000000000003";
+    String driveLessFolder = "00000000000000000000000000000004";
+    Space space = new Space();
+    space.setId("12");
+    Space otherSpace = new Space();
+    otherSpace.setId("13");
+    when(documentFileService.getDocumentSpaceGroupId(spaceFolder)).thenReturn("/spaces/legal");
+    when(documentFileService.getDocumentSpaceGroupId(otherSpaceFolder)).thenReturn("/spaces/hr");
+    when(documentFileService.getDocumentSpaceGroupId(driveLessFolder)).thenReturn(null);
+    when(spaceService.getSpaceByGroupId("/spaces/legal")).thenReturn(space);
+    when(spaceService.getSpaceByGroupId("/spaces/hr")).thenReturn(otherSpace);
+    lenient().when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    lenient().when(documentFileService.getDocumentById(spaceFolder, USERNAME)).thenReturn(folderNode(spaceFolder));
+    lenient().when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
+
+    scopeSpaceId = 12L;
+    for (String outside : List.of(otherSpaceFolder, driveLessFolder)) {
+      assertThrows(IllegalAccessException.class, () -> documentMcpTool.moveDocument(DOCUMENT_ID, outside, null));
+      assertThrows(IllegalAccessException.class, () -> documentMcpTool.copyDocument(DOCUMENT_ID, outside));
+      assertThrows(IllegalAccessException.class, () -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, outside, null));
+    }
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.moveDocument(DOCUMENT_ID, spaceFolder, null));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.copyDocument(DOCUMENT_ID, spaceFolder));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, spaceFolder, null));
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+    verify(documentFileService, never()).copyDocument(any(), any(), anyLong());
+    verify(documentFileService, never()).createShortcut(any(), any(), any(), any());
+
+    scopeUnreadable = false;
+    documentMcpTool.moveDocument(DOCUMENT_ID, spaceFolder, null);
+    documentMcpTool.createDocumentShortcut(DOCUMENT_ID, spaceFolder, null);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(Collections.emptyList())
+        .thenReturn(List.of(fileNodeNamed("copy-1", "report.pdf")));
+    assertEquals("copy-1", documentMcpTool.copyDocument(DOCUMENT_ID, spaceFolder).getId());
+    verify(documentFileService).moveDocument(eq(OWNER_ID), eq(DOCUMENT_ID), any(), eq(USER_IDENTITY_ID), eq("keepBoth"));
+    verify(documentFileService).createShortcut(eq(DOCUMENT_ID), any(), eq(USERNAME), eq("keepBoth"));
+    verify(documentFileService).copyDocument(DOCUMENT_ID, spaceFolder, USER_IDENTITY_ID);
+
+    scopeSpaceId = null;
+    Mockito.clearInvocations(documentFileService);
+    documentMcpTool.moveDocument(DOCUMENT_ID, spaceFolder, null);
+    verify(documentFileService, never()).getDocumentSpaceGroupId(any());
+  }
+
+  /**
+   * In a call limited to a space, a node the platform created for the space
+   * (creator {@code __system}) is neither moved, copied, linked nor hidden, and
+   * a file is neither hidden nor shown: only a folder is. A folder created by
+   * a user is hidden. A call that isn't limited keeps the storage's own rules,
+   * with no lookup of the node; one whose space can't be read is refused.
+   * Mutants: the creator check removed or applied to one tool only, the
+   * folder-only rule removed or applied to a move, an unlimited call checked,
+   * or an unreadable space taken as unlimited.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceLeavesThePlatformsNodesAndHidesFoldersOnly() throws Exception {
+    String spaceFolder = "ae0688cd7f00010134384ab7e1b15a49";
+    String systemFolderId = "ce0688cd7f00010134384ab7e1b15a50";
+    String userFolderId = "de0688cd7f00010134384ab7e1b15a51";
+    Space space = new Space();
+    space.setId("12");
+    FolderNode systemFolder = folderNode(systemFolderId);
+    systemFolder.setCreatorUserName("__system");
+    FolderNode userFolder = folderNode(userFolderId);
+    userFolder.setCreatorUserName(USERNAME);
+    FileNode userFile = fileNode(DOCUMENT_ID, "application/pdf");
+    userFile.setCreatorUserName(USERNAME);
+    lenient().when(documentFileService.getDocumentSpaceGroupId(spaceFolder)).thenReturn("/spaces/legal");
+    lenient().when(spaceService.getSpaceByGroupId("/spaces/legal")).thenReturn(space);
+    lenient().when(documentFileService.getDocumentById(spaceFolder, USERNAME)).thenReturn(folderNode(spaceFolder));
+    when(documentFileService.getDocumentById(systemFolderId, USERNAME)).thenReturn(systemFolder);
+    when(documentFileService.getDocumentById(userFolderId, USERNAME)).thenReturn(userFolder);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(userFile);
+    lenient().when(documentFileService.getRootFolderOwnerId(any())).thenReturn(OWNER_ID);
+
+    scopeSpaceId = 12L;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.moveDocument(systemFolderId, spaceFolder, null));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.copyDocument(systemFolderId, spaceFolder));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.createDocumentShortcut(systemFolderId, spaceFolder, null));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.setDocumentVisibility(systemFolderId, true));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.setDocumentVisibility(DOCUMENT_ID, true));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.setDocumentVisibility(DOCUMENT_ID, false));
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+    verify(documentFileService, never()).copyDocument(any(), any(), anyLong());
+    verify(documentFileService, never()).createShortcut(any(), any(), any(), any());
+    verify(documentFileService, never()).setDocumentVisibility(anyLong(), any(), anyBoolean(), anyLong());
+
+    documentMcpTool.setDocumentVisibility(userFolderId, true);
+    documentMcpTool.moveDocument(DOCUMENT_ID, spaceFolder, null);
+    verify(documentFileService).setDocumentVisibility(OWNER_ID, userFolderId, true, USER_IDENTITY_ID);
+    verify(documentFileService).moveDocument(eq(OWNER_ID), eq(DOCUMENT_ID), any(), eq(USER_IDENTITY_ID), eq("keepBoth"));
+
+    scopeSpaceId = null;
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.setDocumentVisibility(userFolderId, false));
+
+    scopeUnreadable = false;
+    Mockito.clearInvocations(documentFileService);
+    documentMcpTool.setDocumentVisibility(DOCUMENT_ID, true);
+    documentMcpTool.moveDocument(systemFolderId, spaceFolder, null);
+    verify(documentFileService).setDocumentVisibility(OWNER_ID, DOCUMENT_ID, true, USER_IDENTITY_ID);
+    verify(documentFileService, never()).getDocumentById(eq(DOCUMENT_ID), any());
+    verify(documentFileService, never()).getDocumentById(eq(systemFolderId), any());
+  }
+
+  /**
+   * In a call limited to a space, a node the platform created for the space
+   * (creator {@code __system}) is not duplicated, and a node a user created
+   * is; a call that isn't limited duplicates either.
+   * Mutants: the creator check removed from the duplicate, or run on an
+   * unlimited call.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceDuplicatesNoNodeOfThePlatform() throws Exception {
+    FileNode systemFile = fileNode(DOCUMENT_ID, "application/pdf");
+    systemFile.setCreatorUserName("__system");
+    systemFile.setParentFolderId(FOLDER_ID);
+    FileNode userFile = fileNode("fe0688cd7f00010134384ab7e1b15a52", "application/pdf");
+    userFile.setCreatorUserName(USERNAME);
+    userFile.setParentFolderId(FOLDER_ID);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(systemFile);
+    when(documentFileService.getDocumentById(userFile.getId(), USERNAME)).thenReturn(userFile);
+    lenient().when(documentFileService.getRootFolderOwnerId(any())).thenReturn(OWNER_ID);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of())
+        .thenReturn(List.of(fileNodeNamed("dup-1", "report.pdf")))
+        .thenReturn(List.of())
+        .thenReturn(List.of(fileNodeNamed("dup-2", "report.pdf")));
+
+    scopeSpaceId = 12L;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.duplicateDocument(DOCUMENT_ID, null));
+    verify(documentFileService, never()).duplicateDocument(anyLong(), any(), any(), anyLong());
+    assertEquals("dup-1", documentMcpTool.duplicateDocument(userFile.getId(), null).getId());
+
+    scopeSpaceId = null;
+    assertEquals("dup-2", documentMcpTool.duplicateDocument(DOCUMENT_ID, null).getId());
+    verify(documentFileService).duplicateDocument(OWNER_ID, DOCUMENT_ID, null, USER_IDENTITY_ID);
+  }
+
+  /**
+   * In a call limited to a space, a node the platform created for the space
+   * (creator {@code __system}) is not renamed, and a folder or a file a user
+   * created is; a call that isn't limited renames either.
+   * Mutants: the creator check removed from the rename, the rename checked as
+   * a folder-only change, or every folder refused whatever its creator.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceRenamesNoNodeOfThePlatform() throws Exception {
+    FolderNode systemFolder = folderNode(FOLDER_ID);
+    systemFolder.setCreatorUserName("__system");
+    FileNode userFile = fileNode(DOCUMENT_ID, "application/pdf");
+    userFile.setCreatorUserName(USERNAME);
+    String userFolderId = "user-folder";
+    FolderNode userFolder = folderNode(userFolderId);
+    userFolder.setCreatorUserName(USERNAME);
+    when(documentFileService.getDocumentById(userFolderId, USERNAME)).thenReturn(userFolder);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(systemFolder);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(userFile);
+    lenient().when(documentFileService.getRootFolderOwnerId(any())).thenReturn(OWNER_ID);
+
+    scopeSpaceId = 12L;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.renameDocument(FOLDER_ID, "Minutes"));
+    verify(documentFileService, never()).renameDocument(anyLong(), any(), any(), anyLong());
+    documentMcpTool.renameDocument(DOCUMENT_ID, "contract.pdf");
+    documentMcpTool.renameDocument(userFolderId, "Agreements");
+    verify(documentFileService).renameDocument(OWNER_ID, DOCUMENT_ID, "contract.pdf", USER_IDENTITY_ID);
+    verify(documentFileService).renameDocument(OWNER_ID, userFolderId, "Agreements", USER_IDENTITY_ID);
+
+    scopeSpaceId = null;
+    documentMcpTool.renameDocument(FOLDER_ID, "Minutes");
+    verify(documentFileService).renameDocument(OWNER_ID, FOLDER_ID, "Minutes", USER_IDENTITY_ID);
+  }
+
+  /**
+   * The space a call is limited to is the one its acting identity carries,
+   * none for an identity without a scope or no identity, and an identity that
+   * can't be read fails the read rather than passing for an unlimited call.
+   * Runs the real {@code getScopeSpaceId}, which the other tests stub.
+   * Mutants: the scope not read, or the read failure swallowed.
+   */
+  @Test
+  public void theScopeSpaceIsTheOneTheActingIdentityCarries() {
+    DocumentMcpTool realTool = new DocumentMcpTool(documentFileService,
+                                                   attachmentService,
+                                                   socialAttachmentService,
+                                                   fileService,
+                                                   identityManager,
+                                                   spaceService,
+                                                   Mockito.mock(TranslationService.class),
+                                                   Mockito.mock(ProfilePropertyService.class),
+                                                   Mockito.mock(UserACL.class),
+                                                   Mockito.mock(UserPortalConfigService.class),
+                                                   Mockito.mock(UploadService.class),
+                                                   publicDocumentAccessService,
+                                                   favoriteService);
+    ActingIdentity limited = ActingIdentity.agent("agent-docs", "DOCS", Origin.PROPOSAL, 7L);
+    ActingIdentity unlimited = ActingIdentity.person(USERNAME, Origin.CHAT);
+    try (MockedStatic<McpToolUtils> mocked = Mockito.mockStatic(McpToolUtils.class)) {
+      mocked.when(McpToolUtils::getCurrentActingIdentity).thenReturn(limited);
+      assertEquals(Long.valueOf(7L), realTool.getScopeSpaceId());
+      mocked.when(McpToolUtils::getCurrentActingIdentity).thenReturn(unlimited);
+      assertEquals(null, realTool.getScopeSpaceId());
+      mocked.when(McpToolUtils::getCurrentActingIdentity).thenReturn(null);
+      assertEquals(null, realTool.getScopeSpaceId());
+      mocked.when(McpToolUtils::getCurrentActingIdentity).thenThrow(new IllegalStateException("refused"));
+      assertThrows(IllegalStateException.class, realTool::getScopeSpaceId);
+    }
   }
 
   private FileNode fileNode(String id, String mimeType) {
@@ -940,6 +1190,36 @@ public class DocumentMcpToolTest {
     assertTrue(ex.getMessage().contains("multiple candidates"));
   }
 
+  /**
+   * A copied folder and a duplicated folder are found after the operation and
+   * returned, by their kind and their name. A file of the same name added
+   * meanwhile is not taken for the folder, and a
+   * file is still resolved among files only.
+   * Mutants: the copied node read among files only again, for the copy or the
+   * duplicate, or the kind ignored.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCopiedOrDuplicatedFolderIsFoundAfterTheOperation() throws Exception {
+    FolderNode source = folderNode(DOCUMENT_ID);
+    source.setParentFolderId(FOLDER_ID);
+    FolderNode copied = folderNode("copy-folder");
+    FolderNode duplicated = folderNode("dup-folder");
+    duplicated.setName("Copy of Projects");
+    FileNode sameNamedFile = fileNodeNamed("file-1", "Projects");
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(source);
+    when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of())
+        .thenReturn(List.of(sameNamedFile, copied))
+        .thenReturn(List.of(source))
+        .thenReturn(List.of(source, duplicated));
+
+    assertEquals("copy-folder", documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID).getId());
+    assertEquals("dup-folder", documentMcpTool.duplicateDocument(DOCUMENT_ID, "Copy of").getId());
+  }
+
   @Test
   public void duplicateDocumentReturnsResolvedDuplicateNotParentFolder() throws Exception {
     // The storage duplicateDocument returns the PARENT FOLDER node (not the
@@ -1117,6 +1397,73 @@ public class DocumentMcpToolTest {
 
     verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
     verify(documentFileService).updateVersionSummary(eq(DOCUMENT_ID), eq("version-1"), eq("reworded intro"), eq(USERNAME));
+  }
+
+  /**
+   * A new version's inline content, text or base64, is capped at the size the
+   * url and the chat attachment are capped at: one byte over is refused before
+   * anything is stored, the limit itself is accepted.
+   * Mutants: the cap removed, applied to the text or to the base64 only, or
+   * off by one.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aNewVersionsInlineContentIsCapped() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    int limit = (int) UploadToolUtils.DEFAULT_MAX_BYTES;
+    String overText = "a".repeat(limit + 1);
+    String overBase64 = java.util.Base64.getEncoder().encodeToString(new byte[limit + 1]);
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, overText, null, null, null, null, null));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, overBase64, null, null, null, null));
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, "a".repeat(limit), null, null, null, null, null);
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
+  }
+
+  /**
+   * In a call limited to a space, a file the platform created for the space
+   * (creator {@code __system}) gets no new version, as the Documents
+   * application lets no space member who isn't an administrator edit it, and
+   * a file a user created does; a call that isn't limited versions either,
+   * and one whose space can't be read is refused.
+   * Mutants: the creator check removed from the versioning, run on an
+   * unlimited call, or an unreadable space taken as unlimited.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceVersionsNoFileOfThePlatform() throws Exception {
+    String userFileId = "fe0688cd7f00010134384ab7e1b15a52";
+    FileNode systemFile = fileNode(DOCUMENT_ID, "text/plain");
+    systemFile.setCreatorUserName("__system");
+    FileNode userFile = fileNode(userFileId, "text/plain");
+    userFile.setCreatorUserName("jane");
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(systemFile);
+    when(documentFileService.getDocumentById(userFileId, USERNAME)).thenReturn(userFile);
+    lenient().when(documentFileService.hasEditPermissionOnDocument(any(), eq(USER_IDENTITY_ID))).thenReturn(true);
+
+    scopeSpaceId = 12L;
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null));
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+    documentMcpTool.addDocumentVersion(userFileId, "body", null, null, null, null, null);
+    verify(documentFileService).createNewVersion(eq(userFileId), eq(USERNAME), any());
+
+    scopeSpaceId = null;
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(userFileId, "body", null, null, null, null, null));
+    verify(documentFileService, times(1)).createNewVersion(eq(userFileId), any(), any());
+
+    scopeUnreadable = false;
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null);
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
   }
 
   @Test

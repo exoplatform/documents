@@ -82,7 +82,9 @@ import org.exoplatform.wiki.WikiException;
 import org.exoplatform.wiki.model.Page;
 import org.exoplatform.wiki.service.NoteService;
 
+import io.meeds.mcp.server.model.ActingIdentity;
 import io.meeds.mcp.server.plugin.McpToolPlugin;
+import io.meeds.mcp.server.util.McpToolUtils;
 import io.meeds.mcp.server.tool.model.UserModel;
 import io.meeds.mcp.server.tool.util.UploadToolUtils;
 import io.meeds.mcp.server.tool.util.UserToolUtils;
@@ -128,6 +130,24 @@ public class DocumentMcpTool implements McpToolPlugin {
    * the app ever shows.
    */
   private static final String      FAVORITE_TYPE_FILE     = "file";
+
+  private static final String      MSG_DESTINATION_OUTSIDE_SCOPE_SPACE =
+                                                                       "The destination folder %s isn't in the space this call is limited to. Pick a folder of that space (get_root_folder_by_space, get_documents_by_folder_id).";
+
+  private static final String      MSG_SCOPE_UNREADABLE   =
+                                                          "The space this call is limited to can't be read, so it can't rename, move, copy, link, duplicate, hide or version a document";
+
+  private static final String      MSG_SYSTEM_NODE        =
+                                                          "The document %s was created by the platform for the space; a digital worker can't rename, move, copy, link, duplicate, hide or version it.";
+
+  private static final String      MSG_HIDE_FOLDER_ONLY   =
+                                                          "Only a folder can be hidden or shown; %s is a file.";
+
+  private static final String      MSG_CONTENT_TOO_LARGE  =
+                                                          "The new version content is %d bytes, over the %d bytes limit.";
+
+  /** The creator of the nodes the platform creates for a space. */
+  private static final String      SYSTEM_USER            = "__system";
 
   /**
    * Structured / binary office and PDF formats that cannot be produced from a
@@ -207,6 +227,77 @@ public class DocumentMcpTool implements McpToolPlugin {
     this.uploadService = uploadService;
     this.publicDocumentAccessService = publicDocumentAccessService;
     this.favoriteService = favoriteService;
+  }
+
+  /**
+   * @return the space the current call is limited to, null when it isn't
+   * @throws IllegalStateException when the call's identity can't be read
+   */
+  protected Long getScopeSpaceId() {
+    ActingIdentity identity = McpToolUtils.getCurrentActingIdentity();
+    return identity == null ? null : identity.spaceScope();
+  }
+
+  /**
+   * Checks the destination folder of a call limited to a space is in that
+   * space, by the same mapping the {@value DocumentSpaceScopeResolver#NAME}
+   * resolver gives the moved, copied or linked node: the space scope checks
+   * that node only, and the destination is a second node, so a move, a copy
+   * or a shortcut could otherwise take the node out of the space. A call that
+   * isn't limited is not checked; one whose space can't be read is refused.
+   *
+   * @param destinationFolderId the destination folder
+   * @throws IllegalAccessException when the call is limited to a space the
+   *           destination folder isn't in, or its space can't be read
+   */
+  private void checkDestinationInScopeSpace(String destinationFolderId) throws IllegalAccessException {
+    Long spaceId;
+    try {
+      spaceId = getScopeSpaceId();
+    } catch (IllegalStateException e) {
+      throw new IllegalAccessException(MSG_SCOPE_UNREADABLE);
+    }
+    if (spaceId == null) {
+      return;
+    }
+    Long destinationSpaceId = new DocumentSpaceScopeResolver(documentFileService, spaceService).spaceOf(destinationFolderId);
+    if (!spaceId.equals(destinationSpaceId)) {
+      throw new IllegalAccessException(MSG_DESTINATION_OUTSIDE_SCOPE_SPACE.formatted(destinationFolderId));
+    }
+  }
+
+  /**
+   * Checks a call limited to a space may rename, move, copy, link, duplicate,
+   * hide or version a node, as the Documents application lets a space member
+   * who isn't an administrator do: not a node the platform created for the space (creator
+   * {@value #SYSTEM_USER}), and, for a visibility change, a folder only. A call
+   * that isn't limited is not checked; one whose space can't be read is
+   * refused.
+   *
+   * @param documentId the node
+   * @param folderOnly true when only a folder may be changed
+   * @throws IllegalAccessException when the call is limited to a space and the
+   *           node was created by the platform, or isn't a folder when one is
+   *           required, or the call's space can't be read
+   * @throws ObjectNotFoundException when the node doesn't exist
+   */
+  private void checkScopedChange(String documentId, boolean folderOnly) throws IllegalAccessException,
+                                                                         ObjectNotFoundException {
+    Long spaceId;
+    try {
+      spaceId = getScopeSpaceId();
+    } catch (IllegalStateException e) {
+      throw new IllegalAccessException(MSG_SCOPE_UNREADABLE);
+    }
+    if (spaceId == null) {
+      return;
+    }
+    AbstractNode node = getNode(documentId);
+    if (SYSTEM_USER.equals(node.getCreatorUserName())) {
+      throw new IllegalAccessException(MSG_SYSTEM_NODE.formatted(documentId));
+    } else if (folderOnly && !(node instanceof FolderNode)) {
+      throw new IllegalAccessException(MSG_HIDE_FOLDER_ONLY.formatted(documentId));
+    }
   }
 
   public DocumentFolderModel getRootFolderBySpace(long spaceId) throws ObjectNotFoundException, IllegalAccessException {
@@ -668,11 +759,22 @@ public class DocumentMcpTool implements McpToolPlugin {
     return importContent(parentFolderId, fileName, bytes);
   }
 
+  /**
+   * Renames a file or a folder.
+   *
+   * @param documentId the file or folder
+   * @param newName its new name
+   * @throws IllegalAccessException when the user can't rename the node, or, in
+   *           a call limited to a space, the node was created by the platform
+   *           for the space or the call's space can't be read
+   * @throws ObjectNotFoundException when the node doesn't exist
+   */
   public void renameDocument(String documentId, String newName) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
     if (StringUtils.isBlank(newName)) {
       throw new IllegalArgumentException("The 'newName' parameter is mandatory to rename a document.");
     }
+    checkScopedChange(documentId, false);
     try {
       documentFileService.renameDocument(getOwnerId(documentId), documentId, newName, getCurrentUserIdentityId());
     } catch (ObjectAlreadyExistsException e) {
@@ -681,6 +783,20 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * Moves a file or a folder into another folder; in a call limited to a
+   * space, the destination folder must be in that space.
+   *
+   * @param documentId the file or folder to move
+   * @param destinationFolderId the destination folder
+   * @param conflictAction what to do when the destination holds a node of the
+   *          same name, {@code keepBoth} by default
+   * @throws IllegalAccessException when the user can't move the node there,
+   *           or, in a call limited to a space, the destination folder isn't in
+   *           that space, the node was created by the platform for the space,
+   *           or the call's space can't be read
+   * @throws ObjectNotFoundException when a node doesn't exist
+   */
   public void moveDocument(String documentId,
                            String destinationFolderId,
                            String conflictAction) throws IllegalAccessException, ObjectNotFoundException {
@@ -688,6 +804,8 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_document_by_id or get_documents_by_folder_id to find the target folder id.");
     }
+    checkDestinationInScopeSpace(destinationFolderId);
+    checkScopedChange(documentId, false);
     AbstractNode destination = getNode(destinationFolderId);
     try {
       documentFileService.moveDocument(getOwnerId(documentId),
@@ -700,32 +818,63 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * Copies a file into another folder; in a call limited to a space, the
+   * destination folder must be in that space.
+   *
+   * @param documentId the file to copy
+   * @param destinationFolderId the destination folder
+   * @return the copy
+   * @throws IllegalAccessException when the user can't copy the node there,
+   *           or, in a call limited to a space, the destination folder isn't in
+   *           that space, the node was created by the platform for the space,
+   *           or the call's space can't be read
+   * @throws ObjectNotFoundException when a node doesn't exist
+   */
   public DocumentModel copyDocument(String documentId,
                                     String destinationFolderId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_document_by_id or get_documents_by_folder_id to find the target folder id.");
     }
+    checkDestinationInScopeSpace(destinationFolderId);
+    checkScopedChange(documentId, false);
     // The storage copyDocument returns the DESTINATION folder node, not the copy,
-    // so snapshot the destination's file ids first and resolve the newly added
-    // file by NAME afterwards to return the actual copied document. The copy keeps
-    // the source's name (or, when copied into the source's own folder, gets a
-    // " (n)" counter suffix), so it is matched name-aware: this stays correct even
-    // if another file lands in the destination concurrently (a blind folder-diff
-    // would otherwise return the wrong document).
+    // so snapshot the destination's children of the source's kind first and
+    // resolve the newly added one by NAME afterwards to return the actual copied
+    // document or folder. The copy keeps the source's name, or gets a " (n)"
+    // counter suffix when the destination already holds that name, so it is
+    // matched name-aware: this stays correct even if another node lands in the
+    // destination concurrently (a blind folder-diff would otherwise return the
+    // wrong document).
     AbstractNode source = getNode(documentId);
     String expectedName = source.getName();
-    Set<String> beforeFileIds = currentChildFileIds(destinationFolderId);
+    Class<? extends AbstractNode> kind = kindOf(source);
+    Set<String> beforeIds = currentChildIds(destinationFolderId, kind);
     documentFileService.copyDocument(documentId, destinationFolderId, getCurrentUserIdentityId());
-    return requireResolvedChildFile(destinationFolderId, beforeFileIds, expectedName, "copied");
+    return requireResolvedChild(destinationFolderId, beforeIds, expectedName, kind, "copied");
   }
 
+  /**
+   * Duplicates a file or a folder in its own folder, with an optional prefix
+   * and a " (n)" counter, and returns the duplicate.
+   *
+   * @param documentId the file or folder to duplicate
+   * @param prefix an optional prefix of the duplicate's name
+   * @return the duplicate, a file or a folder like the source
+   * @throws IllegalAccessException when the user can't read or duplicate the
+   *           node, or, in a call limited to a space, the node was created by
+   *           the platform for the space or the call's space can't be read
+   * @throws ObjectNotFoundException when the node doesn't exist
+   */
   public DocumentModel duplicateDocument(String documentId,
                                          String prefix) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
+    checkScopedChange(documentId, false);
     // The storage duplicateDocument returns the PARENT folder node, not the
-    // duplicate, so snapshot the parent's file ids first and resolve the newly
-    // added file by NAME afterwards to return the actual duplicate. The duplicate
+    // duplicate, so snapshot the parent's children of the source's kind first and
+    // resolve the newly added node by NAME afterwards to return the actual
+    // duplicate. The duplicate
     // is named "[<prefix> ]<source name>" with a " (n)" counter appended on a name
     // clash (there is always at least one, since the source itself is present), so
     // it is matched name-aware to stay correct under a concurrent add.
@@ -742,9 +891,10 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                            getCurrentUserIdentityId());
       return toDocumentModel(duplicateReturn);
     }
-    Set<String> beforeFileIds = currentChildFileIds(parentFolderId);
+    Class<? extends AbstractNode> kind = kindOf(source);
+    Set<String> beforeIds = currentChildIds(parentFolderId, kind);
     documentFileService.duplicateDocument(getOwnerId(documentId), documentId, prefix, getCurrentUserIdentityId());
-    return requireResolvedChildFile(parentFolderId, beforeFileIds, expectedName, "duplicated");
+    return requireResolvedChild(parentFolderId, beforeIds, expectedName, kind, "duplicated");
   }
 
   public void deleteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
@@ -805,12 +955,26 @@ public class DocumentMcpTool implements McpToolPlugin {
     return toVersionModel(full);
   }
 
+  /**
+   * Hides a file or a folder from the listings, or shows it again; hiding a
+   * folder may also hide some of its direct children. In a call limited to a
+   * space, only a folder the platform didn't create for the space.
+   *
+   * @param documentId the file or folder
+   * @param hidden true to hide it, false to show it
+   * @throws IllegalAccessException in a call limited to a space, when the node
+   *           is a file or was created by the platform, or the call's space
+   *           can't be read
+   * @throws IllegalStateException when the storage refuses the change, the
+   *           user's refused access included, which it reports wrapped
+   */
   @SneakyThrows
   public void setDocumentVisibility(String documentId, Boolean hidden) throws IllegalAccessException {
     checkDocumentIdParameter(documentId);
     if (hidden == null) {
       throw new IllegalArgumentException("The 'hidden' parameter is mandatory (true to hide the document, false to make it visible).");
     }
+    checkScopedChange(documentId, true);
     documentFileService.setDocumentVisibility(getOwnerId(documentId), documentId, hidden, getCurrentUserIdentityId());
   }
 
@@ -841,6 +1005,10 @@ public class DocumentMcpTool implements McpToolPlugin {
    *          chat; set automatically by the client — do not fill it from the model
    * @param versionSummary an optional change note stored on the new version
    * @return the updated document (with its refreshed size / modification info)
+   * @throws IllegalAccessException when the user can't edit the file, or, in a
+   *           call limited to a space, the file was created by the platform
+   *           for the space, or the call's space can't be read
+   * @throws ObjectNotFoundException when the file doesn't exist
    */
   public DocumentModel addDocumentVersion(String documentId,
                                           String content,
@@ -854,6 +1022,7 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalArgumentException("Only a file can have versions; the id %s points to a folder. Provide a file document_id."
           .formatted(documentId));
     }
+    checkScopedChange(documentId, false);
     if (!documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId())) {
       throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot add a new version to it."
           .formatted(documentId));
@@ -926,6 +1095,11 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param conflictAction behaviour when a node with the same name already exists
    *          in the destination; only 'keepBoth' is honoured, defaults to
    *          'keepBoth'
+   * @throws IllegalAccessException when the user can't read the nodes, or, in
+   *           a call limited to a space, the destination folder isn't in that
+   *           space, the node was created by the platform for the space, or the
+   *           call's space can't be read
+   * @throws ObjectNotFoundException when a node doesn't exist
    */
   public void createDocumentShortcut(String documentId,
                                      String destinationFolderId,
@@ -934,6 +1108,8 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_documents_by_folder_id or get_root_folder_for_user to find the target folder id.");
     }
+    checkDestinationInScopeSpace(destinationFolderId);
+    checkScopedChange(documentId, false);
     // Validate the source and the destination folder exist and are readable by
     // the user before touching the JCR storage.
     checkCanAccessDocument(documentId);
@@ -1124,7 +1300,19 @@ public class DocumentMcpTool implements McpToolPlugin {
    * Resolves the raw bytes for a new file version from exactly one of the
    * supported sources (chat text, base64, url or a chat attachment), reusing
    * {@code upload_document}'s attachment/url resolution so the same ACL and SSRF
-   * guards apply.
+   * guards apply. Every source is capped at
+   * {@code UploadToolUtils.DEFAULT_MAX_BYTES}.
+   *
+   * @param content chat text
+   * @param base64 base64-encoded bytes
+   * @param url an http(s) url
+   * @param attachmentObjectType the chat attachment's object type
+   * @param attachmentObjectId the chat attachment's object id
+   * @return the bytes
+   * @throws IllegalArgumentException when not exactly one source is given, or
+   *           the content is over the limit
+   * @throws IllegalAccessException when the attachment can't be read
+   * @throws ObjectNotFoundException when the attachment doesn't exist
    */
   private byte[] resolveContentBytes(String content,
                                      String base64,
@@ -1146,10 +1334,12 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalArgumentException("Provide the new version content from only one source: 'content', 'base64', 'url' or the chat attachment — not several.");
     }
     try {
-      if (hasContent) {
-        return content.getBytes(StandardCharsets.UTF_8);
-      } else if (hasBase64) {
-        return UploadToolUtils.decodeBase64(base64);
+      if (hasContent || hasBase64) {
+        byte[] bytes = hasContent ? content.getBytes(StandardCharsets.UTF_8) : UploadToolUtils.decodeBase64(base64);
+        if (bytes.length > UploadToolUtils.DEFAULT_MAX_BYTES) {
+          throw new IllegalArgumentException(MSG_CONTENT_TOO_LARGE.formatted(bytes.length, UploadToolUtils.DEFAULT_MAX_BYTES));
+        }
+        return bytes;
       } else if (hasAttachment) {
         return UploadToolUtils.resolveImage(socialAttachmentService,
                                             fileService,
@@ -1432,16 +1622,49 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Lists the file ids currently under a folder, used to snapshot a destination
-   * before an operation that adds a file (import / copy / duplicate) so the newly
-   * created node can be identified afterwards.
+   * before an import adds a file, so the newly created node can be identified
+   * afterwards.
+   *
+   * @param folderId the folder
+   * @return the ids of its child files
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read it
    */
   private Set<String> currentChildFileIds(String folderId) throws ObjectNotFoundException, IllegalAccessException {
+    return currentChildIds(folderId, FileNode.class);
+  }
+
+  /**
+   * Lists the ids of the children of one kind currently under a folder, used
+   * to snapshot a destination before an operation that adds a node of that
+   * kind (import, copy, duplicate) so the newly created node can be identified
+   * afterwards.
+   *
+   * @param folderId the folder
+   * @param kind {@link FileNode} or {@link FolderNode}, the kind of the added
+   *          node
+   * @return the ids of its children of that kind
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read it
+   */
+  private Set<String> currentChildIds(String folderId,
+                                      Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
+                                                                          IllegalAccessException {
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
     return documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE, getCurrentUserIdentityId())
                               .stream()
-                              .filter(FileNode.class::isInstance)
+                              .filter(kind::isInstance)
                               .map(AbstractNode::getId)
                               .collect(java.util.stream.Collectors.toSet());
+  }
+
+  /**
+   * @param node a file or a folder
+   * @return {@link FolderNode} for a folder, {@link FileNode} otherwise: the
+   *         kind of node a copy or a duplicate of it adds
+   */
+  private static Class<? extends AbstractNode> kindOf(AbstractNode node) {
+    return node instanceof FolderNode ? FolderNode.class : FileNode.class;
   }
 
   /**
@@ -1468,15 +1691,37 @@ public class DocumentMcpTool implements McpToolPlugin {
                                               Set<String> beforeFileIds,
                                               String expectedName) throws ObjectNotFoundException,
                                                                    IllegalAccessException {
+    return resolveAddedChild(folderId, beforeFileIds, expectedName, FileNode.class);
+  }
+
+  /**
+   * Resolves the node of one kind just added to a folder, as
+   * {@link #resolveAddedChildFile} does for a file: the child of that kind
+   * whose id is not in the pre-operation snapshot and whose name matches the
+   * expected created name.
+   *
+   * @param folderId the folder to resolve the created node in
+   * @param beforeIds the folder's ids of that kind snapshotted before the
+   *          operation
+   * @param expectedName the name the created node is expected to carry
+   * @param kind {@link FileNode} or {@link FolderNode}
+   * @return the resolved created node, or {@code null} if none matches yet
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read it
+   */
+  private DocumentModel resolveAddedChild(String folderId,
+                                          Set<String> beforeIds,
+                                          String expectedName,
+                                          Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
+                                                                              IllegalAccessException {
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
     List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE,
                                                                           getCurrentUserIdentityId());
-    List<FileNode> candidates = children.stream()
-                                        .filter(FileNode.class::isInstance)
-                                        .map(FileNode.class::cast)
-                                        .filter(file -> !beforeFileIds.contains(file.getId()))
-                                        .filter(file -> nameMatchesExpected(file.getName(), expectedName))
-                                        .toList();
+    List<AbstractNode> candidates = children.stream()
+                                            .filter(kind::isInstance)
+                                            .filter(node -> !beforeIds.contains(node.getId()))
+                                            .filter(node -> nameMatchesExpected(node.getName(), expectedName))
+                                            .toList();
     if (candidates.isEmpty()) {
       return null;
     }
@@ -1484,29 +1729,34 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalStateException(("Could not unambiguously resolve the created document in folder %s "
           + "(multiple candidates matched '%s'); please retry.").formatted(folderId, expectedName));
     }
-    return toDocumentFileModel(candidates.get(0));
+    return toDocumentModel(candidates.get(0));
   }
 
   /**
-   * Resolves the single file added to a folder by a synchronous operation
-   * (copy / duplicate) and fails clearly when it cannot be found, rather than
-   * returning the storage's folder node or silently guessing. The ambiguity guard
-   * (more than one match) is enforced by {@link #resolveAddedChildFile}; a
-   * {@code null} here means no added file matched the expected name, which is
-   * surfaced as an actionable error instead of a wrong document.
+   * Resolves the single file or folder added to a folder by a synchronous
+   * operation (copy / duplicate) and fails clearly when it cannot be found,
+   * rather than returning the storage's folder node or silently guessing. The
+   * ambiguity guard (more than one match) is enforced by
+   * {@link #resolveAddedChild}; a {@code null} here means no added node matched
+   * the expected name, which is surfaced as an actionable error instead of a
+   * wrong document.
    *
-   * @param folderId the folder the operation added a file to
-   * @param beforeFileIds the folder's file ids snapshotted before the operation
-   * @param expectedName the expected name of the created file
+   * @param folderId the folder the operation added a node to
+   * @param beforeIds the folder's ids of that kind snapshotted before the
+   *          operation
+   * @param expectedName the expected name of the created node
+   * @param kind {@link FileNode} or {@link FolderNode}, the kind of the
+   *          created node
    * @param operation a short label for the operation ("copied" / "duplicated"),
    *          used only in the error message
    * @return the resolved created document (never {@code null})
    */
-  private DocumentModel requireResolvedChildFile(String folderId,
-                                                 Set<String> beforeFileIds,
-                                                 String expectedName,
-                                                 String operation) throws ObjectNotFoundException, IllegalAccessException {
-    DocumentModel resolved = resolveAddedChildFile(folderId, beforeFileIds, expectedName);
+  private DocumentModel requireResolvedChild(String folderId,
+                                             Set<String> beforeIds,
+                                             String expectedName,
+                                             Class<? extends AbstractNode> kind,
+                                             String operation) throws ObjectNotFoundException, IllegalAccessException {
+    DocumentModel resolved = resolveAddedChild(folderId, beforeIds, expectedName, kind);
     if (resolved == null) {
       throw new IllegalStateException(("Could not locate the %s document '%s' in folder %s after the operation. "
           + "Call list_folder_children on that folder to find it.").formatted(operation, expectedName, folderId));

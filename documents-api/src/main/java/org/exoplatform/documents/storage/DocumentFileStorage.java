@@ -406,6 +406,20 @@ public interface DocumentFileStorage {
   }
 
   /**
+   * Tells which space drive holds a node itself, read as the system. A
+   * shortcut or a share link ({@code exo:symlink}) isn't the node it points
+   * to: it holds nothing of its own, so it belongs to no space here.
+   *
+   * @param documentId the node id
+   * @return the group id ({@code /spaces/<name>}) of the space whose
+   *         {@code Documents} drive holds the node, or null when the node is
+   *         missing, is a shortcut or a share link, lies outside a space's
+   *         {@code Documents} drive (a personal drive, the trash, any other
+   *         place), or can't be read
+   */
+  String getDocumentSpaceGroupId(String documentId);
+
+  /**
    * Retrieves a document content By its Id
    *
    * @param documentId  target file node id

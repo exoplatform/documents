@@ -827,6 +827,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getDocumentById(documentId);
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getDocumentSpaceGroupId(String documentId) {
+    return documentFileStorage.getDocumentSpaceGroupId(documentId);
+  }
+
   @Override
   public String getDocumentPathInDrive(String documentId,
                                        long ownerId,

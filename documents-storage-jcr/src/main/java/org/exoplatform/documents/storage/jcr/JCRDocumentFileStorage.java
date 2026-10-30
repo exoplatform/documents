@@ -28,6 +28,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.jcr.*;
@@ -227,6 +229,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final Log                          LOG                         =
                                                         ExoLogger.getLogger(JCRDocumentFileStorage.class);
+
+  /** A node path in the {@code Documents} drive of a space, the space's group name captured. */
+  private static final Pattern                      SPACE_DRIVE_PATH            = Pattern.compile("/Groups/spaces/([^/\\[\\]]+)/Documents(?:/.*)?");
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -1630,8 +1635,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * Copies a node under {@code destinationNode}, recursing into a folder's
    * children.
    * <p>
-   * When the destination is the source's own parent the copy cannot keep the
-   * source's name, so a {@code " (n)"} counter is appended, {@code n} being the
+   * When the destination already holds a node of the source's name - always
+   * the case for a copy into the source's own parent, and for a copy into
+   * another folder that holds a node of the same name - the copy cannot keep
+   * that name, so a {@code " (n)"} counter is appended, {@code n} being the
    * first free index. For a file the counter is inserted <em>before</em> the
    * extension - {@code report (1).docx}, never {@code report.docx (1)}, which is
    * no longer recognised as a .docx and does not open - through the same
@@ -1642,8 +1649,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @param oldNode the node to copy
    * @param destinationNode the node the copy is added under
    * @param parentNode the source's parent, compared against the destination to
-   *          decide whether a counter is needed
-   * @param prefixClone optional prefix prepended to the copy's name and title
+   *          decide whether the copy is an in-place duplicate, which takes the
+   *          prefix and a lower-cased name
+   * @param prefixClone optional prefix prepended to an in-place duplicate's
+   *          name and title
    * @return the newly created node, or null for a thumbnails folder
    * @throws RepositoryException if the repository cannot be read or written
    * @throws UnsupportedEncodingException if the name cannot be URL-decoded
@@ -1667,32 +1676,34 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String title =
                  oldNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? oldNode.getProperty(NodeTypeConstants.EXO_TITLE).getString() :
                                                                   oldNode.getName();
-    if (((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier())) {
-      if (StringUtils.isNotEmpty(prefixClone)) {
-        name = prefixClone.concat(" ").concat(name);
-        title = prefixClone.concat(" ").concat(title);
-      }
-      // A file's counter goes before the extension, a folder's at the end: see the
-      // method javadoc. Both sides use one index so the node name and the title a
-      // user sees stay in step. A dot at index 0 is not an extension separator but a
-      // hidden-file marker (".gitignore"), and splitting there would yield a name
-      // beginning with the counter, so those keep the trailing form - the same
-      // "dot > 0" guard cleanNameWithAccents applies.
-      boolean beforeExtension = !isFolder(oldNode) && name.lastIndexOf('.') > 0;
-      String newName = name;
-      int i = 0;
-      while ((destinationNode.hasNode(newName))) {
-        i++;
-        newName = beforeExtension ? getNewIndexedName(name, " (" + i + ")") : name + " (" + i + ")";
-      }
-      name = newName.toLowerCase();
-      if (i > 0) {
-        title = beforeExtension ? getNewIndexedName(title, " (" + i + ")") : title + " (" + i + ")";
-      }
+    boolean inPlace = ((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier());
+    if (inPlace && StringUtils.isNotEmpty(prefixClone)) {
+      name = prefixClone.concat(" ").concat(name);
+      title = prefixClone.concat(" ").concat(title);
     }
-    name = URLDecoder.decode(name, "UTF-8");
-    if (oldNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
-      newNode = destinationNode.addNode(name.toLowerCase(), NodeTypeConstants.NT_FOLDER);
+    // A file's counter goes before the extension, a folder's at the end: see the
+    // method javadoc. Both sides use one index so the node name and the title a
+    // user sees stay in step. A dot at index 0 is not an extension separator but a
+    // hidden-file marker (".gitignore"), and splitting there would yield a name
+    // beginning with the counter, so those keep the trailing form - the same
+    // "dot > 0" guard cleanNameWithAccents applies.
+    boolean beforeExtension = !isFolder(oldNode) && name.lastIndexOf('.') > 0;
+    // A name is taken when the destination holds it as it is (the source itself,
+    // for an in-place duplicate) or as the node is added under, which addedName
+    // computes for both the probe and addNode.
+    boolean folder = oldNode.isNodeType(NodeTypeConstants.NT_FOLDER);
+    String newName = name;
+    int i = 0;
+    while (destinationNode.hasNode(newName) || destinationNode.hasNode(addedName(newName, inPlace, folder))) {
+      i++;
+      newName = beforeExtension ? getNewIndexedName(name, " (" + i + ")") : name + " (" + i + ")";
+    }
+    name = addedName(newName, inPlace, folder);
+    if (i > 0) {
+      title = beforeExtension ? getNewIndexedName(title, " (" + i + ")") : title + " (" + i + ")";
+    }
+    if (folder) {
+      newNode = destinationNode.addNode(name, NodeTypeConstants.NT_FOLDER);
       newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
       NodeIterator nodeIterator = oldNode.getNodes();
       while (nodeIterator.hasNext()) {
@@ -1704,6 +1715,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       addProperties(oldNode, newNode, title);
     }
     return newNode;
+  }
+
+  /**
+   * @param name the name a copy is given, counter included
+   * @param inPlace true for a copy into the source's own folder
+   * @param folder true for an {@code nt:folder}
+   * @return the name the copy's node is added under: lower-cased for an
+   *         in-place copy, then URL-decoded, then lower-cased for an
+   *         {@code nt:folder}, so a percent-escape of an upper-case letter is
+   *         lower-cased too
+   * @throws UnsupportedEncodingException never, UTF-8 being supported
+   */
+  private static String addedName(String name, boolean inPlace, boolean folder) throws UnsupportedEncodingException {
+    String decoded = URLDecoder.decode(inPlace ? name.toLowerCase() : name, "UTF-8");
+    return folder ? decoded.toLowerCase() : decoded;
   }
 
   private void addProperties(Node oldNode, Node newNode, String title) throws RepositoryException {
@@ -2697,6 +2723,39 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       LOG.debug("Drive of owner {} is not accessible to user {}", ownerIdentity.getId(), username, e);
       return null;
     }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getDocumentSpaceGroupId(String documentId) {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node == null || node.isNodeType(NodeTypeConstants.EXO_SYMLINK) || node.isNodeType(NodeTypeConstants.TAXONOMY_LINK)) {
+        return null;
+      }
+      return spaceGroupIdOfDrivePath(node.getPath());
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.debug("The space of document '{}' couldn't be read", documentId, e);
+      return null;
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * @param path a node path
+   * @return the group id ({@code /spaces/<name>}) of the space whose
+   *         {@code Documents} drive the path is, or lies in, null for any
+   *         other path
+   */
+  static String spaceGroupIdOfDrivePath(String path) {
+    Matcher matcher = path == null ? null : SPACE_DRIVE_PATH.matcher(path);
+    return matcher != null && matcher.matches() ? "/spaces/" + matcher.group(1) : null;
   }
 
   @Override

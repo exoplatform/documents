@@ -508,8 +508,8 @@ public class JCRDocumentFileStorageTest {
     when(parentNode.getIdentifier()).thenReturn("1");
     when(currentNode.getPath()).thenReturn("/Documents/Private");
     when(parentNode.getPath()).thenReturn("/Documents/Private/user/2026.Q1 reports");
-    when(parentNode.hasNode("2026.Q1 reports")).thenReturn(true);
-    when(parentNode.hasNode("2026.Q1 reports (1)")).thenReturn(false);
+    when(parentNode.hasNode("2026.q1 reports")).thenReturn(true);
+    when(parentNode.hasNode("2026.q1 reports (1)")).thenReturn(false);
     when(parentNode.addNode(anyString(), anyString())).thenReturn(currentNode);
     // A folder recurses into its children; this one has none.
     when(currentNode.getNodes()).thenReturn(emptyChildren);
@@ -558,6 +558,426 @@ public class JCRDocumentFileStorageTest {
     when(destinationNode.addNode("nodeName", "nt:file")).thenReturn(node);
     jcrDocumentFileStorage.copyDocument("1", "2", userID);
     verify(sessionProvider, times(3)).close();
+  }
+
+  /**
+   * A copy into another folder that already holds a file of the source's name
+   * gets the same {@code " (n)"} counter as an in-place duplicate, before the
+   * extension, on its node name and its title, and keeps the source's case and
+   * no prefix.
+   * Mutants: the counter limited to an in-place copy again, or the copy's name
+   * lower-cased like an in-place duplicate.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void copyIntoAnotherFolderHoldingTheSameNameGetsTheCopyCounter() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("Report.docx");
+    when(sourceNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(sourceNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("Report.docx");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Report.docx");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("Report.docx")).thenReturn(true);
+    when(destinationNode.hasNode("Report (1).docx")).thenReturn(false);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("Report (1).docx", NodeTypeConstants.NT_FILE);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Report (1).docx");
+  }
+
+  /**
+   * A prefixed duplicate of a folder prefixes the folder only: its children
+   * are copied under their own names into the new folder.
+   * Mutant: the prefix applied to every copied node, not only to the
+   * in-place duplicate.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aPrefixedFolderDuplicateKeepsItsChildrensNames() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl folderNode = mock(NodeImpl.class);
+    NodeImpl parentNode = mock(NodeImpl.class);
+    NodeImpl newFolder = mock(NodeImpl.class);
+    NodeImpl childNode = mock(NodeImpl.class);
+    NodeImpl newChild = mock(NodeImpl.class);
+    NodeType folderType = mock(NodeType.class);
+    NodeType fileType = mock(NodeType.class);
+    NodeIterator children = mock(NodeIterator.class);
+    NodeIterator noChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(folderNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(folderNode.getName()).thenReturn("contracts");
+    when(folderNode.getPrimaryNodeType()).thenReturn(folderType);
+    when(folderType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(folderNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folderNode.getParent()).thenReturn(parentNode);
+    when(folderNode.getPath()).thenReturn("/Documents/contracts");
+    when(parentNode.getPath()).thenReturn("/Documents");
+    when(parentNode.getIdentifier()).thenReturn("10");
+    when(parentNode.addNode(anyString(), anyString())).thenReturn(newFolder);
+    when(newFolder.getIdentifier()).thenReturn("20");
+    when(newFolder.getPath()).thenReturn("/Documents/copy contracts");
+    when(folderNode.getNodes()).thenReturn(children);
+    when(children.hasNext()).thenReturn(true, false);
+    when(children.nextNode()).thenReturn(childNode);
+    when(childNode.getName()).thenReturn("nda.txt");
+    when(childNode.getPrimaryNodeType()).thenReturn(fileType);
+    when(fileType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(childNode.getParent()).thenReturn(folderNode);
+    when(childNode.getPath()).thenReturn("/Documents/contracts/nda.txt");
+    when(newFolder.addNode(anyString(), anyString())).thenReturn(newChild);
+    lenient().when(newChild.getNodes()).thenReturn(noChildren);
+
+    jcrDocumentFileStorage.duplicateDocument(1L, "1", "copy", userID);
+
+    verify(parentNode).addNode("copy contracts", NodeTypeConstants.NT_FOLDER);
+    verify(newFolder).addNode("nda.txt", NodeTypeConstants.NT_FILE);
+  }
+
+  /**
+   * A folder copied into another folder that already holds a folder of the
+   * same name in another case gets the copy counter: a folder is added under
+   * its lower-cased name, so the clash is probed on that name, not on the
+   * source's mixed-case one, which no node holds.
+   * Mutant: the probe on the name as it is.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aMixedCaseFolderCopiedOntoItsLowerCaseNameGetsTheCopyCounter() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    NodeType nodeType = mock(NodeType.class);
+    NodeIterator noChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("Reports");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Reports");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("reports")).thenReturn(true);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+    when(sourceNode.getNodes()).thenReturn(noChildren);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("reports (1)", NodeTypeConstants.NT_FOLDER);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Reports (1)");
+  }
+
+  /**
+   * The copy counter takes a name as taken when the destination holds it as
+   * it is or as the node is added under. An in-place duplicate of a
+   * mixed-case file finds the source itself, then its earlier lower-cased
+   * duplicate ({@code report (1).docx}), and is added as
+   * {@code report (2).docx}; an escaped folder name ({@code 50%25 plan}) is
+   * added URL-decoded, so it clashes with the decoded one.
+   * Mutants: the probe on the name as it is only, on the added name only, the
+   * in-place half of the lower-casing dropped, or the probe on the escaped
+   * name.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void theCopyCounterProbesTheDecodedLowerCasedName() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl fileNode = mock(NodeImpl.class);
+    NodeImpl folderNode = mock(NodeImpl.class);
+    NodeImpl parentNode = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    NodeType fileType = mock(NodeType.class);
+    NodeType folderType = mock(NodeType.class);
+    NodeIterator noChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(fileNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "3")).thenReturn(folderNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(fileNode.getName()).thenReturn("Report.docx");
+    when(fileNode.getPrimaryNodeType()).thenReturn(fileType);
+    when(fileType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(fileNode.getParent()).thenReturn(parentNode);
+    when(fileNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Report.docx");
+    when(parentNode.getIdentifier()).thenReturn("10");
+    when(parentNode.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(parentNode.hasNode("Report.docx")).thenReturn(true);
+    when(parentNode.hasNode("report (1).docx")).thenReturn(true);
+    when(parentNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.duplicateDocument(1L, "1", "", userID);
+
+    verify(parentNode).addNode("report (2).docx", NodeTypeConstants.NT_FILE);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Report (2).docx");
+
+    Property folderTitle = mock(Property.class);
+    when(folderNode.getName()).thenReturn("50%25 plan");
+    when(folderNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(folderNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(folderTitle);
+    when(folderTitle.getString()).thenReturn("50% plan");
+    when(folderNode.getPrimaryNodeType()).thenReturn(folderType);
+    when(folderType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(folderNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folderNode.getParent()).thenReturn(parentNode);
+    when(folderNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/50%25 plan");
+    when(folderNode.getNodes()).thenReturn(noChildren);
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("50% plan")).thenReturn(true);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.copyDocument("3", "2", userID);
+
+    verify(destinationNode).addNode("50% plan (1)", NodeTypeConstants.NT_FOLDER);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "50% plan (1)");
+  }
+
+  /**
+   * An {@code nt:unstructured} folder copied into another folder that already
+   * holds its name gets the trailing copy counter on its node name and its
+   * title, and keeps its case: unlike an {@code nt:folder}, it is added under
+   * its name as it is.
+   * Mutants: the counter before a dot of the folder name, the counter on the
+   * name but not the title, or an {@code nt:unstructured} folder lower-cased
+   * like an {@code nt:folder}.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUnstructuredFolderCopiedOntoItsNameGetsTheCopyCounter() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("Q1.Reports");
+    when(sourceNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(sourceNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("Q1.Reports");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_UNSTRUCTURED);
+    when(sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)).thenReturn(true);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Q1.Reports");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("Q1.Reports")).thenReturn(true);
+    when(destinationNode.hasNode("q1.reports")).thenReturn(true);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("Q1.Reports (1)", NodeTypeConstants.NT_UNSTRUCTURED);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Q1.Reports (1)");
+  }
+
+  /**
+   * A folder whose name escapes an upper-case letter ({@code %C3%89t%C3%A9})
+   * is added URL-decoded then lower-cased ({@code été}), so the copy counter
+   * probes that name: the destination holding {@code été} and
+   * {@code été (1)}, the copy is added as {@code été (2)}.
+   * Mutant: the probe lower-cases before decoding, finds {@code Été}, which
+   * no node holds, and adds {@code été} again.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anEscapedUpperCaseFolderNameIsProbedAsItIsAdded() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    NodeIterator noChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("%C3%89t%C3%A9");
+    when(sourceNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(sourceNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("Été");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/%C3%89t%C3%A9");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("été")).thenReturn(true);
+    when(destinationNode.hasNode("été (1)")).thenReturn(true);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+    when(sourceNode.getNodes()).thenReturn(noChildren);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("été (2)", NodeTypeConstants.NT_FOLDER);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Été (2)");
+  }
+
+  /**
+   * A file copied into another folder keeps its name and title when that
+   * folder holds only its lower-cased name: a file copied out of place is
+   * added under its name as it is, so the lower-cased one is no clash.
+   * Mutant: every copy probed lower-cased.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileCopiedNextToItsLowerCasedNameKeepsItsName() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("Report.docx");
+    when(sourceNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(sourceNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("Report.docx");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Report.docx");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("report.docx")).thenReturn(true);
+    when(destinationNode.hasNode("Report.docx")).thenReturn(false);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("Report.docx", NodeTypeConstants.NT_FILE);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Report.docx");
   }
 
   @Test
@@ -2045,6 +2465,106 @@ public class JCRDocumentFileStorageTest {
     assertEquals(2, categoryIds.size());
     assertTrue(categoryIds.containsAll(List.of(3L, 5L)));
     verify(sessionProvider, times(1)).close();
+  }
+
+  /**
+   * The group id comes from the path of a node of a space's {@code Documents}
+   * drive, the drive root included, and from nothing else: a personal drive,
+   * another folder of the space, a name that only starts like the drive, a
+   * same-name-sibling index, a nested space path and a null path give none.
+   * Mutants: the {@code Documents} segment dropped from the pattern; the
+   * pattern unanchored (a path that merely contains a drive).
+   */
+  @Test
+  public void spaceGroupIdOfDrivePathAcceptsTheDriveOfASpaceOnly() {
+    assertEquals("/spaces/team", JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documents"));
+    assertEquals("/spaces/team", JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documents/a/b.txt"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Pages/x"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documentsx"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documents[2]/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team[2]/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/platform/administrators/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Users/j___/jo___/john/Private/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Trash/a/Groups/spaces/team/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces//Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath(null));
+  }
+
+  /**
+   * A node of a space's drive tells its space, as the system. Mutant: the
+   * path read from another node.
+   */
+  @Test
+  public void documentSpaceGroupIdOfANodeOfASpaceDrive() throws Exception {
+    Session session = systemSessionForSpaceGroupId();
+    Node node = mock(Node.class);
+    when(node.getPath()).thenReturn("/Groups/spaces/team/Documents/reports/q3.txt");
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "abc")).thenReturn(node);
+
+    assertEquals("/spaces/team", jcrDocumentFileStorage.getDocumentSpaceGroupId("abc"));
+  }
+
+  /**
+   * A shortcut or a share link inside a space's drive belongs to no space: it
+   * stands for a node that may lie anywhere. Mutants: the {@code exo:symlink}
+   * check removed; the {@code exo:taxonomyLink} check removed.
+   */
+  @Test
+  public void documentSpaceGroupIdOfAShortcutIsNone() throws Exception {
+    Session session = systemSessionForSpaceGroupId();
+    Node shortcut = mock(Node.class);
+    Node taxonomyLink = mock(Node.class);
+    when(shortcut.getPath()).thenReturn("/Groups/spaces/team/Documents/Shared/q3.txt");
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    when(taxonomyLink.getPath()).thenReturn("/Groups/spaces/team/Documents/links/q3.txt");
+    when(taxonomyLink.isNodeType(NodeTypeConstants.TAXONOMY_LINK)).thenReturn(true);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "shortcut")).thenReturn(shortcut);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "taxonomy")).thenReturn(taxonomyLink);
+
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("shortcut"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("taxonomy"));
+  }
+
+  /**
+   * A node of a personal drive, of the trash, outside any drive, a missing
+   * node and a repository that fails give no space, and the session is closed
+   * each time.
+   */
+  @Test
+  public void documentSpaceGroupIdOfAnythingElseIsNone() throws Exception {
+    Session session = systemSessionForSpaceGroupId();
+    Node personal = mock(Node.class);
+    Node trashed = mock(Node.class);
+    Node failing = mock(Node.class);
+    when(personal.getPath()).thenReturn("/Users/j___/jo___/john/Private/Documents/a");
+    when(trashed.getPath()).thenReturn("/Trash/a");
+    when(failing.getPath()).thenThrow(new RepositoryException("down"));
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "personal")).thenReturn(personal);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "trashed")).thenReturn(trashed);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "failing")).thenReturn(failing);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "missing")).thenReturn(null);
+
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("personal"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("trashed"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("failing"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("missing"));
+    verify(sessionProviderOfSpaceGroupId, times(4)).close();
+  }
+
+  private SessionProvider sessionProviderOfSpaceGroupId;
+
+  /**
+   * @return the system session the space group id is read with
+   */
+  private Session systemSessionForSpaceGroupId() throws Exception {
+    Session session = mock(Session.class);
+    sessionProviderOfSpaceGroupId = mock(SessionProvider.class);
+    ManageableRepository repository = mock(ManageableRepository.class);
+    when(SessionProvider.createSystemProvider()).thenReturn(sessionProviderOfSpaceGroupId);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(sessionProviderOfSpaceGroupId.getSession("collaboration", repository)).thenReturn(session);
+    return session;
   }
 
   private Value categoryValue(String value) throws Exception {
