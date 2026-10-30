@@ -803,6 +803,65 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * A folder whose name escapes an upper-case letter ({@code %C3%89t%C3%A9})
+   * is added URL-decoded then lower-cased ({@code été}), so the copy counter
+   * probes that name: the destination holding {@code été} and
+   * {@code été (1)}, the copy is added as {@code été (2)}.
+   * Mutant: the probe lower-cases before decoding, finds {@code Été}, which
+   * no node holds, and adds {@code été} again.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anEscapedUpperCaseFolderNameIsProbedAsItIsAdded() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    NodeIterator noChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("%C3%89t%C3%A9");
+    when(sourceNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(sourceNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("Été");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/%C3%89t%C3%A9");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("été")).thenReturn(true);
+    when(destinationNode.hasNode("été (1)")).thenReturn(true);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+    when(sourceNode.getNodes()).thenReturn(noChildren);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("été (2)", NodeTypeConstants.NT_FOLDER);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Été (2)");
+  }
+
+  /**
    * A file copied into another folder keeps its name and title when that
    * folder holds only its lower-cased name: a file copied out of place is
    * added under its name as it is, so the lower-cased one is no clash.
