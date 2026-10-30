@@ -787,7 +787,7 @@
     {
       "name": "add_document_version",
       "title": "Add a new version to a DMS file",
-      "description": "Uploads updated content onto an EXISTING file, creating a new version (the previous content stays retrievable via list_document_versions / restore_document_version). The file name and type are unchanged. Provide the new content from exactly one source: a text 'content' string (for text files), a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation. Call get_document_by_id, get_documents_by_folder_id or search_documents first to get the document_id.",
+      "description": "Uploads updated content onto an EXISTING file, creating a new version (the previous content stays retrievable via list_document_versions / restore_document_version). The file name and type are unchanged. Provide the new content from exactly one source: a text 'content' string (for text files), a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation. In a call limited to a space, a file the platform created for the space (creator __system) can't be versioned. Call get_document_by_id, get_documents_by_folder_id or search_documents first to get the document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
