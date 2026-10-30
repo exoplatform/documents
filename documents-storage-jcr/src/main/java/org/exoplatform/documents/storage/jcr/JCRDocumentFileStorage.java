@@ -1689,23 +1689,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     // "dot > 0" guard cleanNameWithAccents applies.
     boolean beforeExtension = !isFolder(oldNode) && name.lastIndexOf('.') > 0;
     // A name is taken when the destination holds it as it is (the source itself,
-    // for an in-place duplicate) or as the node is added under: URL-decoded, and
-    // lower-cased for an in-place duplicate and for a folder (see addNode below).
-    boolean lowerCased = inPlace || oldNode.isNodeType(NodeTypeConstants.NT_FOLDER);
+    // for an in-place duplicate) or as the node is added under, which addedName
+    // computes for both the probe and addNode.
+    boolean folder = oldNode.isNodeType(NodeTypeConstants.NT_FOLDER);
     String newName = name;
     int i = 0;
-    while (destinationNode.hasNode(newName)
-        || destinationNode.hasNode(URLDecoder.decode(lowerCased ? newName.toLowerCase() : newName, "UTF-8"))) {
+    while (destinationNode.hasNode(newName) || destinationNode.hasNode(addedName(newName, inPlace, folder))) {
       i++;
       newName = beforeExtension ? getNewIndexedName(name, " (" + i + ")") : name + " (" + i + ")";
     }
-    name = inPlace ? newName.toLowerCase() : newName;
+    name = addedName(newName, inPlace, folder);
     if (i > 0) {
       title = beforeExtension ? getNewIndexedName(title, " (" + i + ")") : title + " (" + i + ")";
     }
-    name = URLDecoder.decode(name, "UTF-8");
-    if (oldNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
-      newNode = destinationNode.addNode(name.toLowerCase(), NodeTypeConstants.NT_FOLDER);
+    if (folder) {
+      newNode = destinationNode.addNode(name, NodeTypeConstants.NT_FOLDER);
       newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
       NodeIterator nodeIterator = oldNode.getNodes();
       while (nodeIterator.hasNext()) {
@@ -1717,6 +1715,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       addProperties(oldNode, newNode, title);
     }
     return newNode;
+  }
+
+  /**
+   * @param name the name a copy is given, counter included
+   * @param inPlace true for a copy into the source's own folder
+   * @param folder true for an {@code nt:folder}
+   * @return the name the copy's node is added under: lower-cased for an
+   *         in-place copy, then URL-decoded, then lower-cased for an
+   *         {@code nt:folder}, so a percent-escape of an upper-case letter is
+   *         lower-cased too
+   * @throws UnsupportedEncodingException never, UTF-8 being supported
+   */
+  private static String addedName(String name, boolean inPlace, boolean folder) throws UnsupportedEncodingException {
+    String decoded = URLDecoder.decode(inPlace ? name.toLowerCase() : name, "UTF-8");
+    return folder ? decoded.toLowerCase() : decoded;
   }
 
   private void addProperties(Node oldNode, Node newNode, String title) throws RepositoryException {
