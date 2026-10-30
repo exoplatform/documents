@@ -135,10 +135,10 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                        "The destination folder %s isn't in the space this call is limited to. Pick a folder of that space (get_root_folder_by_space, get_documents_by_folder_id).";
 
   private static final String      MSG_SCOPE_UNREADABLE   =
-                                                          "The space this call is limited to can't be read, so it can't rename, move, copy, link, duplicate or hide a document";
+                                                          "The space this call is limited to can't be read, so it can't rename, move, copy, link, duplicate, hide or version a document";
 
   private static final String      MSG_SYSTEM_NODE        =
-                                                          "The document %s was created by the platform for the space; a digital worker can't rename, move, copy, link, duplicate or hide it.";
+                                                          "The document %s was created by the platform for the space; a digital worker can't rename, move, copy, link, duplicate, hide or version it.";
 
   private static final String      MSG_HIDE_FOLDER_ONLY   =
                                                           "Only a folder can be hidden or shown; %s is a file.";
@@ -267,9 +267,9 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Checks a call limited to a space may rename, move, copy, link, duplicate
-   * or hide a node, as the Documents application lets a space member who
-   * isn't an administrator do: not a node the platform created for the space (creator
+   * Checks a call limited to a space may rename, move, copy, link, duplicate,
+   * hide or version a node, as the Documents application lets a space member
+   * who isn't an administrator do: not a node the platform created for the space (creator
    * {@value #SYSTEM_USER}), and, for a visibility change, a folder only. A call
    * that isn't limited is not checked; one whose space can't be read is
    * refused.
@@ -1005,6 +1005,10 @@ public class DocumentMcpTool implements McpToolPlugin {
    *          chat; set automatically by the client — do not fill it from the model
    * @param versionSummary an optional change note stored on the new version
    * @return the updated document (with its refreshed size / modification info)
+   * @throws IllegalAccessException when the user can't edit the file, or, in a
+   *           call limited to a space, the file was created by the platform
+   *           for the space, or the call's space can't be read
+   * @throws ObjectNotFoundException when the file doesn't exist
    */
   public DocumentModel addDocumentVersion(String documentId,
                                           String content,
@@ -1018,6 +1022,7 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalArgumentException("Only a file can have versions; the id %s points to a folder. Provide a file document_id."
           .formatted(documentId));
     }
+    checkScopedChange(documentId, false);
     if (!documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId())) {
       throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot add a new version to it."
           .formatted(documentId));
