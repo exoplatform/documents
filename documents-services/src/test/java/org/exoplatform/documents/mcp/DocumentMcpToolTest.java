@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -1422,6 +1423,46 @@ public class DocumentMcpToolTest {
     verify(documentFileService, never()).createNewVersion(any(), any(), any());
 
     documentMcpTool.addDocumentVersion(DOCUMENT_ID, "a".repeat(limit), null, null, null, null, null);
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
+  }
+
+  /**
+   * In a call limited to a space, a file the platform created for the space
+   * (creator {@code __system}) gets no new version, as the Documents
+   * application lets no space member who isn't an administrator edit it, and
+   * a file a user created does; a call that isn't limited versions either,
+   * and one whose space can't be read is refused.
+   * Mutants: the creator check removed from the versioning, run on an
+   * unlimited call, or an unreadable space taken as unlimited.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceVersionsNoFileOfThePlatform() throws Exception {
+    String userFileId = "fe0688cd7f00010134384ab7e1b15a52";
+    FileNode systemFile = fileNode(DOCUMENT_ID, "text/plain");
+    systemFile.setCreatorUserName("__system");
+    FileNode userFile = fileNode(userFileId, "text/plain");
+    userFile.setCreatorUserName("jane");
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(systemFile);
+    when(documentFileService.getDocumentById(userFileId, USERNAME)).thenReturn(userFile);
+    lenient().when(documentFileService.hasEditPermissionOnDocument(any(), eq(USER_IDENTITY_ID))).thenReturn(true);
+
+    scopeSpaceId = 12L;
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null));
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+    documentMcpTool.addDocumentVersion(userFileId, "body", null, null, null, null, null);
+    verify(documentFileService).createNewVersion(eq(userFileId), eq(USERNAME), any());
+
+    scopeSpaceId = null;
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(userFileId, "body", null, null, null, null, null));
+    verify(documentFileService, times(1)).createNewVersion(eq(userFileId), any(), any());
+
+    scopeUnreadable = false;
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null);
     verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
   }
 
