@@ -3,6 +3,7 @@ package org.exoplatform.documents.storage.jcr;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getIdentityRootNode;
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.getNodeByIdentifier;
 import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -46,6 +47,7 @@ import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.config.RepositoryEntry;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
@@ -2150,6 +2152,112 @@ public class JCRDocumentFileStorageTest {
     assertFalse(jcrDocumentFileStorage.hasEditPermissions("123", identity));
   }
   
+  /**
+   * Pins that the edit check closes the user session it opens, whether the
+   * document is found, missing, or the repository fails.
+   */
+  @Test
+  public void hasEditPermissionsClosesItsSession() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    Session session = getMockedSession(identity);
+    SessionProvider sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
+    Node node = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "found")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "missing")).thenReturn(null);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "failing"))
+                      .thenThrow(new IllegalStateException("repository down"));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+
+    assertTrue(jcrDocumentFileStorage.hasEditPermissions("found", identity));
+    verify(sessionProvider, times(1)).close();
+    assertFalse(jcrDocumentFileStorage.hasEditPermissions("missing", identity));
+    verify(sessionProvider, times(2)).close();
+    assertFalse(jcrDocumentFileStorage.hasEditPermissions("failing", identity));
+    verify(sessionProvider, times(3)).close();
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.hasEditPermission(session, null), never());
+  }
+
+  /**
+   * Pins that the batch access check reads every id in one user session, closes
+   * it, and reports a repository failure instead of an empty answer.
+   */
+  @Test
+  public void getDocumentAccessUsesOneClosedUserSession() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    ExtendedSession session = mockExtendedSessions(identity);
+    SessionProvider sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
+    Node file = mockNodeOfType(NodeTypeConstants.NT_FILE);
+    when(session.getNodeByIdentifier("a")).thenReturn(file);
+    when(session.getNodeByIdentifier("b")).thenThrow(new ItemNotFoundException());
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, file)).thenCallRealMethod();
+
+    Map<String, Boolean> access = jcrDocumentFileStorage.getDocumentAccess(List.of("a", "b"), identity);
+    assertEquals(Map.of("a", true), access);
+    verify(sessionProvider, times(1)).getSession(anyString(), any());
+    verify(sessionProvider, times(1)).close();
+
+    when(session.getNodeByIdentifier("c")).thenThrow(new RepositoryException("down"));
+    assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.getDocumentAccess(List.of("c"), identity));
+    verify(sessionProvider, times(2)).close();
+  }
+
+  /**
+   * Pins that the batch description reads every id in one system session,
+   * closes it, and reports a repository failure instead of an absent node.
+   */
+  @Test
+  public void describeNodesUsesOneClosedSystemSession() throws RepositoryException {
+    ExtendedSession session = mockExtendedSessions(null);
+    SessionProvider systemProvider = SessionProvider.createSystemProvider();
+    Node file = mockNodeOfType(NodeTypeConstants.NT_FILE);
+    when(file.getPath()).thenReturn("/Users/u/Private/f.txt");
+    when(session.getNodeByIdentifier("a")).thenReturn(file);
+    when(session.getNodeByIdentifier("b")).thenThrow(new ItemNotFoundException());
+
+    Map<String, DocumentNodeInfo> nodes = jcrDocumentFileStorage.describeNodes(List.of("a", "b"));
+    assertEquals(Set.of("a"), nodes.keySet());
+    verify(systemProvider, times(1)).getSession(anyString(), any());
+    verify(systemProvider, times(1)).close();
+
+    when(session.getNodeByIdentifier("c")).thenThrow(new RepositoryException("down"));
+    assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.describeNodes(List.of("c")));
+    verify(systemProvider, times(2)).close();
+  }
+
+  /**
+   * Mocks the user and system session providers so both give one extended
+   * session.
+   *
+   * @param identity the user of the user session
+   * @return the session
+   */
+  private ExtendedSession mockExtendedSessions(org.exoplatform.services.security.Identity identity) throws RepositoryException {
+    SessionProvider systemSessionprovider = mock(SessionProvider.class);
+    SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(systemSessionprovider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    ExtendedSession session = mock(ExtendedSession.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    when(systemSessionprovider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    return session;
+  }
+
+  /**
+   * @param primaryType a primary node type name
+   * @return a node of that primary type, no shortcut
+   */
+  private Node mockNodeOfType(String primaryType) throws RepositoryException {
+    Node node = mock(Node.class);
+    NodeType nodeType = mock(NodeType.class);
+    when(nodeType.getName()).thenReturn(primaryType);
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
+    when(node.getPath()).thenReturn("/Groups/spaces/s/Documents/f");
+    return node;
+  }
+
   @Test
   public void getDocumentDownloadItem() throws RepositoryException {
     Session session = getMockedSession(null);
