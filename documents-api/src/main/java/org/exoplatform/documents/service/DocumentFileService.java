@@ -19,6 +19,7 @@ package org.exoplatform.documents.service;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -461,6 +462,50 @@ public interface DocumentFileService {
   void renameDocument(long ownerId, String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
   boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity);
+
+  /**
+   * Tells, for several nodes at once, which files a user may read and which he
+   * may edit, in one repository session of the user's.
+   *
+   * @param ids node identifiers
+   * @param aclIdentity the user
+   * @return for each id naming a file the user may read, true when he may edit
+   *         it and false when he may only read it; an id naming no node, a
+   *         node he may not read or a node that is not a file is absent
+   * @throws IllegalStateException when the repository fails, never read as a
+   *           refusal
+   */
+  default Map<String, Boolean> getDocumentAccess(Collection<String> ids,
+                                                 org.exoplatform.services.security.Identity aclIdentity) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Describes several nodes at once, whoever may see them, in one system
+   * session: what each is, what a shortcut leads to, which space library holds
+   * it and its folders. A node in the trash is found too.
+   *
+   * @param ids node identifiers
+   * @return the description of each id a node carries, by id, plus, for a
+   *         shortcut, the description of its target under the target's id; an
+   *         id no node carries is absent
+   * @throws IllegalStateException when the repository fails, never read as a
+   *           node that does not exist
+   */
+  default Map<String, DocumentNodeInfo> describeNodes(Collection<String> ids) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Describes one node, see {@link #describeNodes(Collection)}.
+   *
+   * @param id a node identifier
+   * @return the node's description, or null when no node carries the id
+   * @throws IllegalStateException when the repository fails
+   */
+  default DocumentNodeInfo describeNode(String id) {
+    return id == null ? null : describeNodes(List.of(id)).get(id);
+  }
 
   org.exoplatform.services.security.Identity getAclUserIdentity(String userName) throws IllegalAccessException;
   
