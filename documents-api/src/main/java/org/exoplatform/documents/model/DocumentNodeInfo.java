@@ -35,13 +35,15 @@ import org.exoplatform.documents.constant.DocumentNodeType;
  * @param ancestorFolderIds the identifiers of the folders holding the node,
  *          from its parent up to the library root excluded, nearest first;
  *          empty outside a space library
+ * @param libraryRoot true for a space library's root folder itself
  */
 public record DocumentNodeInfo(String id,
                                DocumentNodeType type,
                                String targetId,
                                DocumentNodeType targetType,
                                long spaceId,
-                               List<String> ancestorFolderIds) {
+                               List<String> ancestorFolderIds,
+                               boolean libraryRoot) {
 
   /**
    * Copies the folder list, so the record stays immutable.
