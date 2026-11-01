@@ -77,6 +77,15 @@
             fas fa-eye-slash
           </v-icon>
         </div>
+        <extension-registry-components
+          v-if="!editNameMode"
+          :params="indicatorParams"
+          name="DocumentsFileIndicators"
+          type="documents-file-indicator"
+          parent-element="span"
+          element="span"
+          class="documents-file-indicators d-inline-flex align-center ms-2"
+          strict-type />
         <documents-file-edit-name-cell
           v-if="editNameMode"
           :file="file"
@@ -161,7 +170,11 @@
 import ntFileExtension from '../../../../json/NtFileExtension.json';
 
 export default {
-
+  inject: {
+    documentsFileIndicators: {
+      default: null,
+    },
+  },
   props: {
     file: {
       type: Object,
@@ -224,6 +237,12 @@ export default {
     menuY: 0,
   }),
   computed: {
+    indicatorParams() {
+      return {
+        file: this.file,
+        indicators: this.file?.id && this.documentsFileIndicators?.byFile?.[this.file.id],
+      };
+    },
     isFileEditable() {
       const fileType = this.file && this.file.mimeType || '';
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.edit && doc.mimeType === fileType && !this.file.cloudDriveFile).length > 0;
