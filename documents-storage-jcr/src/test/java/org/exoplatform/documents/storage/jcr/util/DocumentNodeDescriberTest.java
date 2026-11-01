@@ -88,7 +88,7 @@ class DocumentNodeDescriberTest {
 
     DocumentNodeInfo info = DocumentNodeDescriber.describe(session, List.of("file"), spaceService).get("file");
 
-    assertEquals(new DocumentNodeInfo("file", DocumentNodeType.FILE, "file", DocumentNodeType.FILE, 7, List.of("y2026", "contracts")),
+    assertEquals(new DocumentNodeInfo("file", DocumentNodeType.FILE, "file", DocumentNodeType.FILE, 7, List.of("y2026", "contracts"), false),
                  info);
   }
 
@@ -104,6 +104,8 @@ class DocumentNodeDescriberTest {
     assertEquals(DocumentNodeType.FOLDER, infos.get("lib").type());
     assertEquals(7, infos.get("lib").spaceId());
     assertEquals(List.of(), infos.get("lib").ancestorFolderIds());
+    assertTrue(infos.get("lib").libraryRoot());
+    assertFalse(infos.get("file").libraryRoot());
   }
 
   @Test
@@ -112,10 +114,12 @@ class DocumentNodeDescriberTest {
     Node contracts = node("contracts", "nt:folder", LIBRARY + "/Contracts", library);
     node("y2026", "nt:folder", LIBRARY + "/Contracts/2026", contracts);
 
-    DocumentNodeInfo info = DocumentNodeDescriber.describe(session, List.of("y2026"), spaceService).get("y2026");
+    Map<String, DocumentNodeInfo> infos = DocumentNodeDescriber.describe(session, List.of("y2026", "contracts"), spaceService);
 
-    assertEquals(DocumentNodeType.FOLDER, info.type());
-    assertEquals(List.of("contracts"), info.ancestorFolderIds());
+    assertEquals(DocumentNodeType.FOLDER, infos.get("y2026").type());
+    assertEquals(List.of("contracts"), infos.get("y2026").ancestorFolderIds());
+    assertEquals(List.of(), infos.get("contracts").ancestorFolderIds());
+    assertFalse(infos.get("contracts").libraryRoot());
   }
 
   @Test
@@ -177,9 +181,9 @@ class DocumentNodeDescriberTest {
 
     Map<String, DocumentNodeInfo> infos = DocumentNodeDescriber.describe(session, List.of("link1"), spaceService);
 
-    assertEquals(new DocumentNodeInfo("link1", DocumentNodeType.SYMLINK, "file", DocumentNodeType.FILE, 0, List.of()),
+    assertEquals(new DocumentNodeInfo("link1", DocumentNodeType.SYMLINK, "file", DocumentNodeType.FILE, 0, List.of(), false),
                  infos.get("link1"));
-    assertEquals(new DocumentNodeInfo("file", DocumentNodeType.FILE, "file", DocumentNodeType.FILE, 7, List.of("contracts")),
+    assertEquals(new DocumentNodeInfo("file", DocumentNodeType.FILE, "file", DocumentNodeType.FILE, 7, List.of("contracts"), false),
                  infos.get("file"));
     assertEquals(Set.of("link1", "file"), infos.keySet());
   }

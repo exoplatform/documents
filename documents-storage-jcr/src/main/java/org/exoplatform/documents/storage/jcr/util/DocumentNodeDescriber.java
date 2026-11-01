@@ -208,15 +208,15 @@ public final class DocumentNodeDescriber {
                                            SpaceService spaceService) throws RepositoryException {
     String path = node.getPath();
     if (path == null || !path.startsWith(SPACES_PATH_PREFIX)) {
-      return new DocumentNodeInfo(id, type, targetId, targetType, 0, List.of());
+      return new DocumentNodeInfo(id, type, targetId, targetType, 0, List.of(), false);
     }
     String[] segments = path.substring(SPACES_PATH_PREFIX.length()).split("/");
     if (segments.length < 2 || segments[0].isEmpty() || !LIBRARY_FOLDER_NAME.equals(segments[1])) {
-      return new DocumentNodeInfo(id, type, targetId, targetType, 0, List.of());
+      return new DocumentNodeInfo(id, type, targetId, targetType, 0, List.of(), false);
     }
     long spaceId = spaceIdsByGroup.computeIfAbsent(segments[0], groupName -> spaceId(spaceService, groupName));
     if (spaceId == 0) {
-      return new DocumentNodeInfo(id, type, targetId, targetType, 0, List.of());
+      return new DocumentNodeInfo(id, type, targetId, targetType, 0, List.of(), false);
     }
     // segments: group, Documents, then one per level below the library root,
     // the node itself last; its parents below the root are the levels above it
@@ -229,7 +229,7 @@ public final class DocumentNodeDescriber {
         ancestorFolderIds.add(((ExtendedNode) parent).getIdentifier());
       }
     }
-    return new DocumentNodeInfo(id, type, targetId, targetType, spaceId, ancestorFolderIds);
+    return new DocumentNodeInfo(id, type, targetId, targetType, spaceId, ancestorFolderIds, segments.length == 2);
   }
 
   /**
