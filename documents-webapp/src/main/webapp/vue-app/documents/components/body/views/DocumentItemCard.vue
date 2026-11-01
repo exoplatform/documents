@@ -100,6 +100,15 @@
                 class="pa-0  my-auto white--text text-wrap text-break text-truncate"
                 v-text="fileName" />
             </v-card>
+            <extension-registry-components
+              v-if="!editNameMode"
+              :params="indicatorParams"
+              name="DocumentsFileIndicators"
+              type="documents-file-indicator"
+              parent-element="span"
+              element="span"
+              class="documents-file-indicators d-inline-flex align-center my-auto text-truncate"
+              strict-type />
             <v-spacer />
             <div class="d-flex">
               <v-simple-checkbox
@@ -189,6 +198,11 @@
 <script>
 import ntFileExtension from '../../../json/NtFileExtension.json';
 export default {
+  inject: {
+    documentsFileIndicators: {
+      default: null,
+    },
+  },
   props: {
     file: {
       type: Object,
@@ -258,6 +272,12 @@ export default {
   computed: {
     fileId() {
       return this.file?.id;
+    },
+    indicatorParams() {
+      return {
+        file: this.file,
+        indicators: this.file?.id && this.documentsFileIndicators?.byFile?.[this.file.id],
+      };
     },
     fileName() {
       return this.file?.name;

@@ -141,9 +141,16 @@
 </template>
 <script>
 import {openFileVersion} from '../../../js/DocumentVersionUtils.js';
+import {UPDATED_EVENT as FILE_INDICATORS_UPDATED, getProviders as getFileIndicatorProviders, loadIndicators as loadFileIndicators} from '../js/DocumentsFileIndicators.js';
 
 export default {
+  provide() {
+    return {
+      documentsFileIndicators: this.fileIndicators,
+    };
+  },
   data: () => ({
+    fileIndicators: {byFile: {}},
     canAdd: false,
     spaceCanAdd: false,
     versions: [],
@@ -264,8 +271,12 @@ export default {
         this.refreshFiles();
       }
     },
+    files() {
+      this.loadFileIndicators(false);
+    },
   },
   created() {
+    document.addEventListener(FILE_INDICATORS_UPDATED, this.reloadFileIndicators);
     this.viewType = this.$documentsUtils.getViewType(this.$root.appId);
     document.addEventListener('categories-updated', this.refreshDocument);
     document.addEventListener('categories-drawer-closed', this.resetMultiSelection);
@@ -391,6 +402,7 @@ export default {
     });
   },
   destroyed() {
+    document.removeEventListener(FILE_INDICATORS_UPDATED, this.reloadFileIndicators);
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
     document.removeEventListener('document-version-restored', this.handleVersionRestoredElsewhere);
   },
@@ -398,6 +410,42 @@ export default {
     this.$root.$off('add-drives', this.addDrives());
   },
   methods: {
+    /**
+     * Asks the file marker providers about the listed files, once for the
+     * files a listing adds, and forgets the files it no longer shows, so a
+     * folder opened again is asked again. With no provider registered,
+     * nothing is asked and no file gets markers.
+     *
+     * @param {boolean} all true to ask again about every listed file, as when
+     *          a provider registers after the files were listed
+     * @returns {Promise} settled once the answers are applied
+     */
+    loadFileIndicators(all) {
+      if (!getFileIndicatorProviders().length) {
+        return Promise.resolve();
+      }
+      const listed = [...new Set((this.files || []).map(file => file?.id).filter(Boolean))];
+      const byFile = this.fileIndicators.byFile;
+      Object.keys(byFile).filter(fileId => !listed.includes(fileId)).forEach(fileId => this.$delete(byFile, fileId));
+      this.requestedFileIndicators = new Set([...(this.requestedFileIndicators || [])].filter(fileId => listed.includes(fileId)));
+      const asked = all ? listed : listed.filter(fileId => !this.requestedFileIndicators.has(fileId));
+      if (!asked.length) {
+        return Promise.resolve();
+      }
+      asked.forEach(fileId => this.requestedFileIndicators.add(fileId));
+      return loadFileIndicators(asked).then(answers => Object.keys(answers)
+        .filter(fileId => this.requestedFileIndicators.has(fileId))
+        .forEach(fileId => this.$set(byFile, fileId, answers[fileId])));
+    },
+    /**
+     * Asks every provider again about every listed file, when a provider
+     * registers or unregisters.
+     *
+     * @returns {Promise} settled once the answers are applied
+     */
+    reloadFileIndicators() {
+      return this.loadFileIndicators(true);
+    },
     copyPublicLinkToClipBoard(text) {
       navigator.clipboard.writeText(text).then(() => {
         this.$root.$emit('show-alert', {
