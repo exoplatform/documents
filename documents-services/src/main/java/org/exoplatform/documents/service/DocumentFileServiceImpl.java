@@ -508,6 +508,28 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.canAccess(documentID, aclIdentity);
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, Boolean> getDocumentAccess(Collection<String> ids, org.exoplatform.services.security.Identity aclIdentity) {
+    if (ids == null || ids.isEmpty()) {
+      return Map.of();
+    }
+    return documentFileStorage.getDocumentAccess(ids, aclIdentity);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, DocumentNodeInfo> describeNodes(Collection<String> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return Map.of();
+    }
+    return documentFileStorage.describeNodes(ids);
+  }
+
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
     Identity userIdentity = identityManager.getIdentity(userIdentityId);
     if (userIdentity == null) {

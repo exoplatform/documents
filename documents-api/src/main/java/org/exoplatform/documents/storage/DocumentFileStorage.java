@@ -19,6 +19,7 @@ package org.exoplatform.documents.storage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -381,6 +382,27 @@ public interface DocumentFileStorage {
   void notifyMember(String documentId, long destId) throws IllegalAccessException;
 
   boolean canAccess(String documentID, Identity aclIdentity);
+
+  /**
+   * See {@link org.exoplatform.documents.service.DocumentFileService#getDocumentAccess}.
+   *
+   * @param ids node identifiers
+   * @param aclIdentity the user
+   * @return for each file the user may read, whether he may edit it
+   */
+  default Map<String, Boolean> getDocumentAccess(Collection<String> ids, Identity aclIdentity) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * See {@link org.exoplatform.documents.service.DocumentFileService#describeNodes}.
+   *
+   * @param ids node identifiers
+   * @return the description of each id a node carries
+   */
+  default Map<String, DocumentNodeInfo> describeNodes(Collection<String> ids) {
+    throw new UnsupportedOperationException();
+  }
   
   default void updateDocumentDescription(long ownerId,
                                          String documentID,
