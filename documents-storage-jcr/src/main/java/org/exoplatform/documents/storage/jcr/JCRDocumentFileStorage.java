@@ -68,6 +68,7 @@ import org.exoplatform.documents.storage.jcr.search.DocumentPagedTextExtractor;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.search.DocumentTextExtractor;
 import org.exoplatform.documents.storage.jcr.util.ContentSource;
+import org.exoplatform.documents.storage.jcr.util.DocumentNodeDescriber;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
@@ -4030,17 +4031,65 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    */
   @Override
   public boolean hasEditPermissions(String nodeId, Identity aclUserIdentity) {
-    SessionProvider sessionProvider;
+    SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclUserIdentity);
       Session session = sessionProvider.getSession(manageableRepository.getConfiguration().getDefaultWorkspaceName(),
                                                    manageableRepository);
       Node node = getNodeByIdentifier(session, nodeId);
+      if (node == null) {
+        LOG.debug("No document {} readable by the user, so no edit permission", nodeId);
+        return false;
+      }
       return JCRDocumentsUtil.hasEditPermission(session, node);
     } catch (Exception e) {
-      LOG.error("Error while checking edit permissions on document {}", nodeId, e);
+      LOG.warn("Error while checking edit permissions on document {}", nodeId, e);
       return false;
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, Boolean> getDocumentAccess(Collection<String> ids, Identity aclIdentity) {
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repository);
+      return DocumentNodeDescriber.getAccess((ExtendedSession) session, ids);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the access of a user to " + ids.size() + " documents", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, DocumentNodeInfo> describeNodes(Collection<String> ids) {
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      sessionProvider = SessionProvider.createSystemProvider();
+      Session session = sessionProvider.getSession(COLLABORATION, repository);
+      return DocumentNodeDescriber.describe((ExtendedSession) session, ids, spaceService);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error describing " + ids.size() + " nodes", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
