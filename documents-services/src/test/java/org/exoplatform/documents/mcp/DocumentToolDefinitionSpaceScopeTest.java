@@ -68,17 +68,17 @@ import tools.jackson.databind.json.JsonMapper;
 public class DocumentToolDefinitionSpaceScopeTest {
 
   /** The role each space-scoped write declares in {@code space_role}. */
-  private static final Map<String, String> SPACE_ROLES = Map.ofEntries(Map.entry("add_document_version", "member"),
-                                                                       Map.entry("copy_document", "member"),
-                                                                       Map.entry("create_document", "member"),
-                                                                       Map.entry("create_document_from_template", "member"),
-                                                                       Map.entry("create_document_shortcut", "member"),
-                                                                       Map.entry("create_folder", "member"),
-                                                                       Map.entry("duplicate_document", "member"),
-                                                                       Map.entry("move_document", "member"),
-                                                                       Map.entry("rename_document", "member"),
-                                                                       Map.entry("set_document_visibility", "member"),
-                                                                       Map.entry("update_document_description", "member"));
+  private static final Map<String, String> SPACE_ROLES = Map.ofEntries(Map.entry("add_document_version", "redactor"),
+                                                                       Map.entry("copy_document", "redactor"),
+                                                                       Map.entry("create_document", "redactor"),
+                                                                       Map.entry("create_document_from_template", "redactor"),
+                                                                       Map.entry("create_document_shortcut", "redactor"),
+                                                                       Map.entry("create_folder", "redactor"),
+                                                                       Map.entry("duplicate_document", "redactor"),
+                                                                       Map.entry("move_document", "redactor"),
+                                                                       Map.entry("rename_document", "redactor"),
+                                                                       Map.entry("set_document_visibility", "redactor"),
+                                                                       Map.entry("update_document_description", "redactor"));
 
   private static final String      ROOT_BY_SPACE  = "get_root_folder_by_space";
 
@@ -411,10 +411,15 @@ public class DocumentToolDefinitionSpaceScopeTest {
   /**
    * Each space-scoped write declares in {@code space_role} the role the member
    * who asks a digital worker for it must hold in the call's space
-   * (EXO-91405), and no space-scoped read declares one: the folders of a space
-   * grant every permission to {@code *:/spaces/<name>} (ecms
-   * {@code NewGroupListener}), so every member writes the space drive, hiding
-   * a folder included, and each of them is {@code member}.
+   * (EXO-91405), and no space-scoped read declares one. Who may write the
+   * space drive, hiding a folder included, follows whether the space has
+   * redactors: without any, its folders grant every permission to
+   * {@code *:/spaces/<name>} (ecms {@code NewGroupListener}); with some,
+   * members only read it and its managers, redactors and publishers write it
+   * ({@code DocumentUtils#buildStandardRedactionalSpacePermissions}, applied
+   * by {@code DocumentFileServiceImpl#synchronizeSpacePermissions}). That is
+   * who may redact in the space ({@code SpaceService#canRedactOnSpace}), so
+   * each of them is {@code redactor}.
    * Mutants: a write's role dropped or changed, or a read given one.
    *
    * @throws Exception when the shipped definitions can't be read
