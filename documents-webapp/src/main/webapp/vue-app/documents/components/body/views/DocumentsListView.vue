@@ -455,7 +455,7 @@ export default {
         }
       } else if (sortBy[0] === 'size') {
         sorted = items.sort((a, b) => {
-          return isDesc[0] ? a.size - b.size : b.size - a.size;
+          return (b.folder - a.folder) || (isDesc[0] ? a.size - b.size : b.size - a.size);
         });
       }
       return sorted;
