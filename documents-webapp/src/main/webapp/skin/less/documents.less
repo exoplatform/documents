@@ -297,11 +297,17 @@
           th.documents-actions-header {
             padding: 0 !important;
           }
+          // Last updated and Size take the width of their widest header or
+          // value in the user's language, the name the rest; 16px apart.
+          th.documents-last-updated-header,
+          th.documents-size-header {
+            white-space: nowrap;
+          }
           th.documents-last-updated-header {
-            padding: 0 8px 0 0 !important;
+            padding: 0 0 0 16px !important;
           }
           th.documents-size-header {
-            padding: 0 16px 0 0 !important;
+            padding: 0 16px !important;
           }
         }
         // Without hover, as on a touch screen, the row actions always show.
@@ -331,13 +337,14 @@
             padding: 0 !important;
           }
           td.documents-cell-lastUpdated {
-            width: 116px;
-            padding: 0 8px 0 0 !important;
+            width: 1%;
+            padding: 0 0 0 16px !important;
             text-align: end;
+            white-space: nowrap;
           }
           td.documents-cell-size {
-            width: 64px;
-            padding: 0 16px 0 0 !important;
+            width: 1%;
+            padding: 0 16px !important;
             text-align: end;
             white-space: nowrap;
           }
