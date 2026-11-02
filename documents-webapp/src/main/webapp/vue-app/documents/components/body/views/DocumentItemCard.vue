@@ -100,6 +100,11 @@
                 class="pa-0  my-auto white--text text-wrap text-break text-truncate"
                 v-text="fileName" />
             </v-card>
+            <documents-file-signs
+              v-if="!editNameMode"
+              :file="file"
+              class="my-auto me-1 flex-shrink-0"
+              dark />
             <v-spacer />
             <div class="d-flex">
               <v-simple-checkbox

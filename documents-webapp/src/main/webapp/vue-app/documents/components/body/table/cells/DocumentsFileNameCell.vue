@@ -78,6 +78,9 @@
               fas fa-eye-slash
             </v-icon>
           </div>
+          <documents-file-signs
+            :file="file"
+            class="flex-shrink-0 ms-2" />
           <extension-registry-components
             :params="indicatorParams"
             name="DocumentsFileIndicators"
@@ -94,73 +97,30 @@
           :file-type="fileType"
           :is-mobile="isMobile"
           :edit-name-mode="editNameMode" />
-        <div v-if="isMobile" class="d-flex">
+        <div
+          v-if="isMobile && !editNameMode"
+          class="d-flex align-center">
           <date-format
-            v-if="!editNameMode"
             :value="lastUpdated"
             :format="fullDateFormat"
             class="document-time text-light-color text-no-wrap" />
-          <documents-visibility-cell
-            class="mt-n1"
+          <documents-size-cell
+            v-if="!file.folder && !file.drive"
             :file="file"
-            :is-mobile="isMobile"
-            :selected-view="selectedView" />
+            class="document-size ms-2 text-no-wrap" />
         </div>
       </div>
     </a>
     <v-spacer />
-    <documents-info-details-cell
-      v-if="!isMobile && !file.drive"
-      :file="file"
-      :is-mobile="isMobile"
-      :class="editNameMode ? '' : 'button-info-details'" />
-    <div
-      v-if="!file.drive"
+    <v-btn
+      v-if="isMobile && !file.drive"
+      :aria-label="menuActionTooltip"
       class="ma-auto"
-      :id="`document-action-menu-cel-${file.id}`">
-      <v-tooltip
-        :disabled="menuDisplayed"
-        :open-delay="500"
-        bottom>
-        <template #activator="{ on, attrs }">
-          <v-btn
-            icon
-            small
-            v-bind="attrs"
-            v-on="on">
-            <v-icon
-              v-show="isMobile || menuDisplayed"
-              :size="isMobile ? 14 : 18"
-              class="clickable"
-              :class="editNameMode ? '' : 'button-document-action'"
-              @click="displayActionMenu($event)">
-              mdi-dots-vertical
-            </v-icon>
-          </v-btn>
-          <v-menu
-            v-model="menuDisplayed"
-            transition="slide-x-reverse-transition"
-            :content-class="`${isMobile ? 'documentActionMenuMobile' : 'documentActionMenu'} application-menu layout-drawer`"
-            :position-x="menuX"
-            :position-y="menuY"
-            :nudge-right="30"
-            :nudge-top="25"
-            offset-y
-            offset-x
-            close-on-click
-            absolute>
-            <documents-actions-menu
-              :file="file"
-              :current-view="selectedView"
-              :is-search-result="isSearchResult"
-              :is-mobile="isMobile" />
-          </v-menu>
-        </template>
-        <span>
-          {{ menuActionTooltip }}
-        </span>
-      </v-tooltip>
-    </div>
+      icon
+      small
+      @click="displayActionMenu">
+      <v-icon size="14">mdi-dots-vertical</v-icon>
+    </v-btn>
   </div>
 </template>
 <script>
@@ -208,8 +168,6 @@ export default {
   },
   data: () => ({
     loading: false,
-    menuDisplayed: false,
-    waitTimeUntilCloseMenu: 200,
     fileToEditId: -1,
     fullDateFormat: {
       year: 'numeric',
@@ -230,8 +188,6 @@ export default {
     },
     icon: null,
     touchTimer: null,
-    menuX: 0,
-    menuY: 0,
   }),
   computed: {
     /**
@@ -293,14 +249,6 @@ export default {
     },
   },
   created() {
-    $(document).on('mousedown', (event) => {
-      if (!event.target.closest('.group-menu-action') && this.menuDisplayed) {
-        window.setTimeout(() => {
-          $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().removeAttr('style');
-          this.menuDisplayed = false;
-        }, this.waitTimeUntilCloseMenu);
-      }
-    });
     this.$root.$on('update-file-name', this.editFileName);
     this.$root.$on('cancel-edit-mode', this.cancelEditMode);
     this.$root.$on('document-set-icon-loading', this.setIconLoading);
@@ -385,20 +333,12 @@ export default {
       this.loading = false;
       this.$root.$emit('mark-document-as-viewed', this.file);
     },
-    displayActionMenu(event) {
-      if (this.isMobile) {
-        this.$root.$emit('open-file-action-menu', this.file);
-      } else {
-        const rect = event.currentTarget.getBoundingClientRect();
-        this.menuX = rect.left;
-        this.menuY = rect.bottom;
-
-        this.menuDisplayed = true;
-
-        $(`#document-action-menu-cel-${this.file.id}`)
-          .parent().parent().parent().parent()
-          .css('background', '#eee');
-      }
+    /**
+     * Opens the file's action menu as a bottom sheet, on a narrow screen,
+     * where the row has no actions column.
+     */
+    displayActionMenu() {
+      this.$root.$emit('open-file-action-menu', this.file);
     },
     escapeRegExp(string) {
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
