@@ -52,7 +52,7 @@
                  v-btn/v-icon markup + classes, and the same wrapper padding
                  (documents-breadcrumb-mobile uses pa-1 mb-1 ps-0) so both icons
                  sit on the same line, same size/padding/baseline. -->
-            <div class="d-flex align-center pa-1 mb-1 ps-0">
+            <div v-if="!lockDrive" class="d-flex align-center pa-1 mb-1 ps-0">
               <v-btn
                 icon
                 small
@@ -253,6 +253,12 @@ export default {
     createEntityTypeFolder: {
       type: Boolean,
       default: true
+    },
+    // Keeps the explorer in the drive it was opened on: no navigation tree, so no
+    // other drive, the personal one included, is offered.
+    lockDrive: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -470,8 +476,16 @@ export default {
         avatarUrl: null,
       });
     },
-    // Breadcrumb re-emits 'document-open-home' for the personal root (Private).
+    /**
+     * Opens the personal root (Private) when the breadcrumb re-emits
+     * 'document-open-home'; does nothing while the drive is locked.
+     *
+     * @returns {void}
+     */
     handleDocumentOpenHome() {
+      if (this.lockDrive) {
+        return;
+      }
       this.openMyDocuments();
     },
     // ".spaces.<group>" ECMS drive name from a space groupId (else Personal).
@@ -548,16 +562,25 @@ export default {
       this.resetSearch();
       return this.navigate();
     },
-    // Handles a folder open from: a folder row click (mapped browse item), the
-    // breadcrumb (crumb / angle-left click), or the nav tree (brokered by the
-    // breadcrumb as 'document-open-folder'). A drive/space tree node (folder.drive)
-    // opens that drive; otherwise we drill into the folder, syncing the drive
-    // owner the tree may have changed (cross-drive jump).
+    /**
+     * Opens a folder from a folder row click (mapped browse item), the
+     * breadcrumb (crumb / angle-left click), or the nav tree (brokered by the
+     * breadcrumb as 'document-open-folder'). A drive/space tree node
+     * (folder.drive) opens that drive, unless the drive is locked; otherwise it
+     * drills into the folder, syncing the drive owner the tree may have changed
+     * (cross-drive jump).
+     *
+     * @param {object} folder the folder or drive node to open
+     * @returns {Promise|undefined} the navigation, when one starts
+     */
     handleDocumentOpenFolder(folder) {
       if (!folder || this.renameFolderAction) {
         return;
       }
       if (folder.drive) {
+        if (this.lockDrive) {
+          return;
+        }
         return this.openDrive({
           name: this.driveNameFromGroupId(folder.groupId),
           title: folder.title || folder.name,
