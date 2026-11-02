@@ -296,7 +296,7 @@ export default {
   },
   created() {
     document.addEventListener(FILE_INDICATORS_UPDATED, this.reloadFileIndicators);
-    document.addEventListener('documents-favorite-updated', this.updateFileFavorite);
+    document.addEventListener('metadata.favorite.updated', this.updateFileFavorite);
     this.viewType = this.$documentsUtils.getViewType(this.$root.appId);
     document.addEventListener('categories-updated', this.refreshDocument);
     document.addEventListener('categories-drawer-closed', this.resetMultiSelection);
@@ -423,7 +423,7 @@ export default {
   },
   destroyed() {
     document.removeEventListener(FILE_INDICATORS_UPDATED, this.reloadFileIndicators);
-    document.removeEventListener('documents-favorite-updated', this.updateFileFavorite);
+    document.removeEventListener('metadata.favorite.updated', this.updateFileFavorite);
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
     document.removeEventListener('document-version-restored', this.handleVersionRestoredElsewhere);
   },
@@ -509,16 +509,17 @@ export default {
         });
     },
     /**
-     * Applies a favorite change made anywhere on the page to the listed
-     * file, so its row and its tile show it at once.
+     * Applies a favorite change made by any favorite button of the page to
+     * the listed file, so its row and its tile show it at once.
      *
-     * @param {CustomEvent} event its detail holds the file `id` and its new
+     * @param {CustomEvent} event the platform's `metadata.favorite.updated`,
+     *          whose detail holds the `objectType`, the `objectId` and the new
      *          `favorite` state
      * @returns {void}
      */
     updateFileFavorite(event) {
-      const {id, favorite} = event?.detail || {};
-      const file = id && this.files?.find(listed => listed?.id === id);
+      const {objectType, objectId: id, favorite} = event?.detail || {};
+      const file = objectType === 'file' && id && this.files?.find(listed => listed?.id === id);
       if (!file) {
         return;
       }
