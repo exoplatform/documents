@@ -79,8 +79,8 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   labelKey: 'documents.label.lastUpdated',
   align: 'end',
   sortable: true,
-  cssClass: 'text-truncate tooltip-marker documents-last-updated-header',
-  width: '116px',
+  cssClass: 'tooltip-marker documents-last-updated-header',
+  width: '1%',
   rank: 40,
   componentOptions: {
     vueComponent: Vue.options.components['documents-last-updated-cell'],
@@ -434,8 +434,8 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   labelKey: 'documents.label.size',
   align: 'end',
   sortable: true,
-  cssClass: 'text-truncate tooltip-marker documents-size-header',
-  width: '64px',
+  cssClass: 'tooltip-marker documents-size-header',
+  width: '1%',
   rank: 50,
   componentOptions: {
     vueComponent: Vue.options.components['documents-size-cell'],
