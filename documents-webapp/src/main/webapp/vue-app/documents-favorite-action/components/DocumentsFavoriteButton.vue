@@ -120,6 +120,7 @@ export default {
      * the list row, the tile and the details panel show the same state.
      *
      * @param {boolean} favorite the file's new favorite state
+     * @returns {void}
      */
     notifyFavoriteUpdated(favorite) {
       document.dispatchEvent(new CustomEvent('documents-favorite-updated', {detail: {id: this.fileId, favorite}}));

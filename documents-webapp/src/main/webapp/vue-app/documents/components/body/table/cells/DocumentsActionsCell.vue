@@ -26,7 +26,7 @@
       <template #activator="{ on, attrs }">
         <v-btn
           :aria-label="detailsLabel"
-          class="documents-row-action"
+          class="documents-row-action documents-row-details"
           icon
           small
           v-bind="attrs"
@@ -50,7 +50,7 @@
           :aria-label="menuLabel"
           aria-haspopup="menu"
           :aria-expanded="String(menuDisplayed)"
-          class="documents-row-action"
+          class="documents-row-action documents-row-menu"
           icon
           small
           v-bind="attrs"
@@ -141,6 +141,7 @@ export default {
      * its groups, late enough for a clicked action to run first.
      *
      * @param {MouseEvent} event the mousedown on the page
+     * @returns {void}
      */
     closeMenuOnOutsideClick(event) {
       if (this.menuDisplayed && !event.target?.closest?.('.group-menu-action')) {
@@ -149,6 +150,8 @@ export default {
     },
     /**
      * Opens the file's details panel.
+     *
+     * @returns {void}
      */
     displayDetails() {
       document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: {id: this.file.id, ownerId: this.$root.ownerId}}));
@@ -157,6 +160,7 @@ export default {
      * Opens the file's action menu under the ⋮ button.
      *
      * @param {Event} event the click, by pointer or keyboard, on the button
+     * @returns {void}
      */
     displayActionMenu(event) {
       const rect = event.currentTarget.getBoundingClientRect();
