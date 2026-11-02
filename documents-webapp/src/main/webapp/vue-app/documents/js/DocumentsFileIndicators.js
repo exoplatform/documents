@@ -16,16 +16,18 @@
  */
 
 /**
- * Small markers other add-ons show after a file's name, in the file list and
- * on the file's tile. A provider registers with
+ * Small markers other add-ons show after a file's or a folder's name, in the
+ * file list and on the file's or the folder's tile. A provider registers with
  * extensionRegistry.registerExtension(EXTENSION_APP, PROVIDER_TYPE, {id, rank, load})
  * where load(fileIds) resolves to a Map, or a plain object, from a file id,
  * as listed, to whatever that provider's component shows for the file. Its
  * component registers with
  * extensionRegistry.registerComponent(EXTENSION_APP, COMPONENT_TYPE, {id, vueComponent, rank})
- * and receives the props {file, indicators}: indicators maps each provider id
- * to its answer for the file, and is undefined where no provider was asked,
- * such as a tile shown outside the Documents application. The application
+ * and receives the props {file, indicators, view}: file is the file or the
+ * folder; indicators maps each provider id to its answer for it, and is
+ * undefined where no provider was asked, such as a tile shown outside the
+ * Documents application; view is 'list' in the file list and 'tile' on a
+ * file's or a folder's tile, so markers can fit the room. The application
  * asks every provider once for each page of files it lists, never once per
  * file.
  */
