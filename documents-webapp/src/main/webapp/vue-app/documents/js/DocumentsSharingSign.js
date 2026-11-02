@@ -16,9 +16,9 @@
  */
 
 /**
- * The sharing signs a listed file or folder shows after its name: its
- * visibility, with the icon and the tooltip the former Access column used,
- * when its access is its own, then a link sign when it has a public link.
+ * The sharing signs a listed file or folder shows after its name: an icon
+ * and a tooltip telling its visibility, when its access is its own, then a
+ * link sign when it has a public link.
  *
  * Inside a folder, a row's access is its own when it differs from the opened
  * folder's: the listing gives each row its own access, and the opened
@@ -103,8 +103,8 @@ function hasPublicLink(acl) {
 }
 
 /**
- * Tells whether a node's access names the space or the user browsing it: the
- * rule the Access column used to show a read-only space or drive share.
+ * Tells whether a node's access names the current space, or the current user
+ * outside a space.
  *
  * @param {object} acl the node's access
  * @returns {boolean} true when the current space, or the current user outside a
@@ -122,8 +122,10 @@ function isSharedWithCurrentSpaceOrDrive(acl) {
 }
 
 /**
- * Gives the icon and the tooltip of a node's visibility, as the list's former
- * Access column showed them.
+ * Gives the icon and the tooltip of a node's visibility: a lock for a system
+ * node, an eye where its viewer's space or drive share is read-only or where
+ * members may only read, a layer group where all members may edit, a user
+ * lock for specific collaborators, a globe for a public access.
  *
  * @param {object} file the listed file or folder
  * @returns {object} the sign: `{id: 'visibility', icon, labelKey}`
@@ -196,8 +198,8 @@ function differsFromFolder(file, folder) {
 }
 
 /**
- * Computes the sharing signs of a listed row, at most two: its visibility, as
- * the former Access column showed it, when its access is its own (inside a
+ * Computes the sharing signs of a listed row, at most two: its visibility
+ * sign when its access is its own (inside a
  * folder, when it differs from the folder's; in the recent view and in search
  * results, when it is public), then a link sign when it has a public link.
  *
