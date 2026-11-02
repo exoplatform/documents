@@ -293,12 +293,53 @@
       }
 
       .documents-table,.documents-folder-table {
-        tbody {
-          tr:hover button.v-icon.mdi-dots-vertical.button-document-action {
-            display: flex !important;
+        thead {
+          th.documents-actions-header {
+            padding: 0 !important;
           }
-          tr:hover .button-info-details button.v-icon.fa-info-circle {
-            display: initial !important;
+          th.documents-last-updated-header {
+            padding: 0 8px 0 0 !important;
+          }
+          th.documents-size-header {
+            padding: 0 16px 0 0 !important;
+          }
+        }
+        // Without hover, as on a touch screen, the row actions always show.
+        @media (hover: none) {
+          tbody tr td .documents-row-actions {
+            opacity: 1;
+          }
+        }
+        tbody {
+          // The row actions keep their place at rest, so nothing moves when
+          // they appear on hover, on keyboard focus or while their menu is open.
+          .documents-row-actions {
+            opacity: 0;
+            transition: opacity 0.15s ease-in-out;
+          }
+          tr:hover .documents-row-actions,
+          .documents-row-actions:focus-within,
+          .documents-row-actions--open {
+            opacity: 1;
+          }
+          tr.documents-row--menu-open {
+            background: #eee;
+          }
+
+          td.documents-cell-actions {
+            width: 88px;
+            padding: 0 !important;
+          }
+          td.documents-cell-lastUpdated {
+            width: 116px;
+            padding: 0 8px 0 0 !important;
+            text-align: end;
+          }
+          td.documents-cell-size {
+            width: 64px;
+            padding: 0 16px 0 0 !important;
+            text-align: end;
+            white-space: nowrap;
           }
 
           td {
