@@ -429,7 +429,7 @@ export default {
     document.addEventListener('click', this.closeOnClickOutside);
     window.addEventListener('click', this.noteClickUnderDrawer, true);
     document.addEventListener('documents-transcript-expand', this.expandFromTranscript);
-    document.addEventListener('documents-favorite-updated', this.followFavoriteUpdate);
+    document.addEventListener('metadata.favorite.updated', this.followFavoriteUpdate);
     document.addEventListener('closeDisplayedDrawer', this.collapseOnMaskOrEscape, true);
   },
   methods: {
@@ -1050,13 +1050,14 @@ export default {
      * Follows a favorite change made elsewhere on the page, such as the star
      * of the file's row, while these details show the same file.
      *
-     * @param {CustomEvent} event its detail holds the file `id` and its new
+     * @param {CustomEvent} event the platform's `metadata.favorite.updated`,
+     *          whose detail holds the `objectType`, the `objectId` and the new
      *          `favorite` state
      * @returns {void}
      */
     followFavoriteUpdate(event) {
-      const {id, favorite} = event?.detail || {};
-      if (!id || !this.file || this.file.id !== id || !!this.isFavorite === !!favorite) {
+      const {objectType, objectId: id, favorite} = event?.detail || {};
+      if (objectType !== 'file' || !id || !this.file || this.file.id !== id || !!this.isFavorite === !!favorite) {
         return;
       }
       const metadatas = this.file.metadatas || {};

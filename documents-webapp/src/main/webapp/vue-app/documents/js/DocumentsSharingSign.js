@@ -130,7 +130,7 @@ function signAgainstFolder(file, folder) {
   if (isPublic(acl) && !isPublic(folderAcl)) {
     return publicSign(acl);
   }
-  if (acl.visibilityChoice === 'SPECIFIC_COLLABORATOR' && folderAcl.visibilityChoice === 'ALL_MEMBERS') {
+  if (acl.visibilityChoice === 'SPECIFIC_COLLABORATOR' && folderAcl.visibilityChoice !== 'SPECIFIC_COLLABORATOR') {
     return 'restricted';
   }
   const known = new Set(collaboratorKeys(folder));
