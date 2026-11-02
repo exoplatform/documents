@@ -60,7 +60,7 @@
   </span>
 </template>
 <script>
-import {SIGNS, FOLDER_MODE, getSharingSigns, canManageAccess as mayManageAccess, openManageAccess} from '../../../../js/DocumentsSharingSign.js';
+import {FOLDER_MODE, getSharingSigns, canManageAccess as mayManageAccess, openManageAccess} from '../../../../js/DocumentsSharingSign.js';
 
 export default {
   inject: {
@@ -87,7 +87,7 @@ export default {
     },
     signs() {
       return getSharingSigns(this.file, this.documentsSharingReference)
-        .map(id => ({id, icon: SIGNS[id].icon, label: this.$t(SIGNS[id].labelKey)}));
+        .map(sign => ({id: sign.id, icon: sign.icon, label: this.$t(sign.labelKey)}));
     },
     canManageAccess() {
       return mayManageAccess(this.file);
