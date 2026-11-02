@@ -3,8 +3,8 @@
     v-if="!isMobile"
     class="align-center ms-1 d-inline-flex mt-2">
     <exo-user-avatar
-      v-if="file.modifierIdentity"
-      :profile-id="file.modifierIdentity.remoteId"
+      v-if="lastActorIdentity"
+      :profile-id="lastActorIdentity.remoteId"
       :size="28"
       popover
       avatar
@@ -64,6 +64,9 @@ export default {
     },
   }),
   computed: {
+    lastActorIdentity() {
+      return this.file?.modifierIdentity || this.file?.creatorIdentity;
+    },
     lastUpdated() {
       return this.file && (this.file.modifiedDate || this.file.createdDate) || '';
     },
