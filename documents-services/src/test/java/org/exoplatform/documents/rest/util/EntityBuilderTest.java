@@ -166,6 +166,46 @@ public class EntityBuilderTest {
     }
 
   @Test
+  public void toNodePermissionEntityTellsAPublicLinkApartFromPublicAccess() throws Exception {
+    Space space = new Space();
+    space.setPrettyName("testspace");
+    when(spaceService.getSpaceByGroupId("/spaces/testspace")).thenReturn(space);
+    Identity spaceIdentity = mock(Identity.class);
+    when(spaceIdentity.getId()).thenReturn("999");
+    when(spaceIdentity.isSpace()).thenReturn(true);
+    when(identityManager.getOrCreateSpaceIdentity("testspace")).thenReturn(spaceIdentity);
+
+    FileNode node = new FileNode();
+    node.setId("fileId");
+    node.setPath("/Groups/spaces/testspace");
+
+    // A link on a node that is not open to anyone: the visibility choice does
+    // not change, the flag tells the link.
+    node.setAcl(new NodePermission(true, true, false, false, List.of(), null, null, null));
+    when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(true);
+    NodePermissionEntity linkOnly = invokeToNodePermissionEntity(node);
+    assertTrue(linkOnly.isHasPublicLink());
+    assertEquals(Visibility.SPECIFIC_COLLABORATOR.name(), linkOnly.getVisibilityChoice());
+
+    // No link: no flag.
+    when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(false);
+    NodePermissionEntity noLink = invokeToNodePermissionEntity(node);
+    assertFalse(noLink.isHasPublicLink());
+    assertEquals(Visibility.SPECIFIC_COLLABORATOR.name(), noLink.getVisibilityChoice());
+
+    // Open to anyone, with and without a link: the visibility choices are unchanged.
+    node.setAcl(new NodePermission(true, true, false, true, List.of(), null, null, null));
+    when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(true);
+    NodePermissionEntity publicWithLink = invokeToNodePermissionEntity(node);
+    assertTrue(publicWithLink.isHasPublicLink());
+    assertEquals(Visibility.COLLABORATORS_AND_PUBLIC_ACCESS.name(), publicWithLink.getVisibilityChoice());
+    when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(false);
+    NodePermissionEntity publicWithoutLink = invokeToNodePermissionEntity(node);
+    assertFalse(publicWithoutLink.isHasPublicLink());
+    assertEquals(Visibility.ANYONE.name(), publicWithoutLink.getVisibilityChoice());
+  }
+
+  @Test
   public void encodeNamePreservesPlusSign() throws Exception {
     FileNode node = new FileNode();
     node.setName("ABD + DEF.docx");
