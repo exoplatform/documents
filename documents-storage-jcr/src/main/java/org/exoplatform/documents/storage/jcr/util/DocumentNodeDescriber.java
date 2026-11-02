@@ -67,7 +67,8 @@ public final class DocumentNodeDescriber {
    * @return for each id naming a file the user may read, whether he may edit
    *         it; ids naming no node, a node he may not read or another kind of
    *         node are absent
-   * @throws RepositoryException when the repository fails otherwise
+   * @throws RepositoryException when the repository fails otherwise reading a
+   *           node; a failure of the edit check reads as read only
    */
   public static Map<String, Boolean> getAccess(ExtendedSession session,
                                                Collection<String> ids) throws RepositoryException {
