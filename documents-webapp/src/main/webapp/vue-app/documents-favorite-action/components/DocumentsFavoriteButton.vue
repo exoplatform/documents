@@ -115,7 +115,17 @@ export default {
         }
       }
     },
+    /**
+     * Tells every view showing the file that its favorite state changed, so
+     * the list row, the tile and the details panel show the same state.
+     *
+     * @param {boolean} favorite the file's new favorite state
+     */
+    notifyFavoriteUpdated(favorite) {
+      document.dispatchEvent(new CustomEvent('documents-favorite-updated', {detail: {id: this.fileId, favorite}}));
+    },
     async handleFavoriteDocumentRemoved() {
+      this.notifyFavoriteUpdated(false);
       this.$emit('removed');
       document.dispatchEvent(new CustomEvent('alert-message', {detail: {
         alertType: 'success',
@@ -126,6 +136,7 @@ export default {
       }
     },
     async handleFavoriteDocumentAdded() {
+      this.notifyFavoriteUpdated(true);
       this.$emit('added');
       document.dispatchEvent(new CustomEvent('alert-message', {detail: {
         alertType: 'success',

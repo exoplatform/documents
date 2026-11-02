@@ -142,15 +142,18 @@
 <script>
 import {openFileVersion} from '../../../js/DocumentVersionUtils.js';
 import {UPDATED_EVENT as FILE_INDICATORS_UPDATED, getProviders as getFileIndicatorProviders, loadIndicators as loadFileIndicators} from '../js/DocumentsFileIndicators.js';
+import {FOLDER_MODE, EXPOSURE_MODE} from '../js/DocumentsSharingSign.js';
 
 export default {
   provide() {
     return {
       documentsFileIndicators: this.fileIndicators,
+      documentsSharingReference: this.sharingReference,
     };
   },
   data: () => ({
     fileIndicators: {byFile: {}},
+    sharingReference: {mode: null, folderId: null, acl: null},
     canAdd: false,
     spaceCanAdd: false,
     versions: [],
@@ -281,6 +284,7 @@ export default {
     },
     files() {
       this.loadFileIndicators(false);
+      this.loadSharingReference();
     },
     fileIndicatorsShown(shown) {
       // Leaving the list forgets what was asked, so coming back asks every listed file again
@@ -292,6 +296,7 @@ export default {
   },
   created() {
     document.addEventListener(FILE_INDICATORS_UPDATED, this.reloadFileIndicators);
+    document.addEventListener('documents-favorite-updated', this.updateFileFavorite);
     this.viewType = this.$documentsUtils.getViewType(this.$root.appId);
     document.addEventListener('categories-updated', this.refreshDocument);
     document.addEventListener('categories-drawer-closed', this.resetMultiSelection);
@@ -418,6 +423,7 @@ export default {
   },
   destroyed() {
     document.removeEventListener(FILE_INDICATORS_UPDATED, this.reloadFileIndicators);
+    document.removeEventListener('documents-favorite-updated', this.updateFileFavorite);
     document.removeEventListener(`extension-${this.extensionApp}-${this.extensionType}-updated`, this.refreshViewExtensions);
     document.removeEventListener('document-version-restored', this.handleVersionRestoredElsewhere);
   },
@@ -466,6 +472,58 @@ export default {
      */
     reloadFileIndicators() {
       return this.loadFileIndicators(true);
+    },
+    /**
+     * Sets what each listed row's sharing is compared with. Inside a folder,
+     * a row is compared with the opened folder, whose access is read once
+     * per folder; in the recent view and in search results, rows come from
+     * many folders and only a real exposure gets a sign.
+     *
+     * @returns {Promise} settled once the reference is set
+     */
+    loadSharingReference() {
+      const reference = this.sharingReference;
+      if (this.selectedView !== 'folder' || this.isSearchResult || this.$root.driveView) {
+        Object.assign(reference, {mode: EXPOSURE_MODE, folderId: null, acl: null});
+        return Promise.resolve();
+      }
+      const folderId = this.parentFolderId || this.files?.find(file => file?.parentFolderId)?.parentFolderId;
+      if (!folderId) {
+        Object.assign(reference, {mode: FOLDER_MODE, folderId: null, acl: null});
+        return Promise.resolve();
+      }
+      if (reference.mode === FOLDER_MODE && reference.folderId === folderId) {
+        return Promise.resolve();
+      }
+      Object.assign(reference, {mode: FOLDER_MODE, folderId, acl: null});
+      return this.$documentFileService.getDocumentById(folderId)
+        .then(folder => {
+          if (reference.folderId === folderId) {
+            reference.acl = folder?.acl || null;
+          }
+        })
+        .catch(() => {
+          if (reference.folderId === folderId) {
+            reference.acl = null;
+          }
+        });
+    },
+    /**
+     * Applies a favorite change made anywhere on the page to the listed
+     * file, so its row and its tile show it at once.
+     *
+     * @param {CustomEvent} event its detail holds the file `id` and its new
+     *          `favorite` state
+     */
+    updateFileFavorite(event) {
+      const {id, favorite} = event?.detail || {};
+      const file = id && this.files?.find(listed => listed?.id === id);
+      if (!file) {
+        return;
+      }
+      const metadatas = file.metadatas || {};
+      const favorites = favorite ? (metadatas.favorites?.length && metadatas.favorites || [{objectId: id}]) : [];
+      this.$set(file, 'metadatas', {...metadatas, favorites});
     },
     copyPublicLinkToClipBoard(text) {
       navigator.clipboard.writeText(text).then(() => {
