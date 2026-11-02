@@ -63,28 +63,27 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
 });
 
 extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
-  id: 'lastUpdated',
-  labelKey: 'documents.label.lastUpdated',
-  align: 'center',
-  sortable: true,
-  cssClass: 'text-truncate tooltip-marker',
-  width: '170px',
-  rank: 40,
+  id: 'actions',
+  align: 'end',
+  sortable: false,
+  cssClass: 'documents-actions-header',
+  width: '88px',
+  rank: 30,
   componentOptions: {
-    vueComponent: Vue.options.components['documents-last-updated-cell'],
+    vueComponent: Vue.options.components['documents-actions-cell'],
   },
 });
 
 extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
-  id: 'visibility',
-  labelKey: 'documents.label.extension.visibility',
-  align: 'center',
+  id: 'lastUpdated',
+  labelKey: 'documents.label.lastUpdated',
+  align: 'end',
   sortable: true,
-  cssClass: 'text-truncate tooltip-marker',
-  width: '100px',
-  rank: 60,
+  cssClass: 'text-truncate tooltip-marker documents-last-updated-header',
+  width: '116px',
+  rank: 40,
   componentOptions: {
-    vueComponent: Vue.options.components['documents-visibility-cell'],
+    vueComponent: Vue.options.components['documents-last-updated-cell'],
   },
 });
 
@@ -96,8 +95,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'text-truncate',
   width: '190px',
   rank: 13,
-  enabled: (file, isMobile) => {
-    return file && !file.folder && !file.cloudDriveFolder && isMobile;
+  enabled: (file) => {
+    return file && !file.folder && !file.cloudDriveFolder;
   },
   enabledForMultiSelection: () => false,
   componentOptions: {
@@ -380,8 +379,8 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
   cssClass: 'text-truncate',
   width: '190px',
   rank: 14,
-  enabled: (file, isMobile) => {
-    return file && !file.cloudDriveFolder && !file.folder && isMobile;
+  enabled: (file) => {
+    return file && !file.cloudDriveFolder && !file.drive;
   },
   enabledForMultiSelection: () => false,
   componentOptions: {
@@ -433,26 +432,13 @@ extensionRegistry.registerExtension('DocumentMenu', 'menuActionMenu', {
 extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   id: 'size',
   labelKey: 'documents.label.size',
-  align: 'center',
+  align: 'end',
   sortable: true,
-  cssClass: 'text-truncate tooltip-marker',
-  width: '100px',
-  rank: 60,
+  cssClass: 'text-truncate tooltip-marker documents-size-header',
+  width: '64px',
+  rank: 50,
   componentOptions: {
     vueComponent: Vue.options.components['documents-size-cell'],
-  },
-});
-
-extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
-  id: 'favorite',
-  labelKey: 'documents.label.favorite',
-  align: 'center',
-  sortable: true,
-  cssClass: 'text-truncate tooltip-marker',
-  width: '120px',
-  rank: 70,
-  componentOptions: {
-    vueComponent: Vue.options.components['documents-favorite-cell'],
   },
 });
 

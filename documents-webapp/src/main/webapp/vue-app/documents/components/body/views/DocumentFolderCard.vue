@@ -53,7 +53,12 @@
             :is-mobile="isMobile"
             :edit-name-mode="editNameMode"
             card-view="true" />
-          <div v-else class="align-self-center text-subtitle-2 text-truncate">{{ name }}</div>
+          <div v-else class="documents-folder-card-name align-self-center d-flex align-center flex-nowrap">
+            <span class="text-subtitle-2 text-truncate">{{ name }}</span>
+            <documents-file-signs
+              :file="folder"
+              class="flex-shrink-0 ms-1" />
+          </div>
         </v-card>
         <v-card-actions v-show="!isDrive && (hover || selectedDocuments.length) && !editNameMode">
           <v-simple-checkbox
