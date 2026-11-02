@@ -129,6 +129,7 @@ export default {
   data: () => ({
     fileToEditId: -1,
     menuDisplayed: false,
+    menuRow: null,
     menuX: 0,
     menuY: 0,
   }),
@@ -154,7 +155,7 @@ export default {
   },
   watch: {
     menuDisplayed() {
-      const row = this.$el?.closest?.('tr');
+      const row = this.menuRow || this.$el?.closest?.('tr');
       if (row) {
         row.classList.toggle('documents-row--menu-open', this.menuDisplayed);
       }
@@ -180,6 +181,7 @@ export default {
      */
     startEditing(file) {
       if (this.file?.id === file?.id) {
+        this.menuDisplayed = false;
         this.fileToEditId = file.id;
       }
     },
@@ -229,6 +231,7 @@ export default {
      * @returns {void}
      */
     displayActionMenu(event) {
+      this.menuRow = event.currentTarget.closest('tr');
       const rect = event.currentTarget.getBoundingClientRect();
       this.menuX = rect.left;
       this.menuY = rect.bottom;
