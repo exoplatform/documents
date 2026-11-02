@@ -22,7 +22,7 @@
  * opened folder's: the listing gives each row its own access, and the opened
  * folder's access is read once per folder (`FOLDER_MODE`). In the recent view
  * and in search results, rows come from many folders, so a row shows a sign
- * only for a public access (`EXPOSURE_MODE`).
+ * only for a public link or a public access (`EXPOSURE_MODE`).
  *
  * The collaborators the listing returns are not all sharings: it leaves the
  * drive's owner out, but returns the administrators group to its members, a
@@ -101,13 +101,24 @@ function collaboratorKeys(node) {
 }
 
 /**
+ * Tells whether a node has a public link. The listing flags it on its own,
+ * since a link can exist on a node that is not open to anyone.
+ *
+ * @param {object} acl the access of a node, as the documents REST answers it
+ * @returns {boolean} true when the node has a public link
+ */
+function hasPublicLink(acl) {
+  return !!acl?.hasPublicLink || acl?.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS';
+}
+
+/**
  * Gives the public sign of an access.
  *
  * @param {object} acl the access of a node
  * @returns {string} 'publicLink' when a public link exists, 'anyone' otherwise
  */
 function publicSign(acl) {
-  return acl.visibilityChoice === 'COLLABORATORS_AND_PUBLIC_ACCESS' ? 'publicLink' : 'anyone';
+  return hasPublicLink(acl) ? 'publicLink' : 'anyone';
 }
 
 /**
@@ -130,6 +141,9 @@ function signAgainstFolder(file, folder) {
   if (isPublic(acl) && !isPublic(folderAcl)) {
     return publicSign(acl);
   }
+  if (hasPublicLink(acl) && !hasPublicLink(folderAcl)) {
+    return 'publicLink';
+  }
   if (acl.visibilityChoice === 'SPECIFIC_COLLABORATOR' && folderAcl.visibilityChoice !== 'SPECIFIC_COLLABORATOR') {
     return 'restricted';
   }
@@ -142,14 +156,15 @@ function signAgainstFolder(file, folder) {
 
 /**
  * Computes the sign of a row that is not compared with a folder: only a
- * public access is told. Without the row's folder, the grants a row inherits
- * from its folder's creator cannot be told from a sharing.
+ * public link or a public access is told. Without the row's folder, the
+ * grants a row inherits from its folder's creator cannot be told from a
+ * sharing.
  *
  * @param {object} file the listed row, with its `acl`
  * @returns {string|null} the sign id, or null when the row is not public
  */
 function signOfExposure(file) {
-  return isPublic(file.acl) ? publicSign(file.acl) : null;
+  return hasPublicLink(file.acl) || isPublic(file.acl) ? publicSign(file.acl) : null;
 }
 
 /**

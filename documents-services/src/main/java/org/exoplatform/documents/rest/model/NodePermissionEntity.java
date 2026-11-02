@@ -39,4 +39,12 @@ public class NodePermissionEntity {
 
   private List<PermissionEntryEntity> collaborators;
 
+  /**
+   * Whether the node has a public link, whatever its {@code visibilityChoice}:
+   * a link can exist on a node that is not open to anyone, which
+   * {@code visibilityChoice} does not tell. Sent to the client only; never
+   * read back when an access is saved.
+   */
+  private boolean hasPublicLink;
+
 }
