@@ -116,8 +116,8 @@ export default {
       }
     },
     /**
-     * Tells every view showing the file that its favorite state changed, so
-     * the list row, the tile and the details panel show the same state.
+     * Tells the page that the file's favorite state changed, so the file's
+     * row, its tile and its details panel show the new state.
      *
      * @param {boolean} favorite the file's new favorite state
      * @returns {void}
