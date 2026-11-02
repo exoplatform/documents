@@ -24,12 +24,23 @@ export default {
     }
   },
   data: () => ({
-    isFavorite: false,
+    favoriteOverride: null,
     displayActionMenu: false,
   }),
   computed: {
+    fileFavorite() {
+      return !!this.file?.metadatas?.favorites?.length;
+    },
+    isFavorite() {
+      return this.favoriteOverride === null ? this.fileFavorite : this.favoriteOverride;
+    },
     favoriteLabel() {
       return this.isFavorite ? this.$t('documents.label.remove.favorite') : this.$t('documents.label.add.favorite');
+    },
+  },
+  watch: {
+    fileFavorite() {
+      this.favoriteOverride = null;
     },
   },
   created() {
@@ -40,18 +51,17 @@ export default {
         }, 200);
       }
     });
-    this.isFavorite = !!this.file?.metadatas?.favorites?.length;
   },
   methods: {
     removed() {
-      this.isFavorite = false;
+      this.favoriteOverride = false;
       this.$emit('removed');
       if (this.isMobile) {
         this.$root.$emit('close-file-action-menu');
       }
     },
     added() {
-      this.isFavorite = true;
+      this.favoriteOverride = true;
       this.$emit('added');
       if (this.isMobile) {
         this.$root.$emit('close-file-action-menu');
