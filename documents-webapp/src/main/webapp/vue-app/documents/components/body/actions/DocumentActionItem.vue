@@ -37,7 +37,9 @@
           {{ icon }}
         </v-icon>
       </v-list-item-icon>
-      <v-list-item-title class="text-body menu-text-color">
+      <v-list-item-title
+        :class="isGroup && 'pe-7'"
+        class="text-body menu-text-color">
         <span :class="labelExtraClass">
           {{ label }}
         </span>
