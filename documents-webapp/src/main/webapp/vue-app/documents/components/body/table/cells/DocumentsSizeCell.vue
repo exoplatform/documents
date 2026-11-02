@@ -1,5 +1,5 @@
 <template>
-  <div class="align-center">
+  <div class="text-no-wrap">
     <span class="text-light-color">{{ size }}</span>
   </div>
 </template>

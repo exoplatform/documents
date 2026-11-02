@@ -41,6 +41,30 @@
       v-if="canBeFavorite"
       :file="file"
       class="documents-row-action documents-row-favorite" />
+    <span
+      v-else
+      class="documents-row-action-slot"></span>
+    <v-tooltip
+      v-if="canManageAccess"
+      :open-delay="500"
+      bottom>
+      <template #activator="{ on, attrs }">
+        <v-btn
+          :aria-label="accessLabel"
+          class="documents-row-action documents-row-access"
+          icon
+          small
+          v-bind="attrs"
+          v-on="on"
+          @click="manageAccess">
+          <v-icon size="16">fas fa-shield-alt</v-icon>
+        </v-btn>
+      </template>
+      <span>{{ accessLabel }}</span>
+    </v-tooltip>
+    <span
+      v-else
+      class="documents-row-action-slot"></span>
     <v-tooltip
       :disabled="menuDisplayed"
       :open-delay="500"
@@ -82,6 +106,8 @@
   </div>
 </template>
 <script>
+import {canManageAccess as mayManageAccess, openManageAccess} from '../../../../js/DocumentsSharingSign.js';
+
 export default {
   props: {
     file: {
@@ -113,6 +139,12 @@ export default {
   computed: {
     canBeFavorite() {
       return !this.file.folder && !this.file.cloudDriveFolder;
+    },
+    canManageAccess() {
+      return mayManageAccess(this.file, this.$shareDocumentSuspended);
+    },
+    accessLabel() {
+      return this.$t('documents.label.visibility');
     },
     detailsLabel() {
       return this.$t('documents.label.show.details');
@@ -147,6 +179,14 @@ export default {
       if (this.menuDisplayed && !event.target?.closest?.('.group-menu-action')) {
         window.setTimeout(() => this.menuDisplayed = false, 200);
       }
+    },
+    /**
+     * Opens Manage access for the file.
+     *
+     * @returns {void}
+     */
+    manageAccess() {
+      openManageAccess(this.$root, this.file, this.selectedView === 'timeline' ? 'recentView' : 'folderView');
     },
     /**
      * Opens the file's details panel.
