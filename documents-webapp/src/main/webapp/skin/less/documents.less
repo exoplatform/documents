@@ -310,12 +310,6 @@
           height: 13px !important;
           min-width: 0 !important;
         }
-        // A missing row action keeps its place, so the others do not move.
-        .documents-row-action-slot {
-          display: inline-block;
-          width: 28px;
-          flex-shrink: 0;
-        }
         // Every name starts at the same x, whatever the width of its icon.
         td.documents-cell-name .documents-file-type-icon {
           width: 24px;
@@ -334,7 +328,7 @@
             padding: 0 0 0 16px !important;
           }
           th.documents-size-header {
-            padding: 0 16px !important;
+            padding: 0 16px 0 32px !important;
           }
         }
         // Without hover, as on a touch screen, the row actions always show.
@@ -372,26 +366,31 @@
             min-width: 116px;
             padding: 0 !important;
           }
+          // The date and the size sit in boxes of the avatar's height,
+          // centred in the row, so they share one line, avatar or not.
           td.documents-cell-lastUpdated {
             width: 1%;
             padding: 0 0 0 16px !important;
             text-align: end;
             white-space: nowrap;
+            vertical-align: middle;
+            > div {
+              margin-top: 0 !important;
+              min-height: 28px;
+            }
           }
           td.documents-cell-size {
             width: 1%;
             min-width: 80px;
-            padding: 0 16px !important;
+            padding: 0 16px 0 32px !important;
             text-align: end;
             white-space: nowrap;
+            vertical-align: middle;
             font-variant-numeric: tabular-nums;
-            // The size sits in a box shaped like the date's (an 8px top
-            // margin around a 28px avatar), so both share one baseline.
             .documents-size-value {
               display: inline-flex;
               align-items: center;
               height: 28px;
-              margin-top: 8px;
             }
           }
 
