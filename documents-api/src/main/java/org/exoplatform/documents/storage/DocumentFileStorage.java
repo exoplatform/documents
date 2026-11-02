@@ -384,10 +384,12 @@ public interface DocumentFileStorage {
   boolean canAccess(String documentID, Identity aclIdentity);
 
   /**
-   * See {@link org.exoplatform.documents.service.DocumentFileService#getDocumentAccess}.
+   * See {@link org.exoplatform.documents.service.DocumentFileService#getDocumentAccess}:
+   * the session is opened as the current {@code ConversationState}, not as
+   * {@code aclIdentity}.
    *
    * @param ids node identifiers
-   * @param aclIdentity the user
+   * @param aclIdentity the request's user, whose session the rights are read in
    * @return for each file the user may read, whether he may edit it
    */
   default Map<String, Boolean> getDocumentAccess(Collection<String> ids, Identity aclIdentity) {
