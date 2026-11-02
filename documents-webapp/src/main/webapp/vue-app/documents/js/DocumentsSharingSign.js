@@ -42,7 +42,7 @@ export const SIGNS = {
     labelKey: 'documents.label.sharing.anyone',
   },
   publicLink: {
-    icon: 'fas fa-globe',
+    icon: 'fas fa-link',
     labelKey: 'documents.label.sharing.publicLink',
   },
   restricted: {
