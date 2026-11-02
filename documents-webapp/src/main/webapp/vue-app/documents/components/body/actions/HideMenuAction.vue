@@ -32,6 +32,7 @@ export default {
 
   methods: {
     hide(hidden) {
+      this.$root.$emit('close-file-action-menu');
       this.file.hidden = hidden;
       return this.$documentFileService.updateVisibility(this.$root.ownerId,this.file)
         .then(() => {
