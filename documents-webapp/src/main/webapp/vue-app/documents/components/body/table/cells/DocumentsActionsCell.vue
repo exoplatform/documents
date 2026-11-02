@@ -20,6 +20,10 @@
     :id="`document-action-menu-cel-${file.id}`"
     :class="menuDisplayed && 'documents-row-actions--open'"
     class="documents-row-actions d-flex align-center justify-end flex-nowrap">
+    <documents-favorite-button
+      v-if="canBeFavorite"
+      :file="file"
+      class="documents-row-action documents-row-favorite" />
     <v-tooltip
       :open-delay="500"
       bottom>
@@ -37,13 +41,6 @@
       </template>
       <span>{{ detailsLabel }}</span>
     </v-tooltip>
-    <documents-favorite-button
-      v-if="canBeFavorite"
-      :file="file"
-      class="documents-row-action documents-row-favorite" />
-    <span
-      v-else
-      class="documents-row-action-slot"></span>
     <v-tooltip
       v-if="canManageAccess"
       :open-delay="500"
@@ -62,9 +59,6 @@
       </template>
       <span>{{ accessLabel }}</span>
     </v-tooltip>
-    <span
-      v-else
-      class="documents-row-action-slot"></span>
     <v-tooltip
       :disabled="menuDisplayed"
       :open-delay="500"
