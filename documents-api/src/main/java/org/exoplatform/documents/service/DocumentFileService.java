@@ -465,8 +465,8 @@ public interface DocumentFileService {
 
   /**
    * Tells, for several nodes at once, which files the request's user may read
-   * and which he may edit, in one repository session. As every method of this
-   * service that takes an identity, the session is opened as the current
+   * and which he may edit, in one repository session. The session is opened
+   * through the storage's user session provider, so it runs as the current
    * {@code ConversationState}, not as {@code aclIdentity}: a caller passes the
    * request's own identity, and a call made for another user, or from a thread
    * with no request user, reads the rights of whoever the thread runs as.
