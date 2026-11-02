@@ -16,7 +16,7 @@
 -->
 <template>
   <div
-    v-if="!file.drive"
+    v-if="!file.drive && !editing"
     :id="`document-action-menu-cel-${file.id}`"
     :class="menuDisplayed && 'documents-row-actions--open'"
     class="documents-row-actions d-flex align-center justify-end flex-nowrap">
@@ -133,11 +133,15 @@ export default {
     },
   },
   data: () => ({
+    fileToEditId: -1,
     menuDisplayed: false,
     menuX: 0,
     menuY: 0,
   }),
   computed: {
+    editing() {
+      return this.file?.id === this.fileToEditId;
+    },
     canBeFavorite() {
       return !this.file.folder && !this.file.cloudDriveFolder;
     },
@@ -164,11 +168,38 @@ export default {
   },
   created() {
     document.addEventListener('mousedown', this.closeMenuOnOutsideClick);
+    this.$root.$on('update-file-name', this.startEditing);
+    this.$root.$on('cancel-edit-mode', this.stopEditing);
   },
   beforeDestroy() {
     document.removeEventListener('mousedown', this.closeMenuOnOutsideClick);
+    this.$root.$off('update-file-name', this.startEditing);
+    this.$root.$off('cancel-edit-mode', this.stopEditing);
   },
   methods: {
+    /**
+     * Hides the row's actions while its name is being edited, as a new
+     * folder's is: the row has no node to act on yet.
+     *
+     * @param {object} file the file whose name is being edited
+     * @returns {void}
+     */
+    startEditing(file) {
+      if (this.file?.id === file?.id) {
+        this.fileToEditId = file.id;
+      }
+    },
+    /**
+     * Shows the row's actions again once its name is no longer edited.
+     *
+     * @param {object} file the file whose name was being edited
+     * @returns {void}
+     */
+    stopEditing(file) {
+      if (this.file?.id === file?.id) {
+        this.fileToEditId = null;
+      }
+    },
     /**
      * Closes the action menu when the user presses anywhere but on one of
      * its groups, late enough for a clicked action to run first.
