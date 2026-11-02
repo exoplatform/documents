@@ -212,6 +212,14 @@ export default {
     createDocFolderPath: '',
   }),
   computed: {
+    /**
+     * @returns {boolean} true while the files show as a list, the only place
+     *          their markers show: tiles show on a wide enough window with
+     *          the cards view chosen, as the folder and timeline views decide
+     */
+    fileIndicatorsShown() {
+      return this.$root.isMobile || this.viewType !== 'cardsView';
+    },
     displayCategoriesFilter() {
       return this.$root.allowFilteringPerCategory && this.recentViewSelected;
     },
@@ -271,6 +279,13 @@ export default {
     },
     files() {
       this.loadFileIndicators(false);
+    },
+    fileIndicatorsShown(shown) {
+      // Leaving the list forgets what was asked, so coming back asks every listed file again
+      this.requestedFileIndicators = new Map();
+      if (shown) {
+        this.loadFileIndicators(false);
+      }
     },
   },
   created() {
@@ -412,28 +427,33 @@ export default {
      * Asks the file marker providers about the listed files, once for the
      * files a listing adds, and forgets the files it no longer shows, so a
      * folder opened again is asked again. Markers show in the list only:
-     * with the files shown as tiles, or no provider registered, nothing is
-     * asked.
+     * with the files shown as tiles ({@link fileIndicatorsShown}), or no
+     * provider registered, nothing is asked.
      *
      * @param {boolean} all true to ask again about every listed file, as when
      *          a provider registers after the files were listed
      * @returns {Promise} settled once the answers are applied
      */
     loadFileIndicators(all) {
-      if (this.viewType !== 'listView' || !getFileIndicatorProviders().length) {
+      if (!this.fileIndicatorsShown || !getFileIndicatorProviders().length) {
         return Promise.resolve();
       }
       const listed = [...new Set((this.files || []).map(file => file?.id).filter(Boolean))];
       const byFile = this.fileIndicators.byFile;
       Object.keys(byFile).filter(fileId => !listed.includes(fileId)).forEach(fileId => this.$delete(byFile, fileId));
-      this.requestedFileIndicators = new Set([...(this.requestedFileIndicators || [])].filter(fileId => listed.includes(fileId)));
-      const asked = all ? listed : listed.filter(fileId => !this.requestedFileIndicators.has(fileId));
+      const requested = this.requestedFileIndicators instanceof Map ? this.requestedFileIndicators : new Map();
+      [...requested.keys()].filter(fileId => !listed.includes(fileId)).forEach(fileId => requested.delete(fileId));
+      this.requestedFileIndicators = requested;
+      const asked = all ? listed : listed.filter(fileId => !requested.has(fileId));
       if (!asked.length) {
         return Promise.resolve();
       }
-      asked.forEach(fileId => this.requestedFileIndicators.add(fileId));
+      // Each file remembers its latest request: an older answer arriving late never overwrites a newer one
+      const request = (this.fileIndicatorsRequests || 0) + 1;
+      this.fileIndicatorsRequests = request;
+      asked.forEach(fileId => requested.set(fileId, request));
       return loadFileIndicators(asked).then(answers => Object.keys(answers)
-        .filter(fileId => this.requestedFileIndicators.has(fileId))
+        .filter(fileId => this.requestedFileIndicators.get(fileId) === request)
         .forEach(fileId => this.$set(byFile, fileId, answers[fileId])));
     },
     /**
