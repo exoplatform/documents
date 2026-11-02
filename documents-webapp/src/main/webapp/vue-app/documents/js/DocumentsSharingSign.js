@@ -28,9 +28,9 @@
  * drive's owner out, but returns the administrators group to its members, a
  * creator's read entry once the node's access was saved, and the grant a
  * saved folder gives its creator, which the rows created inside inherit.
- * The rules below set those grants aside on the client; the server-side fix,
- * and a « shared beyond default » flag computed by the server, are tracked by
- * the Maintenance task EXO-92881.
+ * The rules below set those grants aside on the client. The server-side fix
+ * of the two creator grants, and a « shared beyond default » flag computed by
+ * the server, are tracked by the Maintenance task EXO-92881.
  */
 
 export const FOLDER_MODE = 'folder';
