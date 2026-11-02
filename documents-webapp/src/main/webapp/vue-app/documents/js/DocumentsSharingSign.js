@@ -184,3 +184,39 @@ export function getSharingSign(file, reference) {
   }
   return signOfExposure(file);
 }
+
+/**
+ * Tells whether the viewer may change a node's access from the list: never on
+ * a space's locked system folder, nor while sharing is suspended.
+ *
+ * @param {object} file the listed file or folder
+ * @param {boolean} shareSuspended whether sharing documents is suspended
+ * @returns {boolean} true when the viewer may open Manage access for it
+ */
+export function canManageAccess(file, shareSuspended) {
+  const lockedSystemFolder = file?.folder
+    && file.creatorUserName === '__system'
+    && eXo.env.portal.spaceIdentityId
+    && !eXo.env.portal.isAdministrator;
+  return !!file?.acl?.canEdit && !shareSuspended && !lockedSystemFolder;
+}
+
+/**
+ * Opens Manage access for a node, and tells the analytics which view it was
+ * opened from.
+ *
+ * @param {object} root the application's root component
+ * @param {object} file the listed file or folder
+ * @param {string} view 'folderView' or 'recentView'
+ * @returns {void}
+ */
+export function openManageAccess(root, file, view) {
+  root.$emit('open-visibility-drawer', file);
+  document.dispatchEvent(new CustomEvent('manage-access', {
+    detail: {
+      'category': file.folder ? 'Folder' : 'Document',
+      'spaceId': eXo.env.portal.spaceId,
+      'view': view,
+    }
+  }));
+}

@@ -56,7 +56,7 @@
   </span>
 </template>
 <script>
-import {SIGNS, FOLDER_MODE, getSharingSign} from '../../../../js/DocumentsSharingSign.js';
+import {SIGNS, FOLDER_MODE, getSharingSign, canManageAccess as mayManageAccess, openManageAccess} from '../../../../js/DocumentsSharingSign.js';
 
 export default {
   inject: {
@@ -88,14 +88,8 @@ export default {
     signLabel() {
       return this.sign && this.$t(this.sign.labelKey);
     },
-    isLockedSystemFolder() {
-      return this.file?.folder
-        && this.file.creatorUserName === '__system'
-        && eXo.env.portal.spaceIdentityId
-        && !eXo.env.portal.isAdministrator;
-    },
     canManageAccess() {
-      return this.file?.acl?.canEdit && !this.$shareDocumentSuspended && !this.isLockedSystemFolder;
+      return mayManageAccess(this.file, this.$shareDocumentSuspended);
     },
   },
   methods: {
@@ -105,14 +99,7 @@ export default {
      * @returns {void}
      */
     manageAccess() {
-      this.$root.$emit('open-visibility-drawer', this.file);
-      document.dispatchEvent(new CustomEvent('manage-access', {
-        detail: {
-          'category': this.file.folder ? 'Folder' : 'Document',
-          'spaceId': eXo.env.portal.spaceId,
-          'view': this.documentsSharingReference?.mode === FOLDER_MODE ? 'folderView' : 'recentView',
-        }
-      }));
+      openManageAccess(this.$root, this.file, this.documentsSharingReference?.mode === FOLDER_MODE ? 'folderView' : 'recentView');
     },
   },
 };
