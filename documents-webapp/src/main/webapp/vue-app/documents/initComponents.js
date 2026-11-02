@@ -34,9 +34,9 @@ import DocumentsFolderListView from './components/body/views/DocumentsFolderList
 import DocumentsTimelineGroupHeader from './components/body/views/DocumentsTimelineGroupHeader.vue';
 import DocumentsTableCell from './components/body/table/DocumentsTableCell.vue';
 import DocumentsLastUpdatedCell from './components/body/table/cells/DocumentsLastUpdatedCell.vue';
-import DocumentsVisibilityCell from './components/body/table/cells/DocumentsVisibilityCell.vue';
+import DocumentsFileSigns from './components/body/table/cells/DocumentsFileSigns.vue';
+import DocumentsActionsCell from './components/body/table/cells/DocumentsActionsCell.vue';
 import DocumentsLastActivityCell from './components/body/table/cells/DocumentsLastActivityCell.vue';
-import DocumentsFavoriteCell from './components/body/table/cells/DocumentsFavoriteCell.vue';
 import DocumentsFavoriteAction from './components/body/table/action/DocumentFavoriteAction.vue';
 import DocumentsFileNameCell from './components/body/table/cells/DocumentsFileNameCell.vue';
 import DocumentsFileEditNameCell from './components/body/table/cells/DocumentsFileEditNameCell.vue';
@@ -70,7 +70,6 @@ import DeleteMenuAction from './components/body/actions/DeleteMenuAction.vue';
 import OpenInDesktopCredentialsDialog from './components/body/actions/OpenInDesktopCredentialsDialog.vue';
 import OpenInDesktopMenuAction from './components/body/actions/OpenInDesktopMenuAction.vue';
 import ShortcutMenuAction from './components/body/actions/ShortcutMenuAction.vue';
-import DocumentsInfoDetailsCell from './components/body/table/cells/DocumentsInfoDetailsCell.vue';
 import DocumentAddNewMobile from './components/header/actions/DocumentAddNewMobile.vue';
 import DocumentAdvancedFilterDrawer from './components/header/filters/DocumentAdvancedFilterDrawer.vue';
 import DocumentSettingsDrawer from './components/header/setting/DocumentSettingsDrawer.vue';
@@ -125,9 +124,9 @@ const components = {
   'documents-timeline-group-header': DocumentsTimelineGroupHeader,
   'documents-table-cell': DocumentsTableCell,
   'documents-last-updated-cell': DocumentsLastUpdatedCell,
-  'documents-visibility-cell': DocumentsVisibilityCell,
+  'documents-file-signs': DocumentsFileSigns,
+  'documents-actions-cell': DocumentsActionsCell,
   'documents-last-activity-cell': DocumentsLastActivityCell,
-  'documents-favorite-cell': DocumentsFavoriteCell,
   'documents-favorite-action': DocumentsFavoriteAction,
   'documents-file-name-cell': DocumentsFileNameCell,
   'documents-file-edit-name-cell': DocumentsFileEditNameCell,
@@ -165,7 +164,6 @@ const components = {
   'folder-treeview-drawer': FolderTreeViewDrawer,
   'document-tree-view': TreeView,
   'details-menu-action': DetailsMenuAction,
-  'documents-info-details-cell': DocumentsInfoDetailsCell,
   'upload-overlay': UploadOverlay,
   'versionHistory-menu-action': VersionHistoryMenuAction,
   'favorite-filter-action': FavoriteFilterActionMobile,

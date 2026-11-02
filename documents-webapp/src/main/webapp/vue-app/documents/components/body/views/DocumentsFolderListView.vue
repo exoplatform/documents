@@ -136,7 +136,8 @@
                     </td>
                     <td
                       v-for="header in extendedCells"
-                      :key="header.value + item.id">
+                      :key="header.value + item.id"
+                      :class="`documents-cell-${header.value}`">
                       <documents-table-cell
                         :extension="header.cellExtension"
                         :file="item"
@@ -291,7 +292,7 @@ export default {
     headerExtensionApp: 'Documents',
     headerExtensionType: 'timelineViewHeader',
     headerExtensions: {},
-    mobileUnfriendlyExtensions: ['visibility','lastUpdated', 'size', 'lastActivity', 'favorite'],
+    mobileUnfriendlyExtensions: ['actions', 'lastUpdated', 'size', 'lastActivity'],
     selectAll: false,
     showSelectAllInput: false,
     showSelectInputTimer: null,
