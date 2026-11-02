@@ -16,7 +16,7 @@
     </div>
     <a
       class="attachment d-flex flex-nowrap text-color not-clickable text-decoration-none openPreviewDoc width-document-title">
-      <div class="mt-auto mb-auto">
+      <div class="documents-file-type-icon d-flex justify-center flex-shrink-0 mt-auto mb-auto">
         <v-progress-circular
           v-if="loading"
           color="primary"

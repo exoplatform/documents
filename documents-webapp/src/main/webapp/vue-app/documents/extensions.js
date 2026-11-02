@@ -67,7 +67,7 @@ extensionRegistry.registerExtension('Documents', 'timelineViewHeader', {
   align: 'end',
   sortable: false,
   cssClass: 'documents-actions-header',
-  width: '88px',
+  width: '116px',
   rank: 30,
   componentOptions: {
     vueComponent: Vue.options.components['documents-actions-cell'],
