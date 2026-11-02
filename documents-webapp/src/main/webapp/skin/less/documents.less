@@ -303,6 +303,23 @@
         .documentNameRow .documents-file-signs {
           padding-top: 2px;
         }
+        // The sign's button is as wide as its icon, so the gap before it
+        // is the same whether the viewer may change access or not.
+        .documents-file-signs .v-btn.documents-file-sharing {
+          width: 13px !important;
+          height: 13px !important;
+          min-width: 0 !important;
+        }
+        // A missing row action keeps its place, so the others do not move.
+        .documents-row-action-slot {
+          display: inline-block;
+          width: 28px;
+          flex-shrink: 0;
+        }
+        // Every name starts at the same x, whatever the width of its icon.
+        td.documents-cell-name .documents-file-type-icon {
+          width: 24px;
+        }
         thead {
           th.documents-actions-header {
             padding: 0 !important;
@@ -351,8 +368,8 @@
             max-width: 0;
           }
           td.documents-cell-actions {
-            width: 88px;
-            min-width: 88px;
+            width: 116px;
+            min-width: 116px;
             padding: 0 !important;
           }
           td.documents-cell-lastUpdated {
