@@ -271,12 +271,24 @@ export default {
     cancelTouch() {
       clearTimeout(this.touchTimer);
     },
+    /**
+     * Picks the file's icon by its type: a folder's, the type's own, else the
+     * audio or video icon for any audio or video type, else a plain file's.
+     *
+     * @returns {void}
+     */
     getFileIcon() {
       const extensions = this.$documentsIconsExtension;
       if (this.file?.folder) {
         this.icon = extensions[0].get('folder');
       } else {
-        let extension = extensions[0].get(this.file?.mimeType);
+        const mimeType = this.file?.mimeType || '';
+        let extension = extensions[0].get(mimeType);
+        if (!extension && mimeType.startsWith('audio/')) {
+          extension = extensions[0].get('audio/mpeg');
+        } else if (!extension && mimeType.startsWith('video/')) {
+          extension = extensions[0].get('video/mp4');
+        }
         if (!extension) {
           extension = extensions[0].get('file');
         }
