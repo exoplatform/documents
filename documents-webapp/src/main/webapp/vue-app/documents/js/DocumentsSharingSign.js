@@ -186,19 +186,18 @@ export function getSharingSign(file, reference) {
 }
 
 /**
- * Tells whether the viewer may change a node's access from the list: never on
- * a space's locked system folder, nor while sharing is suspended.
+ * Tells whether the viewer may change a node's access from the list, by the
+ * same rule as the action menu's Manage access entry, so the list never
+ * offers it where the menu does not (a shortcut, a cloud drive folder, a news
+ * attachment, a locked system node, sharing suspended).
  *
  * @param {object} file the listed file or folder
- * @param {boolean} shareSuspended whether sharing documents is suspended
  * @returns {boolean} true when the viewer may open Manage access for it
  */
-export function canManageAccess(file, shareSuspended) {
-  const lockedSystemFolder = file?.folder
-    && file.creatorUserName === '__system'
-    && eXo.env.portal.spaceIdentityId
-    && !eXo.env.portal.isAdministrator;
-  return !!file?.acl?.canEdit && !shareSuspended && !lockedSystemFolder;
+export function canManageAccess(file) {
+  const entry = extensionRegistry.loadExtensions('DocumentMenu', 'menuActionMenu')
+    .find(extension => extension.id === 'visibility');
+  return !!(file && entry?.enabled?.(file, false));
 }
 
 /**
