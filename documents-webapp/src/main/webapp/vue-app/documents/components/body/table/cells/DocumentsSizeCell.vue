@@ -1,6 +1,12 @@
 <template>
-  <div class="text-no-wrap">
-    <span class="text-light-color">{{ size }}</span>
+  <div class="documents-size-value text-no-wrap">
+    <span
+      v-if="size"
+      class="text-light-color">{{ size }}</span>
+    <template v-else>
+      <span class="text-light-color" aria-hidden="true">—</span>
+      <span class="d-sr-only">{{ $t('documents.label.size.none') }}</span>
+    </template>
   </div>
 </template>
 
