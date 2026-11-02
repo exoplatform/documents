@@ -514,6 +514,7 @@ export default {
      *
      * @param {CustomEvent} event its detail holds the file `id` and its new
      *          `favorite` state
+     * @returns {void}
      */
     updateFileFavorite(event) {
       const {id, favorite} = event?.detail || {};
