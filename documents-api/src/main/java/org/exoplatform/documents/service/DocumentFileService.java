@@ -476,8 +476,9 @@ public interface DocumentFileService {
    * @return for each id naming a file the user may read, true when he may edit
    *         it and false when he may only read it; an id naming no node, a
    *         node he may not read or a node that is not a file is absent
-   * @throws IllegalStateException when the repository fails, never read as a
-   *           refusal
+   * @throws IllegalStateException when the repository fails reading a node,
+   *           never read as a refusal; a failure of the edit check reads as
+   *           read only, never as an edit
    */
   default Map<String, Boolean> getDocumentAccess(Collection<String> ids,
                                                  org.exoplatform.services.security.Identity aclIdentity) {
