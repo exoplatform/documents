@@ -48,44 +48,48 @@
       <div class="mt-auto mb-auto width-document-title">
         <div
           v-if="!editNameMode"
-          class="document-title clickable hover-underline d-inline-flex"
-          :class="file.hidden ? 'text-light-color' : ''"
-          :title="file.hidden ? `${file.name} (${$t('documents.label.hidden')})`: `${file.name}`"
-          role="link"
-          tabindex="0"
-          @click="openPreview()"
-          @keydown.enter="openPreview()">
+          class="documentNameRow d-flex align-center flex-nowrap"
+          style="min-width: 0">
           <div
-            v-sanitized-html="title"
-            class="document-name ms-4"
-            :class="title.includes('</b>') ? '' : 'text-truncate'">
+            class="document-title clickable hover-underline d-inline-flex"
+            style="min-width: 0"
+            :class="file.hidden ? 'text-light-color' : ''"
+            :title="file.hidden ? `${file.name} (${$t('documents.label.hidden')})`: `${file.name}`"
+            role="link"
+            tabindex="0"
+            @click="openPreview()"
+            @keydown.enter="openPreview()">
+            <div
+              v-sanitized-html="title"
+              class="document-name ms-4"
+              :class="title.includes('</b>') ? '' : 'text-truncate'">
+            </div>
+            <div
+              v-sanitized-html="fileType"
+              class="document-type ms-0">
+            </div>
+            <v-icon
+              v-if="file.sourceID"
+              size="13"
+              class="pe-1 iconStyle ms-1">
+              mdi-link-variant
+            </v-icon>
+            <v-icon
+              v-if="file.hidden"
+              size="13"
+              class="pe-1 iconStyle ms-1">
+              fas fa-eye-slash
+            </v-icon>
           </div>
-          <div
-            v-sanitized-html="fileType"
-            class="document-type ms-0">
-          </div>
-          <v-icon
-            v-if="file.sourceID"
-            size="13"
-            class="pe-1 iconStyle ms-1">
-            mdi-link-variant
-          </v-icon>
-          <v-icon
-            v-if="file.hidden"
-            size="13"
-            class="pe-1 iconStyle ms-1">
-            fas fa-eye-slash
-          </v-icon>
+          <extension-registry-components
+            :params="indicatorParams"
+            name="DocumentsFileIndicators"
+            type="documents-file-indicator"
+            parent-element="span"
+            element="span"
+            class="documents-file-indicators d-inline-flex align-center flex-shrink-0 ms-2"
+            strict-type />
         </div>
-        <extension-registry-components
-          v-if="!editNameMode"
-          :params="indicatorParams"
-          name="DocumentsFileIndicators"
-          type="documents-file-indicator"
-          parent-element="span"
-          element="span"
-          class="documents-file-indicators d-inline-flex align-center ms-2"
-          strict-type />
         <documents-file-edit-name-cell
           v-if="editNameMode"
           :file="file"
