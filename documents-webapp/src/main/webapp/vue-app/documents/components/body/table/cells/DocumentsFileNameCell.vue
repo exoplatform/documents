@@ -241,10 +241,15 @@ export default {
     menuY: 0,
   }),
   computed: {
+    /**
+     * @returns {object} what the file's markers get on its row: the file,
+     *          what the providers answered for it, and the « list » view
+     */
     indicatorParams() {
       return {
         file: this.file,
         indicators: this.file?.id && this.documentsFileIndicators?.byFile?.[this.file.id],
+        view: 'list',
       };
     },
     isFileEditable() {
