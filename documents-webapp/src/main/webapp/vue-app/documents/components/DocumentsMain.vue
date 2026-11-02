@@ -151,7 +151,7 @@ export default {
   },
   data: () => ({
     fileIndicators: {byFile: {}},
-    sharingReference: {mode: null, folderId: null, acl: null},
+    sharingReference: {mode: null, folderId: null, folder: null},
     canAdd: false,
     spaceCanAdd: false,
     versions: [],
@@ -482,27 +482,27 @@ export default {
     loadSharingReference() {
       const reference = this.sharingReference;
       if (this.selectedView !== 'folder' || this.isSearchResult || this.$root.driveView) {
-        Object.assign(reference, {mode: EXPOSURE_MODE, folderId: null, acl: null});
+        Object.assign(reference, {mode: EXPOSURE_MODE, folderId: null, folder: null});
         return Promise.resolve();
       }
       const folderId = this.parentFolderId || this.files?.find(file => file?.parentFolderId)?.parentFolderId;
       if (!folderId) {
-        Object.assign(reference, {mode: FOLDER_MODE, folderId: null, acl: null});
+        Object.assign(reference, {mode: FOLDER_MODE, folderId: null, folder: null});
         return Promise.resolve();
       }
       if (reference.mode === FOLDER_MODE && reference.folderId === folderId) {
         return Promise.resolve();
       }
-      Object.assign(reference, {mode: FOLDER_MODE, folderId, acl: null});
+      Object.assign(reference, {mode: FOLDER_MODE, folderId, folder: null});
       return this.$documentFileService.getDocumentById(folderId)
         .then(folder => {
           if (reference.folderId === folderId) {
-            reference.acl = folder?.acl || null;
+            reference.folder = folder?.acl ? {acl: folder.acl, creatorUserName: folder.creatorUserName} : null;
           }
         })
         .catch(() => {
           if (reference.folderId === folderId) {
-            reference.acl = null;
+            reference.folder = null;
           }
         });
     },
@@ -1328,28 +1328,6 @@ export default {
           this.files = options?.append ? this.files.concat(files) : files ;
           this.files = [...new Map(this.files.map((item) => [item['id'], item])).values()];
           this.files = options?.deleted ? this.files.filter(this.isDocumentsToBeDeleted) : this.files;
-          if (this.sortField === 'favorite'){
-            this.files.sort((file1, file2) => {
-              if (file1.favorite === false && file2.favorite === true) {
-                return this.ascending ? -1 : 1;
-              }
-              if (file1.favorite === true && file2.favorite === false) {
-                return this.ascending ? 1 : -1;
-              }
-              return 0;
-            });
-          }
-          if (this.sortField === 'visibility'){
-            this.files.sort((file1, file2) => {
-              if (file1.acl.visibilityChoice > file2.acl.visibilityChoice) {
-                return this.ascending ? -1 : 1;
-              }
-              if (file1.acl.visibilityChoice < file2.acl.visibilityChoice) {
-                return this.ascending ? 1 : -1;
-              }
-              return 0;
-            }); 
-          }
           this.hasMore = files && files.length >= this.limit;
           if (this.fileName && !options?.disablePreview) {
             const result = files.filter(file => file?.path.endsWith(`/${this.fileName}`));
