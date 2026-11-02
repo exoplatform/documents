@@ -23,9 +23,10 @@
  * folder's access is read once per folder (`FOLDER_MODE`). In the recent view
  * and in search results, rows come from many folders, so a row shows a sign
  * only for a real exposure: a public access, or collaborators added to it
- * (`EXPOSURE_MODE`). The listing leaves out of the collaborators the drive's
- * owner and the creator's own grant; with the administrators group the
- * storage adds also left out, any collaborator left was added.
+ * (`EXPOSURE_MODE`). The listing leaves the drive's owner out of the
+ * collaborators; the collaborators the storage adds by itself (the
+ * administrators group, the creator's read entry) are left out here, so any
+ * collaborator left was added by someone.
  */
 
 export const FOLDER_MODE = 'folder';
@@ -70,16 +71,35 @@ function isPublic(acl) {
 }
 
 /**
- * Lists the ids of the identities an access names as collaborators, leaving
- * out the administrators group the storage adds by itself.
+ * Tells whether a collaborator is one the storage adds by itself rather than
+ * a sharing: the administrators group, or the node's own creator. Saving a
+ * node's access grants its creator every permission, which the content
+ * repository keeps as one entry per permission; the listing hides the
+ * creator's edit entries but returns its read entry as a collaborator.
  *
- * @param {object} acl the access of a node
+ * @param {object} identity the collaborator's identity
+ * @param {string} creatorUserName the user name of the node's creator
+ * @returns {boolean} true when the collaborator is not a sharing
+ */
+function isImplicitCollaborator(identity, creatorUserName) {
+  if (identity.providerId === 'group') {
+    return identity.remoteId === ADMINISTRATORS_GROUP;
+  }
+  return identity.providerId === 'organization' && !!creatorUserName && identity.remoteId === creatorUserName;
+}
+
+/**
+ * Lists the ids of the identities a node's access names as collaborators,
+ * leaving out those the storage adds by itself.
+ *
+ * @param {object} node a listed row or a folder, with its `acl` and its
+ *          `creatorUserName`
  * @returns {Array<string>} the identity ids, empty when there is none
  */
-function collaboratorIds(acl) {
-  return (acl?.collaborators || [])
+function collaboratorIds(node) {
+  return (node?.acl?.collaborators || [])
     .map(collaborator => collaborator?.identity)
-    .filter(identity => identity?.id && !(identity.providerId === 'group' && identity.remoteId === ADMINISTRATORS_GROUP))
+    .filter(identity => identity?.id && !isImplicitCollaborator(identity, node.creatorUserName))
     .map(identity => identity.id);
 }
 
@@ -96,19 +116,21 @@ function publicSign(acl) {
 /**
  * Computes the sign of a row inside a folder, against the opened folder's access.
  *
- * @param {object} acl the row's access
- * @param {object} folderAcl the opened folder's access
+ * @param {object} file the listed row, with its `acl` and `creatorUserName`
+ * @param {object} folder the opened folder, with its `acl` and `creatorUserName`
  * @returns {string|null} the sign id, or null when the row shares as its folder
  */
-function signAgainstFolder(acl, folderAcl) {
+function signAgainstFolder(file, folder) {
+  const acl = file.acl;
+  const folderAcl = folder.acl;
   if (isPublic(acl) && !isPublic(folderAcl)) {
     return publicSign(acl);
   }
   if (acl.visibilityChoice === 'SPECIFIC_COLLABORATOR' && folderAcl.visibilityChoice === 'ALL_MEMBERS') {
     return 'restricted';
   }
-  const folderCollaborators = collaboratorIds(folderAcl);
-  if (collaboratorIds(acl).some(id => !folderCollaborators.includes(id))) {
+  const folderCollaborators = collaboratorIds(folder);
+  if (collaboratorIds(file).some(id => !folderCollaborators.includes(id))) {
     return 'people';
   }
   return null;
@@ -117,31 +139,30 @@ function signAgainstFolder(acl, folderAcl) {
 /**
  * Computes the sign of a row that is not compared with a folder.
  *
- * @param {object} acl the row's access
+ * @param {object} file the listed row, with its `acl` and `creatorUserName`
  * @returns {string|null} the sign id, or null when the row is not exposed
  */
-function signOfExposure(acl) {
-  if (isPublic(acl)) {
-    return publicSign(acl);
+function signOfExposure(file) {
+  if (isPublic(file.acl)) {
+    return publicSign(file.acl);
   }
-  return collaboratorIds(acl).length ? 'people' : null;
+  return collaboratorIds(file).length ? 'people' : null;
 }
 
 /**
  * Computes the sharing sign of a listed row.
  *
  * @param {object} file the listed file or folder
- * @param {object} reference `{mode, acl}`: the mode, and in `FOLDER_MODE` the
- *          opened folder's access, null while it is not read yet
+ * @param {object} reference `{mode, folder}`: the mode, and in `FOLDER_MODE`
+ *          the opened folder with its `acl`, null while it is not read yet
  * @returns {string|null} a key of `SIGNS`, or null for no sign
  */
 export function getSharingSign(file, reference) {
-  const acl = file?.acl;
-  if (!acl || file.drive || file.sourceID || file.cloudDriveFolder || !reference?.mode) {
+  if (!file?.acl || file.drive || file.sourceID || file.cloudDriveFolder || !reference?.mode) {
     return null;
   }
   if (reference.mode === FOLDER_MODE) {
-    return reference.acl ? signAgainstFolder(acl, reference.acl) : null;
+    return reference.folder?.acl ? signAgainstFolder(file, reference.folder) : null;
   }
-  return signOfExposure(acl);
+  return signOfExposure(file);
 }
