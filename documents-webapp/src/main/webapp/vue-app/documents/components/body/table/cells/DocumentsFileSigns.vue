@@ -77,6 +77,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    noSharing: {
+      type: Boolean,
+      default: false,
+    },
   },
   computed: {
     isFavorite() {
@@ -86,6 +90,9 @@ export default {
       return this.$t('documents.label.sign.favorite');
     },
     signs() {
+      if (this.noSharing) {
+        return [];
+      }
       return getSharingSigns(this.file, this.documentsSharingReference)
         .map(sign => ({id: sign.id, icon: sign.icon, label: this.$t(sign.labelKey)}));
     },
