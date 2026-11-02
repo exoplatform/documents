@@ -413,15 +413,16 @@ export default {
     /**
      * Asks the file marker providers about the listed files, once for the
      * files a listing adds, and forgets the files it no longer shows, so a
-     * folder opened again is asked again. With no provider registered,
-     * nothing is asked and no file gets markers.
+     * folder opened again is asked again. Markers show in the list only:
+     * with the files shown as tiles, or no provider registered, nothing is
+     * asked.
      *
      * @param {boolean} all true to ask again about every listed file, as when
      *          a provider registers after the files were listed
      * @returns {Promise} settled once the answers are applied
      */
     loadFileIndicators(all) {
-      if (!getFileIndicatorProviders().length) {
+      if (this.viewType !== 'listView' || !getFileIndicatorProviders().length) {
         return Promise.resolve();
       }
       const listed = [...new Set((this.files || []).map(file => file?.id).filter(Boolean))];
