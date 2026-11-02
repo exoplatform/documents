@@ -332,8 +332,17 @@
             background: #eee;
           }
 
+          // The name takes the width the other columns leave and shortens:
+          // with no max-width, the table sizes it to the whole unwrapped name
+          // and its markers, and the table, wider than its wrapper, loses its
+          // right-hand columns.
+          td.documents-cell-name {
+            width: 100%;
+            max-width: 0;
+          }
           td.documents-cell-actions {
             width: 88px;
+            min-width: 88px;
             padding: 0 !important;
           }
           td.documents-cell-lastUpdated {
