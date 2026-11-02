@@ -79,7 +79,8 @@ export default {
       maxProgress: 100,
       newUploadedFiles: [],
       abortUploading: false,
-      uploadedFilesCount: 0
+      uploadedFilesCount: 0,
+      pendingExistenceChecks: 0,
     };
   },
   computed: {
@@ -129,7 +130,21 @@ export default {
   },
   methods: {
     uploadFile: function () {
+      // Cleared when the picker opens rather than after a pick, and never by
+      // this code while a picked file is still held (in its existence check,
+      // queued, waiting for a conflict choice, uploading, or kept for Retry):
+      // a picked file is read only once its upload starts, and on iOS Safari a
+      // picked photo may not stay readable once its input is cleared
+      // (inferred, not reproduced on a device).
+      if (!this.holdsPickedFiles()) {
+        this.$refs.uploadInput.value = null;
+      }
       this.$refs.uploadInput.click();
+    },
+    holdsPickedFiles() {
+      return this.pendingExistenceChecks > 0
+        || [...(this.attachments || []), ...this.newUploadedFiles, ...this.uploadingFilesQueue]
+          .some(file => file?.originalFileObject);
     },
     handleFileUpload: function (files) {
       if (this.$refs.uploadInput){
@@ -188,8 +203,6 @@ export default {
             return true;
           }
         });
-        this.$refs.uploadInput.value = null;
-      
       }
     },
     queueUpload: function (file) {
@@ -202,7 +215,8 @@ export default {
         }}));
         return;
       }
-      this.checkExistenceActions(file).then(actions => {
+      this.pendingExistenceChecks++;
+      this.checkExistenceActions(file).finally(() => this.pendingExistenceChecks--).then(actions => {
         if (actions.length > 0) {
           file.actions = actions;
           file.waitAction = true;
@@ -237,11 +251,24 @@ export default {
     sendFileToServer(file, continueAction) {
       if (!file.aborted && !file.waitAction) {
         this.uploadingCount++;
-        this.$uploadService.upload(file.originalFileObject, file.uploadId, file.signal)
-          .then(() => delete file.originalFileObject)
-          .catch(() => {
-            this.$root.$emit('alert-message', this.$t('attachments.link.failed'), 'error');
-            this.markUploadFailed(file);
+        // A retry starts a new attempt: an earlier request settling late
+        // neither fails it nor ends its pending state.
+        const attempt = file.uploadAttempt = (file.uploadAttempt || 0) + 1;
+        file.uploadPending = true;
+        new Promise(resolve => resolve(this.$uploadService.upload(file.originalFileObject, file.uploadId, file.signal)))
+          .then(uploadId => {
+            if (!uploadId) {
+              throw new Error('Upload request failed');
+            }
+            if (file.uploadAttempt === attempt) {
+              delete file.originalFileObject;
+            }
+          })
+          .catch(() => file.uploadAttempt === attempt && this.handleUploadFailure(file))
+          .finally(() => {
+            if (file.uploadAttempt === attempt) {
+              file.uploadPending = false;
+            }
           });
         this.controlUpload(file, continueAction);
       } else {
@@ -255,12 +282,12 @@ export default {
       } else {
         if (file.uploadId) {
           window.setTimeout(() => {
-            if (!file.countFirstProgressError) {
-              file.countFirstProgressError=0;
+            if (file.uploadFailed) {
+              return;
             }
+            const sentWhileUploadPending = file.uploadPending;
             this.$uploadService.getUploadProgress(file.uploadId)
               .then(percent => {
-                delete file.countFirstProgressError;
                 if (this.abortUploading) {
                   return;
                 } else {
@@ -280,14 +307,14 @@ export default {
                 }
               })
               .catch((err) => {
-                if (err.message==='Uploaded resource not found' && file.countFirstProgressError != null && file.countFirstProgressError < 5) {
-                  //if the upload request take more than 200ms to initialize, then the progress request arrives too early.
-                  //In this case, redo the progress, until 5 errors to be sure
-                  file.countFirstProgressError++;
+                if (err?.message === 'Uploaded resource not found' && sentWhileUploadPending) {
+                  // The server knows an upload only once its request reaches
+                  // it, which can be well after the first poll: a slow network,
+                  // or a browser that prepares the body before sending it,
+                  // starts the request late.
                   this.controlUpload(file, continueAction);
                 } else {
-                  this.markUploadFailed(file);
-                  this.$root.$emit('alert-message', this.$t('attachments.link.failed'), 'error');
+                  this.handleUploadFailure(file);
                 }
               });
           }, 200);
@@ -305,6 +332,13 @@ export default {
     },
     removeAttachedFile(file) {
       this.$root.$emit('remove-attachment-item', file);
+    },
+    handleUploadFailure(file) {
+      if (file.uploadFailed || file.aborted) {
+        return;
+      }
+      this.$root.$emit('alert-message', this.$t('attachments.link.failed'), 'error');
+      this.markUploadFailed(file);
     },
     markUploadFailed(file) {
       // Keep the failed item in the list (with an inline error + Retry) instead
@@ -328,7 +362,6 @@ export default {
       this.$set(file, 'uploadProgress', 0);
       file.aborted = false;
       delete file.inProcess;
-      delete file.countFirstProgressError;
       const controller = new AbortController();
       file.signal = controller.signal;
       if (this.newUploadedFiles.findIndex(f => f.uploadId === file.uploadId) === -1) {
