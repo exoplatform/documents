@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="!isMobile"
-    class="align-center ms-1 d-inline-flex mt-2">
+    class="documents-last-updated align-center ms-1 d-inline-flex">
     <exo-user-avatar
       v-if="lastActorIdentity"
       :profile-id="lastActorIdentity.remoteId"
