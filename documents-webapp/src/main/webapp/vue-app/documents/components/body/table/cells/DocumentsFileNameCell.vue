@@ -336,6 +336,8 @@ export default {
     /**
      * Opens the file's action menu as a bottom sheet, on a narrow screen,
      * where the row has no actions column.
+     *
+     * @returns {void}
      */
     displayActionMenu() {
       this.$root.$emit('open-file-action-menu', this.file);
