@@ -187,9 +187,11 @@ export function getSharingSign(file, reference) {
 
 /**
  * Tells whether the viewer may change a node's access from the list, by the
- * same rule as the action menu's Manage access entry, so the list never
- * offers it where the menu does not (a shortcut, a cloud drive folder, a news
- * attachment, a locked system node, sharing suspended).
+ * same rule as the action menu's Manage access entry: never on a shortcut, a
+ * cloud drive folder, a news attachment or a locked system node, nor while
+ * sharing is suspended. Sharing is known to be suspended only once the
+ * transfer rules are loaded, so a row may show the action before then; the
+ * rule is checked again when the action is used.
  *
  * @param {object} file the listed file or folder
  * @returns {boolean} true when the viewer may open Manage access for it
@@ -201,8 +203,8 @@ export function canManageAccess(file) {
 }
 
 /**
- * Opens Manage access for a node, and tells the analytics which view it was
- * opened from.
+ * Opens Manage access for a node, when the viewer may still change its
+ * access, and tells the analytics which view it was opened from.
  *
  * @param {object} root the application's root component
  * @param {object} file the listed file or folder
@@ -210,6 +212,9 @@ export function canManageAccess(file) {
  * @returns {void}
  */
 export function openManageAccess(root, file, view) {
+  if (!canManageAccess(file)) {
+    return;
+  }
   root.$emit('open-visibility-drawer', file);
   document.dispatchEvent(new CustomEvent('manage-access', {
     detail: {
