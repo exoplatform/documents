@@ -149,10 +149,15 @@ export default {
     folderToEditId: -1,
   }),
   computed: {
+    /**
+     * @returns {object} what the folder's markers get on its tile: the folder,
+     *          what the providers answered for it, and the « tile » view
+     */
     indicatorParams() {
       return {
         file: this.folder,
         indicators: this.folder?.id && this.documentsFileIndicators?.byFile?.[this.folder.id],
+        view: 'tile',
       };
     },
     folderId() {
