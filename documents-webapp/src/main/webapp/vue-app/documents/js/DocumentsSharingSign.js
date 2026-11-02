@@ -191,7 +191,8 @@ export function getSharingSign(file, reference) {
  * cloud drive folder, a news attachment or a locked system node, nor while
  * sharing is suspended. Sharing is known to be suspended only once the
  * transfer rules are loaded, so a row may show the action before then; the
- * rule is checked again when the action is used.
+ * rule is checked again when the action is used. A row with no access yet,
+ * such as a folder being created, offers none.
  *
  * @param {object} file the listed file or folder
  * @returns {boolean} true when the viewer may open Manage access for it
@@ -199,7 +200,7 @@ export function getSharingSign(file, reference) {
 export function canManageAccess(file) {
   const entry = extensionRegistry.loadExtensions('DocumentMenu', 'menuActionMenu')
     .find(extension => extension.id === 'visibility');
-  return !!(file && entry?.enabled?.(file, false));
+  return !!(file?.acl && entry?.enabled?.(file, false));
 }
 
 /**
