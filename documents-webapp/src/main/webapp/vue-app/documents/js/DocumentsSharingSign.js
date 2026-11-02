@@ -112,17 +112,28 @@ function hasPublicLink(acl) {
 }
 
 /**
- * Gives the public sign of an access.
+ * Gives the public signs of a row: open to anyone, then a public link, each
+ * told only when the reference does not have it already.
  *
- * @param {object} acl the access of a node
- * @returns {string} 'publicLink' when a public link exists, 'anyone' otherwise
+ * @param {object} acl the row's access
+ * @param {object} referenceAcl the opened folder's access, or null when the
+ *          row is not compared with a folder
+ * @returns {Array<string>} the public sign ids, at most two, in that order
  */
-function publicSign(acl) {
-  return hasPublicLink(acl) ? 'publicLink' : 'anyone';
+function publicSigns(acl, referenceAcl) {
+  const signs = [];
+  if (isPublic(acl) && !isPublic(referenceAcl)) {
+    signs.push('anyone');
+  }
+  if (hasPublicLink(acl) && !hasPublicLink(referenceAcl)) {
+    signs.push('publicLink');
+  }
+  return signs;
 }
 
 /**
- * Computes the sign of a row inside a folder, against the opened folder's access.
+ * Computes the signs of a row inside a folder, against the opened folder's
+ * access.
  *
  * A row names, besides the people it was shared with, grants the storage made
  * by itself: its own creator, whose read entry the listing returns once the
@@ -133,56 +144,43 @@ function publicSign(acl) {
  *
  * @param {object} file the listed row, with its `acl` and `creatorUserName`
  * @param {object} folder the opened folder, with its `acl` and `creatorUserName`
- * @returns {string|null} the sign id, or null when the row shares as its folder
+ * @returns {Array<string>} the sign ids, empty when the row shares as its folder
  */
-function signAgainstFolder(file, folder) {
+function signsAgainstFolder(file, folder) {
   const acl = file.acl;
   const folderAcl = folder.acl;
-  if (isPublic(acl) && !isPublic(folderAcl)) {
-    return publicSign(acl);
-  }
-  if (hasPublicLink(acl) && !hasPublicLink(folderAcl)) {
-    return 'publicLink';
+  const signs = publicSigns(acl, folderAcl);
+  if (signs.length) {
+    return signs;
   }
   if (acl.visibilityChoice === 'SPECIFIC_COLLABORATOR' && folderAcl.visibilityChoice !== 'SPECIFIC_COLLABORATOR') {
-    return 'restricted';
+    return ['restricted'];
   }
   const known = new Set(collaboratorKeys(folder));
   [folder.creatorUserName, file.creatorUserName]
     .filter(Boolean)
     .forEach(userName => known.add(identityKey('organization', userName)));
-  return collaboratorKeys(file).some(key => !known.has(key)) ? 'people' : null;
+  return collaboratorKeys(file).some(key => !known.has(key)) ? ['people'] : [];
 }
 
 /**
- * Computes the sign of a row that is not compared with a folder: only a
- * public link or a public access is told. Without the row's folder, the
- * grants a row inherits from its folder's creator cannot be told from a
- * sharing.
- *
- * @param {object} file the listed row, with its `acl`
- * @returns {string|null} the sign id, or null when the row is not public
- */
-function signOfExposure(file) {
-  return hasPublicLink(file.acl) || isPublic(file.acl) ? publicSign(file.acl) : null;
-}
-
-/**
- * Computes the sharing sign of a listed row.
+ * Computes the sharing signs of a listed row: at most two, open to anyone
+ * then a public link; or one of restricted and shared with people, inside a
+ * folder only.
  *
  * @param {object} file the listed file or folder
  * @param {object} reference `{mode, folder}`: the mode, and in `FOLDER_MODE`
  *          the opened folder with its `acl`, null while it is not read yet
- * @returns {string|null} a key of `SIGNS`, or null for no sign
+ * @returns {Array<string>} keys of `SIGNS`, empty for no sign
  */
-export function getSharingSign(file, reference) {
+export function getSharingSigns(file, reference) {
   if (!file?.acl || file.drive || file.sourceID || file.cloudDriveFolder || !reference?.mode) {
-    return null;
+    return [];
   }
   if (reference.mode === FOLDER_MODE) {
-    return reference.folder?.acl ? signAgainstFolder(file, reference.folder) : null;
+    return reference.folder?.acl ? signsAgainstFolder(file, reference.folder) : [];
   }
-  return signOfExposure(file);
+  return publicSigns(file.acl, null);
 }
 
 /**
