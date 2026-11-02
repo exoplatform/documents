@@ -54,6 +54,15 @@
             :edit-name-mode="editNameMode"
             card-view="true" />
           <div v-else class="align-self-center text-subtitle-2 text-truncate">{{ name }}</div>
+          <extension-registry-components
+            v-if="!editNameMode"
+            :params="indicatorParams"
+            name="DocumentsFileIndicators"
+            type="documents-file-indicator"
+            parent-element="span"
+            element="span"
+            class="documents-file-indicators d-inline-flex align-center align-self-center mt-1 text-truncate"
+            strict-type />
         </v-card>
         <v-card-actions v-show="!isDrive && (hover || selectedDocuments.length) && !editNameMode">
           <v-simple-checkbox
@@ -99,6 +108,11 @@
 
 <script>
 export default {
+  inject: {
+    documentsFileIndicators: {
+      default: null,
+    },
+  },
   props: {
     folder: {
       type: Object,
@@ -135,6 +149,12 @@ export default {
     folderToEditId: -1,
   }),
   computed: {
+    indicatorParams() {
+      return {
+        file: this.folder,
+        indicators: this.folder?.id && this.documentsFileIndicators?.byFile?.[this.folder.id],
+      };
+    },
     folderId() {
       return this.folder?.id;
     },
