@@ -24,7 +24,8 @@
  * and in search results, rows come from many folders, so a row shows a sign
  * only for a real exposure: a public access, or collaborators added to it
  * (`EXPOSURE_MODE`). The listing leaves out of the collaborators the drive's
- * owner and the creator's own grant, so any collaborator left was added.
+ * owner and the creator's own grant; with the administrators group the
+ * storage adds also left out, any collaborator left was added.
  */
 
 export const FOLDER_MODE = 'folder';
@@ -52,6 +53,13 @@ export const SIGNS = {
 const PUBLIC_CHOICES = ['ANYONE', 'COLLABORATORS_AND_PUBLIC_ACCESS'];
 
 /**
+ * The group the storage grants on every node of a space drive whose access
+ * is saved (`JCRDocumentFileStorage#updatePermissions`), and which the
+ * listing returns as a collaborator to its members only: never a sharing.
+ */
+const ADMINISTRATORS_GROUP = '/platform/administrators';
+
+/**
  * Tells whether an access is open to the public.
  *
  * @param {object} acl the access of a node, as the documents REST answers it
@@ -62,13 +70,17 @@ function isPublic(acl) {
 }
 
 /**
- * Lists the ids of the identities an access names as collaborators.
+ * Lists the ids of the identities an access names as collaborators, leaving
+ * out the administrators group the storage adds by itself.
  *
  * @param {object} acl the access of a node
  * @returns {Array<string>} the identity ids, empty when there is none
  */
 function collaboratorIds(acl) {
-  return (acl?.collaborators || []).map(collaborator => collaborator?.identity?.id).filter(Boolean);
+  return (acl?.collaborators || [])
+    .map(collaborator => collaborator?.identity)
+    .filter(identity => identity?.id && !(identity.providerId === 'group' && identity.remoteId === ADMINISTRATORS_GROUP))
+    .map(identity => identity.id);
 }
 
 /**
