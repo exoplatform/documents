@@ -380,9 +380,19 @@
           }
           td.documents-cell-size {
             width: 1%;
+            min-width: 80px;
             padding: 0 16px !important;
             text-align: end;
             white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+            // The size sits in a box shaped like the date's (an 8px top
+            // margin around a 28px avatar), so both share one baseline.
+            .documents-size-value {
+              display: inline-flex;
+              align-items: center;
+              height: 28px;
+              margin-top: 8px;
+            }
           }
 
           td {
