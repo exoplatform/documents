@@ -115,18 +115,7 @@ export default {
         }
       }
     },
-    /**
-     * Tells the page that the file's favorite state changed, so the file's
-     * row, its tile and its details panel show the new state.
-     *
-     * @param {boolean} favorite the file's new favorite state
-     * @returns {void}
-     */
-    notifyFavoriteUpdated(favorite) {
-      document.dispatchEvent(new CustomEvent('documents-favorite-updated', {detail: {id: this.fileId, favorite}}));
-    },
     async handleFavoriteDocumentRemoved() {
-      this.notifyFavoriteUpdated(false);
       this.$emit('removed');
       document.dispatchEvent(new CustomEvent('alert-message', {detail: {
         alertType: 'success',
@@ -137,7 +126,6 @@ export default {
       }
     },
     async handleFavoriteDocumentAdded() {
-      this.notifyFavoriteUpdated(true);
       this.$emit('added');
       document.dispatchEvent(new CustomEvent('alert-message', {detail: {
         alertType: 'success',
