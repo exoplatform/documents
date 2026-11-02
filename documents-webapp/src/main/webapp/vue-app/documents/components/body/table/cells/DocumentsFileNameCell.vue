@@ -104,10 +104,6 @@
             :value="lastUpdated"
             :format="fullDateFormat"
             class="document-time text-light-color text-no-wrap" />
-          <documents-size-cell
-            v-if="!file.folder && !file.drive"
-            :file="file"
-            class="document-size ms-2 text-no-wrap" />
         </div>
       </div>
     </a>
