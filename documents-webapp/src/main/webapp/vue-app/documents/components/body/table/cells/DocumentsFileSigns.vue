@@ -16,7 +16,7 @@
 -->
 <template>
   <span
-    v-if="isFavorite || sign"
+    v-if="isFavorite || signs.length"
     class="documents-file-signs d-inline-flex align-center">
     <v-icon
       v-if="isFavorite"
@@ -28,35 +28,39 @@
       size="13">
       fas fa-star
     </v-icon>
-    <v-btn
-      v-if="sign && canManageAccess"
-      :title="signLabel"
-      :aria-label="signLabel"
-      :class="isFavorite && 'ms-2'"
-      class="documents-file-sign documents-file-sharing"
-      icon
-      x-small
-      @click.stop.prevent="manageAccess">
+    <template v-for="(sign, index) in signs">
+      <v-btn
+        v-if="canManageAccess"
+        :key="sign.id"
+        :title="sign.label"
+        :aria-label="sign.label"
+        :class="(isFavorite || index) && 'ms-2'"
+        class="documents-file-sign documents-file-sharing"
+        icon
+        x-small
+        @click.stop.prevent="manageAccess">
+        <v-icon
+          :class="dark ? 'white--text' : 'iconStyle'"
+          size="13">
+          {{ sign.icon }}
+        </v-icon>
+      </v-btn>
       <v-icon
-        :class="dark ? 'white--text' : 'iconStyle'"
+        v-else
+        :key="sign.id"
+        :title="sign.label"
+        :aria-label="sign.label"
+        :class="[dark ? 'white--text' : 'iconStyle', (isFavorite || index) && 'ms-2']"
+        class="documents-file-sign documents-file-sharing"
+        role="img"
         size="13">
         {{ sign.icon }}
       </v-icon>
-    </v-btn>
-    <v-icon
-      v-else-if="sign"
-      :title="signLabel"
-      :aria-label="signLabel"
-      :class="[dark ? 'white--text' : 'iconStyle', isFavorite && 'ms-2']"
-      class="documents-file-sign documents-file-sharing"
-      role="img"
-      size="13">
-      {{ sign.icon }}
-    </v-icon>
+    </template>
   </span>
 </template>
 <script>
-import {SIGNS, FOLDER_MODE, getSharingSign, canManageAccess as mayManageAccess, openManageAccess} from '../../../../js/DocumentsSharingSign.js';
+import {SIGNS, FOLDER_MODE, getSharingSigns, canManageAccess as mayManageAccess, openManageAccess} from '../../../../js/DocumentsSharingSign.js';
 
 export default {
   inject: {
@@ -81,12 +85,9 @@ export default {
     favoriteLabel() {
       return this.$t('documents.label.sign.favorite');
     },
-    sign() {
-      const signId = getSharingSign(this.file, this.documentsSharingReference);
-      return signId && SIGNS[signId];
-    },
-    signLabel() {
-      return this.sign && this.$t(this.sign.labelKey);
+    signs() {
+      return getSharingSigns(this.file, this.documentsSharingReference)
+        .map(id => ({id, icon: SIGNS[id].icon, label: this.$t(SIGNS[id].labelKey)}));
     },
     canManageAccess() {
       return mayManageAccess(this.file);
