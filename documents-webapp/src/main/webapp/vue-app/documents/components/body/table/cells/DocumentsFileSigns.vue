@@ -101,6 +101,8 @@ export default {
   methods: {
     /**
      * Opens the access drawer of the file, as its sharing sign was clicked.
+     *
+     * @returns {void}
      */
     manageAccess() {
       this.$root.$emit('open-visibility-drawer', this.file);
