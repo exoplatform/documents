@@ -273,10 +273,15 @@ export default {
     fileId() {
       return this.file?.id;
     },
+    /**
+     * @returns {object} what the file's markers get on its tile: the file,
+     *          what the providers answered for it, and the « tile » view
+     */
     indicatorParams() {
       return {
         file: this.file,
         indicators: this.file?.id && this.documentsFileIndicators?.byFile?.[this.file.id],
+        view: 'tile',
       };
     },
     fileName() {
