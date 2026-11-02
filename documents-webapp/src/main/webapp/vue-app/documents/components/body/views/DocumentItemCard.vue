@@ -104,7 +104,8 @@
               v-if="!editNameMode"
               :file="file"
               class="my-auto me-1 flex-shrink-0"
-              dark />
+              dark
+              no-sharing />
             <v-spacer />
             <div class="d-flex">
               <v-simple-checkbox
