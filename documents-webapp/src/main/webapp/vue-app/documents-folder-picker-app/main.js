@@ -47,7 +47,7 @@ let i18nPromise = null;
  * 'open-documents-folder-picker' event. Mounts the picker root on first use, then
  * opens the explorer drawer at the requested drive/folder.
  *
- * @param {Object} detail the open request: {defaultDrive?, defaultFolder?, spaceId?}
+ * @param {Object} detail the open request: {defaultDrive?, defaultFolder?, spaceId?, lockDrive?}
  * @returns {void}
  */
 export function open(detail) {
@@ -82,6 +82,7 @@ function createPickerApp(i18n) {
       defaultDrive: null,
       defaultFolder: '',
       spaceId: '',
+      lockDrive: false,
       // Whether the current open ended with a confirmed selection (drives the
       // selected-vs-cancelled outcome when the drawer closes).
       picked: false,
@@ -114,7 +115,9 @@ function createPickerApp(i18n) {
       /**
        * Opens the explorer drawer for one picking round.
        *
-       * @param {Object} detail {defaultDrive?, defaultFolder?, spaceId?}
+       * @param {Object} detail {defaultDrive?, defaultFolder?, spaceId?, lockDrive?}:
+       *   a defaultDrive with an ownerId opens that drive, at defaultFolder or at its
+       *   root; lockDrive keeps the picker in it, no other drive being offered
        * @returns {void}
        */
       openPicker(detail) {
@@ -122,15 +125,17 @@ function createPickerApp(i18n) {
         this.defaultDrive = detail.defaultDrive || null;
         this.defaultFolder = detail.defaultFolder || '';
         this.spaceId = detail.spaceId || '';
+        this.lockDrive = !!detail.lockDrive;
         this.$nextTick(() => {
           const explorer = this.$refs.explorer;
           if (!explorer) {
             return;
           }
-          if (this.defaultFolder && !this.spaceId) {
-            // Open the requested drive directly AT the requested folder in a
-            // single navigation (the component's own open event always starts at
-            // the drive root; navigating again afterwards would race it).
+          if ((this.defaultFolder || this.defaultDrive?.ownerId) && !this.spaceId) {
+            // Open the requested drive directly AT the requested folder, or at its
+            // root when none is given, in a single navigation (the component's own
+            // open event starts on the page's drive; navigating again afterwards
+            // would race it).
             explorer.modeFolderSelection = true;
             explorer.modeFolderSelectionForFile = false;
             explorer.resetSearch();
@@ -223,6 +228,7 @@ function createPickerApp(i18n) {
                     :default-drive="defaultDrive"
                     :default-folder="defaultFolder"
                     :space-id="spaceId"
+                    :lock-drive="lockDrive"
                     :create-entity-type-folder="false" />
                 </div>
               </div>`,
