@@ -336,6 +336,17 @@ public class EntityBuilder {
     return nodeName;
   }
 
+  /**
+   * Builds the access a node shows its viewer: whether the viewer may open,
+   * edit and delete it, who it is visible to, the collaborators it was shared
+   * with, and whether it has a public link.
+   *
+   * @param node the node, with its access computed for the viewer
+   * @param identityManager to resolve the drive owner from the node's path
+   * @param spaceService to resolve a space collaborator
+   * @param publicDocumentAccessService to tell whether the node has a public link
+   * @return the node's access, or null when the node carries none
+   */
   private static NodePermissionEntity toNodePermissionEntity(AbstractNode node,
                                                              IdentityManager identityManager,
                                                              SpaceService spaceService,
@@ -387,7 +398,13 @@ public class EntityBuilder {
     } else {
       visibilityChoice = Visibility.SPECIFIC_COLLABORATOR.name();
     }
-    return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, visibilityChoice, new ArrayList<>(map.values()));
+    return new NodePermissionEntity(nodePermission.isCanAccess(),
+                                    nodePermission.isCanEdit(),
+                                    nodePermission.isCanDelete(),
+                                    allCanEdit,
+                                    visibilityChoice,
+                                    new ArrayList<>(map.values()),
+                                    hasPublicAccessLink);
   }
   private static PermissionEntryEntity toPermissionEntryEntity(PermissionEntry permissionEntry, SpaceService spaceService){
     if(permissionEntry == null) return null;
