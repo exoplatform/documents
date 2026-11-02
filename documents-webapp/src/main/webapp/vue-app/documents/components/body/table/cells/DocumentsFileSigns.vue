@@ -32,7 +32,7 @@
       v-if="sign && canManageAccess"
       :title="signLabel"
       :aria-label="signLabel"
-      :class="isFavorite && 'ms-1'"
+      :class="isFavorite && 'ms-2'"
       class="documents-file-sign documents-file-sharing"
       icon
       x-small
@@ -47,7 +47,7 @@
       v-else-if="sign"
       :title="signLabel"
       :aria-label="signLabel"
-      :class="[dark ? 'white--text' : 'iconStyle', isFavorite && 'ms-1']"
+      :class="[dark ? 'white--text' : 'iconStyle', isFavorite && 'ms-2']"
       class="documents-file-sign documents-file-sharing"
       role="img"
       size="13">
