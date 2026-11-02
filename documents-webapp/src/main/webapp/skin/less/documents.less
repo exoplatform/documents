@@ -293,6 +293,16 @@
       }
 
       .documents-table,.documents-folder-table {
+        // Automatic layout, so Last updated and Size take their content's
+        // width (width 1%); a fixed layout collapses them.
+        table {
+          table-layout: auto !important;
+        }
+        // The signs share the title's 2px top padding, so they centre on the
+        // name's text rather than on its row.
+        .documentNameRow .documents-file-signs {
+          padding-top: 2px;
+        }
         thead {
           th.documents-actions-header {
             padding: 0 !important;
