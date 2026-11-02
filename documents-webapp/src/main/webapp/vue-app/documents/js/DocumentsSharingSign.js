@@ -16,13 +16,15 @@
  */
 
 /**
- * The sharing sign a listed file or folder shows after its name.
+ * The sharing signs a listed file or folder shows after its name: its
+ * visibility, with the icon and the tooltip the former Access column used,
+ * when its access is its own, then a link sign when it has a public link.
  *
- * Inside a folder, a row shows a sign only when its sharing differs from the
- * opened folder's: the listing gives each row its own access, and the opened
+ * Inside a folder, a row's access is its own when it differs from the opened
+ * folder's: the listing gives each row its own access, and the opened
  * folder's access is read once per folder (`FOLDER_MODE`). In the recent view
- * and in search results, rows come from many folders, so a row shows a sign
- * only for a public link or a public access (`EXPOSURE_MODE`).
+ * and in search results, rows come from many folders, so only a public access
+ * counts as its own (`EXPOSURE_MODE`).
  *
  * The collaborators the listing returns are not all sharings: it leaves the
  * drive's owner out, but returns the administrators group to its members, a
@@ -37,21 +39,10 @@ export const FOLDER_MODE = 'folder';
 export const EXPOSURE_MODE = 'exposure';
 
 export const SIGNS = {
-  anyone: {
-    icon: 'fas fa-globe',
-    labelKey: 'documents.label.sharing.anyone',
-  },
   publicLink: {
+    id: 'publicLink',
     icon: 'fas fa-link',
     labelKey: 'documents.label.sharing.publicLink',
-  },
-  restricted: {
-    icon: 'fas fa-user-lock',
-    labelKey: 'documents.label.sharing.restricted',
-  },
-  people: {
-    icon: 'fas fa-user-friends',
-    labelKey: 'documents.label.sharing.people',
   },
 };
 
@@ -112,75 +103,127 @@ function hasPublicLink(acl) {
 }
 
 /**
- * Gives the public signs of a row: open to anyone, then a public link, each
- * told only when the reference does not have it already.
+ * Tells whether a node's access names the space or the user browsing it: the
+ * rule the Access column used to show a read-only space or drive share.
  *
- * @param {object} acl the row's access
- * @param {object} referenceAcl the opened folder's access, or null when the
- *          row is not compared with a folder
- * @returns {Array<string>} the public sign ids, at most two, in that order
+ * @param {object} acl the node's access
+ * @returns {boolean} true when the current space, or the current user outside a
+ *          space, is among the node's collaborators
  */
-function publicSigns(acl, referenceAcl) {
-  const signs = [];
-  if (isPublic(acl) && !isPublic(referenceAcl)) {
-    signs.push('anyone');
+function isSharedWithCurrentSpaceOrDrive(acl) {
+  const spaceIdentityId = eXo.env.portal.spaceIdentityId;
+  const spaceName = eXo.env.portal.spaceName;
+  const collaborators = acl?.collaborators || [];
+  if (spaceIdentityId && spaceName && collaborators.length > 0) {
+    return collaborators.some(collaborator => collaborator.identity.id === spaceIdentityId
+      && collaborator.identity.remoteId === spaceName);
   }
-  if (hasPublicLink(acl) && !hasPublicLink(referenceAcl)) {
-    signs.push('publicLink');
-  }
-  return signs;
+  return collaborators.some(collaborator => collaborator.identity.remoteId === eXo.env.portal.userName);
 }
 
 /**
- * Computes the signs of a row inside a folder, against the opened folder's
- * access.
+ * Gives the icon and the tooltip of a node's visibility, as the list's former
+ * Access column showed them.
+ *
+ * @param {object} file the listed file or folder
+ * @returns {object} the sign: `{id: 'visibility', icon, labelKey}`
+ */
+export function getVisibilitySign(file) {
+  const sign = (icon, labelKey) => ({id: 'visibility', icon, labelKey});
+  const inSpace = !!eXo.env.portal.spaceGroup;
+  if (file.drive) {
+    return sign('fas fa-lock', 'documents.label.visibility.system');
+  }
+  if (file.folder && file.creatorUserName === '__system' && eXo.env.portal.spaceIdentityId && !eXo.env.portal.isAdministrator) {
+    return sign('fas fa-lock', 'documents.label.visibility.system');
+  }
+  if (file.folder && file.id < 0) {
+    return sign('fas fa-layer-group', 'documents.label.visibility.all');
+  }
+  const acl = file.acl;
+  if (isSharedWithCurrentSpaceOrDrive(acl) && !acl.canEdit) {
+    const collaborators = acl.collaborators.filter(e => e.identity.id === eXo.env.portal.spaceIdentityId || eXo.env.portal.userName);
+    return collaborators[0].permission === 'read' ?
+      sign('fas fa-eye', 'documents.label.visibility.specific.manger')
+      : sign('fas fa-layer-group', 'documents.label.visibility.all');
+  }
+  switch (acl.visibilityChoice) {
+  case 'SPECIFIC_COLLABORATOR':
+    return sign('fas fa-user-lock', inSpace ? 'documents.label.visibility.specific.collaborator'
+      : 'documents.myDrive.label.visibility.specific.collaborator');
+  case 'ALL_MEMBERS':
+    return acl.allMembersCanEdit ?
+      sign('fas fa-layer-group', 'documents.label.visibility.all')
+      : sign('fas fa-eye', 'documents.label.visibility.specific.manger');
+  case 'COLLABORATORS_AND_PUBLIC_ACCESS':
+  case 'ANYONE':
+    return sign('fas fa-globe', inSpace ? 'documents.label.visibility.anyone' : 'documents.myDrive.label.visibility.anyone');
+  default:
+    return sign('fas fa-layer-group', 'documents.label.visibility.all');
+  }
+}
+
+/**
+ * Tells whether a row's access differs from the opened folder's, a public
+ * access with or without a link counting as one visibility.
  *
  * A row names, besides the people it was shared with, grants the storage made
  * by itself: its own creator, whose read entry the listing returns once the
  * row's access was saved, and the folder's creator, whose grant on a saved
- * folder the rows created inside inherit. Neither is a sharing, so a row
- * shows « people » only for someone neither its creator, the folder's
- * creator nor already on the folder.
+ * folder the rows created inside inherit. Neither is a sharing, so only
+ * someone neither its creator, the folder's creator nor already on the folder
+ * makes the row's access differ.
  *
  * @param {object} file the listed row, with its `acl` and `creatorUserName`
  * @param {object} folder the opened folder, with its `acl` and `creatorUserName`
- * @returns {Array<string>} the sign ids, empty when the row shares as its folder
+ * @returns {boolean} true when the row's access is its own
  */
-function signsAgainstFolder(file, folder) {
+function differsFromFolder(file, folder) {
   const acl = file.acl;
   const folderAcl = folder.acl;
-  const signs = publicSigns(acl, folderAcl);
-  if (signs.length) {
-    return signs;
+  const visibility = nodeAcl => (isPublic(nodeAcl) ? 'PUBLIC' : nodeAcl.visibilityChoice);
+  if (visibility(acl) !== visibility(folderAcl)) {
+    return true;
   }
-  if (acl.visibilityChoice === 'SPECIFIC_COLLABORATOR' && folderAcl.visibilityChoice !== 'SPECIFIC_COLLABORATOR') {
-    return ['restricted'];
+  if (acl.visibilityChoice === 'ALL_MEMBERS' && !!acl.allMembersCanEdit !== !!folderAcl.allMembersCanEdit) {
+    return true;
   }
   const known = new Set(collaboratorKeys(folder));
   [folder.creatorUserName, file.creatorUserName]
     .filter(Boolean)
     .forEach(userName => known.add(identityKey('organization', userName)));
-  return collaboratorKeys(file).some(key => !known.has(key)) ? ['people'] : [];
+  return collaboratorKeys(file).some(key => !known.has(key));
 }
 
 /**
- * Computes the sharing signs of a listed row: at most two, open to anyone
- * then a public link; or one of restricted and shared with people, inside a
- * folder only.
+ * Computes the sharing signs of a listed row, at most two: its visibility, as
+ * the former Access column showed it, when its access is its own (inside a
+ * folder, when it differs from the folder's; in the recent view and in search
+ * results, when it is public), then a link sign when it has a public link.
  *
  * @param {object} file the listed file or folder
  * @param {object} reference `{mode, folder}`: the mode, and in `FOLDER_MODE`
  *          the opened folder with its `acl`, null while it is not read yet
- * @returns {Array<string>} keys of `SIGNS`, empty for no sign
+ * @returns {Array<object>} the signs, `{id, icon, labelKey}`, empty for none
  */
 export function getSharingSigns(file, reference) {
   if (!file?.acl || file.drive || file.sourceID || file.cloudDriveFolder || !reference?.mode) {
     return [];
   }
+  let ownAccess;
   if (reference.mode === FOLDER_MODE) {
-    return reference.folder?.acl ? signsAgainstFolder(file, reference.folder) : [];
+    if (!reference.folder?.acl) {
+      return [];
+    }
+    ownAccess = differsFromFolder(file, reference.folder);
+  } else {
+    ownAccess = isPublic(file.acl);
   }
-  return publicSigns(file.acl, null);
+  const signs = ownAccess ? [getVisibilitySign(file)] : [];
+  if (hasPublicLink(file.acl)) {
+    signs.push(SIGNS.publicLink);
+  }
+  return signs;
 }
 
 /**
