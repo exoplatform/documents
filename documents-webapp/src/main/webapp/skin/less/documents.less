@@ -375,8 +375,11 @@
             text-align: end;
             white-space: nowrap;
             vertical-align: middle;
+            // Both boxes are inline: their middles meet whatever their first
+            // item is, an avatar with no text included.
             .documents-last-updated {
               min-height: 28px;
+              vertical-align: middle;
             }
           }
           td.documents-cell-size {
@@ -391,6 +394,7 @@
               display: inline-flex;
               align-items: center;
               height: 28px;
+              vertical-align: middle;
             }
           }
 
