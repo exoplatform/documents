@@ -142,7 +142,7 @@ export default {
       return !this.file.folder && !this.file.cloudDriveFolder;
     },
     canManageAccess() {
-      return mayManageAccess(this.file, this.$shareDocumentSuspended);
+      return mayManageAccess(this.file);
     },
     accessLabel() {
       return this.$t('documents.label.visibility');

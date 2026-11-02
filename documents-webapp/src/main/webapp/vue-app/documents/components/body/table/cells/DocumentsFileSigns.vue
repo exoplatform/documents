@@ -89,7 +89,7 @@ export default {
       return this.sign && this.$t(this.sign.labelKey);
     },
     canManageAccess() {
-      return mayManageAccess(this.file, this.$shareDocumentSuspended);
+      return mayManageAccess(this.file);
     },
   },
   methods: {
