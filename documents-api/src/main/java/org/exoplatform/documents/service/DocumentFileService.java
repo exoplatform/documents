@@ -464,11 +464,15 @@ public interface DocumentFileService {
   boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity);
 
   /**
-   * Tells, for several nodes at once, which files a user may read and which he
-   * may edit, in one repository session of the user's.
+   * Tells, for several nodes at once, which files the request's user may read
+   * and which he may edit, in one repository session. As every method of this
+   * service that takes an identity, the session is opened as the current
+   * {@code ConversationState}, not as {@code aclIdentity}: a caller passes the
+   * request's own identity, and a call made for another user, or from a thread
+   * with no request user, reads the rights of whoever the thread runs as.
    *
    * @param ids node identifiers
-   * @param aclIdentity the user
+   * @param aclIdentity the request's user, whose session the rights are read in
    * @return for each id naming a file the user may read, true when he may edit
    *         it and false when he may only read it; an id naming no node, a
    *         node he may not read or a node that is not a file is absent
