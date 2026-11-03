@@ -211,6 +211,27 @@ class ActionThreadZipSecurityTest {
     assertFalse(Files.exists(outputDir.resolve("folderX/__MACOSX"), LinkOption.NOFOLLOW_LINKS));
   }
 
+  /**
+   * Entry names separated by backslashes, which the extraction treats as path
+   * separators.
+   */
+  @Test
+  void fixAndExtractZipSkipsMacOsMetadataInBackslashSeparatedEntries() throws Exception {
+    Path zip = tempDir.resolve("backslash.zip");
+    Path outputDir = tempDir.resolve("output");
+
+    createZip(zip,
+              new ZipItem("folderX\\doc.txt", "hello"),
+              new ZipItem("folderX\\.DS_Store", "Bud1"),
+              new ZipItem("folderX\\sub\\note.txt", "world"),
+              new ZipItem("folderX\\sub\\__MACOSX\\info.txt", "metadata"),
+              new ZipItem("__MACOSX\\folderX\\._doc.txt", "AppleDouble"));
+
+    ActionThread.fixAndExtractZip(zip.toFile(), outputDir.toFile());
+
+    assertOnlyUserFilesExtracted(outputDir);
+  }
+
   @Test
   void fixAndExtractZipKeepsNamesThatOnlyResembleMacOsMetadata() throws Exception {
     Path zip = tempDir.resolve("lookalikes.zip");
