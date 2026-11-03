@@ -148,6 +148,8 @@ class DocumentModeRedirectHandlerTest {
   @Test
   void testUserWithEditRightPassesThroughOnce() throws Exception {
     mockUser(true);
+    // Stubbed so that a wrong redirect is seen as a redirect, not as an NPE
+    lenient().when(request.getRequestURL()).thenReturn(new StringBuffer(EDITOR_URL));
 
     handler.redirectToViewModeWhenNotEditable(request, response, chain);
 
