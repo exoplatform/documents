@@ -418,6 +418,30 @@ public interface DocumentFileStorage {
   default Map<String, DocumentNodeInfo> describeNodes(Collection<String> ids) {
     throw new UnsupportedOperationException();
   }
+
+  /**
+   * See {@link org.exoplatform.documents.service.DocumentFileService#describeForIndex}:
+   * every description's {@code url} is left null, for the service to set.
+   *
+   * @param ids node identifiers
+   * @return the description of each id naming a file
+   */
+  default Map<String, DocumentIndexInfo> describeForIndex(Collection<String> ids) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * See {@link org.exoplatform.documents.service.DocumentFileService#listFileIds}.
+   *
+   * @param folderId the identifier of the folder
+   * @param afterId the last identifier of the previous page, null for the
+   *          first page
+   * @param limit the most identifiers returned, at least 1
+   * @return up to {@code limit} file identifiers following {@code afterId}
+   */
+  default List<String> listFileIds(String folderId, String afterId, int limit) {
+    throw new UnsupportedOperationException();
+  }
   
   default void updateDocumentDescription(long ownerId,
                                          String documentID,

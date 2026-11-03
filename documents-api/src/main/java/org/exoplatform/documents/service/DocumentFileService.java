@@ -534,6 +534,48 @@ public interface DocumentFileService {
     return id == null ? null : describeNodes(List.of(id)).get(id);
   }
 
+  /**
+   * Describes several files at once for a search index built outside
+   * Documents, whoever may see them, in one system session: their metadata,
+   * the Documents link opening them, the space library and folders holding
+   * them, and the identities their access control list lets read them. Only
+   * files are described: a folder or a shortcut is absent, so a file reached
+   * through a shortcut is described once, under its own id.
+   *
+   * @param ids node identifiers
+   * @return the description of each id naming a file, by id, in the order of
+   *         the ids; an id no node carries, naming another kind of node, or
+   *         naming a file in the trash (itself trashed, or under a trashed
+   *         folder) is absent, as a deleted file is
+   * @throws IllegalStateException when the repository fails, never read as a
+   *           file that does not exist
+   */
+  default Map<String, DocumentIndexInfo> describeForIndex(Collection<String> ids) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Lists the files under a folder, whoever may see them, its sub-folders
+   * included, in one system session per call: a page of identifiers in a
+   * stable order, resumed after the last identifier of the previous page. A
+   * shortcut is not listed, nor what it leads to.
+   *
+   * @param folderId the identifier of the folder, a space library's root
+   *          included
+   * @param afterId the last identifier of the previous page, null for the
+   *          first page
+   * @param limit the most identifiers returned, at least 1
+   * @return up to {@code limit} file identifiers following {@code afterId};
+   *         fewer only when no file follows them, empty when the folder holds
+   *         no more file or when no folder carries {@code folderId}
+   * @throws IllegalArgumentException when {@code folderId} is blank or
+   *           {@code limit} is below 1
+   * @throws IllegalStateException when the repository fails
+   */
+  default List<String> listFileIds(String folderId, String afterId, int limit) {
+    throw new UnsupportedOperationException();
+  }
+
   org.exoplatform.services.security.Identity getAclUserIdentity(String userName) throws IllegalAccessException;
   
   default void updateDocumentDescription(long ownerId,
