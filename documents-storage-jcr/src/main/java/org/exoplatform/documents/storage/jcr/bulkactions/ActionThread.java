@@ -74,6 +74,12 @@ public class ActionThread implements Runnable {
 
   private static final int               UNIX_SYMLINK_FLAG    = 0120000;
 
+  private static final String            MACOS_METADATA_FOLDER = "__MACOSX";
+
+  private static final String            MACOS_FOLDER_SETTINGS_FILE = ".DS_Store";
+
+  private static final String            MACOS_APPLE_DOUBLE_PREFIX = "._";
+
   public static final String             NT_FILE                = "nt:file";
 
   public static final String             NT_FOLDER              = "nt:folder";
@@ -342,6 +348,9 @@ public class ActionThread implements Runnable {
     }
 
     File outFile = validateZipEntry(outputDir, entryName);
+    if (isMacOsMetadata(entryName)) {
+      return;
+    }
     Path outPath = outFile.toPath();
 
     if (header.isDirectory()) {
@@ -394,6 +403,26 @@ public class ActionThread implements Runnable {
     }
 
     return targetFile;
+  }
+
+  /**
+   * Tells whether a ZIP entry is macOS metadata rather than user content: an
+   * entry under a {@code __MACOSX} folder, an AppleDouble {@code ._<name>}
+   * file, or a Finder {@code .DS_Store} file. Other dot-files are user content
+   * and are kept.
+   *
+   * @param entryName the entry's path inside the archive
+   * @return true when the entry is macOS metadata and must not be extracted
+   */
+  private static boolean isMacOsMetadata(String entryName) {
+    String[] segments = entryName.replace('\\', '/').split("/");
+    for (String segment : segments) {
+      if (MACOS_METADATA_FOLDER.equals(segment)) {
+        return true;
+      }
+    }
+    String fileName = segments.length == 0 ? "" : segments[segments.length - 1];
+    return MACOS_FOLDER_SETTINGS_FILE.equals(fileName) || fileName.startsWith(MACOS_APPLE_DOUBLE_PREFIX);
   }
 
   private static boolean isSymlink(FileHeader header) {
