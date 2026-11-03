@@ -4117,6 +4117,46 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
+  public Map<String, DocumentIndexInfo> describeForIndex(Collection<String> ids) {
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      sessionProvider = SessionProvider.createSystemProvider();
+      Session session = sessionProvider.getSession(COLLABORATION, repository);
+      return DocumentNodeDescriber.describeForIndex((ExtendedSession) session, ids, spaceService);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error describing " + ids.size() + " files for an index", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<String> listFileIds(String folderId, String afterId, int limit) {
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      sessionProvider = SessionProvider.createSystemProvider();
+      Session session = sessionProvider.getSession(COLLABORATION, repository);
+      return DocumentNodeDescriber.listFileIds((ExtendedSession) session, folderId, afterId, limit);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error listing the files under a folder", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public DownloadItem getDocumentDownloadItem(String documentId) {
     SessionProvider sessionProvider = null;
     try {
