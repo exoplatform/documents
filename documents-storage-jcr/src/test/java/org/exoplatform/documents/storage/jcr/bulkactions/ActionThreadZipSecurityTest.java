@@ -194,6 +194,24 @@ class ActionThreadZipSecurityTest {
   }
 
   @Test
+  void fixAndExtractZipSkipsMacOsMetadataFolderBelowTheArchiveRoot() throws Exception {
+    Path zip = tempDir.resolve("nested-macosx.zip");
+    Path outputDir = tempDir.resolve("output");
+
+    createZip(zip,
+              new ZipItem("folderX/doc.txt", "hello"),
+              new ZipItem("folderX/__MACOSX/", ""),
+              new ZipItem("folderX/__MACOSX/info.txt", "metadata"),
+              new ZipItem("folderX/sub/note.txt", "world"),
+              new ZipItem("folderX/sub/__MACOSX/readme.txt", "metadata"));
+
+    ActionThread.fixAndExtractZip(zip.toFile(), outputDir.toFile());
+
+    assertOnlyUserFilesExtracted(outputDir);
+    assertFalse(Files.exists(outputDir.resolve("folderX/__MACOSX"), LinkOption.NOFOLLOW_LINKS));
+  }
+
+  @Test
   void fixAndExtractZipKeepsNamesThatOnlyResembleMacOsMetadata() throws Exception {
     Path zip = tempDir.resolve("lookalikes.zip");
     Path outputDir = tempDir.resolve("output");
