@@ -34,8 +34,9 @@ public final class MacOsMetadataUtils {
   /**
    * Tells whether a path is macOS metadata rather than user content: a path
    * with a {@code __MACOSX} segment (that folder itself or anything under it),
-   * an AppleDouble {@code ._<name>} file, or a Finder {@code .DS_Store} file.
-   * Other dot-files are user content.
+   * or a path whose last segment is an AppleDouble name ({@code ._<name>}) or
+   * the Finder's {@code .DS_Store}, whether that segment names a file or a
+   * folder. Other dot-files are user content.
    *
    * @param path a non-blank path, with '/' or '\' separators, or a single name
    * @return true when the path is macOS metadata and must not be imported

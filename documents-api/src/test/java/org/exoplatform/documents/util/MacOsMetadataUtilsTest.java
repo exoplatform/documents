@@ -36,7 +36,9 @@ class MacOsMetadataUtilsTest {
       "folderX\\.DS_Store",
       "._doc.txt",
       "folderX/sub/._note.txt",
-      "folderX\\._doc.txt"
+      "folderX\\._doc.txt",
+      "folderX/._sub/",
+      "folderX/.DS_Store/"
   })
   void isMacOsMetadataForMacOsMetadataPaths(String path) {
     assertTrue(MacOsMetadataUtils.isMacOsMetadata(path));
@@ -51,7 +53,9 @@ class MacOsMetadataUtilsTest {
       "folderX/__MACOSX_notes/c.txt",
       "folderX/.DS_Store.txt",
       "folderX/.gitignore",
-      ".hidden"
+      ".hidden",
+      "folderX/._sub/doc.txt",
+      "folderX/.DS_Store/doc.txt"
   })
   void isNotMacOsMetadataForUserContent(String path) {
     assertFalse(MacOsMetadataUtils.isMacOsMetadata(path));
