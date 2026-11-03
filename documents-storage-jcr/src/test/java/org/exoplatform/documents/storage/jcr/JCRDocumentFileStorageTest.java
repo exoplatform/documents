@@ -2252,6 +2252,60 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * Pins that the index description reads every id in one system session,
+   * closes it, keeps files only, and reports a repository failure instead of
+   * a file left out, which an index would read as deleted.
+   */
+  @Test
+  public void describeForIndexUsesOneClosedSystemSession() throws RepositoryException {
+    ExtendedSession session = mockExtendedSessions(null);
+    SessionProvider systemProvider = SessionProvider.createSystemProvider();
+    ExtendedNode file = mock(ExtendedNode.class);
+    NodeType fileType = mock(NodeType.class);
+    when(fileType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(file.getPrimaryNodeType()).thenReturn(fileType);
+    when(file.getPath()).thenReturn("/Users/u/Private/f.txt");
+    when(file.getName()).thenReturn("f.txt");
+    Node folder = mockNodeOfType(NodeTypeConstants.NT_FOLDER);
+    when(session.getNodeByIdentifier("a")).thenReturn(file);
+    when(session.getNodeByIdentifier("d")).thenReturn(folder);
+    when(session.getNodeByIdentifier("b")).thenThrow(new ItemNotFoundException());
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(file)).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getLastModifiedDate(file)).thenCallRealMethod();
+
+    Map<String, DocumentIndexInfo> files = jcrDocumentFileStorage.describeForIndex(List.of("a", "b", "d"));
+    assertEquals(Set.of("a"), files.keySet());
+    assertNull(files.get("a").url());
+    verify(systemProvider, times(1)).getSession(anyString(), any());
+    verify(systemProvider, times(1)).close();
+
+    when(session.getNodeByIdentifier("c")).thenThrow(new RepositoryException("down"));
+    assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.describeForIndex(List.of("c")));
+    verify(systemProvider, times(2)).close();
+  }
+
+  /**
+   * Pins that the file listing runs in one system session, closed on success
+   * and on a repository failure, which it reports instead of an empty page,
+   * which the caller would read as the end of the folder.
+   */
+  @Test
+  public void listFileIdsUsesOneClosedSystemSession() throws RepositoryException {
+    ExtendedSession session = mockExtendedSessions(null);
+    SessionProvider systemProvider = SessionProvider.createSystemProvider();
+    Node file = mockNodeOfType(NodeTypeConstants.NT_FILE);
+    when(session.getNodeByIdentifier("file")).thenReturn(file);
+
+    assertEquals(List.of(), jcrDocumentFileStorage.listFileIds("file", null, 10));
+    verify(systemProvider, times(1)).getSession(anyString(), any());
+    verify(systemProvider, times(1)).close();
+
+    when(session.getNodeByIdentifier("broken")).thenThrow(new RepositoryException("down"));
+    assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.listFileIds("broken", null, 10));
+    verify(systemProvider, times(2)).close();
+  }
+
+  /**
    * Mocks the user and system session providers so both give one extended
    * session.
    *
