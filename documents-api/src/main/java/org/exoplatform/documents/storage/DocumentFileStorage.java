@@ -397,6 +397,19 @@ public interface DocumentFileStorage {
   }
 
   /**
+   * See {@link org.exoplatform.documents.service.DocumentFileService#getFolderAccess}:
+   * the session is opened as the current {@code ConversationState}, not as
+   * {@code aclIdentity}.
+   *
+   * @param ids node identifiers
+   * @param aclIdentity the request's user, whose session the rights are read in
+   * @return for each folder the user may open, whether he may edit it
+   */
+  default Map<String, Boolean> getFolderAccess(Collection<String> ids, Identity aclIdentity) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * See {@link org.exoplatform.documents.service.DocumentFileService#describeNodes}.
    *
    * @param ids node identifiers

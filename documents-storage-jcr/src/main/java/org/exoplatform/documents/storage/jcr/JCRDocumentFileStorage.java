@@ -4077,6 +4077,26 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
+  public Map<String, Boolean> getFolderAccess(Collection<String> ids, Identity aclIdentity) {
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repository);
+      return DocumentNodeDescriber.getFolderAccess((ExtendedSession) session, ids);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the access of a user to " + ids.size() + " folders", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public Map<String, DocumentNodeInfo> describeNodes(Collection<String> ids) {
     SessionProvider sessionProvider = null;
     try {
