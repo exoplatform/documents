@@ -255,7 +255,7 @@ export default {
         // neither fails it nor ends its pending state.
         const attempt = file.uploadAttempt = (file.uploadAttempt || 0) + 1;
         file.uploadPending = true;
-        new Promise(resolve => resolve(this.$uploadService.upload(file.originalFileObject, file.uploadId, file.signal)))
+        Promise.resolve().then(() => this.$uploadService.upload(file.originalFileObject, file.uploadId, file.signal))
           .then(uploadId => {
             if (!uploadId) {
               throw new Error('Upload request failed');
