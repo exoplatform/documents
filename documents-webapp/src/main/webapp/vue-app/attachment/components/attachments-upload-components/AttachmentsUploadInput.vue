@@ -251,17 +251,18 @@ export default {
     sendFileToServer(file, continueAction) {
       if (!file.aborted && !file.waitAction) {
         this.uploadingCount++;
-        // A retry starts a new attempt: an earlier request settling late
-        // neither fails it nor ends its pending state.
+        // A retry starts a new attempt: an earlier attempt's request or poll
+        // settling late neither fails it nor completes it.
         const attempt = file.uploadAttempt = (file.uploadAttempt || 0) + 1;
         file.uploadPending = true;
+        file.uploadAnswered = false;
         Promise.resolve().then(() => this.$uploadService.upload(file.originalFileObject, file.uploadId, file.signal))
           .then(uploadId => {
             if (!uploadId) {
               throw new Error('Upload request failed');
             }
             if (file.uploadAttempt === attempt) {
-              delete file.originalFileObject;
+              file.uploadAnswered = true;
             }
           })
           .catch(() => file.uploadAttempt === attempt && this.handleUploadFailure(file))
@@ -270,56 +271,72 @@ export default {
               file.uploadPending = false;
             }
           });
-        this.controlUpload(file, continueAction);
+        this.controlUpload(file, continueAction, attempt);
       } else {
         this.processNextQueuedUpload();
       }
     },
-    controlUpload(file, continueAction) {
+    controlUpload(file, continueAction, attempt) {
       if (file.aborted) {
         this.uploadingCount--;
         this.processNextQueuedUpload();
-      } else {
-        if (file.uploadId) {
-          window.setTimeout(() => {
-            if (file.uploadFailed) {
-              return;
-            }
-            const sentWhileUploadPending = file.uploadPending;
-            this.$uploadService.getUploadProgress(file.uploadId)
-              .then(percent => {
-                if (this.abortUploading) {
-                  return;
-                } else {
-                  file.uploadProgress = file.inProcess && 100 || Number(percent);
-                  if (!file.uploadProgress || file.uploadProgress < 100) {
-                    this.controlUpload(file, continueAction);
-                  } else {
-                    this.uploadingCount--;
-                    this.processNextQueuedUpload();
-                  }
-                  if (file.uploadProgress === 100 && !file.inProcess) {
-                    file.inProcess = true;
-                    this.$root.$emit('continue-upload-to-destination-path', file);
-                    const index = this.newUploadedFiles.findIndex(f => f.id === file.id);
-                    this.newUploadedFiles.splice(index, 1);
-                  }
-                }
-              })
-              .catch((err) => {
-                if (err?.message === 'Uploaded resource not found' && sentWhileUploadPending) {
-                  // The server knows an upload only once its request reaches
-                  // it, which can be well after the first poll: a slow network,
-                  // or a browser that prepares the body before sending it,
-                  // starts the request late.
-                  this.controlUpload(file, continueAction);
-                } else {
-                  this.handleUploadFailure(file);
-                }
-              });
-          }, 200);
-        }
+      } else if (file.uploadId) {
+        window.setTimeout(() => {
+          if (this.isAttemptOver(file, attempt)) {
+            return;
+          } else if (file.aborted) {
+            this.controlUpload(file, continueAction, attempt);
+            return;
+          }
+          const sentWhileUploadPending = file.uploadPending;
+          const sentAfterUploadAnswered = file.uploadAnswered;
+          this.$uploadService.getUploadProgress(file.uploadId)
+            .then(percent => {
+              if (this.abortUploading || this.isAttemptOver(file, attempt)) {
+                return;
+              } else if (file.aborted) {
+                this.controlUpload(file, continueAction, attempt);
+                return;
+              }
+              // A poll reads 100 once the body has arrived, before the server
+              // has written and validated the file: only a poll sent after the
+              // upload request answered completes the upload and files it.
+              file.uploadProgress = file.inProcess && 100
+                || (sentAfterUploadAnswered ? Number(percent) : Math.min(Number(percent), 99));
+              if (!file.uploadProgress || file.uploadProgress < 100) {
+                this.controlUpload(file, continueAction, attempt);
+              } else {
+                this.uploadingCount--;
+                this.processNextQueuedUpload();
+              }
+              if (file.uploadProgress === 100 && !file.inProcess) {
+                file.inProcess = true;
+                delete file.originalFileObject;
+                this.$root.$emit('continue-upload-to-destination-path', file);
+                const index = this.newUploadedFiles.findIndex(f => f.id === file.id);
+                this.newUploadedFiles.splice(index, 1);
+              }
+            })
+            .catch((err) => {
+              if (this.isAttemptOver(file, attempt)) {
+                return;
+              } else if (file.aborted) {
+                this.controlUpload(file, continueAction, attempt);
+              } else if (sentWhileUploadPending && err?.message !== 'Upload error') {
+                // The server knows an upload only once its request reaches it,
+                // and a poll sent before then finds none; a late start (a slow
+                // network, a browser preparing the body) is the inferred cause
+                // of the iPhone uploads that stayed at 0%.
+                this.controlUpload(file, continueAction, attempt);
+              } else {
+                this.handleUploadFailure(file);
+              }
+            });
+        }, 200);
       }
+    },
+    isAttemptOver(file, attempt) {
+      return file.uploadAttempt !== attempt || file.failedAttempt === attempt;
     },
     processNextQueuedUpload: function () {
       if (this.uploadingFilesQueue.length > 0) {
@@ -344,6 +361,7 @@ export default {
       // Keep the failed item in the list (with an inline error + Retry) instead
       // of silently removing it.
       this.$set(file, 'uploadFailed', true);
+      file.failedAttempt = file.uploadAttempt;
       this.$set(file, 'uploadProgress', 0);
       if (this.uploadingCount > 0) {
         this.uploadingCount--;
