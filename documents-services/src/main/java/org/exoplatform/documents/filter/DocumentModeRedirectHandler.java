@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.filter;
 
+import java.io.IOException;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
@@ -42,10 +44,15 @@ public class DocumentModeRedirectHandler implements Filter {
   void redirectToViewModeWhenNotEditable(HttpServletRequest httpServletRequest,
                                          HttpServletResponse httpServletResponse,
                                          FilterChain chain) throws Exception {
+    boolean modeRequested = httpServletRequest.getParameter("mode") != null;
     String viewer = httpServletRequest.getRemoteUser();
     if (viewer == null) {
-      // An anonymous visitor (public site) has no edit right to check
-      chain.doFilter(httpServletRequest, httpServletResponse);
+      // An anonymous visitor (public site) never has an edit right on a document
+      if (modeRequested) {
+        chain.doFilter(httpServletRequest, httpServletResponse);
+      } else {
+        redirectToViewMode(httpServletRequest, httpServletResponse);
+      }
       return;
     }
     DocumentFileService documentFileService = ExoContainerContext.getService(DocumentFileService.class);
@@ -59,17 +66,22 @@ public class DocumentModeRedirectHandler implements Filter {
     Identity authenticatedUserIdentity = identityManager.getOrCreateUserIdentity(viewer);
     boolean canEdit = documentFileService.hasEditPermissionOnDocument(documentId,
                                                                       Long.parseLong(authenticatedUserIdentity.getId()));
-    if (!canEdit && httpServletRequest.getParameter("mode") == null) {
-      StringBuilder redirectUrl = new StringBuilder(httpServletRequest.getRequestURL());
-      String query = httpServletRequest.getQueryString();
-      if (query != null && !query.isEmpty()) {
-        redirectUrl.append("?").append(query).append("&mode=view");
-      } else {
-        redirectUrl.append("?mode=view");
-      }
-      httpServletResponse.sendRedirect(redirectUrl.toString());
+    if (!canEdit && !modeRequested) {
+      redirectToViewMode(httpServletRequest, httpServletResponse);
       return;
     }
     chain.doFilter(httpServletRequest, httpServletResponse);
+  }
+
+  private void redirectToViewMode(HttpServletRequest httpServletRequest,
+                                  HttpServletResponse httpServletResponse) throws IOException {
+    StringBuilder redirectUrl = new StringBuilder(httpServletRequest.getRequestURL());
+    String query = httpServletRequest.getQueryString();
+    if (query != null && !query.isEmpty()) {
+      redirectUrl.append("?").append(query).append("&mode=view");
+    } else {
+      redirectUrl.append("?mode=view");
+    }
+    httpServletResponse.sendRedirect(redirectUrl.toString());
   }
 }

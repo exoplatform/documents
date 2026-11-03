@@ -17,6 +17,7 @@
 package org.exoplatform.documents.filter;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -84,13 +85,29 @@ public class DocumentModeRedirectHandlerTest {
   }
 
   @Test
-  public void testAnonymousVisitorPassesThroughOnce() throws Exception {
+  public void testAnonymousVisitorInViewModePassesThroughOnce() throws Exception {
     when(request.getRemoteUser()).thenReturn(null);
+    when(request.getParameter("mode")).thenReturn("view");
+    // Stubbed so that a wrong redirect is seen as a redirect, not as an NPE
+    lenient().when(request.getRequestURL()).thenReturn(new StringBuffer("http://localhost:8080/portal/public/oeditor"));
 
     handler.redirectToViewModeWhenNotEditable(request, response, chain);
 
     verify(chain, times(1)).doFilter(request, response);
     verify(response, never()).sendRedirect(any());
+    verifyNoInteractions(documentFileService, identityManager);
+  }
+
+  @Test
+  public void testAnonymousVisitorWithoutModeIsRedirectedToViewMode() throws Exception {
+    when(request.getRemoteUser()).thenReturn(null);
+    when(request.getRequestURL()).thenReturn(new StringBuffer("http://localhost:8080/portal/public/oeditor"));
+    when(request.getQueryString()).thenReturn("docId=" + DOCUMENT_ID);
+
+    handler.redirectToViewModeWhenNotEditable(request, response, chain);
+
+    verify(response).sendRedirect("http://localhost:8080/portal/public/oeditor?docId=" + DOCUMENT_ID + "&mode=view");
+    verify(chain, never()).doFilter(any(), any());
     verifyNoInteractions(documentFileService, identityManager);
   }
 
