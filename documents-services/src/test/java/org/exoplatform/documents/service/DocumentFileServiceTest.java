@@ -862,4 +862,19 @@ public class DocumentFileServiceTest {
     verify(imageThumbnailService).createThumbnail("videoThumbnaildocId", content, "user", 250, 250);
   }
 
+  /**
+   * Pins that the folder access answers nothing without asking the storage for
+   * no ids, and hands the storage's answer through otherwise.
+   */
+  @Test
+  public void testGetFolderAccessAsksTheStorageOnlyForIds() {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    assertEquals(Map.of(), documentFileService.getFolderAccess(null, aclIdentity));
+    assertEquals(Map.of(), documentFileService.getFolderAccess(List.of(), aclIdentity));
+    verify(documentFileStorage, never()).getFolderAccess(any(), any());
+
+    when(documentFileStorage.getFolderAccess(List.of("f"), aclIdentity)).thenReturn(Map.of("f", false));
+    assertEquals(Map.of("f", false), documentFileService.getFolderAccess(List.of("f"), aclIdentity));
+  }
+
 }

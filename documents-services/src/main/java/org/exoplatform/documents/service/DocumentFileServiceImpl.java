@@ -523,6 +523,17 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    * {@inheritDoc}
    */
   @Override
+  public Map<String, Boolean> getFolderAccess(Collection<String> ids, org.exoplatform.services.security.Identity aclIdentity) {
+    if (ids == null || ids.isEmpty()) {
+      return Map.of();
+    }
+    return documentFileStorage.getFolderAccess(ids, aclIdentity);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public Map<String, DocumentNodeInfo> describeNodes(Collection<String> ids) {
     if (ids == null || ids.isEmpty()) {
       return Map.of();
