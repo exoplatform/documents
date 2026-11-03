@@ -50,6 +50,8 @@ import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.plugin.DocumentCategoryPlugin;
+import org.exoplatform.documents.plugin.DocumentPermanentLinkPlugin;
+import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.services.listener.ListenerService;
@@ -80,6 +82,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   private static final String   RENAME_FILE_EVENT = "rename_file_event";
 
   private static final String   VIDEO_THUMBNAIL_TYPE = "videoThumbnail";
+
+  UserPortalConfigService       portalConfigService;
 
   private DocumentFileStorage   documentFileStorage;
 
@@ -539,6 +543,55 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       return Map.of();
     }
     return documentFileStorage.describeNodes(ids);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, DocumentIndexInfo> describeForIndex(Collection<String> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, DocumentIndexInfo> descriptions = documentFileStorage.describeForIndex(ids);
+    if (descriptions.isEmpty()) {
+      return descriptions;
+    }
+    String metaPortal = getPortalConfigService().getMetaPortal();
+    Map<String, DocumentIndexInfo> withUrls = new LinkedHashMap<>();
+    descriptions.forEach((id, description) -> withUrls.put(id,
+                                                           description.withUrl(String.format(DocumentPermanentLinkPlugin.URL_FORMAT,
+                                                                                             metaPortal,
+                                                                                             id))));
+    return withUrls;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<String> listFileIds(String folderId, String afterId, int limit) {
+    if (StringUtils.isBlank(folderId)) {
+      throw new IllegalArgumentException("documents.listFileIds.folderIdMandatory");
+    }
+    if (limit < 1) {
+      throw new IllegalArgumentException("documents.listFileIds.limitBelowOne");
+    }
+    return documentFileStorage.listFileIds(folderId, StringUtils.isBlank(afterId) ? null : afterId, limit);
+  }
+
+  /**
+   * Resolves the portal configuration service the first time a Documents link
+   * is built, so that the Kernel-wired constructor keeps its parameters.
+   *
+   * @return the portal configuration service, whose meta portal hosts the
+   *         Documents application's links
+   */
+  UserPortalConfigService getPortalConfigService() {
+    if (portalConfigService == null) {
+      portalConfigService = CommonsUtils.getService(UserPortalConfigService.class);
+    }
+    return portalConfigService;
   }
 
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
