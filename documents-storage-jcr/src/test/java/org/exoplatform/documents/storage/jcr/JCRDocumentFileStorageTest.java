@@ -2202,6 +2202,33 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * Pins that the batch folder access check reads every id in one user
+   * session, closes it, keeps folders only, and reports a repository failure
+   * instead of an empty answer.
+   */
+  @Test
+  public void getFolderAccessUsesOneClosedUserSession() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    ExtendedSession session = mockExtendedSessions(identity);
+    SessionProvider sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity);
+    Node folder = mockNodeOfType(NodeTypeConstants.NT_FOLDER);
+    Node file = mockNodeOfType(NodeTypeConstants.NT_FILE);
+    when(session.getNodeByIdentifier("a")).thenReturn(folder);
+    when(session.getNodeByIdentifier("b")).thenThrow(new ItemNotFoundException());
+    when(session.getNodeByIdentifier("f")).thenReturn(file);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, folder)).thenCallRealMethod();
+
+    Map<String, Boolean> access = jcrDocumentFileStorage.getFolderAccess(List.of("a", "b", "f"), identity);
+    assertEquals(Map.of("a", true), access);
+    verify(sessionProvider, times(1)).getSession(anyString(), any());
+    verify(sessionProvider, times(1)).close();
+
+    when(session.getNodeByIdentifier("c")).thenThrow(new RepositoryException("down"));
+    assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.getFolderAccess(List.of("c"), identity));
+    verify(sessionProvider, times(2)).close();
+  }
+
+  /**
    * Pins that the batch description reads every id in one system session,
    * closes it, and reports a repository failure instead of an absent node.
    */
