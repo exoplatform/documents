@@ -17,6 +17,7 @@
 package org.exoplatform.documents.filter;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -26,13 +27,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
@@ -48,48 +52,53 @@ import org.exoplatform.social.core.manager.IdentityManager;
  * plain call to the {@code @ContainerTransactional} method would boot a Kernel
  * container.
  */
-@RunWith(MockitoJUnitRunner.class)
-public class DocumentModeRedirectHandlerTest {
+@ExtendWith(MockitoExtension.class)
+class DocumentModeRedirectHandlerTest {
 
-  private static final String                DOCUMENT_ID = "123";
+  private static final String               DOCUMENT_ID = "123";
 
-  @Mock
-  private DocumentFileService                documentFileService;
-
-  @Mock
-  private IdentityManager                    identityManager;
+  private static final String               EDITOR_URL  = "http://localhost:8080/portal/public/oeditor";
 
   @Mock
-  private HttpServletRequest                 request;
+  private DocumentFileService               documentFileService;
 
   @Mock
-  private HttpServletResponse                response;
+  private IdentityManager                   identityManager;
 
   @Mock
-  private FilterChain                        chain;
+  private HttpServletRequest                request;
 
-  private MockedStatic<ExoContainerContext>  containerContext;
+  @Mock
+  private HttpServletResponse               response;
 
-  private DocumentModeRedirectHandler        handler = new DocumentModeRedirectHandler();
+  @Mock
+  private FilterChain                       chain;
 
-  @Before
-  public void setUp() {
+  private final Map<String, String>        parameters  = new HashMap<>();
+
+  private MockedStatic<ExoContainerContext> containerContext;
+
+  private DocumentModeRedirectHandler       handler     = new DocumentModeRedirectHandler();
+
+  @BeforeEach
+  void setUp() {
     containerContext = mockStatic(ExoContainerContext.class);
     containerContext.when(() -> ExoContainerContext.getService(DocumentFileService.class)).thenReturn(documentFileService);
     containerContext.when(() -> ExoContainerContext.getService(IdentityManager.class)).thenReturn(identityManager);
+    lenient().when(request.getParameter(anyString())).thenAnswer(invocation -> parameters.get(invocation.getArgument(0)));
   }
 
-  @After
-  public void tearDown() {
+  @AfterEach
+  void tearDown() {
     containerContext.close();
   }
 
   @Test
-  public void testAnonymousVisitorInViewModePassesThroughOnce() throws Exception {
+  void testAnonymousVisitorInViewModePassesThroughOnce() throws Exception {
     when(request.getRemoteUser()).thenReturn(null);
-    when(request.getParameter("mode")).thenReturn("view");
+    parameters.put("mode", "view");
     // Stubbed so that a wrong redirect is seen as a redirect, not as an NPE
-    lenient().when(request.getRequestURL()).thenReturn(new StringBuffer("http://localhost:8080/portal/public/oeditor"));
+    lenient().when(request.getRequestURL()).thenReturn(new StringBuffer(EDITOR_URL));
 
     handler.redirectToViewModeWhenNotEditable(request, response, chain);
 
@@ -99,47 +108,59 @@ public class DocumentModeRedirectHandlerTest {
   }
 
   @Test
-  public void testAnonymousVisitorWithoutModeIsRedirectedToViewMode() throws Exception {
+  void testAnonymousVisitorWithoutModeIsRedirectedToViewMode() throws Exception {
     when(request.getRemoteUser()).thenReturn(null);
-    when(request.getRequestURL()).thenReturn(new StringBuffer("http://localhost:8080/portal/public/oeditor"));
+    when(request.getRequestURL()).thenReturn(new StringBuffer(EDITOR_URL));
     when(request.getQueryString()).thenReturn("docId=" + DOCUMENT_ID);
 
     handler.redirectToViewModeWhenNotEditable(request, response, chain);
 
-    verify(response).sendRedirect("http://localhost:8080/portal/public/oeditor?docId=" + DOCUMENT_ID + "&mode=view");
+    verify(response).sendRedirect(EDITOR_URL + "?docId=" + DOCUMENT_ID + "&mode=view");
     verify(chain, never()).doFilter(any(), any());
     verifyNoInteractions(documentFileService, identityManager);
   }
 
   @Test
-  public void testUserWithoutEditRightIsRedirectedToViewMode() throws Exception {
-    when(request.getRemoteUser()).thenReturn("user");
-    when(request.getParameter("docId")).thenReturn(DOCUMENT_ID);
-    when(request.getRequestURL()).thenReturn(new StringBuffer("http://localhost:8080/portal/dw/oeditor"));
+  void testUserWithoutEditRightIsRedirectedToViewMode() throws Exception {
+    mockUser(false);
+    when(request.getRequestURL()).thenReturn(new StringBuffer(EDITOR_URL));
     when(request.getQueryString()).thenReturn("docId=" + DOCUMENT_ID);
-    Identity identity = mock(Identity.class);
-    when(identity.getId()).thenReturn("1");
-    when(identityManager.getOrCreateUserIdentity("user")).thenReturn(identity);
-    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, 1L)).thenReturn(false);
 
     handler.redirectToViewModeWhenNotEditable(request, response, chain);
 
-    verify(response).sendRedirect("http://localhost:8080/portal/dw/oeditor?docId=" + DOCUMENT_ID + "&mode=view");
+    verify(response).sendRedirect(EDITOR_URL + "?docId=" + DOCUMENT_ID + "&mode=view");
     verify(chain, never()).doFilter(any(), any());
   }
 
   @Test
-  public void testUserWithEditRightPassesThroughOnce() throws Exception {
-    when(request.getRemoteUser()).thenReturn("user");
-    when(request.getParameter("docId")).thenReturn(DOCUMENT_ID);
-    Identity identity = mock(Identity.class);
-    when(identity.getId()).thenReturn("1");
-    when(identityManager.getOrCreateUserIdentity("user")).thenReturn(identity);
-    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, 1L)).thenReturn(true);
+  void testUserWithoutEditRightInViewModePassesThroughOnce() throws Exception {
+    mockUser(false);
+    parameters.put("mode", "view");
+    // Stubbed so that a wrong redirect is seen as a redirect, not as an NPE
+    lenient().when(request.getRequestURL()).thenReturn(new StringBuffer(EDITOR_URL));
 
     handler.redirectToViewModeWhenNotEditable(request, response, chain);
 
     verify(chain, times(1)).doFilter(request, response);
     verify(response, never()).sendRedirect(any());
+  }
+
+  @Test
+  void testUserWithEditRightPassesThroughOnce() throws Exception {
+    mockUser(true);
+
+    handler.redirectToViewModeWhenNotEditable(request, response, chain);
+
+    verify(chain, times(1)).doFilter(request, response);
+    verify(response, never()).sendRedirect(any());
+  }
+
+  private void mockUser(boolean canEdit) throws Exception {
+    when(request.getRemoteUser()).thenReturn("user");
+    parameters.put("docId", DOCUMENT_ID);
+    Identity identity = mock(Identity.class);
+    when(identity.getId()).thenReturn("1");
+    when(identityManager.getOrCreateUserIdentity("user")).thenReturn(identity);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, 1L)).thenReturn(canEdit);
   }
 }
