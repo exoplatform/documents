@@ -486,6 +486,28 @@ public interface DocumentFileService {
   }
 
   /**
+   * Tells, for several nodes at once, which folders the request's user may
+   * open and which he may edit, in one repository session: the folder twin of
+   * {@link #getDocumentAccess(Collection, org.exoplatform.services.security.Identity)},
+   * whose session runs as the current {@code ConversationState} in the same
+   * way. A shortcut is not a folder here: a caller resolves it to its target
+   * first, with {@link #describeNodes(Collection)}.
+   *
+   * @param ids node identifiers
+   * @param aclIdentity the request's user, whose session the rights are read in
+   * @return for each id naming a folder the user may open, true when he may
+   *         edit it and false when he may only open it; an id naming no node, a
+   *         node he may not read or a node that is not a folder is absent
+   * @throws IllegalStateException when the repository fails reading a node,
+   *           never read as a refusal; a failure of the edit check reads as
+   *           read only, never as an edit
+   */
+  default Map<String, Boolean> getFolderAccess(Collection<String> ids,
+                                               org.exoplatform.services.security.Identity aclIdentity) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Describes several nodes at once, whoever may see them, in one system
    * session: what each is, what a shortcut leads to, which space library holds
    * it and its folders. A node in the trash is found too.
