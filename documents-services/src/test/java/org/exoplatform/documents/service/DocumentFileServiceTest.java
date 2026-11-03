@@ -37,6 +37,7 @@ import org.exoplatform.documents.listener.AttachmentsActivityCacheUpdater;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
+import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
@@ -875,6 +876,50 @@ public class DocumentFileServiceTest {
 
     when(documentFileStorage.getFolderAccess(List.of("f"), aclIdentity)).thenReturn(Map.of("f", false));
     assertEquals(Map.of("f", false), documentFileService.getFolderAccess(List.of("f"), aclIdentity));
+  }
+
+  /**
+   * Pins that the index description asks the storage nothing for no ids, and
+   * gives each file the Documents link of the meta portal, in the storage's
+   * order.
+   */
+  @Test
+  public void testDescribeForIndexSetsTheDocumentsLink() {
+    assertEquals(Map.of(), documentFileService.describeForIndex(null));
+    assertEquals(Map.of(), documentFileService.describeForIndex(List.of()));
+    verify(documentFileStorage, never()).describeForIndex(any());
+
+    UserPortalConfigService portalConfigService = mock(UserPortalConfigService.class);
+    when(portalConfigService.getMetaPortal()).thenReturn("dw");
+    documentFileService.portalConfigService = portalConfigService;
+    Map<String, DocumentIndexInfo> stored = new LinkedHashMap<>();
+    stored.put("b", new DocumentIndexInfo("b", "B", null, null, 0, 0, null, null, 0, null, null));
+    stored.put("a", new DocumentIndexInfo("a", "A", null, null, 0, 0, null, null, 3, List.of("f"), List.of("any")));
+    when(documentFileStorage.describeForIndex(List.of("a", "b"))).thenReturn(stored);
+
+    Map<String, DocumentIndexInfo> described = documentFileService.describeForIndex(List.of("a", "b"));
+
+    assertEquals(List.of("b", "a"), new ArrayList<>(described.keySet()));
+    assertEquals("/portal/dw/documents?documentPreviewId=a", described.get("a").url());
+    assertEquals("/portal/dw/documents?documentPreviewId=b", described.get("b").url());
+    assertEquals(stored.get("a").withUrl("/portal/dw/documents?documentPreviewId=a"), described.get("a"));
+  }
+
+  /**
+   * Pins the file listing's arguments: a blank folder id or a limit below 1 is
+   * refused before the storage is asked, and a blank cursor reads as the first
+   * page.
+   */
+  @Test
+  public void testListFileIdsValidatesItsArguments() {
+    assertThrows(IllegalArgumentException.class, () -> documentFileService.listFileIds(" ", null, 10));
+    assertThrows(IllegalArgumentException.class, () -> documentFileService.listFileIds("f", null, 0));
+    verify(documentFileStorage, never()).listFileIds(any(), any(), anyInt());
+
+    when(documentFileStorage.listFileIds("f", null, 1)).thenReturn(List.of("x"));
+    assertEquals(List.of("x"), documentFileService.listFileIds("f", "", 1));
+    when(documentFileStorage.listFileIds("f", "x", 1)).thenReturn(List.of("y"));
+    assertEquals(List.of("y"), documentFileService.listFileIds("f", "x", 1));
   }
 
 }

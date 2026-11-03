@@ -58,6 +58,9 @@ public class NodeTypeConstants {
 
   public static final String JCR_UUID                  = "jcr:uuid";
 
+  /** The pseudo-property naming a query row's node path. */
+  public static final String JCR_PATH                  = "jcr:path";
+
   public static final String JCR_FROZEN_UUID           = "jcr:frozenUuid";
 
   public static final String JCR_CONTENT               = "jcr:content";
