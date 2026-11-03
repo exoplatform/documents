@@ -19,6 +19,7 @@ package org.exoplatform.documents.filter;
 import java.io.IOException;
 
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,7 +44,7 @@ public class DocumentModeRedirectHandler implements Filter {
 
   void redirectToViewModeWhenNotEditable(HttpServletRequest httpServletRequest,
                                          HttpServletResponse httpServletResponse,
-                                         FilterChain chain) throws Exception {
+                                         FilterChain chain) throws IOException, ServletException, IllegalAccessException {
     boolean modeRequested = httpServletRequest.getParameter("mode") != null;
     String viewer = httpServletRequest.getRemoteUser();
     if (viewer == null) {
