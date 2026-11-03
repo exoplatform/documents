@@ -36,16 +36,22 @@ public class DocumentModeRedirectHandler implements Filter {
   @Override
   @ContainerTransactional
   public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
-    DocumentFileService documentFileService = ExoContainerContext.getService(DocumentFileService.class);
-    IdentityManager identityManager = ExoContainerContext.getService(IdentityManager.class);
-    HttpServletResponse httpServletResponse = (HttpServletResponse) response;
-    HttpServletRequest httpServletRequest = (HttpServletRequest) request;
-    String documentPreviewId = httpServletRequest.getParameter("documentPreviewId");
-    String documentEditId = httpServletRequest.getParameter("docId");
+    redirectToViewModeWhenNotEditable((HttpServletRequest) request, (HttpServletResponse) response, chain);
+  }
+
+  void redirectToViewModeWhenNotEditable(HttpServletRequest httpServletRequest,
+                                         HttpServletResponse httpServletResponse,
+                                         FilterChain chain) throws Exception {
     String viewer = httpServletRequest.getRemoteUser();
     if (viewer == null) {
-      chain.doFilter(request, response);
+      // An anonymous visitor (public site) has no edit right to check
+      chain.doFilter(httpServletRequest, httpServletResponse);
+      return;
     }
+    DocumentFileService documentFileService = ExoContainerContext.getService(DocumentFileService.class);
+    IdentityManager identityManager = ExoContainerContext.getService(IdentityManager.class);
+    String documentPreviewId = httpServletRequest.getParameter("documentPreviewId");
+    String documentEditId = httpServletRequest.getParameter("docId");
 
     String documentId = documentPreviewId != null ? documentPreviewId : documentEditId;
 
@@ -64,6 +70,6 @@ public class DocumentModeRedirectHandler implements Filter {
       httpServletResponse.sendRedirect(redirectUrl.toString());
       return;
     }
-    chain.doFilter(request, response);
+    chain.doFilter(httpServletRequest, httpServletResponse);
   }
 }
