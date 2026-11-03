@@ -244,6 +244,37 @@ class DocumentNodeDescriberTest {
   }
 
   /**
+   * Pins that the folder access keeps only folders, a library root included,
+   * with their edit right, and leaves out files, shortcuts, refused and
+   * missing ids.
+   */
+  @Test
+  void folderAccessKeepsReadableFoldersWithTheirEditRight() throws RepositoryException {
+    node("editable", "nt:folder", LIBRARY + "/E", null);
+    node("root", "nt:unstructured", LIBRARY, null);
+    node("file", "nt:file", LIBRARY + "/f.pdf", null);
+    symlink("link", LIBRARY + "/link", "editable");
+    doThrow(new AccessDeniedException()).when(session).getNodeByIdentifier("refused");
+    doThrow(new AccessControlException("read only")).when(session).checkPermission(LIBRARY, PermissionType.SET_PROPERTY);
+
+    Map<String, Boolean> access = DocumentNodeDescriber.getFolderAccess(session,
+                                                                        List.of("editable", "root", "file", "link", "refused", "nothing"));
+
+    assertEquals(Map.of("editable", true, "root", false), access);
+  }
+
+  /**
+   * Pins that a repository failure other than a refused or missing node is
+   * thrown, never read as a folder the user cannot open.
+   */
+  @Test
+  void folderAccessThrowsOnARepositoryFailure() throws RepositoryException {
+    doThrow(new RepositoryException("down")).when(session).getNodeByIdentifier("broken");
+
+    assertThrows(RepositoryException.class, () -> DocumentNodeDescriber.getFolderAccess(session, List.of("broken")));
+  }
+
+  /**
    * Registers a node the session finds by its id.
    *
    * @param id its identifier

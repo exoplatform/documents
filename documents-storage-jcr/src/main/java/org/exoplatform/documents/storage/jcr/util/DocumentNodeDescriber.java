@@ -72,6 +72,43 @@ public final class DocumentNodeDescriber {
    */
   public static Map<String, Boolean> getAccess(ExtendedSession session,
                                                Collection<String> ids) throws RepositoryException {
+    return getAccess(session, ids, DocumentNodeType.FILE);
+  }
+
+  /**
+   * Tells which of some nodes are folders the session's user may open, and
+   * which of them he may edit. A folder is typed as {@link #typeOf(Node)} types
+   * it, so a library root is one, and a shortcut is not: a caller resolves a
+   * shortcut to its target first.
+   *
+   * @param session a session of the user
+   * @param ids node identifiers
+   * @return for each id naming a folder the user may open, whether he may edit
+   *         it; ids naming no node, a node he may not read or another kind of
+   *         node are absent
+   * @throws RepositoryException when the repository fails otherwise reading a
+   *           node; a failure of the edit check reads as read only
+   */
+  public static Map<String, Boolean> getFolderAccess(ExtendedSession session,
+                                                     Collection<String> ids) throws RepositoryException {
+    return getAccess(session, ids, DocumentNodeType.FOLDER);
+  }
+
+  /**
+   * Tells which of some nodes are of one type and readable by the session's
+   * user, and which of them he may edit.
+   *
+   * @param session a session of the user
+   * @param ids node identifiers
+   * @param type the only type of node kept
+   * @return for each id naming a readable node of that type, whether the user
+   *         may edit it
+   * @throws RepositoryException when the repository fails otherwise reading a
+   *           node
+   */
+  private static Map<String, Boolean> getAccess(ExtendedSession session,
+                                                Collection<String> ids,
+                                                DocumentNodeType type) throws RepositoryException {
     Map<String, Boolean> access = new LinkedHashMap<>();
     for (String id : distinct(ids)) {
       Node node;
@@ -80,7 +117,7 @@ public final class DocumentNodeDescriber {
       } catch (ItemNotFoundException | AccessDeniedException e) {
         continue;
       }
-      if (node != null && typeOf(node) == DocumentNodeType.FILE) {
+      if (node != null && typeOf(node) == type) {
         access.put(id, JCRDocumentsUtil.hasEditPermission(session, node));
       }
     }
