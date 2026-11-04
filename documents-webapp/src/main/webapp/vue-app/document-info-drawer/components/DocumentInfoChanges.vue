@@ -19,7 +19,7 @@
     <v-chip-group
       v-if="sources.length > 1"
       :value="selected"
-      class="documentInfoChangesFilter pt-3"
+      class="documentInfoChangesFilter pt-3 mb-2"
       mandatory
       @change="select">
       <v-chip

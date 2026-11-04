@@ -64,12 +64,12 @@
     </template>
     <template v-if="drawer && file" #content>
       <div :class="sideBySide && 'd-flex fill-height'">
-        <div v-if="sideBySide" class="documentInfoContentPane light-grey-background-color d-flex flex-column flex-grow-1 fill-height">
+        <div v-if="sideBySide" class="documentInfoContentPane d-flex flex-column flex-grow-1 fill-height">
           <v-tabs
             v-if="contentViews.length"
             id="documentInfoContentTabs"
             v-model="contentTab"
-            class="documentInfoTabs flex-grow-0">
+            class="documentInfoTabs white flex-grow-0 border-bottom-color">
             <v-tab href="#view" class="documentInfoContentTab-view">{{ $t('documents.drawer.details.tab.view') }}</v-tab>
             <v-tab
               v-for="view in contentViews"
@@ -83,28 +83,31 @@
             v-for="view in shownContentViews"
             :key="view.id"
             :class="`documentInfoContentView-${view.id}`"
-            class="documentInfoContentView white flex-grow-1 overflow-y-auto px-4 pt-3 pb-4">
+            class="documentInfoContentView light-grey-background-color flex-grow-1 overflow-y-auto pa-4">
             <component :is="view.vueComponent" v-bind="contentViewParams" />
           </div>
-          <document-info-content
+          <div
             v-show="contentTab === 'view'"
-            ref="content"
-            :file="file"
-            :icon="icon"
-            :media-kind="mediaKind"
-            :download-url="downloadUrl"
-            :readable="isFileReadable"
-            :start="transcriptMoment || 0"
-            :autoplay="transcriptPlaying"
-            :subtitle="compactSubtitle"
-            @time="playerSeconds = $event"
-            @open="openPreview" />
+            class="documentInfoContentHost light-grey-background-color">
+            <document-info-content
+              ref="content"
+              :file="file"
+              :icon="icon"
+              :media-kind="mediaKind"
+              :download-url="downloadUrl"
+              :readable="isFileReadable"
+              :start="transcriptMoment || 0"
+              :autoplay="transcriptPlaying"
+              :subtitle="compactSubtitle"
+              @time="playerSeconds = $event"
+              @open="openPreview" />
+          </div>
         </div>
         <div :class="sideBySide && 'documentInfoSidePane d-flex flex-column fill-height'">
           <v-tabs
             v-if="sideBySide"
             v-model="tab"
-            class="documentInfoTabs flex-grow-0">
+            class="documentInfoTabs white flex-grow-0 border-bottom-color">
             <v-tab href="#details">{{ $t('documents.drawer.details.tab.details') }}</v-tab>
             <v-tab v-if="!file.folder" href="#versions">{{ $t('documents.drawer.details.versions') }}</v-tab>
             <v-tab v-if="mediaKind && (transcriptAvailable || tab === 'transcript')" href="#transcript">{{ $t('documents.drawer.details.transcript') }}</v-tab>
