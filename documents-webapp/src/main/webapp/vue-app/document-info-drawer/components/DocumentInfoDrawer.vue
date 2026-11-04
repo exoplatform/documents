@@ -60,6 +60,7 @@
         :file="file"
         :transcript-available="!!mediaKind && transcriptAvailable && !sideBySide"
         @transcript="showTranscript"
+        @versions="$refs.versions.open()"
         @copy-link="copyLink" />
     </template>
     <template v-if="drawer && file" #content>
@@ -105,12 +106,12 @@
         </div>
         <div :class="sideBySide && 'documentInfoSidePane d-flex flex-column fill-height'">
           <v-tabs
-            v-if="sideBySide"
-            v-model="tab"
-            class="documentInfoTabs white flex-grow-0 border-bottom-color">
+            :value="paneTab"
+            id="documentInfoPaneTabs"
+            class="documentInfoTabs white flex-grow-0 border-bottom-color"
+            @change="tab = $event">
             <v-tab href="#details">{{ $t('documents.drawer.details.tab.details') }}</v-tab>
-            <v-tab v-if="!file.folder" href="#versions">{{ $t('documents.drawer.details.versions') }}</v-tab>
-            <v-tab v-if="mediaKind && (transcriptAvailable || tab === 'transcript')" href="#transcript">{{ $t('documents.drawer.details.transcript') }}</v-tab>
+            <v-tab v-if="sideBySide && mediaKind && (transcriptAvailable || tab === 'transcript')" href="#transcript">{{ $t('documents.drawer.details.transcript') }}</v-tab>
             <v-tab
               v-if="!file.folder"
               id="documentInfoChangesTab"
@@ -119,7 +120,7 @@
             </v-tab>
           </v-tabs>
           <div
-            v-show="!sideBySide || tab === 'details'"
+            v-show="paneTab === 'details'"
             :class="sideBySide && 'overflow-y-auto'"
             class="px-4 pt-3 pb-4">
             <template v-if="!sideBySide">
@@ -267,13 +268,8 @@
                 class="flex" />
             </div>
           </div>
-          <document-info-versions
-            v-if="sideBySide && tab === 'versions'"
-            :file="file"
-            @restored="refreshFile"
-            class="px-4 overflow-y-auto" />
           <document-info-transcript
-            v-if="sideBySide && tab === 'transcript'"
+            v-if="paneTab === 'transcript'"
             :document-id="fileId"
             :playing-seconds="playerSeconds"
             :seconds="transcriptMoment"
@@ -282,10 +278,17 @@
             @term="transcriptTerm = $event"
             @seek="seek" />
           <document-info-changes
-            v-if="sideBySide && tab === 'changes' && !file.folder"
+            v-if="paneTab === 'changes'"
+            :key="`changes-${changesGeneration}`"
             :file="file"
-            class="px-4 overflow-y-auto" />
+            :class="sideBySide && 'overflow-y-auto'"
+            class="px-4" />
         </div>
+        <document-info-versions
+          ref="versions"
+          :file="file"
+          @restored="refreshFile"
+          @changed="changesGeneration++" />
       </div>
     </template>
     <template v-if="drawer" #footer>
@@ -332,6 +335,7 @@ export default {
     contentViews: [],
     contentViewsFileId: null,
     contentViewsGeneration: 0,
+    changesGeneration: 0,
     thumbnailUrl: null,
     playerSeconds: null,
     openExpanded: false,
@@ -429,6 +433,18 @@ export default {
     },
     downloadUrl() {
       return this.$documentsUtils.getDownloadUrl(this.fileId, this.modifiedDate);
+    },
+    /**
+     * The tab the side pane shows: the one chosen, unless it has no place
+     * here — the transcript in the narrow drawer, the changes of a folder —
+     * where the details show instead.
+     * @returns {string} details, transcript or changes
+     */
+    paneTab() {
+      if ((this.tab === 'transcript' && !this.sideBySide) || (this.tab === 'changes' && this.file?.folder)) {
+        return 'details';
+      }
+      return this.tab;
     },
     /**
      * Lays the content beside the tabs once the drawer is expanded on a wide
@@ -604,7 +620,9 @@ export default {
       if (!expanded && this.narrowScroll !== null) {
         const scroll = this.narrowScroll;
         this.narrowScroll = null;
-        this.tab = 'details';
+        if (this.tab === 'transcript') {
+          this.tab = 'details';
+        }
         // the narrow layout renders on the next tick, then takes its scroll back
         this.$nextTick(() => {
           const content = this.drawerContent();
