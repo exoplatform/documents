@@ -82,8 +82,15 @@ const EXTENSION_NAME = 'DocumentsInfoChanges';
  *   for the first page), newest first, each as {time, key, ...}: time in
  *   milliseconds, key unique within the source and, among its changes of a
  *   same time, highest first; next being the cursor the following page is
- *   read from, given back as before, null once none is left. A rejection
- *   drops the source and tells the reader some changes cannot be read;
+ *   read from, given back as before, null once none is left. A page must
+ *   neither repeat nor skip a change across reads, even when changes are
+ *   added meanwhile: a cursor on (time, key) does that. A rejection drops
+ *   the source and tells the reader some changes cannot be read;
+ * - refreshEvent: optional, the name of a document event after which the
+ *   source may hold new changes, such as a save made beside the list;
+ * - isRefreshFor(detail, {file, documentId}): optional, whether such an
+ *   event, by its detail, concerns the file shown; without it, every such
+ *   event does;
  * - vueComponent: renders one change, given the props entry and file.
  * documentId is the file a shortcut points to, the file itself otherwise.
  */
@@ -150,6 +157,7 @@ export default {
    */
   beforeDestroy() {
     document.removeEventListener(`component-${EXTENSION_NAME}-${SOURCE_TYPE}-updated`, this.refreshSources);
+    this.listenToRefreshes([]);
     this.generation++;
     if (this.observer) {
       this.observer.disconnect();
@@ -177,6 +185,7 @@ export default {
           if (generation === this.generation) {
             this.sources = [this.versionsSource(), ...registered.filter((source, index) => enabled[index])]
               .sort((source1, source2) => Number(source1.rank || 0) - Number(source2.rank || 0));
+            this.listenToRefreshes(this.sources);
             this.select(this.ALL);
           }
         });
@@ -189,6 +198,37 @@ export default {
      */
     refreshSources() {
       return this.lines.length && Promise.resolve() || this.loadSources();
+    },
+    /**
+     * Listens to the events after which the sources shown may hold new
+     * changes, and to none of the sources shown before.
+     * @param {Array<Object>} sources the sources shown
+     * @returns {void}
+     */
+    listenToRefreshes(sources) {
+      (this.refreshListeners || []).forEach(({event, listener}) => document.removeEventListener(event, listener));
+      this.refreshListeners = sources.filter(source => source.refreshEvent).map(source => {
+        const listener = event => this.refreshFor(source, event);
+        document.addEventListener(source.refreshEvent, listener);
+        return {event: source.refreshEvent, listener};
+      });
+    },
+    /**
+     * Shows the changes again, from the newest, with the same choice, when an
+     * event a source listens to concerns the file shown.
+     * @param {Object} source the source the event is for
+     * @param {CustomEvent} event the event
+     * @returns {Promise} settled once the first changes are shown again
+     */
+    refreshFor(source, event) {
+      const params = {file: this.file, documentId: this.documentId};
+      let concerned = true;
+      try {
+        concerned = !source.isRefreshFor || !!source.isRefreshFor(event?.detail, params);
+      } catch (error) {
+        concerned = false;
+      }
+      return concerned && this.select(this.selected) || Promise.resolve();
     },
     /**
      * @param {Object} source the options a source was registered with
