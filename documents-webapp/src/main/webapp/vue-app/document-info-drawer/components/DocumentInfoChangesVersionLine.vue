@@ -64,8 +64,8 @@ export default {
   }),
   methods: {
     /**
-     * Opens the version read only, as the Versions tab does; restoring a
-     * version and writing its summary stay in that tab.
+     * Opens the version read only; restoring a version and writing its
+     * summary stay in the version history the details' menu opens.
      * @returns {Promise} resolved once opened
      */
     openVersion() {
