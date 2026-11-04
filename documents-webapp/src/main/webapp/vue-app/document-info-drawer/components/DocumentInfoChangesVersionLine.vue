@@ -36,6 +36,7 @@
         class="me-2" />
       <span class="me-1">·</span>
       <a
+        :aria-label="$t('documents.drawer.details.changes.openVersion', {0: entry.version.versionNumber})"
         href="#"
         class="documentInfoChangesVersionOpen primary--text"
         @click.prevent="openVersion">
