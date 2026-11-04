@@ -68,6 +68,12 @@
   .documentInfoContentPane {
     min-width: 0;
   }
+  // A tab bar stays in sight while the narrow drawer's content scrolls.
+  .documentInfoTabs {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
   // The View tab's host: v-show hides it, so it takes no display utility.
   .documentInfoContentHost {
     display: flex;
