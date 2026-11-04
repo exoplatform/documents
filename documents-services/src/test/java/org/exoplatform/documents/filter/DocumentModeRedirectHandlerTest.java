@@ -107,16 +107,22 @@ class DocumentModeRedirectHandlerTest {
     verifyNoInteractions(documentFileService, identityManager);
   }
 
+  /**
+   * A request with no user and no mode is a public site visitor or a registered
+   * user not logged in yet: its link goes on unchanged, so that login keeps it.
+   */
   @Test
-  void testAnonymousVisitorWithoutModeIsRedirectedToViewMode() throws Exception {
+  void testAnonymousRequestWithoutModePassesThroughUnchanged() throws Exception {
     when(request.getRemoteUser()).thenReturn(null);
-    when(request.getRequestURL()).thenReturn(new StringBuffer(EDITOR_URL));
-    when(request.getQueryString()).thenReturn("docId=" + DOCUMENT_ID);
+    parameters.put("docId", DOCUMENT_ID);
+    // Stubbed so that a wrong redirect is seen as a redirect, not as an NPE
+    lenient().when(request.getRequestURL()).thenReturn(new StringBuffer(EDITOR_URL));
+    lenient().when(request.getQueryString()).thenReturn("docId=" + DOCUMENT_ID);
 
     handler.redirectToViewModeWhenNotEditable(request, response, chain);
 
-    verify(response).sendRedirect(EDITOR_URL + "?docId=" + DOCUMENT_ID + "&mode=view");
-    verify(chain, never()).doFilter(any(), any());
+    verify(chain, times(1)).doFilter(request, response);
+    verify(response, never()).sendRedirect(any());
     verifyNoInteractions(documentFileService, identityManager);
   }
 

@@ -45,17 +45,15 @@ public class DocumentModeRedirectHandler implements Filter {
   void redirectToViewModeWhenNotEditable(HttpServletRequest httpServletRequest,
                                          HttpServletResponse httpServletResponse,
                                          FilterChain chain) throws IOException, ServletException, IllegalAccessException {
-    boolean modeRequested = httpServletRequest.getParameter("mode") != null;
     String viewer = httpServletRequest.getRemoteUser();
     if (viewer == null) {
-      // An anonymous visitor (public site) never has an edit right on a document
-      if (modeRequested) {
-        chain.doFilter(httpServletRequest, httpServletResponse);
-      } else {
-        redirectToViewMode(httpServletRequest, httpServletResponse);
-      }
+      // Not authenticated yet: the link goes on unchanged, so that a registered
+      // user keeps its mode through login; the editor page opens an anonymous
+      // visitor of a public site in view mode
+      chain.doFilter(httpServletRequest, httpServletResponse);
       return;
     }
+    boolean modeRequested = httpServletRequest.getParameter("mode") != null;
     DocumentFileService documentFileService = ExoContainerContext.getService(DocumentFileService.class);
     IdentityManager identityManager = ExoContainerContext.getService(IdentityManager.class);
     String documentPreviewId = httpServletRequest.getParameter("documentPreviewId");
