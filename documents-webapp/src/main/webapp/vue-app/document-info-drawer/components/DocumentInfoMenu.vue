@@ -36,6 +36,12 @@
         :label="$t('documents.drawer.details.transcript')"
         icon="fas fa-closed-captioning"
         @click="$emit('transcript')" />
+      <documents-info-menu-item
+        v-if="versionHistoryShown"
+        :label="$t('documents.label.showVersionHistory')"
+        class="documentInfoMenuVersionHistory"
+        icon="fas fa-history"
+        @click="$emit('versions')" />
       <extension-registry-components
         :params="contributionParams"
         name="DocumentsInfo"
@@ -72,6 +78,14 @@ export default {
     menu: false,
   }),
   computed: {
+    /**
+     * The version history, where a version is restored and its summary
+     * written, opens for a file that keeps versions; a folder has none.
+     * @returns {boolean} true when the menu offers it
+     */
+    versionHistoryShown() {
+      return !!this.file && !this.file.folder && !!this.file.versionable;
+    },
     /**
      * Gives the contributions of other add-ons the file and where they are
      * shown, so a contribution can render as a labelled entry of the menu; one

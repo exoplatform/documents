@@ -15,34 +15,16 @@
  * along with this program. If not, see <gnu.org/licenses>.
 -->
 <template>
-  <div class="documentInfoVersions">
-    <v-progress-linear v-if="loading" indeterminate />
-    <div v-else-if="failed" class="text-sub-title pa-4">
-      {{ $t('documents.drawer.details.versions.error') }}
-    </div>
-    <div v-else-if="!versions.length" class="text-sub-title pa-4">
-      {{ $t('documents.drawer.details.versions.empty') }}
-    </div>
-    <v-list dense class="pa-0">
-      <v-list-item
-        v-for="version in versions"
-        :key="version.id"
-        :title="$t('documents.drawer.details.versions.open')"
-        class="documentInfoVersion px-0"
-        link
-        @click="openVersion(version)">
-        <v-list-item-content class="py-3">
-          <version-card
-            :version="version"
-            :can-manage="canManage"
-            :enable-edit-description="canManage"
-            @keydown.native.enter.stop
-            @restore-version="restoreVersion"
-            @version-update-description="updateSummary" />
-        </v-list-item-content>
-      </v-list-item>
-    </v-list>
-  </div>
+  <version-history-drawer
+    ref="drawer"
+    :versions="versions"
+    :can-manage="canManage"
+    :enable-edit-description="canManage"
+    :is-loading="loading"
+    class="documentInfoVersions"
+    @open-version="openVersion"
+    @restore-version="restoreVersion"
+    @version-update-description="updateSummary" />
 </template>
 <script>
 import {openFileVersion} from '../../../js/DocumentVersionUtils.js';
@@ -57,7 +39,6 @@ export default {
   data: () => ({
     versions: [],
     loading: false,
-    failed: false,
   }),
   computed: {
     /**
@@ -70,15 +51,16 @@ export default {
       return !!this.file?.acl?.canEdit;
     },
   },
-  watch: {
-    file: {
-      immediate: true,
-      handler() {
-        this.load();
-      },
-    },
-  },
   methods: {
+    /**
+     * Opens the file's version history, where a version is restored and its
+     * summary written, read afresh.
+     * @returns {void}
+     */
+    open() {
+      this.load();
+      this.$refs.drawer.open();
+    },
     /**
      * Reads the file's versions, newest first; a shortcut shows the versions
      * of the file it points to. A file never versioned has none to read: the
@@ -88,7 +70,6 @@ export default {
     load() {
       const nodeId = this.file?.sourceID || this.file?.id;
       this.versions = [];
-      this.failed = false;
       if (!nodeId || !this.file.versionable) {
         return;
       }
@@ -99,7 +80,7 @@ export default {
             this.versions = (result?.versions || []).slice().sort((a, b) => b.versionNumber - a.versionNumber);
           }
         })
-        .catch(() => this.failed = true)
+        .catch(() => this.alert(this.$t('documents.drawer.details.versions.error'), 'error'))
         .finally(() => this.loading = false);
     },
     /**
@@ -134,6 +115,7 @@ export default {
           this.alert(this.$t('documents.restore.version.success'), 'success');
           this.load();
           this.$emit('restored');
+          this.$emit('changed');
           document.dispatchEvent(new CustomEvent('document-version-restored', {detail: {fileId: this.file.id}}));
         })
         .catch(() => {
@@ -157,6 +139,7 @@ export default {
       return this.$documentFileService.updateVersionSummary(version.originId, version.id, cleanSummary)
         .then(updatedVersion => {
           this.$root.$emit('version-description-updated', updatedVersion || {...version, summary: cleanSummary});
+          this.$emit('changed');
           this.alert(this.$t('documents.summary.added.success'), 'success');
         })
         .catch(() => {
