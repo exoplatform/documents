@@ -137,6 +137,10 @@ export default {
     },
   },
   watch: {
+    /**
+     * Shows the changes of the file now shown, a shortcut's target included.
+     * @returns {void}
+     */
     documentId() {
       this.loadSources();
     },
