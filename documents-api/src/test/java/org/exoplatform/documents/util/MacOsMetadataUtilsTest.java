@@ -38,7 +38,9 @@ class MacOsMetadataUtilsTest {
       "folderX/sub/._note.txt",
       "folderX\\._doc.txt",
       "folderX/._sub/",
-      "folderX/.DS_Store/"
+      "folderX/.DS_Store/",
+      "._",
+      "folderX/._"
   })
   void isMacOsMetadataForMacOsMetadataPaths(String path) {
     assertTrue(MacOsMetadataUtils.isMacOsMetadata(path));

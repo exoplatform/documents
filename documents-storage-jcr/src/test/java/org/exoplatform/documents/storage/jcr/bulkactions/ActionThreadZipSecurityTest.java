@@ -259,8 +259,10 @@ class ActionThreadZipSecurityTest {
     Path outputDir = tempDir.resolve("output");
 
     createZip(zip, new ZipItem("__MACOSX/../../evil.txt", "owned"));
+    File zipFile = zip.toFile();
+    File outDir = outputDir.toFile();
 
-    assertThrows(SecurityException.class, () -> ActionThread.fixAndExtractZip(zip.toFile(), outputDir.toFile()));
+    assertThrows(SecurityException.class, () -> ActionThread.fixAndExtractZip(zipFile, outDir));
     assertFalse(Files.exists(tempDir.resolve("evil.txt")));
   }
 
