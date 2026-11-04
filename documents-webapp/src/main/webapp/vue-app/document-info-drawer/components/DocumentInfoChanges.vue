@@ -98,6 +98,16 @@ const SOURCE_TYPE = 'documents-info-changes-source';
 /** The id of the file's own versions, always a source. */
 const VERSIONS_SOURCE = 'versions';
 
+/**
+ * @param {Object} version a version, as the versions REST writes it
+ * @returns {number} its creation time in milliseconds, its date being
+ *          written as {time}, or as a date string or a number
+ */
+function versionTime(version) {
+  const date = version?.createdDate;
+  return Number(date && typeof date === 'object' ? date.time : new Date(date).getTime()) || 0;
+}
+
 export default {
   props: {
     file: {
@@ -248,6 +258,8 @@ export default {
      * The file's own versions, read at once: the server gives them all in
      * one answer, so the first page holds every one and no cursor follows.
      * A file never versioned has none: the server refuses the request for it.
+     * The versions REST writes a date as an object holding its time in
+     * milliseconds, as the version card reads it.
      * @returns {Object} the source of the file's versions, each keyed by its
      *          number and dated by its creation
      */
@@ -264,7 +276,7 @@ export default {
           return this.$documentFileService.getFileVersions(this.documentId)
             .then(result => ({
               entries: (result?.versions || [])
-                .map(version => ({time: new Date(version.createdDate).getTime(), key: version.versionNumber, version}))
+                .map(version => ({time: versionTime(version), key: version.versionNumber, version}))
                 .sort((entry1, entry2) => entry2.time - entry1.time || entry2.key - entry1.key),
               next: null,
             }));
