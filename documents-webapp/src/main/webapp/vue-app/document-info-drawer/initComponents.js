@@ -37,6 +37,8 @@ import DocumentInfoPerson from './components/DocumentInfoPerson.vue';
 import DocumentInfoDetails from './components/DocumentInfoDetails.vue';
 import DocumentInfoContent from './components/DocumentInfoContent.vue';
 import DocumentInfoVersions from './components/DocumentInfoVersions.vue';
+import DocumentInfoChanges from './components/DocumentInfoChanges.vue';
+import DocumentInfoChangesVersionLine from './components/DocumentInfoChangesVersionLine.vue';
 import DocumentInfoTranscript from './components/DocumentInfoTranscript.vue';
 import DocumentInfoPath from './components/DocumentInfoPath.vue';
 import DocumentRecordingTimeline from './components/DocumentRecordingTimeline.vue';
@@ -64,6 +66,8 @@ const components = {
   'document-info-details': DocumentInfoDetails,
   'document-info-content': DocumentInfoContent,
   'document-info-versions': DocumentInfoVersions,
+  'document-info-changes': DocumentInfoChanges,
+  'document-info-changes-version-line': DocumentInfoChangesVersionLine,
   'document-info-transcript': DocumentInfoTranscript,
   'document-info-path': DocumentInfoPath,
   'document-recording-timeline': DocumentRecordingTimeline,
