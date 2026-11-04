@@ -917,7 +917,8 @@ export default {
           this.contentViewsFileId = null;
           this.contentViewsGeneration++;
           this.openExpanded = !!request.expanded;
-          if (this.sideBySide) {
+          // sideBySide still holds the previous opening's state here: only an opening asked in full screen reads the views
+          if (this.openExpanded && this.sideBySide) {
             this.loadContentViews();
           }
           this.transcriptMoment = Number.isFinite(request.seconds) ? request.seconds : null;
