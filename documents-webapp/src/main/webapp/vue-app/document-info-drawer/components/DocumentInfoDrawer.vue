@@ -467,6 +467,11 @@ export default {
     },
   },
   watch: {
+    /**
+     * Reads the views beside the content once the details show beside it.
+     * @param {boolean} sideBySide whether the details show beside the content
+     * @returns {void}
+     */
     sideBySide(sideBySide) {
       if (sideBySide) {
         this.loadContentViews();
