@@ -228,6 +228,14 @@ export default {
       });
     },
     /**
+     * Shows the changes again, from the newest, with the same choice: the
+     * drawer asks it once a version is restored or its summary written.
+     * @returns {Promise} settled once the first changes are shown again
+     */
+    refresh() {
+      return this.select(this.selected);
+    },
+    /**
      * Shows the changes again, from the newest, with the same choice, when an
      * event a source listens to concerns the file shown.
      * @param {Object} source the source the event is for
