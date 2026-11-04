@@ -64,8 +64,30 @@
     </template>
     <template v-if="drawer && file" #content>
       <div :class="sideBySide && 'd-flex fill-height'">
-        <div v-if="sideBySide" class="documentInfoContentPane light-grey-background-color flex-grow-1 fill-height">
+        <div v-if="sideBySide" class="documentInfoContentPane light-grey-background-color d-flex flex-column flex-grow-1 fill-height">
+          <v-tabs
+            v-if="contentViews.length"
+            id="documentInfoContentTabs"
+            v-model="contentTab"
+            class="documentInfoTabs flex-grow-0">
+            <v-tab href="#view" class="documentInfoContentTab-view">{{ $t('documents.drawer.details.tab.view') }}</v-tab>
+            <v-tab
+              v-for="view in contentViews"
+              :key="view.id"
+              :href="`#${view.id}`"
+              :class="`documentInfoContentTab-${view.id}`">
+              {{ viewLabel(view) }}
+            </v-tab>
+          </v-tabs>
+          <div
+            v-for="view in shownContentViews"
+            :key="view.id"
+            :class="`documentInfoContentView-${view.id}`"
+            class="documentInfoContentView white flex-grow-1 overflow-y-auto px-4 pt-3 pb-4">
+            <component :is="view.vueComponent" v-bind="contentViewParams" />
+          </div>
           <document-info-content
+            v-show="contentTab === 'view'"
             ref="content"
             :file="file"
             :icon="icon"
@@ -86,6 +108,12 @@
             <v-tab href="#details">{{ $t('documents.drawer.details.tab.details') }}</v-tab>
             <v-tab v-if="!file.folder" href="#versions">{{ $t('documents.drawer.details.versions') }}</v-tab>
             <v-tab v-if="mediaKind && (transcriptAvailable || tab === 'transcript')" href="#transcript">{{ $t('documents.drawer.details.transcript') }}</v-tab>
+            <v-tab
+              v-if="!file.folder"
+              id="documentInfoChangesTab"
+              href="#changes">
+              {{ $t('documents.drawer.details.tab.changes') }}
+            </v-tab>
           </v-tabs>
           <div
             v-show="!sideBySide || tab === 'details'"
@@ -250,6 +278,10 @@
             class="px-4 overflow-y-auto"
             @term="transcriptTerm = $event"
             @seek="seek" />
+          <document-info-changes
+            v-if="sideBySide && tab === 'changes' && !file.folder"
+            :file="file"
+            class="px-4 overflow-y-auto" />
         </div>
       </div>
     </template>
@@ -273,6 +305,11 @@
 import {mediaKind} from '../js/RecordingLength.js';
 import {isBlankImage} from '../js/BlankImage.js';
 
+/** The extension point of the views other add-ons show beside the content in full screen. */
+const CONTENT_VIEWS_EXTENSION = 'DocumentsInfoContent';
+/** The type a view beside the content is registered with. */
+const CONTENT_VIEW_TYPE = 'documents-info-content-view';
+
 export default {
   props: {
     selectedView: {
@@ -288,6 +325,9 @@ export default {
     drawer: false,
     expanded: false,
     tab: 'details',
+    contentTab: 'view',
+    contentViews: [],
+    contentViewsGeneration: 0,
     thumbnailUrl: null,
     playerSeconds: null,
     openExpanded: false,
@@ -325,7 +365,9 @@ export default {
     },
     /**
      * What the details rows contributed by other add-ons receive: the file,
-     * its identifier and its media type.
+     * its identifier, its media type, and whether the details show beside
+     * the content in full screen, where a row that also has a view of its
+     * own beside the content may leave the details.
      * @returns {Object} the props of each contributed row
      */
     detailsContributionParams() {
@@ -333,7 +375,29 @@ export default {
         file: this.file,
         documentId: this.fileId,
         mimetype: this.file?.mimeType,
+        expanded: this.sideBySide,
       };
+    },
+    /**
+     * What the views other add-ons contribute beside the content receive:
+     * the file, its identifier and its media type.
+     * @returns {Object} the props of each contributed view
+     */
+    contentViewParams() {
+      return {
+        file: this.file,
+        documentId: this.fileId,
+        mimetype: this.file?.mimeType,
+      };
+    },
+    /**
+     * The contributed view chosen in the content's tabs, rendered while it
+     * is chosen only; the content itself stays rendered, hidden, so that a
+     * recording keeps its moment when its tab comes back.
+     * @returns {Array<Object>} the chosen view, or none on the View tab
+     */
+    shownContentViews() {
+      return this.contentViews.filter(view => view.id === this.contentTab);
     },
     modifiedDate() {
       return this.file?.modifiedDate;
@@ -431,8 +495,59 @@ export default {
     document.addEventListener('documents-transcript-expand', this.expandFromTranscript);
     document.addEventListener('metadata.favorite.updated', this.followFavoriteUpdate);
     document.addEventListener('closeDisplayedDrawer', this.collapseOnMaskOrEscape, true);
+    document.addEventListener(`component-${CONTENT_VIEWS_EXTENSION}-${CONTENT_VIEW_TYPE}-updated`, this.loadContentViews);
   },
   methods: {
+    /**
+     * Collects the views other add-ons contribute beside the content in full
+     * screen, the last one registered per id, that apply to the file,
+     * ordered by rank, each shown as a tab after « View ». A view is
+     * registered as
+     * extensionRegistry.registerComponent('DocumentsInfoContent', 'documents-info-content-view', options),
+     * the options being: id, unique; labelKey, or label, its tab; rank, its
+     * order, lowest first; isEnabled({file, documentId, mimetype}), optional,
+     * a boolean or a promise of one, whether it applies to the file, a
+     * failure meaning it does not; vueComponent, given the props file,
+     * documentId and mimetype. Read again for each file, and when an add-on
+     * registers a view late; a view chosen that no longer applies gives
+     * way to the content.
+     * @returns {Promise} settled once the views are known
+     */
+    loadContentViews() {
+      const generation = ++this.contentViewsGeneration;
+      const file = this.file;
+      if (!file || file.folder) {
+        this.contentViews = [];
+        this.contentTab = 'view';
+        return Promise.resolve();
+      }
+      const params = {file, documentId: file.id, mimetype: file.mimeType};
+      const byId = new Map();
+      (extensionRegistry.loadComponents(CONTENT_VIEWS_EXTENSION) || [])
+        .filter(component => component.componentName === CONTENT_VIEW_TYPE && component.componentOptions?.id && component.componentOptions.id !== 'view')
+        .forEach(component => byId.set(component.componentOptions.id, component.componentOptions));
+      const registered = [...byId.values()];
+      return Promise.all(registered.map(view => Promise.resolve()
+        .then(() => !view.isEnabled || view.isEnabled(params))
+        .then(enabled => !!enabled)
+        .catch(() => false)))
+        .then(enabled => {
+          if (generation === this.contentViewsGeneration) {
+            this.contentViews = registered.filter((view, index) => enabled[index])
+              .sort((view1, view2) => Number(view1.rank || 0) - Number(view2.rank || 0));
+            if (!this.contentViews.some(view => view.id === this.contentTab)) {
+              this.contentTab = 'view';
+            }
+          }
+        });
+    },
+    /**
+     * @param {Object} view a view contributed beside the content
+     * @returns {string} its tab's label, translated when it gives a key
+     */
+    viewLabel(view) {
+      return view.labelKey && this.$te(view.labelKey) && this.$t(view.labelKey) || view.label || view.id;
+    },
     /**
      * Follows the drawer's expansion. A full view the transcript drawer opened
      * from these details expanded in place collapses to the narrow details as
@@ -448,6 +563,9 @@ export default {
      */
     updateExpanded(expanded) {
       this.expanded = expanded;
+      if (!expanded) {
+        this.contentTab = 'view';
+      }
       if (!expanded && this.origin !== 'transcript') {
         this.keepRecordingMoment();
       }
@@ -780,6 +898,8 @@ export default {
           this.fileInitialDescription = this.file.description;    
           this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length; 
           this.tab = request.tab || 'details';
+          this.contentTab = 'view';
+          this.loadContentViews();
           this.openExpanded = !!request.expanded;
           this.transcriptMoment = Number.isFinite(request.seconds) ? request.seconds : null;
           this.transcriptPlaying = !!request.playing;
