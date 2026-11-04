@@ -15,16 +15,34 @@
  * along with this program. If not, see <gnu.org/licenses>.
 -->
 <template>
-  <v-list-item
+  <div
     v-if="entry && entry.version"
-    :title="$t('documents.drawer.details.versions.open')"
-    class="documentInfoChangesVersion px-0"
-    link
-    @click="openVersion">
-    <v-list-item-content class="py-3">
-      <version-card :version="entry.version" />
-    </v-list-item-content>
-  </v-list-item>
+    class="documentInfoChangesVersion py-3 border-bottom-color">
+    <div class="text-body-2 font-weight-bold">
+      {{ $t('documents.drawer.details.changes.version', {0: entry.version.versionNumber}) }}
+    </div>
+    <div v-if="entry.version.summary" class="text-body-2 text-break my-1">{{ entry.version.summary }}</div>
+    <div class="d-flex align-center flex-wrap text-caption text-light-color">
+      <user-avatar
+        v-if="entry.version.author"
+        :profile-id="entry.version.author"
+        extra-class="me-2"
+        :size="20"
+        small-font-size
+        popover />
+      <date-format
+        :value="entry.time"
+        :format="dateFormat"
+        class="me-2" />
+      <span class="me-1">·</span>
+      <a
+        href="#"
+        class="documentInfoChangesVersionOpen primary--text"
+        @click.prevent="openVersion">
+        {{ $t('documents.drawer.details.changes.open') }}
+      </a>
+    </div>
+  </div>
 </template>
 <script>
 import {openFileVersion} from '../../../js/DocumentVersionUtils.js';
@@ -40,6 +58,9 @@ export default {
       default: null,
     },
   },
+  data: () => ({
+    dateFormat: {year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'},
+  }),
   methods: {
     /**
      * Opens the version read only, as the Versions tab does; restoring a
