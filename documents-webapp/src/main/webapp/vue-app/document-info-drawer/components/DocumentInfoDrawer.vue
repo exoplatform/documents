@@ -317,6 +317,7 @@ export default {
     tab: 'details',
     contentTab: 'view',
     contentViews: [],
+    contentViewsFileId: null,
     contentViewsGeneration: 0,
     thumbnailUrl: null,
     playerSeconds: null,
@@ -466,6 +467,11 @@ export default {
     },
   },
   watch: {
+    sideBySide(sideBySide) {
+      if (sideBySide) {
+        this.loadContentViews();
+      }
+    },
     showDescription() {
       this.$refs.descriptionMessage?.initCKEditorData(this.file.description);
     },
@@ -485,7 +491,7 @@ export default {
     document.addEventListener('documents-transcript-expand', this.expandFromTranscript);
     document.addEventListener('metadata.favorite.updated', this.followFavoriteUpdate);
     document.addEventListener('closeDisplayedDrawer', this.collapseOnMaskOrEscape, true);
-    document.addEventListener(`component-${CONTENT_VIEWS_EXTENSION}-${CONTENT_VIEW_TYPE}-updated`, this.loadContentViews);
+    document.addEventListener(`component-${CONTENT_VIEWS_EXTENSION}-${CONTENT_VIEW_TYPE}-updated`, this.reloadContentViews);
   },
   methods: {
     /**
@@ -498,14 +504,19 @@ export default {
      * order, lowest first; isEnabled({file, documentId, mimetype}), optional,
      * a boolean or a promise of one, whether it applies to the file, a
      * failure meaning it does not; vueComponent, given the props file,
-     * documentId and mimetype. Read again for each file, and when an add-on
-     * registers a view late; a view chosen that no longer applies gives
-     * way to the content.
+     * documentId and mimetype. Read once per file, when the details first
+     * show beside the content, so that the narrow details ask the add-ons
+     * nothing; a view chosen that no longer applies gives way to the content.
+     * @param {boolean} [force] read them again for the same file
      * @returns {Promise} settled once the views are known
      */
-    loadContentViews() {
-      const generation = ++this.contentViewsGeneration;
+    loadContentViews(force) {
       const file = this.file;
+      if (!force && file && this.contentViewsFileId === file.id) {
+        return Promise.resolve();
+      }
+      const generation = ++this.contentViewsGeneration;
+      this.contentViewsFileId = file?.id || null;
       if (!file || file.folder) {
         this.contentViews = [];
         this.contentTab = 'view';
@@ -530,6 +541,19 @@ export default {
             }
           }
         });
+    },
+    /**
+     * Reads the views again when an add-on registers one late, while the
+     * details show beside the content; otherwise the next full screen reads
+     * them.
+     * @returns {Promise} settled once the views are known
+     */
+    reloadContentViews() {
+      if (!this.sideBySide) {
+        this.contentViewsFileId = null;
+        return Promise.resolve();
+      }
+      return this.loadContentViews(true);
     },
     /**
      * @param {Object} view a view contributed beside the content
@@ -889,8 +913,13 @@ export default {
           this.isFavorite = this.file && this.file.metadatas && this.file.metadatas.favorites && this.file.metadatas.favorites.length; 
           this.tab = request.tab || 'details';
           this.contentTab = 'view';
-          this.loadContentViews();
+          this.contentViews = [];
+          this.contentViewsFileId = null;
+          this.contentViewsGeneration++;
           this.openExpanded = !!request.expanded;
+          if (this.sideBySide) {
+            this.loadContentViews();
+          }
           this.transcriptMoment = Number.isFinite(request.seconds) ? request.seconds : null;
           this.transcriptPlaying = !!request.playing;
           this.transcriptTerm = request.term || '';
