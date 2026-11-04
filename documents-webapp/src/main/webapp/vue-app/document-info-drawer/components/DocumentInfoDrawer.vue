@@ -279,7 +279,7 @@
             @seek="seek" />
           <document-info-changes
             v-if="paneTab === 'changes'"
-            :key="`changes-${changesGeneration}`"
+            ref="changes"
             :file="file"
             :class="sideBySide && 'overflow-y-auto'"
             class="px-4" />
@@ -288,7 +288,7 @@
           ref="versions"
           :file="file"
           @restored="refreshFile"
-          @changed="changesGeneration++" />
+          @changed="refreshChanges" />
       </div>
     </template>
     <template v-if="drawer" #footer>
@@ -335,7 +335,6 @@ export default {
     contentViews: [],
     contentViewsFileId: null,
     contentViewsGeneration: 0,
-    changesGeneration: 0,
     thumbnailUrl: null,
     playerSeconds: null,
     openExpanded: false,
@@ -346,6 +345,7 @@ export default {
     returning: false,
     clickUnderDrawer: false,
     narrowScroll: null,
+    narrowTab: null,
     file: null,
     fileInDrive: null,
     fileInDriveRequest: null,
@@ -620,9 +620,8 @@ export default {
       if (!expanded && this.narrowScroll !== null) {
         const scroll = this.narrowScroll;
         this.narrowScroll = null;
-        if (this.tab === 'transcript') {
-          this.tab = 'details';
-        }
+        this.tab = this.narrowTab || (this.tab === 'transcript' ? 'details' : this.tab);
+        this.narrowTab = null;
         // the narrow layout renders on the next tick, then takes its scroll back
         this.$nextTick(() => {
           const content = this.drawerContent();
@@ -809,11 +808,22 @@ export default {
       this.transcriptPlaying = !!detail.playing;
       this.transcriptTerm = detail.term || '';
       this.playerSeconds = null;
+      if (!this.expanded) {
+        this.narrowTab = this.paneTab;
+      }
       this.tab = 'transcript';
       if (!this.expanded) {
         this.narrowScroll = this.drawerContent()?.scrollTop || 0;
         this.$refs.documentInfoDrawer.toogleExpand();
       }
+    },
+    /**
+     * Shows the changes again, with the chosen filter, once a version is
+     * restored or its summary written in the version history.
+     * @returns {void}
+     */
+    refreshChanges() {
+      this.$refs.changes?.refresh();
     },
     /**
      * The drawer's scrolling content.
@@ -997,6 +1007,7 @@ export default {
     close() {
       this.origin = null;
       this.narrowScroll = null;
+      this.narrowTab = null;
       this.transcriptPlaying = false;
       this.file = null;
       this.fileInDrive = null;
