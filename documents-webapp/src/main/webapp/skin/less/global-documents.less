@@ -68,6 +68,13 @@
   .documentInfoContentPane {
     min-width: 0;
   }
+  // The View tab's host: v-show hides it, so it takes no display utility.
+  .documentInfoContentHost {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
   .documentInfoContent {
     .documentInfoContentOpen {
       flex: 1 1 auto;
