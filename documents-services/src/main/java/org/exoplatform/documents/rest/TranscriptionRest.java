@@ -111,7 +111,7 @@ public class TranscriptionRest {
     if (!documentTranscriptionService.isAvailable()) {
       return ResponseEntity.ok()
                            .cacheControl(CacheControl.noStore())
-                           .body(new TranscriptionStateEntity(false, null, null, null, null, null, null, false, false));
+                           .body(new TranscriptionStateEntity(false, null, null, null, null, null, null, false, false, false));
     }
     try {
       TranscriptionState state = documentTranscriptionService.getState(documentId, getCurrentIdentityId(request));
@@ -125,7 +125,9 @@ public class TranscriptionRest {
                                                               state.durationSeconds(),
                                                               state.updated(),
                                                               state.hasSegments(),
-                                                              state.hasChapters()));
+                                                              state.hasChapters(),
+                                                              documentTranscriptionService.canRequestRetry(documentId,
+                                                                                                           getCurrentIdentityId(request))));
     } catch (IllegalAccessException e) {
       throw forbidden(documentId, e);
     } catch (ObjectNotFoundException e) {
@@ -491,7 +493,7 @@ public class TranscriptionRest {
   @ApiResponses(value = {
     @ApiResponse(responseCode = "202", description = "Request accepted"),
     @ApiResponse(responseCode = "400", description = "No transcriber installed, not a media file, or already transcribed"),
-    @ApiResponse(responseCode = "403", description = "The file cannot be read by the caller"),
+    @ApiResponse(responseCode = "403", description = "The file cannot be read or edited by the caller"),
     @ApiResponse(responseCode = "404", description = "The file does not exist or the caller cannot see it"),
   })
   public ResponseEntity<Void> retry(HttpServletRequest request,
