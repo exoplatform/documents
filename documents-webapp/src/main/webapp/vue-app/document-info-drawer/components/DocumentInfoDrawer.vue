@@ -106,14 +106,15 @@
         </div>
         <div :class="sideBySide && 'documentInfoSidePane d-flex flex-column fill-height'">
           <v-tabs
+            v-if="paneTabs.length > 1"
             :value="paneTab"
             id="documentInfoPaneTabs"
             class="documentInfoTabs white flex-grow-0 border-bottom-color"
             @change="tab = $event">
             <v-tab href="#details">{{ $t('documents.drawer.details.tab.details') }}</v-tab>
-            <v-tab v-if="sideBySide && mediaKind && (transcriptAvailable || tab === 'transcript')" href="#transcript">{{ $t('documents.drawer.details.transcript') }}</v-tab>
+            <v-tab v-if="paneTabs.includes('transcript')" href="#transcript">{{ $t('documents.drawer.details.transcript') }}</v-tab>
             <v-tab
-              v-if="!file.folder"
+              v-if="paneTabs.includes('changes')"
               id="documentInfoChangesTab"
               href="#changes">
               {{ $t('documents.drawer.details.tab.changes') }}
@@ -435,6 +436,22 @@ export default {
         return 'details';
       }
       return this.tab;
+    },
+    /**
+     * The tabs the side pane offers: the details always, the transcript of a
+     * recording in the full view, the changes of a file. The tab bar shows
+     * only when it offers a choice, two tabs or more.
+     * @returns {Array<string>} the tabs offered, in their order
+     */
+    paneTabs() {
+      const tabs = ['details'];
+      if (this.sideBySide && this.mediaKind && (this.transcriptAvailable || this.tab === 'transcript')) {
+        tabs.push('transcript');
+      }
+      if (this.file && !this.file.folder) {
+        tabs.push('changes');
+      }
+      return tabs;
     },
     /**
      * Lays the content beside the tabs once the drawer is expanded on a wide
