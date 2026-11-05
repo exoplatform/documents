@@ -60,15 +60,24 @@ const availability = window.documentsTranscriptAvailability || (window.documents
  * Tells whether a file can be transcribed, reading its state once per page:
  * the answer depends on the edition and on the viewer's access to the file,
  * neither of which changes while the page is open. A failed read is not kept,
- * so the next button reads it again.
+ * so the next button reads it again. An answer saying no engine is installed
+ * holds for every file of the page: once one says so, no other file is asked.
  *
  * @param {string} documentId the file's id
  * @returns {Promise<boolean>} true when the transcript can be offered
  */
 function readAvailability(documentId) {
+  if (window.documentsTranscriptEngineMissing) {
+    return Promise.resolve(false);
+  }
   if (!availability.has(documentId)) {
     availability.set(documentId, getState(documentId)
-      .then(state => !!state?.available)
+      .then(state => {
+        if (state && state.available === false) {
+          window.documentsTranscriptEngineMissing = true;
+        }
+        return !!state?.available;
+      })
       .catch(() => {
         availability.delete(documentId);
         return false;
