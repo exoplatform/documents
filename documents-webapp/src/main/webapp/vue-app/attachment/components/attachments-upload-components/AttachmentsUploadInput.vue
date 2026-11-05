@@ -79,7 +79,9 @@ export default {
       maxProgress: 100,
       newUploadedFiles: [],
       abortUploading: false,
-      uploadedFilesCount: 0
+      uploadedFilesCount: 0,
+      pendingExistenceChecks: 0,
+      resetCount: 0,
     };
   },
   computed: {
@@ -129,7 +131,21 @@ export default {
   },
   methods: {
     uploadFile: function () {
+      // Cleared when the picker opens rather than after a pick, and never by
+      // this code while a picked file is still held (in its existence check,
+      // queued, waiting for a conflict choice, uploading, or kept for Retry):
+      // a picked file is read only once its upload starts, and on iOS Safari a
+      // picked photo may not stay readable once its input is cleared
+      // (inferred, not reproduced on a device).
+      if (!this.holdsPickedFiles()) {
+        this.$refs.uploadInput.value = null;
+      }
       this.$refs.uploadInput.click();
+    },
+    holdsPickedFiles() {
+      return this.pendingExistenceChecks > 0
+        || [...(this.attachments || []), ...this.newUploadedFiles, ...this.uploadingFilesQueue]
+          .some(file => file?.originalFileObject);
     },
     handleFileUpload: function (files) {
       if (this.$refs.uploadInput){
@@ -188,8 +204,6 @@ export default {
             return true;
           }
         });
-        this.$refs.uploadInput.value = null;
-      
       }
     },
     queueUpload: function (file) {
@@ -202,7 +216,14 @@ export default {
         }}));
         return;
       }
-      this.checkExistenceActions(file).then(actions => {
+      this.pendingExistenceChecks++;
+      // A file still in its existence check when the drawer resets is
+      // neither listed nor uploaded once the check answers.
+      const resetCount = this.resetCount;
+      this.checkExistenceActions(file).finally(() => this.pendingExistenceChecks--).then(actions => {
+        if (resetCount !== this.resetCount) {
+          return;
+        }
         if (actions.length > 0) {
           file.actions = actions;
           file.waitAction = true;
@@ -237,62 +258,92 @@ export default {
     sendFileToServer(file, continueAction) {
       if (!file.aborted && !file.waitAction) {
         this.uploadingCount++;
-        this.$uploadService.upload(file.originalFileObject, file.uploadId, file.signal)
-          .then(() => delete file.originalFileObject)
-          .catch(() => {
-            this.$root.$emit('alert-message', this.$t('attachments.link.failed'), 'error');
-            this.markUploadFailed(file);
+        // A retry starts a new attempt: an earlier attempt's request or poll
+        // settling late neither fails it nor completes it.
+        const attempt = file.uploadAttempt = (file.uploadAttempt || 0) + 1;
+        file.uploadPending = true;
+        file.uploadAnswered = false;
+        Promise.resolve().then(() => this.$uploadService.upload(file.originalFileObject, file.uploadId, file.signal))
+          .then(uploadId => {
+            if (!uploadId) {
+              throw new Error('Upload request failed');
+            }
+            if (file.uploadAttempt === attempt) {
+              file.uploadAnswered = true;
+            }
+          })
+          .catch(() => file.uploadAttempt === attempt && this.handleUploadFailure(file))
+          .finally(() => {
+            if (file.uploadAttempt === attempt) {
+              file.uploadPending = false;
+            }
           });
-        this.controlUpload(file, continueAction);
+        this.controlUpload(file, continueAction, attempt);
       } else {
         this.processNextQueuedUpload();
       }
     },
-    controlUpload(file, continueAction) {
+    controlUpload(file, continueAction, attempt) {
       if (file.aborted) {
         this.uploadingCount--;
         this.processNextQueuedUpload();
-      } else {
-        if (file.uploadId) {
-          window.setTimeout(() => {
-            if (!file.countFirstProgressError) {
-              file.countFirstProgressError=0;
-            }
-            this.$uploadService.getUploadProgress(file.uploadId)
-              .then(percent => {
-                delete file.countFirstProgressError;
-                if (this.abortUploading) {
-                  return;
-                } else {
-                  file.uploadProgress = file.inProcess && 100 || Number(percent);
-                  if (!file.uploadProgress || file.uploadProgress < 100) {
-                    this.controlUpload(file, continueAction);
-                  } else {
-                    this.uploadingCount--;
-                    this.processNextQueuedUpload();
-                  }
-                  if (file.uploadProgress === 100 && !file.inProcess) {
-                    file.inProcess = true;
-                    this.$root.$emit('continue-upload-to-destination-path', file);
-                    const index = this.newUploadedFiles.findIndex(f => f.id === file.id);
-                    this.newUploadedFiles.splice(index, 1);
-                  }
-                }
-              })
-              .catch((err) => {
-                if (err.message==='Uploaded resource not found' && file.countFirstProgressError != null && file.countFirstProgressError < 5) {
-                  //if the upload request take more than 200ms to initialize, then the progress request arrives too early.
-                  //In this case, redo the progress, until 5 errors to be sure
-                  file.countFirstProgressError++;
-                  this.controlUpload(file, continueAction);
-                } else {
-                  this.markUploadFailed(file);
-                  this.$root.$emit('alert-message', this.$t('attachments.link.failed'), 'error');
-                }
-              });
-          }, 200);
-        }
+      } else if (file.uploadId) {
+        window.setTimeout(() => {
+          if (this.isAttemptOver(file, attempt)) {
+            return;
+          } else if (file.aborted) {
+            this.controlUpload(file, continueAction, attempt);
+            return;
+          }
+          const sentWhileUploadPending = file.uploadPending;
+          const sentAfterUploadAnswered = file.uploadAnswered;
+          this.$uploadService.getUploadProgress(file.uploadId)
+            .then(percent => {
+              if (this.abortUploading || this.isAttemptOver(file, attempt)) {
+                return;
+              } else if (file.aborted) {
+                this.controlUpload(file, continueAction, attempt);
+                return;
+              }
+              // A poll reads 100 once the body has arrived, before the server
+              // has written and validated the file: only a poll sent after the
+              // upload request answered completes the upload and files it.
+              file.uploadProgress = file.inProcess && 100
+                || (sentAfterUploadAnswered ? Number(percent) : Math.min(Number(percent), 99));
+              if (!file.uploadProgress || file.uploadProgress < 100) {
+                this.controlUpload(file, continueAction, attempt);
+              } else {
+                this.uploadingCount--;
+                this.processNextQueuedUpload();
+              }
+              if (file.uploadProgress === 100 && !file.inProcess) {
+                file.inProcess = true;
+                delete file.originalFileObject;
+                this.$root.$emit('continue-upload-to-destination-path', file);
+                const index = this.newUploadedFiles.findIndex(f => f.id === file.id);
+                this.newUploadedFiles.splice(index, 1);
+              }
+            })
+            .catch((err) => {
+              if (this.isAttemptOver(file, attempt)) {
+                return;
+              } else if (file.aborted) {
+                this.controlUpload(file, continueAction, attempt);
+              } else if (sentWhileUploadPending && err?.message !== 'Upload error') {
+                // The server knows an upload only once its request reaches it,
+                // and a poll sent before then finds none; a late start (a slow
+                // network, a browser preparing the body) is the inferred cause
+                // of the iPhone uploads that stayed at 0%.
+                this.controlUpload(file, continueAction, attempt);
+              } else {
+                this.handleUploadFailure(file);
+              }
+            });
+        }, 200);
       }
+    },
+    isAttemptOver(file, attempt) {
+      return file.uploadAttempt !== attempt || file.failedAttempt === attempt;
     },
     processNextQueuedUpload: function () {
       if (this.uploadingFilesQueue.length > 0) {
@@ -306,10 +357,18 @@ export default {
     removeAttachedFile(file) {
       this.$root.$emit('remove-attachment-item', file);
     },
+    handleUploadFailure(file) {
+      if (file.uploadFailed || file.aborted) {
+        return;
+      }
+      this.$root.$emit('alert-message', this.$t('attachments.link.failed'), 'error');
+      this.markUploadFailed(file);
+    },
     markUploadFailed(file) {
       // Keep the failed item in the list (with an inline error + Retry) instead
       // of silently removing it.
       this.$set(file, 'uploadFailed', true);
+      file.failedAttempt = file.uploadAttempt;
       this.$set(file, 'uploadProgress', 0);
       if (this.uploadingCount > 0) {
         this.uploadingCount--;
@@ -328,7 +387,6 @@ export default {
       this.$set(file, 'uploadProgress', 0);
       file.aborted = false;
       delete file.inProcess;
-      delete file.countFirstProgressError;
       const controller = new AbortController();
       file.signal = controller.signal;
       if (this.newUploadedFiles.findIndex(f => f.uploadId === file.uploadId) === -1) {
@@ -341,11 +399,18 @@ export default {
       }
     },
     resetUploadInput() {
+      this.resetCount++;
       this.newUploadedFiles = [];
       this.uploadingCount = 0;
       this.uploadedFilesCount = 0;
     },
     abortUploadingNewAttachments() {
+      // Ends the attempt of every file uploading or queued: a request or a
+      // poll settling after the drawer closed, or after a later pick, neither
+      // files nor fails that file.
+      [...this.newUploadedFiles, ...this.uploadingFilesQueue]
+        .forEach(file => file.uploadAttempt = (file.uploadAttempt || 0) + 1);
+      this.uploadingFilesQueue = [];
       this.resetUploadInput();
       this.abortUploading = true;
     },
