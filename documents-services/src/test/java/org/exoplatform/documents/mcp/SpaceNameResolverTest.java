@@ -19,7 +19,9 @@ package org.exoplatform.documents.mcp;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,6 +36,7 @@ import org.junit.Test;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.ListAccess;
+import org.exoplatform.social.core.space.SpaceFilter;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
@@ -181,6 +184,27 @@ public class SpaceNameResolverTest {
     memberOf(spaces.toArray(new Space[0]));
 
     assertEquals("250", resolver.resolve("Space 250", USERNAME).getId());
+  }
+
+  /**
+   * A name the spaces search finds among the user's spaces is resolved from
+   * that search alone, without reading every space of the user; a name it
+   * doesn't find falls back to them. Mutants: the search skipped, or every
+   * space read even when the search found the name.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aNameTheSearchFindsIsResolvedWithoutReadingEverySpace() throws Exception {
+    Space legal = space("7", "Legal", "legal");
+    when(spaceService.getMemberSpacesByFilter(eq(USERNAME), any(SpaceFilter.class))).thenReturn(listAccessOf(legal));
+
+    assertEquals("7", resolver.resolve("legal", USERNAME).getId());
+    verify(spaceService, never()).getMemberSpaces(anyString());
+
+    when(spaceService.getMemberSpacesByFilter(eq(USERNAME), any(SpaceFilter.class))).thenReturn(listAccessOf());
+    memberOf(legal);
+    assertEquals("7", resolver.resolve("legal", USERNAME).getId());
   }
 
   /**
