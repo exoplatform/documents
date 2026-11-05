@@ -391,6 +391,15 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public AbstractNode createFolderPath(String folderId,
+                                       List<String> titles,
+                                       long authenticatedUserId) throws IllegalAccessException,
+                                                                 ObjectAlreadyExistsException,
+                                                                 ObjectNotFoundException {
+    return documentFileStorage.createFolderPath(folderId, titles, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
   public AbstractNode createDocumentFromTemplate(long ownerId, String folderId, String folderPath, String title, String documentType, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException, ObjectAlreadyExistsException {
     return documentFileStorage.createDocumentFromTemplate(ownerId, folderId, folderPath, title, documentType, getAclUserIdentity(authenticatedUserId));
   }

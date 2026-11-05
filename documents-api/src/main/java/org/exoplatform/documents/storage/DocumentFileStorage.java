@@ -248,6 +248,31 @@ public interface DocumentFileStorage {
                                                                                ObjectNotFoundException;
 
   /**
+   * Creates the last folder of a path of folder titles under a folder, each
+   * folder of the path before it reused when its parent holds one of that
+   * name, created otherwise. A folder is found by the node name its title
+   * gives, as {@link #createFolder} names it, so it is found wherever it
+   * sorts among its parent's children; a node of that name that is not a
+   * plain folder (a file, a shortcut, a hidden folder) can't be reused.
+   *
+   * @param folderId the folder the path starts under
+   * @param titles the folder titles, the first under that folder, each next
+   *          one under the previous
+   * @param aclIdentity the user creating the folders
+   * @return the last folder of the path, created
+   * @throws IllegalArgumentException when a title is not valid, or a node of
+   *           a title's name can't be reused as a folder
+   * @throws IllegalAccessException when the user can't add a folder where one
+   *           is missing
+   * @throws ObjectAlreadyExistsException when the last folder of the path
+   *           exists already
+   * @throws ObjectNotFoundException when the starting folder can't be found
+   */
+  AbstractNode createFolderPath(String folderId, List<String> titles, Identity aclIdentity) throws IllegalAccessException,
+                                                                                              ObjectAlreadyExistsException,
+                                                                                              ObjectNotFoundException;
+
+  /**
    * Creates a new empty office document (Word/Excel/PowerPoint/ODF) from the
    * platform's blank template, by delegating to the ecms {@code DocumentService}.
    *
