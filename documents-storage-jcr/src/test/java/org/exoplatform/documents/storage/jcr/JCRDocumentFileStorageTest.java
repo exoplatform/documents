@@ -3836,6 +3836,71 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * Every transcript read or write made with a user's rights opens its session
+   * with that user current, whoever the thread's user is, and gives the thread
+   * its state back, whether the call succeeds or fails: the state, the
+   * chapters, the speakers, their naming, the speaker proposals and the text.
+   * Mutant: any one of the swaps dropped.
+   */
+  @Test
+  public void everyTranscriptCallWithAUsersRightsLogsInAsThatUser() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    org.exoplatform.services.security.ConversationState threadState =
+                                                                     new org.exoplatform.services.security.ConversationState(new org.exoplatform.services.security.Identity("mary"));
+    org.exoplatform.services.security.ConversationState.setCurrent(threadState);
+    try {
+      SessionProvider sessionProvider = mock(SessionProvider.class);
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, viewer)).thenReturn(sessionProvider);
+      ManageableRepository manageableRepository = mock(ManageableRepository.class);
+      when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+      Session session = mock(Session.class);
+      java.util.List<String> loggedInAs = new java.util.ArrayList<>();
+      when(sessionProvider.getSession("collaboration", manageableRepository)).thenAnswer(invocation -> {
+        loggedInAs.add(org.exoplatform.services.security.ConversationState.getCurrent().getIdentity().getUserId());
+        return session;
+      });
+      mockMediaNode(session, "video/mp4");
+      java.util.List<java.util.concurrent.Callable<Object>> calls =
+                                                                 java.util.List.of(() -> jcrDocumentFileStorage.getTranscriptionState("1", viewer),
+                                                                                   () -> jcrDocumentFileStorage.getTranscriptionChapters("1", viewer),
+                                                                                   () -> jcrDocumentFileStorage.getTranscriptionSpeakers("1", viewer),
+                                                                                   () -> {
+                                                                                     jcrDocumentFileStorage.setTranscriptionSpeaker("1", "0", "7", viewer);
+                                                                                     return null;
+                                                                                   },
+                                                                                   () -> jcrDocumentFileStorage.getTranscriptionSpeakerSuggestions("1", viewer),
+                                                                                   () -> {
+                                                                                     jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "0", viewer);
+                                                                                     return null;
+                                                                                   },
+                                                                                   () -> jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                                                                                                    new TranscriptionSpeakerSuggestion("0",
+                                                                                                                                                                                       7L,
+                                                                                                                                                                                       true,
+                                                                                                                                                                                       false,
+                                                                                                                                                                                       java.util.List.of()),
+                                                                                                                                                    1L,
+                                                                                                                                                    viewer),
+                                                                                   () -> jcrDocumentFileStorage.getAudioTranscription("1", viewer),
+                                                                                   () -> {
+                                                                                     jcrDocumentFileStorage.updateAudioTranscription("1", "text", viewer);
+                                                                                     return null;
+                                                                                   });
+      for (int i = 0; i < calls.size(); i++) {
+        try {
+          calls.get(i).call();
+        } catch (Exception e) { // NOSONAR the outcome of a call on a bare node is not what this test checks
+        }
+        assertEquals("call " + i + " opened its session once", i + 1, loggedInAs.size());
+        assertEquals("call " + i + " logged in as the viewer", "john", loggedInAs.get(i));
+        assertSame("call " + i + " gave the thread its state back", threadState, org.exoplatform.services.security.ConversationState.getCurrent());
+      }
+    } finally {
+      org.exoplatform.services.security.ConversationState.setCurrent(null);
+    }
+  }
+
+  /**
    * The background work on a transcript reads its segments as the system.
    */
   @Test
