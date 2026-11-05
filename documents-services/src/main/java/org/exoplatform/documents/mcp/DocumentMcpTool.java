@@ -266,6 +266,10 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_NAME_SCOPE_UNREADABLE =
                                                              "The space this call is limited to can't be read, so a space can't be named by its space_name. Call it again with its space_id.";
 
+  /** The refusal of a copy or a duplicate into a folder holding too many children to find the new node in. */
+  private static final String      MSG_TOO_MANY_CHILDREN_TO_COPY_INTO =
+                                                                      "The target folder holds more than %d items, too many to find the copy in afterwards, so nothing was copied. Copy into a folder holding fewer items.";
+
   /** The refusal of a date-limited listing of a folder holding too many children. */
   private static final String      MSG_TOO_MANY_CHILDREN  =
                                                           "The folder holds more than %d documents, too many to keep the changed ones here. Call search_documents with parent_folder_id and updated_since instead (it searches the whole folder tree, files only).";
@@ -292,13 +296,6 @@ public class DocumentMcpTool implements McpToolPlugin {
   /** The argument of the tools that move, copy or link a document to a folder. */
   private static final String      DESTINATION_FOLDER_ID_ARG = "destination_folder_id";
 
-  /**
-   * The children of a folder read in one page when a tool looks a child
-   * folder up by name, or lists a folder's children before and after a copy
-   * or a duplicate to find the one added: only that first page is read, so a
-   * folder holding more children is searched in its first ones only.
-   */
-  private static final int         FOLDER_PAGE_SIZE       = 200;
 
   /**
    * The refusal of a base64 file too long for one upload_document call: a
@@ -1654,6 +1651,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    *           that space, the node was created by the platform for the space,
    *           or the call's space can't be read
    * @throws ObjectNotFoundException when a node doesn't exist
+   * @throws IllegalArgumentException when the destination folder holds more
+   *           than {@value #MAX_SCANNED_CHILDREN} items: the copy could not be
+   *           found among them afterwards, so nothing is copied
    */
   public DocumentModel copyDocument(String documentId,
                                     String destinationFolderId) throws IllegalAccessException, ObjectNotFoundException {
@@ -1691,6 +1691,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    *           node, or, in a call limited to a space, the node was created by
    *           the platform for the space or the call's space can't be read
    * @throws ObjectNotFoundException when the node doesn't exist
+   * @throws IllegalArgumentException when the source's folder holds more than
+   *           {@value #MAX_SCANNED_CHILDREN} items: the duplicate could not be
+   *           found among them afterwards, so nothing is duplicated
    */
   public DocumentModel duplicateDocument(String documentId,
                                          String prefix) throws IllegalAccessException, ObjectNotFoundException {
@@ -2498,6 +2501,33 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
+   * Reads the children of a folder a copy or a duplicate adds a node to, to
+   * find that node afterwards: at most {@value #MAX_SCANNED_CHILDREN}, so a
+   * folder holding more is refused before anything is copied, rather than
+   * listed whole twice.
+   *
+   * @param folderId the folder
+   * @return its children, as the current user sees them
+   * @throws IllegalAccessException when the user cannot read the folder
+   * @throws ObjectNotFoundException when the folder cannot be read
+   * @throws IllegalArgumentException when the folder holds more children than
+   *           that
+   */
+  private List<AbstractNode> scannedChildNodes(String folderId) throws IllegalAccessException, ObjectNotFoundException {
+    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
+    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter,
+                                                                          0,
+                                                                          MAX_SCANNED_CHILDREN + 1,
+                                                                          getCurrentUserIdentityId());
+    if (children == null) {
+      return List.of();
+    } else if (children.size() > MAX_SCANNED_CHILDREN) {
+      throw new IllegalArgumentException(MSG_TOO_MANY_CHILDREN_TO_COPY_INTO.formatted(MAX_SCANNED_CHILDREN));
+    }
+    return children;
+  }
+
+  /**
    * Creates one folder under a folder identified by its id.
    *
    * @param ownerId the owner of the folders' root
@@ -2985,9 +3015,7 @@ public class DocumentMcpTool implements McpToolPlugin {
   private Set<String> currentChildIds(String folderId,
                                       Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
                                                                           IllegalAccessException {
-    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    return documentFileService.getFolderChildNodes(filter, 0, FOLDER_PAGE_SIZE, getCurrentUserIdentityId())
-                              .stream()
+    return scannedChildNodes(folderId).stream()
                               .filter(kind::isInstance)
                               .map(AbstractNode::getId)
                               .collect(java.util.stream.Collectors.toSet());
@@ -3021,9 +3049,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                           String expectedName,
                                           Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
                                                                               IllegalAccessException {
-    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, FOLDER_PAGE_SIZE,
-                                                                          getCurrentUserIdentityId());
+    List<AbstractNode> children = scannedChildNodes(folderId);
     List<AbstractNode> candidates = children.stream()
                                             .filter(kind::isInstance)
                                             .filter(node -> !beforeIds.contains(node.getId()))
