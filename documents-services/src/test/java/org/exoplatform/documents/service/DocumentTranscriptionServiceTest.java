@@ -93,8 +93,18 @@ class DocumentTranscriptionServiceTest {
   }
 
   @Test
+  void retryIsRefusedToAReaderWhoCannotEditTheFile() throws Exception {
+    mockState(TranscriptionState.builder().status(TranscriptionStatus.FAILED).error("provider.timeout").media(true).build());
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, VIEWER_ID)).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class, () -> service.requestRetry(DOCUMENT_ID, VIEWER_ID, VIEWER));
+
+    verifyNoInteractions(listenerService);
+  }
+
+  @Test
   void retryIsRefusedForAFileThatIsNoMedia() throws Exception {
-    mockState(TranscriptionState.builder().media(false).build());
+    mockEditorState(TranscriptionState.builder().media(false).build());
 
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                                               () -> service.requestRetry(DOCUMENT_ID, VIEWER_ID, VIEWER));
@@ -105,7 +115,7 @@ class DocumentTranscriptionServiceTest {
 
   @Test
   void retryIsRefusedForATranscribedFile() throws Exception {
-    mockState(TranscriptionState.builder().status(TranscriptionStatus.DONE).media(true).build());
+    mockEditorState(TranscriptionState.builder().status(TranscriptionStatus.DONE).media(true).build());
 
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                                               () -> service.requestRetry(DOCUMENT_ID, VIEWER_ID, VIEWER));
@@ -116,7 +126,7 @@ class DocumentTranscriptionServiceTest {
 
   @Test
   void retryHandsAFailedFileToTheTranscriber() throws Exception {
-    mockState(TranscriptionState.builder().status(TranscriptionStatus.FAILED).error("provider.timeout").media(true).build());
+    mockEditorState(TranscriptionState.builder().status(TranscriptionStatus.FAILED).error("provider.timeout").media(true).build());
 
     assertTrue(service.requestRetry(DOCUMENT_ID, VIEWER_ID, VIEWER));
 
@@ -125,7 +135,7 @@ class DocumentTranscriptionServiceTest {
 
   @Test
   void retryHandsAFileNeverTranscribedToTheTranscriber() throws Exception {
-    mockState(TranscriptionState.builder().media(true).build());
+    mockEditorState(TranscriptionState.builder().media(true).build());
 
     assertTrue(service.requestRetry(DOCUMENT_ID, VIEWER_ID, VIEWER));
 
@@ -135,10 +145,10 @@ class DocumentTranscriptionServiceTest {
   @Test
   void retryLeavesAQueuedOrRunningTranscriptionAlone() throws Exception {
     long now = System.currentTimeMillis();
-    mockState(TranscriptionState.builder().status(TranscriptionStatus.QUEUED).updated(now).media(true).build());
+    mockEditorState(TranscriptionState.builder().status(TranscriptionStatus.QUEUED).updated(now).media(true).build());
     assertFalse(service.requestRetry(DOCUMENT_ID, VIEWER_ID, VIEWER));
 
-    mockState(TranscriptionState.builder().status(TranscriptionStatus.PROCESSING).progress("3/9").updated(now).media(true).build());
+    mockEditorState(TranscriptionState.builder().status(TranscriptionStatus.PROCESSING).progress("3/9").updated(now).media(true).build());
     assertFalse(service.requestRetry(DOCUMENT_ID, VIEWER_ID, VIEWER));
 
     verify(listenerService, never()).broadcast(anyString(), any(), any());
@@ -147,10 +157,10 @@ class DocumentTranscriptionServiceTest {
   @Test
   void retryHandsAStaleRunToTheTranscriberAgain() throws Exception {
     long stale = System.currentTimeMillis() - DocumentTranscriptionService.STALE_TRANSCRIPTION_MILLIS - 1000;
-    mockState(TranscriptionState.builder().status(TranscriptionStatus.PROCESSING).updated(stale).media(true).build());
+    mockEditorState(TranscriptionState.builder().status(TranscriptionStatus.PROCESSING).updated(stale).media(true).build());
     assertTrue(service.requestRetry(DOCUMENT_ID, VIEWER_ID, VIEWER));
 
-    mockState(TranscriptionState.builder().status(TranscriptionStatus.QUEUED).media(true).build());
+    mockEditorState(TranscriptionState.builder().status(TranscriptionStatus.QUEUED).media(true).build());
     assertTrue(service.requestRetry(DOCUMENT_ID, VIEWER_ID, VIEWER), "Expected a queued state with no update time to be retried");
   }
 
@@ -418,6 +428,11 @@ class DocumentTranscriptionServiceTest {
     lenient().when(identity.isDeleted()).thenReturn(deleted);
     lenient().when(identity.isEnable()).thenReturn(enabled);
     return identity;
+  }
+
+  private void mockEditorState(TranscriptionState state) throws Exception {
+    mockState(state);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, VIEWER_ID)).thenReturn(true);
   }
 
   private void mockState(TranscriptionState state) throws Exception {
