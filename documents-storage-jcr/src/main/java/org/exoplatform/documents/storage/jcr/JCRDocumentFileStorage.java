@@ -93,6 +93,7 @@ import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
@@ -2886,6 +2887,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public TranscriptionState getTranscriptionState(String documentId,
                                                   Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     SessionProvider sessionProvider = null;
+    ConversationState previousState = makeCurrent(aclIdentity);
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -2895,6 +2897,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error reading the transcription state of media file '%s'".formatted(documentId), e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -3123,6 +3126,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                            String mixin,
                                            String property) throws IllegalAccessException, ObjectNotFoundException {
     SessionProvider sessionProvider = null;
+    ConversationState previousState = makeCurrent(aclIdentity);
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -3132,10 +3136,31 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException | IOException e) {
       throw new IllegalStateException("Error reading the property %s of media file '%s'".formatted(property, documentId), e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
     }
+  }
+
+  /**
+   * Makes a user the thread's current conversation state. A JCR session logs in
+   * as the thread's current state, whatever its session provider was built with
+   * ({@code SessionProvider#getSession} calls {@code repository.login}), so a read
+   * or a write made with a user's rights runs with that user current. The caller
+   * restores the returned state in a {@code finally} block.
+   *
+   * @param aclIdentity the user
+   * @return the thread's previous state, possibly null
+   */
+  private static ConversationState makeCurrent(Identity aclIdentity) {
+    ConversationState previousState = ConversationState.getCurrent();
+    ConversationState userState = new ConversationState(aclIdentity);
+    if (aclIdentity.getSubject() != null) {
+      userState.setAttribute(ConversationState.SUBJECT, aclIdentity.getSubject());
+    }
+    ConversationState.setCurrent(userState);
+    return previousState;
   }
 
   /**
@@ -3165,6 +3190,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                       Identity aclIdentity) throws IllegalAccessException,
                                                                             ObjectNotFoundException {
     SessionProvider sessionProvider = null;
+    ConversationState previousState = makeCurrent(aclIdentity);
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -3174,6 +3200,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error reading the transcript speakers of media file '%s'".formatted(documentId), e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -3193,6 +3220,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new TranscriptionBusyException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
     }
     SessionProvider sessionProvider = null;
+    ConversationState previousState = makeCurrent(aclIdentity);
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -3226,6 +3254,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error naming a speaker of media file '%s'".formatted(documentId), e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -3327,6 +3356,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                  Identity aclIdentity) throws IllegalAccessException,
                                                                                                        ObjectNotFoundException {
     SessionProvider sessionProvider = null;
+    ConversationState previousState = makeCurrent(aclIdentity);
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -3336,6 +3366,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error reading the speaker proposals of media file '%s'".formatted(documentId), e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -3354,6 +3385,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new TranscriptionBusyException("Timed out waiting to dismiss a speaker proposal of media file '%s'".formatted(documentId));
     }
     SessionProvider sessionProvider = null;
+    ConversationState previousState = makeCurrent(aclIdentity);
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -3371,6 +3403,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error dismissing a speaker proposal of media file '%s'".formatted(documentId), e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -3391,6 +3424,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new TranscriptionBusyException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
     }
     SessionProvider sessionProvider = null;
+    ConversationState previousState = makeCurrent(aclIdentity);
     try {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
@@ -3429,6 +3463,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error naming a speaker of media file '%s'".formatted(documentId), e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
