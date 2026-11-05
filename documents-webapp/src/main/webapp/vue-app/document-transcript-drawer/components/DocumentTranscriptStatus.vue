@@ -92,7 +92,8 @@ export default {
       return this.status === 'QUEUED' || (this.status === 'PROCESSING' && !this.stale);
     },
     canRetry() {
-      return !this.unreadable && (!this.status || this.status === 'FAILED' || this.stale || this.longQueued);
+      return !this.unreadable && !!this.state?.canRetry
+        && (!this.status || this.status === 'FAILED' || this.stale || this.longQueued);
     },
     progressParts() {
       const parts = (this.state?.progress || '').split('/').map(Number);

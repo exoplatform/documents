@@ -31,6 +31,8 @@ package org.exoplatform.documents.rest.model;
  * @param hasSegments whether the transcript has timed segments
  * @param hasChapters whether the transcript is grouped into chapters
  *          (EXO-92122)
+ * @param canRetry whether the caller may ask to transcribe the file again:
+ *          anyone who can edit it
  */
 public record TranscriptionStateEntity(boolean available,
                                        String status,
@@ -40,5 +42,6 @@ public record TranscriptionStateEntity(boolean available,
                                        Long durationSeconds,
                                        Long updated,
                                        boolean hasSegments,
-                                       boolean hasChapters) {
+                                       boolean hasChapters,
+                                       boolean canRetry) {
 }
