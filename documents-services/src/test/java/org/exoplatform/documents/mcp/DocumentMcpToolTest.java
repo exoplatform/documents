@@ -37,7 +37,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -866,109 +865,26 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * A path in the name creates each missing folder under the one before it,
-   * starting from the given parent, and answers the last one: a folder tree
-   * then needs no id of a folder created in the same round (EXO-91528).
+   * A path in the name is created by the documents service in one call,
+   * starting from the given parent, its segments trimmed, and the call
+   * answers the last folder: a folder tree then needs no id of a folder
+   * created in the same round (EXO-91528). The walk, the reuse of an existing
+   * folder and the title rule are the storage's, pinned in
+   * {@code JCRDocumentFileStorageTest}. Mutants: the folders created one by
+   * one here; a segment left untrimmed.
    *
    * @throws Exception when the tool fails
    */
   @Test
-  public void createFolderPathCreatesEachMissingFolderUnderThePreviousOne() throws Exception {
+  public void createFolderPathAsksTheServiceForTheWholePath() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(Collections.emptyList());
-    when(documentFileService.createFolder(eq(OWNER_ID), eq(FOLDER_ID), isNull(), eq("Finances"), eq(USER_IDENTITY_ID)))
-        .thenReturn(folderNode("finances-id"));
-    when(documentFileService.createFolder(eq(OWNER_ID), eq("finances-id"), isNull(), eq("Factures"), eq(USER_IDENTITY_ID)))
-        .thenReturn(folderNode("factures-id"));
-    when(documentFileService.createFolder(eq(OWNER_ID), eq("factures-id"), isNull(), eq("Entrantes"), eq(USER_IDENTITY_ID)))
+    when(documentFileService.createFolderPath(FOLDER_ID, List.of("Finances", "Factures", "Entrantes"), USER_IDENTITY_ID))
         .thenReturn(folderNode("entrantes-id"));
 
     DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, " Finances / Factures/Entrantes ");
 
     assertEquals("entrantes-id", model.getId());
-    verify(documentFileService).createFolder(eq(OWNER_ID), eq("factures-id"), isNull(), eq("Entrantes"), eq(USER_IDENTITY_ID));
-  }
-
-  /**
-   * A folder of the path that already exists, under another case, is reused
-   * rather than created again, so the leaf is created into it; a file of that
-   * name is not taken for the folder.
-   *
-   * @throws Exception when the tool fails
-   */
-  @Test
-  public void createFolderPathReusesTheExistingFolderOfASegment() throws Exception {
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    FolderNode existing = folderNode("finances-id");
-    existing.setName("finances");
-    when(documentFileService.getFolderChildNodes(argThat(filter -> filter != null && FOLDER_ID.equals(filter.getParentFolderId())),
-                                                 anyInt(),
-                                                 anyInt(),
-                                                 anyLong())).thenReturn(List.of(fileNodeNamed("file-id", "Finances"), existing));
-    when(documentFileService.createFolder(eq(OWNER_ID), eq("finances-id"), isNull(), eq("Budgets"), eq(USER_IDENTITY_ID)))
-        .thenReturn(folderNode("budgets-id"));
-
-    DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, "Finances/Budgets");
-
-    assertEquals("budgets-id", model.getId());
-    verify(documentFileService, never()).createFolder(anyLong(), anyString(), any(), eq("Finances"), anyLong());
-  }
-
-  /**
-   * A folder of the path created by another call between the lookup and the
-   * creation is looked up again and reused, rather than failing the call.
-   *
-   * @throws Exception when the tool fails
-   */
-  @Test
-  public void createFolderPathReusesASegmentFolderCreatedMeanwhile() throws Exception {
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    FolderNode createdMeanwhile = folderNode("contrats-id");
-    createdMeanwhile.setName("Contrats");
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
-        .thenReturn(Collections.emptyList())
-        .thenReturn(List.of(createdMeanwhile));
-    when(documentFileService.createFolder(eq(OWNER_ID), eq(FOLDER_ID), isNull(), eq("Contrats"), eq(USER_IDENTITY_ID)))
-        .thenThrow(new ObjectAlreadyExistsException("Contrats"));
-    when(documentFileService.createFolder(eq(OWNER_ID), eq("contrats-id"), isNull(), eq("Signés"), eq(USER_IDENTITY_ID)))
-        .thenReturn(folderNode("signes-id"));
-
-    DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, "Contrats/Signés");
-
-    assertEquals("signes-id", model.getId());
-  }
-
-  /**
-   * An existing folder of a path is reused wherever it sorts among its
-   * parent's children: the lookup reads every child, not a first page, so a
-   * segment listed after hundreds of other items is not created again.
-   *
-   * @throws Exception when the tool fails
-   */
-  @Test
-  public void createFolderPathReusesASegmentFolderPastHundredsOfChildren() throws Exception {
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    List<AbstractNode> children = new ArrayList<>();
-    for (int i = 0; i < 250; i++) {
-      FolderNode other = folderNode("other-" + i);
-      other.setName("Archive " + i);
-      children.add(other);
-    }
-    FolderNode contrats = folderNode("contrats-id");
-    contrats.setName("Contrats");
-    children.add(contrats);
-    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(0), anyLong())).thenReturn(children);
-    when(documentFileService.createFolder(eq(OWNER_ID), eq("contrats-id"), isNull(), eq("Signés"), eq(USER_IDENTITY_ID)))
-        .thenReturn(folderNode("signes-id"));
-
-    DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, "Contrats/Signés");
-
-    assertEquals("signes-id", model.getId());
-    verify(documentFileService, never()).createFolder(anyLong(), eq(FOLDER_ID), any(), eq("Contrats"), anyLong());
+    verify(documentFileService, never()).createFolder(anyLong(), anyString(), any(), anyString(), anyLong());
   }
 
   /**
@@ -980,9 +896,7 @@ public class DocumentMcpToolTest {
   @Test
   public void createFolderPathWhoseLeafExistsFails() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(folderNode("contrats-id")));
-    when(documentFileService.createFolder(eq(OWNER_ID), eq("contrats-id"), isNull(), eq("Signés"), eq(USER_IDENTITY_ID)))
+    when(documentFileService.createFolderPath(FOLDER_ID, List.of("Projects", "Signés"), USER_IDENTITY_ID))
         .thenThrow(new ObjectAlreadyExistsException("Signés"));
 
     IllegalStateException error = assertThrows(IllegalStateException.class,
@@ -1002,76 +916,25 @@ public class DocumentMcpToolTest {
     assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createFolder(FOLDER_ID, "Finances/../Budgets"));
     assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createFolder(FOLDER_ID, " / "));
     verify(documentFileService, never()).createFolder(anyLong(), anyString(), any(), anyString(), anyLong());
+    verify(documentFileService, never()).createFolderPath(anyString(), any(), anyLong());
   }
 
   /**
-   * A shortcut to a folder, listed as a folder carrying its target's id as
-   * source id, is never reused as a segment of the path: a folder is created
-   * beside it instead, since none can be created under a shortcut node.
+   * The storage's refusal of a segment, an invalid title or an item that
+   * can't be reused as a folder, reaches the caller as the storage words it.
    *
    * @throws Exception when the tool fails
    */
   @Test
-  public void createFolderPathDoesNotReuseAShortcutOfTheSegmentName() throws Exception {
+  public void createFolderPathPassesTheStorageRefusalOn() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    FolderNode shortcut = folderNode("shortcut-id");
-    shortcut.setName("Finances");
-    shortcut.setSourceID("target-id");
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(shortcut));
-    when(documentFileService.createFolder(eq(OWNER_ID), eq(FOLDER_ID), isNull(), eq("Finances"), eq(USER_IDENTITY_ID)))
-        .thenReturn(folderNode("finances-id"));
-    when(documentFileService.createFolder(eq(OWNER_ID), eq("finances-id"), isNull(), eq("Budgets"), eq(USER_IDENTITY_ID)))
-        .thenReturn(folderNode("budgets-id"));
-
-    DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, "Finances/Budgets");
-
-    assertEquals("budgets-id", model.getId());
-    verify(documentFileService, never()).createFolder(anyLong(), eq("shortcut-id"), any(), anyString(), anyLong());
-  }
-
-  /**
-   * A segment whose node name is taken by an item the lookup can't find again
-   * fails with a message that names the possible causes, rather than claiming
-   * the item is not a folder.
-   *
-   * @throws Exception when the tool fails
-   */
-  @Test
-  public void createFolderPathWhoseSegmentNameIsTakenByAnItemNotFoundFails() throws Exception {
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(Collections.emptyList());
-    when(documentFileService.createFolder(eq(OWNER_ID), eq(FOLDER_ID), isNull(), eq("R&D"), eq(USER_IDENTITY_ID)))
-        .thenThrow(new ObjectAlreadyExistsException("r_d"));
-
-    IllegalStateException error = assertThrows(IllegalStateException.class,
-                                               () -> documentMcpTool.createFolder(FOLDER_ID, "R&D/Budgets"));
-
-    assertTrue(error.getMessage().contains("'R&D' already exists in this folder but can't be reused as a folder"));
-    assertTrue(error.getMessage().contains("a name differing only by punctuation"));
-    verify(documentFileService, never()).createFolder(anyLong(), anyString(), any(), eq("Budgets"), anyLong());
-  }
-
-  /**
-   * Every segment of the path is checked against the storage's title rule
-   * before the first folder is created, so an invalid last segment creates
-   * nothing.
-   *
-   * @throws Exception when the tool fails
-   */
-  @Test
-  public void createFolderPathWithAnInvalidSegmentCreatesNothing() throws Exception {
-    lenient().when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    lenient().when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.createFolderPath(FOLDER_ID, List.of("Finances", "Q1?"), USER_IDENTITY_ID))
+        .thenThrow(new IllegalArgumentException("The folder name 'Q1?' is not valid"));
 
     IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                                                  () -> documentMcpTool.createFolder(FOLDER_ID, "Finances/Factures/Q1?"));
-    assertTrue(error.getMessage().contains("'Q1?' is not valid"));
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createFolder(FOLDER_ID, "Finances/.pdf"));
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createFolder(FOLDER_ID, "A<B"));
+                                                  () -> documentMcpTool.createFolder(FOLDER_ID, "Finances/Q1?"));
 
-    verify(documentFileService, never()).createFolder(anyLong(), anyString(), any(), anyString(), anyLong());
+    assertTrue(error.getMessage().contains("'Q1?' is not valid"));
   }
 
   /**
