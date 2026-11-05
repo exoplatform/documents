@@ -109,6 +109,23 @@
                 }"
                 v-sanitized-html="excerptHtml">
               </div>
+              <div
+                v-if="fieldMatchItems.length"
+                class="search-field-matches d-flex flex-row flex-wrap align-center pt-1 text-body-2 text-color">
+                <v-icon
+                  :title="fieldMatches.tooltip"
+                  size="14"
+                  class="icon-default-color me-2">
+                  {{ fieldMatches.icon }}
+                </v-icon>
+                <span
+                  v-for="(item, index) in fieldMatchItems"
+                  :key="index"
+                  class="search-field-match text-truncate">
+                  <span v-if="index" class="mx-1">·</span>{{ item.label }}: <span v-sanitized-html="item.valueHtml"></span>
+                </span>
+                <span v-if="fieldMatches.more > 0" class="ms-2">{{ fieldMatches.moreLabel }}</span>
+              </div>
             </v-list-item-subtitle>
           </v-list-item-content>
         </v-list-item>
@@ -141,6 +158,12 @@ export default {
   computed: {
     fileTitle() {
       return window.decodeURIComponent(this.result?.title);
+    },
+    fieldMatches() {
+      return this.result?.fieldMatches || null;
+    },
+    fieldMatchItems() {
+      return this.fieldMatches?.items || [];
     },
     excerptHtml() {
       return this.result.excerpts['attachment.content'] && this.result?.excerpt || '';
