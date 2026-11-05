@@ -208,6 +208,26 @@ public class SpaceNameResolverTest {
   }
 
   /**
+   * A search that fills a whole page decides nothing: a second space of the
+   * same name could lie past it, so every space of the user is read and two
+   * spaces of that name are refused. Mutant: a full page taken as the answer.
+   */
+  @Test
+  public void aFullSearchPageFallsBackToEverySpace() {
+    List<Space> hits = new ArrayList<>();
+    hits.add(space("1", "Sales", "sales"));
+    for (int i = 2; i <= 100; i++) {
+      hits.add(space(String.valueOf(i), "Sales team " + i, "sales_team_" + i));
+    }
+    when(spaceService.getMemberSpacesByFilter(eq(USERNAME), any(SpaceFilter.class))).thenReturn(listAccessOf(hits.toArray(new Space[0])));
+    List<Space> all = new ArrayList<>(hits);
+    all.add(space("101", "Sales", "sales_2"));
+    memberOf(all.toArray(new Space[0]));
+
+    assertThrows(IllegalArgumentException.class, () -> resolver.resolve("Sales", USERNAME));
+  }
+
+  /**
    * A blank name is refused.
    */
   @Test

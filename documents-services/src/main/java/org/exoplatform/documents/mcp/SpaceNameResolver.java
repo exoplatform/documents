@@ -28,6 +28,8 @@ import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.ListAccess;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.space.SpaceFilter;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -46,6 +48,8 @@ import org.exoplatform.social.core.space.spi.SpaceService;
  * their ids, so the caller picks one by its id.
  */
 public class SpaceNameResolver {
+
+  private static final Log    LOG             = ExoLogger.getLogger(SpaceNameResolver.class);
 
   /** The most spaces a refusal names. */
   public static final int     MAX_SUGGESTIONS = 5;
@@ -156,15 +160,21 @@ public class SpaceNameResolver {
    *
    * @param spaceName the name as the caller gave it, trimmed
    * @param username the calling user
-   * @return the spaces found, at most {@value #PAGE_SIZE}, empty when the
-   *         search finds none or can't be run
+   * @return the spaces found, fewer than {@value #PAGE_SIZE}; empty when the
+   *         search finds none, fills a whole page (a second space of the same
+   *         name could lie past it) or can't be run
    */
   private List<Space> matchingMemberSpaces(String spaceName, String username) {
     try {
       ListAccess<Space> found = spaceService.getMemberSpacesByFilter(username, new SpaceFilter(spaceName));
       Space[] page = found == null ? null : found.load(0, PAGE_SIZE);
-      return page == null ? List.of() : Arrays.stream(page).filter(Objects::nonNull).toList();
+      if (page == null || page.length >= PAGE_SIZE) {
+        // a full page may leave out a second space of the same name: the full scan decides
+        return List.of();
+      }
+      return Arrays.stream(page).filter(Objects::nonNull).toList();
     } catch (Exception e) {
+      LOG.debug("The spaces search could not narrow the spaces named '{}', all of them are read", spaceName, e);
       return List.of();
     }
   }
