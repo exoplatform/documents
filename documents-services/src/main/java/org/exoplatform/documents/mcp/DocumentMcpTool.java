@@ -153,6 +153,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   static final int                 MAX_SCANNED_CHILDREN   = 1000;
 
+  /** The most children one folder listing returns, whatever limit is asked */
+  static final int                 MAX_PAGE_SIZE          = 100;
+
   /** The most base64 characters of one piece of a file sent in pieces. */
   static final int                 MAX_CHUNK_CHARS        = 1024 * 1024;
 
@@ -651,7 +654,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param foldersOnly whether only the folders are kept
    * @param offset the first child listed, 0 by default
    * @param limit the most children listed, the default page size when null
-   *          or 0
+   *          or 0, at most {@value #MAX_PAGE_SIZE}
    * @return the folder's children on that page
    * @throws ObjectNotFoundException when the folder doesn't exist
    * @throws IllegalAccessException when the user can't read the folder
@@ -662,7 +665,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                     Integer offset,
                                                     Integer limit) throws ObjectNotFoundException,
                                                                    IllegalAccessException {
-    int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
+    int size = Math.clamp(getInteger(limit, DEFAULT_LIMIT), 0, MAX_PAGE_SIZE);
     if (size == 0) {
       // a negative limit; the storage reads every child when given none
       return List.of();
@@ -1001,7 +1004,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    *
    * @param folderId the folder id
    * @param offset the first child
-   * @param limit the most children
+   * @param limit the most children, at most {@value #MAX_PAGE_SIZE}
    * @param updatedSince an ISO-8601 date or date-time, blank for any date
    * @return the children
    * @throws ObjectNotFoundException when the folder doesn't exist
@@ -1016,7 +1019,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     checkFolderIdParameter(folderId);
     Long updatedSinceTime = parseUpdatedSince(updatedSince);
     int first = Math.max(getInteger(offset, DEFAULT_OFFSET), 0);
-    int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
+    int size = Math.clamp(getInteger(limit, DEFAULT_LIMIT), 0, MAX_PAGE_SIZE);
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
     if (size == 0) {
       // a negative limit; the storage reads every child when given none
