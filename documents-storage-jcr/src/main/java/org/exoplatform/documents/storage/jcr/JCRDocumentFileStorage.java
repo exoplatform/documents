@@ -2899,7 +2899,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public String getAudioTranscription(String documentId, Identity aclIdentity) throws IllegalAccessException {
     SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
     try {
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getNodeByIdentifier(session, documentId);
@@ -2915,6 +2917,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentId, e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -2950,7 +2953,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                        Identity aclIdentity) throws IllegalAccessException {
     String path = null;
     SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
     try { // NOSONAR
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getNodeByIdentifier(session, documentId);
@@ -2969,6 +2974,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error transcribing media file '%s'".formatted(path == null ? documentId : path), e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -3008,8 +3014,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public TranscriptionState getTranscriptionState(String documentId,
                                                   Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
     SessionProvider sessionProvider = null;
-    ConversationState previousState = makeCurrent(aclIdentity);
+    ConversationState previousState = ConversationState.getCurrent();
     try {
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       return toTranscriptionState(getTranscribedNode(session, documentId));
@@ -3247,8 +3254,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                            String mixin,
                                            String property) throws IllegalAccessException, ObjectNotFoundException {
     SessionProvider sessionProvider = null;
-    ConversationState previousState = makeCurrent(aclIdentity);
+    ConversationState previousState = ConversationState.getCurrent();
     try {
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       return readBinaryProperty(getTranscribedNode(session, documentId), mixin, property);
@@ -3269,19 +3277,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * as the thread's current state, whatever its session provider was built with
    * ({@code SessionProvider#getSession} calls {@code repository.login}), so a read
    * or a write made with a user's rights runs with that user current. The caller
-   * restores the returned state in a {@code finally} block.
+   * reads the thread's state before its {@code try}, calls this first inside it,
+   * and restores the state in its {@code finally}, so that a failure here still
+   * releases whatever the method took before (a speaker lock).
    *
    * @param aclIdentity the user
-   * @return the thread's previous state, possibly null
    */
-  private static ConversationState makeCurrent(Identity aclIdentity) {
-    ConversationState previousState = ConversationState.getCurrent();
+  private static void makeCurrent(Identity aclIdentity) {
     ConversationState userState = new ConversationState(aclIdentity);
     if (aclIdentity.getSubject() != null) {
       userState.setAttribute(ConversationState.SUBJECT, aclIdentity.getSubject());
     }
     ConversationState.setCurrent(userState);
-    return previousState;
   }
 
   /**
@@ -3311,8 +3318,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                       Identity aclIdentity) throws IllegalAccessException,
                                                                             ObjectNotFoundException {
     SessionProvider sessionProvider = null;
-    ConversationState previousState = makeCurrent(aclIdentity);
+    ConversationState previousState = ConversationState.getCurrent();
     try {
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       return readTranscriptionSpeakers(getTranscribedNode(session, documentId));
@@ -3341,8 +3349,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new TranscriptionBusyException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
     }
     SessionProvider sessionProvider = null;
-    ConversationState previousState = makeCurrent(aclIdentity);
+    ConversationState previousState = ConversationState.getCurrent();
     try {
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getTranscribedNode(session, documentId);
@@ -3477,8 +3486,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                  Identity aclIdentity) throws IllegalAccessException,
                                                                                                        ObjectNotFoundException {
     SessionProvider sessionProvider = null;
-    ConversationState previousState = makeCurrent(aclIdentity);
+    ConversationState previousState = ConversationState.getCurrent();
     try {
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       return readTranscriptionSpeakerSuggestions(getTranscribedNode(session, documentId));
@@ -3506,8 +3516,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new TranscriptionBusyException("Timed out waiting to dismiss a speaker proposal of media file '%s'".formatted(documentId));
     }
     SessionProvider sessionProvider = null;
-    ConversationState previousState = makeCurrent(aclIdentity);
+    ConversationState previousState = ConversationState.getCurrent();
     try {
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getTranscribedNode(session, documentId);
@@ -3545,8 +3556,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new TranscriptionBusyException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
     }
     SessionProvider sessionProvider = null;
-    ConversationState previousState = makeCurrent(aclIdentity);
+    ConversationState previousState = ConversationState.getCurrent();
     try {
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getTranscribedNode(session, documentId);
