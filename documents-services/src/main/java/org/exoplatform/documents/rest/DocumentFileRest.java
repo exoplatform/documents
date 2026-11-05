@@ -1417,7 +1417,7 @@ public class DocumentFileRest implements ResourceContainer {
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
-      @ApiResponse(responseCode = "404", description = "No public access link for this node"),
+      @ApiResponse(responseCode = "404", description = "No public access link for this node, or its document no longer exists or cannot be read"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response publicAccessDocument(@Parameter(description = "public link node id", required = true)
                                    @QueryParam("nodeId") String nodeId) {

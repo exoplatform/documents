@@ -40,7 +40,7 @@ public interface ExternalDownloadService {
    * @param documentId document id
    * @return {@link DownloadItem} without content
    * @throws ObjectNotFoundException when the document has no public access
-   *           link, or no longer exists
+   *           link, no longer exists or cannot be read
    */
   DownloadItem getPublicDocumentInfo(String documentId) throws ObjectNotFoundException;
 

@@ -495,7 +495,7 @@ public interface DocumentFileStorage {
    *
    * @param documentId document id
    * @return {@link DownloadItem} without content, or null when no document
-   *         has this id
+   *         has this id or it cannot be read
    */
   DownloadItem getDocumentDownloadInfo(String documentId);
 
