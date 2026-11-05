@@ -47,7 +47,7 @@
           },
           "limit": {
             "type": "integer",
-            "description": "Maximum number of results to return."
+            "description": "Maximum number of results to return, at most 100."
           }
         },
         "required": [
@@ -333,7 +333,7 @@
           },
           "limit": {
             "type": "integer",
-            "description": "Maximum number of results to return."
+            "description": "Maximum number of results to return, at most 100."
           },
           "updated_since": {
             "type": "string",
