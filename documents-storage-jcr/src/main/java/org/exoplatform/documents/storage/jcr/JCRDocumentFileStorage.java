@@ -3027,6 +3027,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    */
   @Override
   public DownloadItem getDocumentDownloadItem(String documentId) {
+    return getDownloadItem(documentId, true);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DownloadItem getDocumentDownloadInfo(String documentId) {
+    return getDownloadItem(documentId, false);
+  }
+
+  private DownloadItem getDownloadItem(String documentId, boolean withContent) {
     SessionProvider sessionProvider = null;
     try {
       sessionProvider = SessionProvider.createSystemProvider();
@@ -3034,7 +3046,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       Node node = getNodeByIdentifier(systemSession, documentId);
       if (node != null) {
-        return toDownloadItem(node);
+        return withContent ? toDownloadItem(node) : toDownloadInfo(node);
       }
     } catch (Exception e) {
       LOG.error("Error while getting document: {}", documentId, e);
