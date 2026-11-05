@@ -372,13 +372,13 @@ public class JCRDocumentFileStorageTest {
     when(hidden.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
     when(hidden.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)).thenReturn(true);
 
-    assertThrows(IllegalArgumentException.class,
-                 () -> jcrDocumentFileStorage.createFolderPath("1", List.of("Contrats", "Signés"), aclIdentity));
-    assertThrows(IllegalArgumentException.class,
-                 () -> jcrDocumentFileStorage.createFolderPath("1", List.of("Archives", "2026"), aclIdentity));
+    List<String> throughShortcut = List.of("Contrats", "Signés");
+    List<String> throughHidden = List.of("Archives", "2026");
+    List<String> invalid = List.of("Contrats", "a:b");
+    assertThrows(IllegalArgumentException.class, () -> jcrDocumentFileStorage.createFolderPath("1", throughShortcut, aclIdentity));
+    assertThrows(IllegalArgumentException.class, () -> jcrDocumentFileStorage.createFolderPath("1", throughHidden, aclIdentity));
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle("a:b")).thenReturn(false);
-    assertThrows(IllegalArgumentException.class,
-                 () -> jcrDocumentFileStorage.createFolderPath("1", List.of("Contrats", "a:b"), aclIdentity));
+    assertThrows(IllegalArgumentException.class, () -> jcrDocumentFileStorage.createFolderPath("1", invalid, aclIdentity));
     verify(parent, never()).addNode(anyString(), anyString());
     verify(shortcut, never()).addNode(anyString(), anyString());
     verify(hidden, never()).addNode(anyString(), anyString());
