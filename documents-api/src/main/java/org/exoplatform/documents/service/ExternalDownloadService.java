@@ -16,7 +16,6 @@
  */
 package org.exoplatform.documents.service;
 
-import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.DownloadItem;
 
 import java.io.IOException;
@@ -30,19 +29,6 @@ public interface ExternalDownloadService {
    * @return {@link DownloadItem}
    */
   DownloadItem getDocumentDownloadItem(String documentId);
-
-  /**
-   * Gets the identifier, the name and the mime type of a document that has a
-   * public access link, without reading its content: the returned item's
-   * content is null. Nothing of the document is read when it has no public
-   * access link.
-   *
-   * @param documentId document id
-   * @return {@link DownloadItem} without content
-   * @throws ObjectNotFoundException when the document has no public access
-   *           link, no longer exists or cannot be read
-   */
-  DownloadItem getPublicDocumentInfo(String documentId) throws ObjectNotFoundException;
 
   /**
    * Download a zipped folder

@@ -494,7 +494,7 @@ public interface DocumentFileStorage {
    * without reading its content: the returned item's content is null. The
    * document is read whatever the caller's permissions: the caller checks
    * access first, as
-   * {@link org.exoplatform.documents.service.ExternalDownloadService#getPublicDocumentInfo(String)}
+   * {@link org.exoplatform.documents.service.PublicDocumentAccessService#getPublicDocumentInfo(String)}
    * does with the public access link.
    *
    * @param documentId document id

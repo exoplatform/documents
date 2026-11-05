@@ -1,7 +1,5 @@
 package org.exoplatform.documents.service;
 
-import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.junit.Before;
 import org.junit.Test;
@@ -14,17 +12,14 @@ import static org.mockito.Mockito.*;
 
 public class ExternalDownloadServiceImplTest {
 
-  private DocumentFileStorage         documentFileStorage;
+  private DocumentFileStorage     documentFileStorage;
 
-  private PublicDocumentAccessService publicDocumentAccessService;
-
-  private ExternalDownloadService     externalDownloadService;
+  private ExternalDownloadService externalDownloadService;
 
   @Before
   public void setUp() throws Exception {
     documentFileStorage = mock(DocumentFileStorage.class);
-    publicDocumentAccessService = mock(PublicDocumentAccessService.class);
-    externalDownloadService = new ExternalDownloadServiceImpl(documentFileStorage, publicDocumentAccessService);
+    externalDownloadService = new ExternalDownloadServiceImpl(documentFileStorage);
   }
 
   @Test
@@ -34,35 +29,6 @@ public class ExternalDownloadServiceImplTest {
     assertEquals("document id is mandatory", exception.getMessage());
     externalDownloadService.getDocumentDownloadItem("123");
     verify(documentFileStorage, times(1)).getDocumentDownloadItem("123");
-  }
-
-  @Test
-  public void getPublicDocumentInfoWithoutPublicLinkReadsNothingOfTheDocument() {
-    when(publicDocumentAccessService.hasDocumentPublicAccess("123")).thenReturn(false);
-    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.getPublicDocumentInfo("123"));
-    verifyNoInteractions(documentFileStorage);
-  }
-
-  @Test
-  public void getPublicDocumentInfoWithPublicLinkReadsNoContent() throws ObjectNotFoundException {
-    DownloadItem documentInfo = new DownloadItem("123", "document.pdf", null, "application/pdf");
-    when(publicDocumentAccessService.hasDocumentPublicAccess("123")).thenReturn(true);
-    when(documentFileStorage.getDocumentDownloadInfo("123")).thenReturn(documentInfo);
-    assertSame(documentInfo, externalDownloadService.getPublicDocumentInfo("123"));
-    verify(documentFileStorage, never()).getDocumentDownloadItem(anyString());
-  }
-
-  @Test
-  public void getPublicDocumentInfoWithPublicLinkOfAMissingDocument() {
-    when(publicDocumentAccessService.hasDocumentPublicAccess("123")).thenReturn(true);
-    when(documentFileStorage.getDocumentDownloadInfo("123")).thenReturn(null);
-    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.getPublicDocumentInfo("123"));
-  }
-
-  @Test
-  public void getPublicDocumentInfoWithoutId() {
-    assertThrows(IllegalArgumentException.class, () -> externalDownloadService.getPublicDocumentInfo(null));
-    verifyNoInteractions(documentFileStorage, publicDocumentAccessService);
   }
 
   @Test

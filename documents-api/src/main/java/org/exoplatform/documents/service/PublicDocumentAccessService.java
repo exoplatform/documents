@@ -16,7 +16,9 @@
  */
 package org.exoplatform.documents.service;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.PublicDocumentAccess;
+import org.exoplatform.documents.model.PublicDocumentInfo;
 
 public interface PublicDocumentAccessService {
 
@@ -68,6 +70,20 @@ public interface PublicDocumentAccessService {
    * @return true or false
    */
   boolean hasDocumentPublicAccess(String documentId);
+
+  /**
+   * Gets what the public link page shows of a document that has a public
+   * access link: whether the link asks for a password or has expired, and the
+   * document's name and mime type, without reading its content. The link is
+   * read once and its password is never decoded. Nothing of the document is
+   * read when it has no public access link.
+   *
+   * @param documentId document id
+   * @return {@link PublicDocumentInfo}
+   * @throws ObjectNotFoundException when the document has no public access
+   *           link, no longer exists or cannot be read
+   */
+  PublicDocumentInfo getPublicDocumentInfo(String documentId) throws ObjectNotFoundException;
 
   /**
    * Revokes a document public access
