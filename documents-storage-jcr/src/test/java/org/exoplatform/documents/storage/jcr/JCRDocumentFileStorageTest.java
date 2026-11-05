@@ -3732,6 +3732,47 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * The segments are read with the viewer's rights: the session logs in with
+   * the viewer current, whoever the thread's user is, and the thread's state is
+   * back afterwards, on a refusal too.
+   */
+  @Test
+  public void getTranscriptionSegmentsReadsThemWithTheViewersRights() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    org.exoplatform.services.security.ConversationState threadState =
+                                                                     new org.exoplatform.services.security.ConversationState(new org.exoplatform.services.security.Identity("mary"));
+    org.exoplatform.services.security.ConversationState.setCurrent(threadState);
+    try {
+      SessionProvider sessionProvider = mock(SessionProvider.class);
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, viewer)).thenReturn(sessionProvider);
+      ManageableRepository manageableRepository = mock(ManageableRepository.class);
+      when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+      Session session = mock(Session.class);
+      java.util.List<String> loggedInAs = new java.util.ArrayList<>();
+      when(sessionProvider.getSession("collaboration", manageableRepository)).thenAnswer(invocation -> {
+        loggedInAs.add(org.exoplatform.services.security.ConversationState.getCurrent().getIdentity().getUserId());
+        return session;
+      });
+      Node node = mockMediaNode(session, "video/mp4");
+      when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+      Property segments = mock(Property.class);
+      when(segments.getStream()).thenAnswer(invocation -> new ByteArrayInputStream("[{\"text\":\"Été\"}]".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+      when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+      when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(segments);
+
+      assertEquals("[{\"text\":\"Été\"}]", jcrDocumentFileStorage.getTranscriptionSegments("1", viewer));
+      assertEquals(java.util.List.of("john"), loggedInAs);
+      assertSame(threadState, org.exoplatform.services.security.ConversationState.getCurrent());
+
+      when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenThrow(new javax.jcr.AccessDeniedException("john"));
+      assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.getTranscriptionSegments("1", viewer));
+      assertSame(threadState, org.exoplatform.services.security.ConversationState.getCurrent());
+    } finally {
+      org.exoplatform.services.security.ConversationState.setCurrent(null);
+    }
+  }
+
+  /**
    * The background work on a transcript reads its segments as the system.
    */
   @Test
