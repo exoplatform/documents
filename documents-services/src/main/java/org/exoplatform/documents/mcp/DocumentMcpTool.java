@@ -294,13 +294,6 @@ public class DocumentMcpTool implements McpToolPlugin {
   /** The argument of the tools that move, copy or link a document to a folder. */
   private static final String      DESTINATION_FOLDER_ID_ARG = "destination_folder_id";
 
-  /**
-   * The children of a folder read in one page when a tool looks a child
-   * folder up by name, or lists a folder's children before and after a copy
-   * or a duplicate to find the one added: only that first page is read, so a
-   * folder holding more children is searched in its first ones only.
-   */
-  private static final int         FOLDER_PAGE_SIZE       = 200;
 
   /**
    * The refusal of a base64 file too long for one upload_document call: a
@@ -2529,8 +2522,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    * creation is refused because the node name is taken, the folder is looked
    * up again, which finds one created by a concurrent call meanwhile; when it
    * still finds none, the taken name belongs to an item that can't be reused:
-   * a file, a hidden or shortcut folder, one past the first page of children,
-   * or one whose title differs only by what {@code JCRDocumentsUtil#cleanName}
+   * a file, a hidden or shortcut folder, or one whose title differs only by what {@code JCRDocumentsUtil#cleanName}
    * replaces in a node name.
    *
    * @param ownerId the owner of the folders' root
@@ -2575,15 +2567,29 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   private String findChildFolderId(String folderId, String folderName) throws IllegalAccessException,
                                                                        ObjectNotFoundException {
+    return allChildNodes(folderId).stream()
+                                  .filter(FolderNode.class::isInstance)
+                                  .filter(child -> StringUtils.isBlank(child.getSourceID()))
+                                  .filter(child -> folderName.equalsIgnoreCase(StringUtils.trim(child.getName())))
+                                  .map(AbstractNode::getId)
+                                  .findFirst()
+                                  .orElse(null);
+  }
+
+  /**
+   * Reads every child of a folder in one listing: without a search criterion,
+   * {@link DocumentFileService#getFolderChildNodes} reads them all when the
+   * limit is zero, so a lookup by name or by id is not limited to a page.
+   *
+   * @param folderId the folder
+   * @return its children, as the current user sees them
+   * @throws IllegalAccessException when the user cannot read the folder
+   * @throws ObjectNotFoundException when the folder cannot be read
+   */
+  private List<AbstractNode> allChildNodes(String folderId) throws IllegalAccessException, ObjectNotFoundException {
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    return documentFileService.getFolderChildNodes(filter, 0, FOLDER_PAGE_SIZE, getCurrentUserIdentityId())
-                              .stream()
-                              .filter(FolderNode.class::isInstance)
-                              .filter(child -> StringUtils.isBlank(child.getSourceID()))
-                              .filter(child -> folderName.equalsIgnoreCase(StringUtils.trim(child.getName())))
-                              .map(AbstractNode::getId)
-                              .findFirst()
-                              .orElse(null);
+    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, 0, getCurrentUserIdentityId());
+    return children == null ? List.of() : children;
   }
 
   /**
@@ -3074,9 +3080,7 @@ public class DocumentMcpTool implements McpToolPlugin {
   private Set<String> currentChildIds(String folderId,
                                       Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
                                                                           IllegalAccessException {
-    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    return documentFileService.getFolderChildNodes(filter, 0, FOLDER_PAGE_SIZE, getCurrentUserIdentityId())
-                              .stream()
+    return allChildNodes(folderId).stream()
                               .filter(kind::isInstance)
                               .map(AbstractNode::getId)
                               .collect(java.util.stream.Collectors.toSet());
@@ -3110,9 +3114,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                           String expectedName,
                                           Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
                                                                               IllegalAccessException {
-    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, FOLDER_PAGE_SIZE,
-                                                                          getCurrentUserIdentityId());
+    List<AbstractNode> children = allChildNodes(folderId);
     List<AbstractNode> candidates = children.stream()
                                             .filter(kind::isInstance)
                                             .filter(node -> !beforeIds.contains(node.getId()))
