@@ -17,15 +17,18 @@
 package org.exoplatform.documents.mcp;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.ListAccess;
+import org.exoplatform.social.core.space.SpaceFilter;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
@@ -89,8 +92,17 @@ public class SpaceNameResolver {
     if (wanted.isEmpty()) {
       throw new IllegalArgumentException("The space_name is blank. Pass the space's name, or its space_id; get_my_spaces lists your spaces.");
     }
+    List<Space> byDisplayName = matchingMemberSpaces(spaceName.trim(), username).stream()
+                                                                                 .filter(space -> wanted.equals(normalize(space.getDisplayName())))
+                                                                                 .toList();
+    if (byDisplayName.size() == 1) {
+      return byDisplayName.get(0);
+    } else if (byDisplayName.size() > 1) {
+      throw new IllegalArgumentException(MSG_SEVERAL.formatted(spaceName.trim(), describe(byDisplayName)));
+    }
+    // no display name found through the search: the URL names and the closest names need every space of the user
     List<Space> spaces = memberSpaces(username);
-    List<Space> byDisplayName = spaces.stream().filter(space -> wanted.equals(normalize(space.getDisplayName()))).toList();
+    byDisplayName = spaces.stream().filter(space -> wanted.equals(normalize(space.getDisplayName()))).toList();
     if (byDisplayName.size() == 1) {
       return byDisplayName.get(0);
     } else if (byDisplayName.size() > 1) {
@@ -135,6 +147,26 @@ public class SpaceNameResolver {
            && (wanted.equals(space.getPrettyName().toLowerCase(Locale.ROOT))
                || wanted.equals((SPACE_GROUP + space.getPrettyName()).toLowerCase(Locale.ROOT)))
            || StringUtils.isNotBlank(space.getGroupId()) && wanted.equals(space.getGroupId().toLowerCase(Locale.ROOT));
+  }
+
+  /**
+   * Reads the spaces of the user that the spaces search finds for a name, so
+   * that a name the user gives exactly is resolved without reading every
+   * space they are a member of.
+   *
+   * @param spaceName the name as the caller gave it, trimmed
+   * @param username the calling user
+   * @return the spaces found, at most {@value #PAGE_SIZE}, empty when the
+   *         search finds none or can't be run
+   */
+  private List<Space> matchingMemberSpaces(String spaceName, String username) {
+    try {
+      ListAccess<Space> found = spaceService.getMemberSpacesByFilter(username, new SpaceFilter(spaceName));
+      Space[] page = found == null ? null : found.load(0, PAGE_SIZE);
+      return page == null ? List.of() : Arrays.stream(page).filter(Objects::nonNull).toList();
+    } catch (Exception e) {
+      return List.of();
+    }
   }
 
   /**

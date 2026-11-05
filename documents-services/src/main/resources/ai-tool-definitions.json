@@ -3,7 +3,7 @@
     {
       "name": "get_root_folder_by_space",
       "title": "Get DMS root folder of a given space",
-      "description": "Retrieves the root folder of a space's documents. Give the space either by its space_name (its name, as the user says it) or by its space_id, not both. A space_name is looked up among the spaces you're a member of; when it matches none or several, the error lists the candidates with their space_id. Never guess a space_id: pass the space_name, or find the id with get_my_spaces.",
+      "description": "Retrieves the root folder of a space's documents. Give the space either by its space_name (its name, as the user says it) or by its space_id, not both. A space_name is the space's exact name, case and spacing aside, looked up among the spaces you're a member of; when it matches none or several, the error lists the candidates with their space_id. To find a space from approximate words, use search_spaces when it is among your tools. Never guess a space_id: pass the space_name, or find the id with get_my_spaces.",
       "input_schema": {
         "type": "object",
         "properties": {
