@@ -1187,8 +1187,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       Node addedNode = node.addNode(name, NodeTypeConstants.NT_FOLDER);
       addedNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
-      if (addedNode.canAddMixin("mix:referenceable")) {
-        addedNode.addMixin("mix:referenceable");
+      if (addedNode.canAddMixin(NodeTypeConstants.MIX_REFERENCEABLE)) {
+        addedNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
       }
       node.save();
       return toFolderNode(identityManager, aclIdentity, addedNode, "", spaceService);
@@ -1287,13 +1287,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    */
   private Node addFolder(Node parent, String title, Identity aclIdentity) throws IllegalAccessException, RepositoryException {
     Map<String, Boolean> nodeAccessList = countNodeAccessList(parent, aclIdentity);
-    if (Boolean.FALSE.equals(nodeAccessList.get("canEdit"))) {
+    if (nodeAccessList != null && Boolean.FALSE.equals(nodeAccessList.get("canEdit"))) {
       throw new IllegalAccessException("Permission to add folder is missing");
     }
     Node addedNode = parent.addNode(folderNodeName(title), NodeTypeConstants.NT_FOLDER);
     addedNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
-    if (addedNode.canAddMixin("mix:referenceable")) {
-      addedNode.addMixin("mix:referenceable");
+    if (addedNode.canAddMixin(NodeTypeConstants.MIX_REFERENCEABLE)) {
+      addedNode.addMixin(NodeTypeConstants.MIX_REFERENCEABLE);
     }
     parent.save();
     return addedNode;
