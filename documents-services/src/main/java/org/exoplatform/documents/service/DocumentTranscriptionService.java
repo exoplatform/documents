@@ -337,7 +337,20 @@ public class DocumentTranscriptionService {
   }
 
   /**
-   * Asks to transcribe a file again, for any user who can read it. A failed file,
+   * Tells whether a user may ask to transcribe a file again: anyone who can edit
+   * it, as for every other change of its transcript, each run being paid for.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the identity id of the user
+   * @return true when the user can edit the file
+   * @throws IllegalAccessException when the user's identity cannot be resolved
+   */
+  public boolean canRequestRetry(String documentId, long aclIdentity) throws IllegalAccessException {
+    return documentFileService.hasEditPermissionOnDocument(documentId, aclIdentity);
+  }
+
+  /**
+   * Asks to transcribe a file again, for any user who can edit it. A failed file,
    * or one never transcribed, is handed to the transcriber; one queued or being
    * transcribed is left as it is, unless its state has not changed for
    * {@link #STALE_TRANSCRIPTION_MILLIS}, when its run was lost; a transcribed one
@@ -348,7 +361,7 @@ public class DocumentTranscriptionService {
    * @param username the user's name
    * @return true when the file was handed to the transcriber, false when it was
    *         already queued or being transcribed
-   * @throws IllegalAccessException when the user may not read the file
+   * @throws IllegalAccessException when the user may not read or edit the file
    * @throws ObjectNotFoundException when the file does not exist or the user
    *           cannot see it
    * @throws IllegalArgumentException when no transcriber is installed, the file
@@ -360,6 +373,9 @@ public class DocumentTranscriptionService {
       throw new IllegalArgumentException(UNAVAILABLE_MESSAGE);
     }
     TranscriptionState state = getState(documentId, aclIdentity);
+    if (!canRequestRetry(documentId, aclIdentity)) {
+      throw new IllegalAccessException("User may not ask to transcribe file " + documentId + " again");
+    }
     if (!state.media()) {
       throw new IllegalArgumentException(NOT_MEDIA_MESSAGE);
     } else if (state.status() == TranscriptionStatus.DONE) {
