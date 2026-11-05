@@ -315,6 +315,106 @@ public class JCRDocumentFileStorageTest {
     verify(sessionProvider, atLeast(1)).close();
   }
 
+  /**
+   * A folder path reuses the existing folder of a segment, found by the node
+   * name its title gives whatever its place among its parent's children, and
+   * creates the leaf under it. Mutants: the segment created again; the leaf
+   * created under the starting folder.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void createFolderPathReusesTheExistingFolderOfASegmentByItsNodeName() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session session = folderPathSession(aclIdentity);
+    ExtendedNode parent = editableFolder();
+    ExtendedNode contrats = editableFolder();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(parent);
+    when(parent.hasNode("contrats")).thenReturn(true);
+    when(parent.getNode("contrats")).thenReturn(contrats);
+    when(contrats.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    Node signes = mock(Node.class);
+    when(contrats.addNode("signés", NodeTypeConstants.NT_FOLDER)).thenReturn(signes);
+    FolderNode expected = new FolderNode();
+    expected.setId("signes-id");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(identityManager, aclIdentity, signes, "", spaceService))
+                      .thenReturn(expected);
+
+    AbstractNode created = jcrDocumentFileStorage.createFolderPath("1", List.of("Contrats", "Signés"), aclIdentity);
+
+    assertEquals("signes-id", created.getId());
+    verify(parent, never()).addNode(anyString(), anyString());
+    verify(signes).setProperty(NodeTypeConstants.EXO_TITLE, "Signés");
+  }
+
+  /**
+   * A segment whose node is a shortcut, or a hidden folder, is refused, and
+   * nothing is created; an invalid title is refused before the folder is
+   * read. Mutants: a shortcut or a hidden folder reused; the title check
+   * dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void createFolderPathRefusesAShortcutOrAHiddenSegmentAndAnInvalidTitle() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session session = folderPathSession(aclIdentity);
+    ExtendedNode parent = editableFolder();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(parent);
+    ExtendedNode shortcut = mock(ExtendedNode.class);
+    when(parent.hasNode("contrats")).thenReturn(true);
+    when(parent.getNode("contrats")).thenReturn(shortcut);
+    when(shortcut.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    ExtendedNode hidden = mock(ExtendedNode.class);
+    when(parent.hasNode("archives")).thenReturn(true);
+    when(parent.getNode("archives")).thenReturn(hidden);
+    when(hidden.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(hidden.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)).thenReturn(true);
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> jcrDocumentFileStorage.createFolderPath("1", List.of("Contrats", "Signés"), aclIdentity));
+    assertThrows(IllegalArgumentException.class,
+                 () -> jcrDocumentFileStorage.createFolderPath("1", List.of("Archives", "2026"), aclIdentity));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle("a:b")).thenReturn(false);
+    assertThrows(IllegalArgumentException.class,
+                 () -> jcrDocumentFileStorage.createFolderPath("1", List.of("Contrats", "a:b"), aclIdentity));
+    verify(parent, never()).addNode(anyString(), anyString());
+    verify(shortcut, never()).addNode(anyString(), anyString());
+    verify(hidden, never()).addNode(anyString(), anyString());
+  }
+
+  /**
+   * @param aclIdentity the user
+   * @return the user's session, the folder names their titles in lower
+   *         case and every title valid
+   * @throws Exception never
+   */
+  private Session folderPathSession(org.exoplatform.services.security.Identity aclIdentity) throws Exception {
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle(anyString())).thenReturn(true);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.cleanName(anyString(), anyString()))
+                      .thenAnswer(invocation -> invocation.getArgument(0));
+    return session;
+  }
+
+  /**
+   * @return a folder node the test user can add a folder to
+   * @throws Exception never
+   */
+  private ExtendedNode editableFolder() throws Exception {
+    ExtendedNode folder = mock(ExtendedNode.class);
+    AccessControlEntry editEntry = new AccessControlEntry("john", PermissionType.ADD_NODE);
+    lenient().when(folder.getACL()).thenReturn(new AccessControlList("john", Arrays.asList(editEntry)));
+    return folder;
+  }
+
   @Test
   public void createDocumentFromTemplateMatchesDottedExtension() throws Exception {
     // Regression: onlyoffice stores the template extension WITH a leading dot
