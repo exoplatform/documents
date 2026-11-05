@@ -111,6 +111,14 @@ import lombok.SneakyThrows;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
 
+  /** The refusal of a folder title the storage can't name a folder after */
+  private static final String INVALID_FOLDER_NAME_MESSAGE    =
+                                                          "The folder name '%s' is not valid: a folder name can't hold any of < \\ > : \" / | ? * and can't be only an extension. Ask the user for another name.";
+
+  /** The refusal of a folder title whose node is taken by an item that is not a plain folder */
+  private static final String UNREUSABLE_FOLDER_NAME_MESSAGE =
+                                                             "An item named '%s' already exists in this folder but can't be reused as a folder (a file, a hidden folder or a shortcut): pick another folder name.";
+
   private static final String                       COLLABORATION               = "collaboration";
 
   /**
@@ -1143,7 +1151,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                    String title,
                                    Identity aclIdentity) throws ObjectAlreadyExistsException, IllegalAccessException {
     if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
-      throw new IllegalArgumentException("folder title is not valid");
+      throw new IllegalArgumentException(INVALID_FOLDER_NAME_MESSAGE.formatted(title));
     }
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
@@ -1195,6 +1203,108 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
     }
+  }
+
+  @Override
+  public AbstractNode createFolderPath(String folderId,
+                                       List<String> titles,
+                                       Identity aclIdentity) throws IllegalAccessException,
+                                                             ObjectAlreadyExistsException,
+                                                             ObjectNotFoundException {
+    if (titles == null || titles.isEmpty()) {
+      throw new IllegalArgumentException("The folder path holds no folder name.");
+    }
+    titles.stream().filter(title -> !JCRDocumentsUtil.isValidDocumentTitle(title)).findFirst().ifPresent(title -> {
+      throw new IllegalArgumentException(INVALID_FOLDER_NAME_MESSAGE.formatted(title));
+    });
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, folderId);
+      if (node == null) {
+        throw new ObjectNotFoundException("Folder '%s' doesn't exist".formatted(folderId));
+      }
+      for (String title : titles.subList(0, titles.size() - 1)) {
+        node = getOrAddFolder(node, title, aclIdentity);
+      }
+      String title = titles.get(titles.size() - 1);
+      if (node.hasNode(folderNodeName(title))) {
+        throw new ObjectAlreadyExistsException("Folder '%s' already exists".formatted(title));
+      }
+      return toFolderNode(identityManager, aclIdentity, addFolder(node, title, aclIdentity), "", spaceService);
+    } catch (IllegalAccessException | ObjectAlreadyExistsException | ObjectNotFoundException | IllegalArgumentException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IllegalStateException("Error creating a folder path under folder '" + folderId + "'", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * Gives the child folder of a folder named after a title, adding it when
+   * the folder has none. A child added meanwhile by another call is found
+   * again after the refused save and reused.
+   *
+   * @param parent the folder
+   * @param title the child folder's title
+   * @param aclIdentity the user
+   * @return the child folder
+   * @throws IllegalAccessException when the user can't add the missing folder
+   * @throws RepositoryException when the folder can't be read or written
+   */
+  private Node getOrAddFolder(Node parent, String title, Identity aclIdentity) throws IllegalAccessException,
+                                                                               RepositoryException {
+    String name = folderNodeName(title);
+    if (!parent.hasNode(name)) {
+      try {
+        return addFolder(parent, title, aclIdentity);
+      } catch (ItemExistsException e) {
+        parent.refresh(false);
+      }
+    }
+    Node child = parent.getNode(name);
+    if (!child.isNodeType(NodeTypeConstants.NT_FOLDER) || child.isNodeType(NodeTypeConstants.EXO_SYMLINK)
+        || child.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)) {
+      throw new IllegalArgumentException(UNREUSABLE_FOLDER_NAME_MESSAGE.formatted(title));
+    }
+    return child;
+  }
+
+  /**
+   * Adds a folder under a folder the user can edit, named and titled as
+   * {@link #createFolder} does.
+   *
+   * @param parent the folder
+   * @param title the new folder's title
+   * @param aclIdentity the user
+   * @return the folder added
+   * @throws IllegalAccessException when the user can't add a folder there
+   * @throws RepositoryException when it can't be added
+   */
+  private Node addFolder(Node parent, String title, Identity aclIdentity) throws IllegalAccessException, RepositoryException {
+    Map<String, Boolean> nodeAccessList = countNodeAccessList(parent, aclIdentity);
+    if (Boolean.FALSE.equals(nodeAccessList.get("canEdit"))) {
+      throw new IllegalAccessException("Permission to add folder is missing");
+    }
+    Node addedNode = parent.addNode(folderNodeName(title), NodeTypeConstants.NT_FOLDER);
+    addedNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
+    if (addedNode.canAddMixin("mix:referenceable")) {
+      addedNode.addMixin("mix:referenceable");
+    }
+    parent.save();
+    return addedNode;
+  }
+
+  /**
+   * @param title a folder title
+   * @return the node name {@link #createFolder} gives a folder of that title
+   */
+  private static String folderNodeName(String title) {
+    return Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), NodeTypeConstants.NT_FOLDER));
   }
 
   @Override

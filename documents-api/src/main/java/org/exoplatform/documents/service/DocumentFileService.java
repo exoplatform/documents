@@ -359,6 +359,24 @@ public interface DocumentFileService {
   AbstractNode createFolder(long ownerId,String folderId, String folderPath, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
   /**
+   * Creates the last folder of a path of folder titles under a folder, each
+   * folder before it reused when it exists, created otherwise, as
+   * {@link org.exoplatform.documents.storage.DocumentFileStorage#createFolderPath}
+   * describes.
+   *
+   * @param folderId the folder the path starts under
+   * @param titles the folder titles, the first under that folder
+   * @param authenticatedUserId the identity id of the user creating them
+   * @return the last folder of the path, created
+   * @throws IllegalAccessException when the user can't add a missing folder
+   * @throws ObjectAlreadyExistsException when the last folder exists already
+   * @throws ObjectNotFoundException when the starting folder can't be found
+   */
+  AbstractNode createFolderPath(String folderId, List<String> titles, long authenticatedUserId) throws IllegalAccessException,
+                                                                                                  ObjectAlreadyExistsException,
+                                                                                                  ObjectNotFoundException;
+
+  /**
    * Creates a new empty office document (Word/Excel/PowerPoint/ODF) from the
    * platform's blank template, delegating to the ecms {@code DocumentService}.
    *
