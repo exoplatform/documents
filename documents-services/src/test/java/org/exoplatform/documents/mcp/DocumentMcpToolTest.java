@@ -37,6 +37,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -923,6 +924,36 @@ public class DocumentMcpToolTest {
     DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, "Contrats/Signés");
 
     assertEquals("signes-id", model.getId());
+  }
+
+  /**
+   * An existing folder of a path is reused wherever it sorts among its
+   * parent's children: the lookup reads every child, not a first page, so a
+   * segment listed after hundreds of other items is not created again.
+   *
+   * @throws Exception when the tool fails
+   */
+  @Test
+  public void createFolderPathReusesASegmentFolderPastHundredsOfChildren() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    List<AbstractNode> children = new ArrayList<>();
+    for (int i = 0; i < 250; i++) {
+      FolderNode other = folderNode("other-" + i);
+      other.setName("Archive " + i);
+      children.add(other);
+    }
+    FolderNode contrats = folderNode("contrats-id");
+    contrats.setName("Contrats");
+    children.add(contrats);
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(0), anyLong())).thenReturn(children);
+    when(documentFileService.createFolder(eq(OWNER_ID), eq("contrats-id"), isNull(), eq("Signés"), eq(USER_IDENTITY_ID)))
+        .thenReturn(folderNode("signes-id"));
+
+    DocumentModel model = documentMcpTool.createFolder(FOLDER_ID, "Contrats/Signés");
+
+    assertEquals("signes-id", model.getId());
+    verify(documentFileService, never()).createFolder(anyLong(), eq(FOLDER_ID), any(), eq("Contrats"), anyLong());
   }
 
   /**
