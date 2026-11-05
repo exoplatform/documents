@@ -321,9 +321,11 @@ public class JCRDocumentFileStorageTest {
 
   /**
    * A folder path reuses the existing folder of a segment, found by the node
-   * name its title gives whatever its place among its parent's children, and
-   * creates the leaf under it. Mutants: the segment created again; the leaf
-   * created under the starting folder.
+   * name its title gives whatever its place among its parent's children, an
+   * {@code nt:unstructured} folder as well as an {@code nt:folder} one, and
+   * creates the leaf under it. Mutants: the segment created again; an
+   * {@code nt:unstructured} folder refused; the leaf created under the
+   * starting folder.
    *
    * @throws Exception never
    */
@@ -333,10 +335,10 @@ public class JCRDocumentFileStorageTest {
     Session session = folderPathSession(aclIdentity);
     ExtendedNode parent = editableFolder();
     ExtendedNode contrats = editableFolder();
+    withPrimaryType(contrats, NodeTypeConstants.NT_UNSTRUCTURED);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(parent);
     when(parent.hasNode("contrats")).thenReturn(true);
     when(parent.getNode("contrats")).thenReturn(contrats);
-    when(contrats.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
     Node signes = mock(Node.class);
     when(contrats.addNode("signés", NodeTypeConstants.NT_FOLDER)).thenReturn(signes);
     FolderNode expected = new FolderNode();
@@ -368,12 +370,12 @@ public class JCRDocumentFileStorageTest {
     ExtendedNode shortcut = mock(ExtendedNode.class);
     when(parent.hasNode("contrats")).thenReturn(true);
     when(parent.getNode("contrats")).thenReturn(shortcut);
-    when(shortcut.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    withPrimaryType(shortcut, NodeTypeConstants.NT_FOLDER);
     when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
     ExtendedNode hidden = mock(ExtendedNode.class);
     when(parent.hasNode("archives")).thenReturn(true);
     when(parent.getNode("archives")).thenReturn(hidden);
-    when(hidden.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    withPrimaryType(hidden, NodeTypeConstants.NT_FOLDER);
     when(hidden.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)).thenReturn(true);
 
     List<String> throughShortcut = List.of("Contrats", "Signés");
@@ -405,7 +407,19 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle(anyString())).thenReturn(true);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.cleanName(anyString(), anyString()))
                       .thenAnswer(invocation -> invocation.getArgument(0));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
     return session;
+  }
+
+  /**
+   * @param node a node mock
+   * @param primaryType the primary node type it reports
+   * @throws Exception never
+   */
+  private static void withPrimaryType(Node node, String primaryType) throws Exception {
+    javax.jcr.nodetype.NodeType nodeType = mock(javax.jcr.nodetype.NodeType.class);
+    when(nodeType.getName()).thenReturn(primaryType);
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
   }
 
   /**
