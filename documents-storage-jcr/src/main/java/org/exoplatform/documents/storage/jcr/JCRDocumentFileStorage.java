@@ -1181,7 +1181,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       // no need to this object later make it eligible to the garbage collactor
       nodeAccessList = null;
-      String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), NodeTypeConstants.NT_FOLDER));
+      String name = folderNodeName(title);
       if (node.hasNode(name)) {
         throw new ObjectAlreadyExistsException("Folder'" + name + "' already exist");
       }
@@ -1246,7 +1246,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   /**
    * Gives the child folder of a folder named after a title, adding it when
-   * the folder has none. A child added meanwhile by another call is found
+   * the folder has none. A child of that node name is reused when it is a
+   * folder as the storage lists one ({@code nt:folder} or
+   * {@code nt:unstructured}), neither a shortcut nor hidden. A child added meanwhile by another call is found
    * again after the refused save and reused.
    *
    * @param parent the folder
@@ -1267,7 +1269,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     }
     Node child = parent.getNode(name);
-    if (!child.isNodeType(NodeTypeConstants.NT_FOLDER) || child.isNodeType(NodeTypeConstants.EXO_SYMLINK)
+    if (!JCRDocumentsUtil.isFolder(child) || child.isNodeType(NodeTypeConstants.EXO_SYMLINK)
         || child.isNodeType(NodeTypeConstants.EXO_HIDDENABLE)) {
       throw new IllegalArgumentException(UNREUSABLE_FOLDER_NAME_MESSAGE.formatted(title));
     }
@@ -1287,7 +1289,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    */
   private Node addFolder(Node parent, String title, Identity aclIdentity) throws IllegalAccessException, RepositoryException {
     Map<String, Boolean> nodeAccessList = countNodeAccessList(parent, aclIdentity);
-    if (nodeAccessList != null && Boolean.FALSE.equals(nodeAccessList.get("canEdit"))) {
+    if (nodeAccessList == null || Boolean.FALSE.equals(nodeAccessList.get("canEdit"))) {
       throw new IllegalAccessException("Permission to add folder is missing");
     }
     Node addedNode = parent.addNode(folderNodeName(title), NodeTypeConstants.NT_FOLDER);
