@@ -81,6 +81,7 @@ export default {
       abortUploading: false,
       uploadedFilesCount: 0,
       pendingExistenceChecks: 0,
+      resetCount: 0,
     };
   },
   computed: {
@@ -216,7 +217,13 @@ export default {
         return;
       }
       this.pendingExistenceChecks++;
+      // A file still in its existence check when the drawer resets is
+      // neither listed nor uploaded once the check answers.
+      const resetCount = this.resetCount;
       this.checkExistenceActions(file).finally(() => this.pendingExistenceChecks--).then(actions => {
+        if (resetCount !== this.resetCount) {
+          return;
+        }
         if (actions.length > 0) {
           file.actions = actions;
           file.waitAction = true;
@@ -392,11 +399,18 @@ export default {
       }
     },
     resetUploadInput() {
+      this.resetCount++;
       this.newUploadedFiles = [];
       this.uploadingCount = 0;
       this.uploadedFilesCount = 0;
     },
     abortUploadingNewAttachments() {
+      // Ends the attempt of every file uploading or queued: a request or a
+      // poll settling after the drawer closed, or after a later pick, neither
+      // files nor fails that file.
+      [...this.newUploadedFiles, ...this.uploadingFilesQueue]
+        .forEach(file => file.uploadAttempt = (file.uploadAttempt || 0) + 1);
+      this.uploadingFilesQueue = [];
       this.resetUploadInput();
       this.abortUploading = true;
     },
