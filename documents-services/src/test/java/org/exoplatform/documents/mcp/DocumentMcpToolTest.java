@@ -593,6 +593,21 @@ public class DocumentMcpToolTest {
    *
    * @throws Exception never
    */
+  /**
+   * A limit above the page bound reads at most that bound, on both folder
+   * listings. Mutant: the bound dropped from either clamp.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void folderListingsReadAtMostOneHundredChildren() throws Exception {
+    documentMcpTool.listFolderChildren(FOLDER_ID, 0, 5000, null);
+    documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, null, 0, 5000);
+
+    verify(documentFileService).getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_PAGE_SIZE), anyLong());
+    verify(documentFileService).getDocumentItems(any(), any(), eq(0), eq(DocumentMcpTool.MAX_PAGE_SIZE), anyLong(), anyBoolean());
+  }
+
   @Test
   public void getDocumentsByFolderIdWithANegativeLimitListsNothing() throws Exception {
     assertEquals(List.of(), documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, null, null, -1));
