@@ -1259,6 +1259,27 @@ public class DocumentMcpToolTest {
     assertFalse(FOLDER_ID.equals(model.getId()));
   }
 
+  /**
+   * A copy into a folder holding more items than the scan reads is refused
+   * before anything is copied, the destination read once and bounded, not
+   * listed whole. Mutants: the bound dropped; the copy run before the check.
+   *
+   * @throws Exception when the tool fails
+   */
+  @Test
+  public void copyDocumentIntoAFolderTooLargeToScanIsRefusedBeforeCopying() throws Exception {
+    when(documentFileService.getDocumentById(eq(DOCUMENT_ID), anyString())).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(eq(FOLDER_ID), anyString())).thenReturn(folderNode(FOLDER_ID));
+    List<AbstractNode> full = java.util.stream.IntStream.rangeClosed(0, DocumentMcpTool.MAX_SCANNED_CHILDREN)
+                                                        .mapToObj(i -> (AbstractNode) fileNodeNamed("f-" + i, "file" + i + ".pdf"))
+                                                        .toList();
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(full);
+
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID));
+    verify(documentFileService, never()).copyDocument(anyString(), anyString(), anyLong());
+  }
+
   @Test
   public void copyDocumentResolvesByNameIgnoringConcurrentDifferentFile() throws Exception {
     // Concurrency: while the copy of "report.pdf" is created, another user drops a
