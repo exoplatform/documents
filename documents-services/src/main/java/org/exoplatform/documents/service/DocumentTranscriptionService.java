@@ -84,11 +84,20 @@ public class DocumentTranscriptionService {
   /** How long a queued or running transcription may go unchanged before its run is taken as lost. */
   static final long                            STALE_TRANSCRIPTION_MILLIS          = TranscriptionState.STALE_MILLIS;
 
+  /**
+   * The most people taken as the possible speakers of a recording linked to no
+   * meeting (EXO-92126): past it, a space's members are left out, a name said
+   * matching too many people to point to one.
+   */
+  static final int                             MAX_CANDIDATES                      = 50;
+
   /** The zero-width non-joiner, part of the spelling of Persian and Indic names. */
   private static final int                     ZERO_WIDTH_NON_JOINER               = 0x200C;
 
   /** The zero-width joiner, part of the spelling of Indic names. */
   private static final int                     ZERO_WIDTH_JOINER                   = 0x200D;
+
+  private static final Log                     LOG                                 = ExoLogger.getLogger(DocumentTranscriptionService.class);
 
   @Autowired
   private DocumentFileService                  documentFileService;
@@ -104,6 +113,12 @@ public class DocumentTranscriptionService {
 
   @Autowired
   private IdentityManager                      identityManager;
+
+  @Autowired
+  private SpaceService                         spaceService;
+
+  @Autowired(required = false)
+  private List<TranscriptionAttendeesPlugin>   attendeesPlugins                    = List.of();
 
   private final ObjectMapper                   objectMapper                        = new ObjectMapper();
 
@@ -424,21 +439,6 @@ public class DocumentTranscriptionService {
     }
     return coming;
   }
-
-  /**
-   * The most people taken as the possible speakers of a recording linked to no
-   * meeting (EXO-92126): past it, a space's members are left out, a name said
-   * matching too many people to point to one.
-   */
-  static final int                             MAX_CANDIDATES                      = 50;
-
-  private static final Log                     LOG                                 = ExoLogger.getLogger(DocumentTranscriptionService.class);
-
-  @Autowired
-  private SpaceService                         spaceService;
-
-  @Autowired(required = false)
-  private List<TranscriptionAttendeesPlugin>   attendeesPlugins                    = List.of();
 
   /**
    * The people who may be the speakers of a recording (EXO-92126): the
