@@ -1895,6 +1895,69 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
+  public void getDocumentDownloadInfoReadsNoContent() throws RepositoryException {
+    SessionProvider systemSessionProvider = mockSystemSessionProvider();
+    Session session = systemSessionProvider.getSession("collaboration", repositoryService.getCurrentRepository());
+    NodeImpl node = mock(NodeImpl.class);
+    Node contentNode = mock(Node.class);
+    when(node.getIdentifier()).thenReturn("123");
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(contentNode);
+    when(contentNode.hasProperty(NodeTypeConstants.JCR_DATA)).thenReturn(true);
+    Property dataProperty = mock(Property.class);
+    when(dataProperty.getStream()).thenReturn(new ByteArrayInputStream("content".getBytes()));
+    when(contentNode.getProperty(NodeTypeConstants.JCR_DATA)).thenReturn(dataProperty);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(node)).thenReturn("document.pdf");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toDownloadInfo(node)).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toDownloadItem(node)).thenCallRealMethod();
+    UTILS.when(() -> Utils.getStringProperty(contentNode, NodeTypeConstants.JCR_MIME_TYPE)).thenReturn("application/pdf");
+
+    DownloadItem downloadInfo = jcrDocumentFileStorage.getDocumentDownloadInfo("123");
+
+    assertEquals("123", downloadInfo.getItemId());
+    assertEquals("document.pdf", downloadInfo.getItemName());
+    assertEquals("application/pdf", downloadInfo.getMimeType());
+    assertNull(downloadInfo.getItemContent());
+    verify(contentNode, never()).hasProperty(NodeTypeConstants.JCR_DATA);
+    verify(contentNode, never()).getProperty(NodeTypeConstants.JCR_DATA);
+    verify(systemSessionProvider).close();
+  }
+
+  @Test
+  public void getDocumentDownloadInfoOfAFolder() throws RepositoryException {
+    SessionProvider systemSessionProvider = mockSystemSessionProvider();
+    Session session = systemSessionProvider.getSession("collaboration", repositoryService.getCurrentRepository());
+    NodeImpl node = mock(NodeImpl.class);
+    when(node.getIdentifier()).thenReturn("456");
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(false);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "456")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(node)).thenReturn("folder");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toDownloadInfo(node)).thenCallRealMethod();
+
+    DownloadItem downloadInfo = jcrDocumentFileStorage.getDocumentDownloadInfo("456");
+
+    assertEquals("folder", downloadInfo.getItemName());
+    assertNull(downloadInfo.getMimeType());
+    assertNull(downloadInfo.getItemContent());
+    assertNull(jcrDocumentFileStorage.getDocumentDownloadInfo("789"));
+    verify(systemSessionProvider, times(2)).close();
+  }
+
+  private SessionProvider mockSystemSessionProvider() throws RepositoryException {
+    SessionProvider systemSessionProvider = mock(SessionProvider.class);
+    SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(systemSessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(systemSessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    return systemSessionProvider;
+  }
+
+  @Test
   public void downloadFolder() throws RepositoryException {
     Session session = getMockedSession(null);
     Node node = mock(Node.class);
