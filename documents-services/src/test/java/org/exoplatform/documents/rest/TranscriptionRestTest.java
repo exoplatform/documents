@@ -113,10 +113,11 @@ class TranscriptionRestTest {
                                                                                               .hasSegments(true)
                                                                                               .hasChapters(true)
                                                                                               .build());
+    when(documentTranscriptionService.canRequestRetry(DOCUMENT_ID, 7L)).thenReturn(true);
 
     ResponseEntity<TranscriptionStateEntity> response = rest.getState(request, DOCUMENT_ID);
 
-    assertEquals(new TranscriptionStateEntity(true, "FAILED", "2/9", "provider.timeout", "en", 5400L, 1000L, true, true),
+    assertEquals(new TranscriptionStateEntity(true, "FAILED", "2/9", "provider.timeout", "en", 5400L, 1000L, true, true, true),
                  response.getBody());
     assertEquals("no-store", response.getHeaders().getCacheControl(), "Expected a viewer's read never to be kept by a shared cache");
   }
