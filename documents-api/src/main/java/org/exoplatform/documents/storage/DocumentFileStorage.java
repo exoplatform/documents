@@ -490,6 +490,16 @@ public interface DocumentFileStorage {
   DownloadItem getDocumentDownloadItem(String documentId);
 
   /**
+   * Gets the identifier, the name and the mime type of a given document
+   * without reading its content: the returned item's content is null.
+   *
+   * @param documentId document id
+   * @return {@link DownloadItem} without content, or null when no document
+   *         has this id
+   */
+  DownloadItem getDocumentDownloadInfo(String documentId);
+
+  /**
    * Download a zipped folder
    *
    * @param folderId  folder node id

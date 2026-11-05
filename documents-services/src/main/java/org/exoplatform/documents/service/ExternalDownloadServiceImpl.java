@@ -17,6 +17,7 @@
 package org.exoplatform.documents.service;
 
 import org.apache.commons.io.FileUtils;
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 
@@ -27,10 +28,14 @@ import java.nio.file.Path;
 
 public class ExternalDownloadServiceImpl implements ExternalDownloadService {
 
-  private final DocumentFileStorage documentFileStorage;
+  private final DocumentFileStorage         documentFileStorage;
 
-  public ExternalDownloadServiceImpl(DocumentFileStorage documentFileStorage) {
+  private final PublicDocumentAccessService publicDocumentAccessService;
+
+  public ExternalDownloadServiceImpl(DocumentFileStorage documentFileStorage,
+                                     PublicDocumentAccessService publicDocumentAccessService) {
     this.documentFileStorage = documentFileStorage;
+    this.publicDocumentAccessService = publicDocumentAccessService;
   }
 
   /**
@@ -42,6 +47,24 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
       throw new IllegalArgumentException("document id is mandatory");
     }
     return documentFileStorage.getDocumentDownloadItem(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DownloadItem getPublicDocumentInfo(String documentId) throws ObjectNotFoundException {
+    if (documentId == null) {
+      throw new IllegalArgumentException("document id is mandatory");
+    }
+    if (!publicDocumentAccessService.hasDocumentPublicAccess(documentId)) {
+      throw new ObjectNotFoundException("Document has no public access link");
+    }
+    DownloadItem downloadInfo = documentFileStorage.getDocumentDownloadInfo(documentId);
+    if (downloadInfo == null) {
+      throw new ObjectNotFoundException("Document with a public access link not found");
+    }
+    return downloadInfo;
   }
 
   /**

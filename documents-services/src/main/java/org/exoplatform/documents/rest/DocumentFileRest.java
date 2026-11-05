@@ -1417,30 +1417,34 @@ public class DocumentFileRest implements ResourceContainer {
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "404", description = "No public access link for this node"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response publicAccessDocument(@Parameter(description = "public link node id", required = true)
                                    @QueryParam("nodeId") String nodeId) {
-
+    if (StringUtils.isBlank(nodeId)) {
+      return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").build();
+    }
+    DownloadItem documentInfo;
+    try {
+      documentInfo = externalDownloadService.getPublicDocumentInfo(nodeId);
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).build();
+    }
     PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
-    DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
-
-    boolean hasPublicLink = publicDocumentAccess != null;
-    boolean isAccessLocked = hasPublicLink && publicDocumentAccess.getPasswordHashKey() != null;
+    if (publicDocumentAccess == null) {
+      return Response.status(Status.NOT_FOUND).build();
+    }
+    boolean isAccessLocked = publicDocumentAccess.getPasswordHashKey() != null;
     boolean isAccessExpired = publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId);
 
     JSONObject response = new JSONObject();
     response.put("nodeId", nodeId);
-    response.put("hasPublicLink", hasPublicLink);
+    response.put("hasPublicLink", true);
     response.put("isAccessLocked", isAccessLocked);
     response.put("isAccessExpired", isAccessExpired);
-    if (downloadItem != null) {
-      response.put("documentName", downloadItem.getItemName());
-      response.put("documentType", downloadItem.getMimeType());
-    }
-
+    response.put("documentName", documentInfo.getItemName());
+    response.put("documentType", documentInfo.getMimeType());
     return Response.ok(response.toString()).build();
-
-
   }
 
   @GET

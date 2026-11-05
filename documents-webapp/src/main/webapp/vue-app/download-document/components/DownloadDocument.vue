@@ -198,6 +198,8 @@ export default {
         if (!this.requirePassword) {
           this.downloadDocument();
         }
+      }, () => {
+        this.loading = false;
       });
     } else {
       this.loading = false;

@@ -34,6 +34,7 @@ import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 
+import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -1634,6 +1635,80 @@ public class DocumentFileRestTest {
     when(publicDocumentAccessService.getPublicDocumentAccess("1233")).thenThrow(new RuntimeException());
     response = documentFileRest1.getPublicAccessLink("1233");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void publicAccessDocumentWithoutPublicLink() throws ObjectNotFoundException {
+    when(externalDownloadService.getPublicDocumentInfo("123")).thenThrow(new ObjectNotFoundException("no public link"));
+    Response response = documentFileRest.publicAccessDocument("123");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNull(response.getEntity());
+    verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
+  }
+
+  @Test
+  public void publicAccessDocumentWithLockedPublicLink() throws ObjectNotFoundException {
+    PublicDocumentAccess publicDocumentAccess = new PublicDocumentAccess();
+    publicDocumentAccess.setNodeId("123");
+    publicDocumentAccess.setPasswordHashKey("100:salt:hash");
+    when(externalDownloadService.getPublicDocumentInfo("123")).thenReturn(new DownloadItem("123",
+                                                                                          "document.pdf",
+                                                                                          null,
+                                                                                          "application/pdf"));
+    when(publicDocumentAccessService.getPublicDocumentAccess("123")).thenReturn(publicDocumentAccess);
+    when(publicDocumentAccessService.isPublicDocumentAccessExpired("123")).thenReturn(false);
+
+    Response response = documentFileRest.publicAccessDocument("123");
+
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    JSONObject answer = new JSONObject((String) response.getEntity());
+    assertTrue(answer.getBoolean("hasPublicLink"));
+    assertTrue(answer.getBoolean("isAccessLocked"));
+    assertFalse(answer.getBoolean("isAccessExpired"));
+    assertEquals("document.pdf", answer.getString("documentName"));
+    assertEquals("application/pdf", answer.getString("documentType"));
+    verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
+  }
+
+  @Test
+  public void publicAccessDocumentWithExpiredPublicLink() throws ObjectNotFoundException {
+    PublicDocumentAccess publicDocumentAccess = new PublicDocumentAccess();
+    publicDocumentAccess.setNodeId("123");
+    publicDocumentAccess.setExpirationDate(new Date(System.currentTimeMillis() - 86400000L));
+    when(externalDownloadService.getPublicDocumentInfo("123")).thenReturn(new DownloadItem("123",
+                                                                                          "document.pdf",
+                                                                                          null,
+                                                                                          "application/pdf"));
+    when(publicDocumentAccessService.getPublicDocumentAccess("123")).thenReturn(publicDocumentAccess);
+    when(publicDocumentAccessService.isPublicDocumentAccessExpired("123")).thenReturn(true);
+
+    Response response = documentFileRest.publicAccessDocument("123");
+
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    JSONObject answer = new JSONObject((String) response.getEntity());
+    assertTrue(answer.getBoolean("hasPublicLink"));
+    assertFalse(answer.getBoolean("isAccessLocked"));
+    assertTrue(answer.getBoolean("isAccessExpired"));
+    assertEquals("document.pdf", answer.getString("documentName"));
+  }
+
+  @Test
+  public void publicAccessDocumentWithPublicLinkRevokedMeanwhile() throws ObjectNotFoundException {
+    when(externalDownloadService.getPublicDocumentInfo("123")).thenReturn(new DownloadItem("123",
+                                                                                          "document.pdf",
+                                                                                          null,
+                                                                                          "application/pdf"));
+    when(publicDocumentAccessService.getPublicDocumentAccess("123")).thenReturn(null);
+    Response response = documentFileRest.publicAccessDocument("123");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNull(response.getEntity());
+  }
+
+  @Test
+  public void publicAccessDocumentWithoutNodeId() {
+    Response response = documentFileRest.publicAccessDocument(" ");
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    verifyNoInteractions(externalDownloadService, publicDocumentAccessService);
   }
 
   @Test
