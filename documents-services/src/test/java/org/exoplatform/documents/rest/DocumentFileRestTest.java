@@ -1643,6 +1643,7 @@ public class DocumentFileRestTest {
     Response response = documentFileRest.publicAccessDocument("123");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     assertNull(response.getEntity());
+    assertNotStored(response);
     verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
   }
 
@@ -1667,6 +1668,7 @@ public class DocumentFileRestTest {
     assertFalse(answer.getBoolean("isAccessExpired"));
     assertEquals("document.pdf", answer.getString("documentName"));
     assertEquals("application/pdf", answer.getString("documentType"));
+    assertNotStored(response);
     verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
   }
 
@@ -1690,6 +1692,7 @@ public class DocumentFileRestTest {
     assertFalse(answer.getBoolean("isAccessLocked"));
     assertTrue(answer.getBoolean("isAccessExpired"));
     assertEquals("document.pdf", answer.getString("documentName"));
+    assertNotStored(response);
   }
 
   @Test
@@ -1702,12 +1705,14 @@ public class DocumentFileRestTest {
     Response response = documentFileRest.publicAccessDocument("123");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     assertNull(response.getEntity());
+    assertNotStored(response);
   }
 
   @Test
   public void publicAccessDocumentWithoutNodeId() {
     Response response = documentFileRest.publicAccessDocument(" ");
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertNotStored(response);
     verifyNoInteractions(externalDownloadService, publicDocumentAccessService);
   }
 

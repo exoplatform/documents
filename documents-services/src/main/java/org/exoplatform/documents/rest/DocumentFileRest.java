@@ -1421,18 +1421,22 @@ public class DocumentFileRest implements ResourceContainer {
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response publicAccessDocument(@Parameter(description = "public link node id", required = true)
                                    @QueryParam("nodeId") String nodeId) {
+    // The answer depends on the node's public link, which can be revoked or changed at any time
+    CacheControl noStore = new CacheControl();
+    noStore.setPrivate(true);
+    noStore.setNoStore(true);
     if (StringUtils.isBlank(nodeId)) {
-      return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").build();
+      return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").cacheControl(noStore).build();
     }
     DownloadItem documentInfo;
     try {
       documentInfo = externalDownloadService.getPublicDocumentInfo(nodeId);
     } catch (ObjectNotFoundException e) {
-      return Response.status(Status.NOT_FOUND).build();
+      return Response.status(Status.NOT_FOUND).cacheControl(noStore).build();
     }
     PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
     if (publicDocumentAccess == null) {
-      return Response.status(Status.NOT_FOUND).build();
+      return Response.status(Status.NOT_FOUND).cacheControl(noStore).build();
     }
     boolean isAccessLocked = publicDocumentAccess.getPasswordHashKey() != null;
     boolean isAccessExpired = publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId);
@@ -1444,7 +1448,7 @@ public class DocumentFileRest implements ResourceContainer {
     response.put("isAccessExpired", isAccessExpired);
     response.put("documentName", documentInfo.getItemName());
     response.put("documentType", documentInfo.getMimeType());
-    return Response.ok(response.toString()).build();
+    return Response.ok(response.toString()).cacheControl(noStore).build();
   }
 
   @GET
