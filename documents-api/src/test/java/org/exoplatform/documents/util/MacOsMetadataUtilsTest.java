@@ -1,0 +1,66 @@
+/*
+ * Copyright (C) 2026 eXo Platform SAS.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see<http://www.gnu.org/licenses/>.
+ */
+package org.exoplatform.documents.util;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+class MacOsMetadataUtilsTest {
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "__MACOSX",
+      "__MACOSX/",
+      "__MACOSX/folderX/._doc.txt",
+      "folderX/__MACOSX/info.txt",
+      "folderX\\__MACOSX\\info.txt",
+      ".DS_Store",
+      "folderX/.DS_Store",
+      "folderX\\.DS_Store",
+      "._doc.txt",
+      "folderX/sub/._note.txt",
+      "folderX\\._doc.txt",
+      "folderX/._sub/",
+      "folderX/.DS_Store/",
+      "._",
+      "folderX/._"
+  })
+  void isMacOsMetadataForMacOsMetadataPaths(String path) {
+    assertTrue(MacOsMetadataUtils.isMacOsMetadata(path));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "doc.txt",
+      "folderX/doc.txt",
+      "folderX/a._b.txt",
+      "folderX/my__MACOSX.txt",
+      "folderX/__MACOSX_notes/c.txt",
+      "folderX/.DS_Store.txt",
+      "folderX/.gitignore",
+      ".hidden",
+      "folderX/._sub/doc.txt",
+      "folderX/.DS_Store/doc.txt"
+  })
+  void isNotMacOsMetadataForUserContent(String path) {
+    assertFalse(MacOsMetadataUtils.isMacOsMetadata(path));
+  }
+
+}
