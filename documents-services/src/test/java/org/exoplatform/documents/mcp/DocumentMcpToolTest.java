@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -64,6 +65,8 @@ import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.TranscriptionState;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
@@ -110,6 +113,17 @@ public class DocumentMcpToolTest {
   private static final String            DOCUMENT_ID  = "be0688cd7f00010134384ab7e1b15a48";
 
   private static final String            FOLDER_ID    = "folder-42";
+
+  /**
+   * A transcript's segments: speaker 1 then 4 are the same person, 2 a guest, 3
+   * and 5 nobody named (5 named after an identity that is gone in one test),
+   * and one segment tells no speaker.
+   */
+  private static final String SPEAKER_SEGMENTS = """
+      [{"start":0.4,"end":10,"text":"Bonjour.","speaker":"1"},{"start":10,"end":60,"text":"Le budget.","speaker":"1"},\
+      {"start":60,"end":80,"text":"Merci.","speaker":"2"},{"start":80,"end":85,"text":"Une question.","speaker":"3"},\
+      {"start":85,"end":90,"text":"Applause."},{"start":90,"end":105.5,"text":"Fin.","speaker":"4"},\
+      {"start":150,"end":151,"text":"Au revoir.","speaker":"5"}]""";
 
   private DocumentFileService            documentFileService;
 
@@ -563,7 +577,378 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
 
-    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  /**
+   * Asked with timestamps, a transcript with segments is given one segment per
+   * line, each starting with its moment in minutes and seconds and in whole
+   * seconds; past an hour the moment carries the hours.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsGivesEachSegmentItsMoment() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("Bonjour. Le pilote démarre.");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
+        [{"start":0.1,"end":3.4,"text":"Bonjour."},{"start":754.6,"end":758,"text":" Le pilote démarre. "},\
+        {"start":3725,"end":3730,"text":"Fin."}]""");
+
+    assertEquals("[00:00 · 0s] Bonjour.\n[12:34 · 754s] Le pilote démarre.\n[1:02:05 · 3725s] Fin.",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Segments with no text or no usable start are left out; when none is left,
+   * the plain transcript is given.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsSkipsUnusableSegments() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
+        [{"start":1,"text":"kept"},{"start":2,"text":"  "},{"text":"no start"},{"start":-1,"text":"negative"},\
+        {"start":"x","text":"not a number"},42]""",
+                                                                                               """
+        [{"text":"no start"},{"start":2,"text":""}]""");
+
+    assertEquals("[00:01 · 1s] kept", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Asked with timestamps, a transcript without segments, or with segments that
+   * cannot be read, is given as without timestamps.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsAndNoSegmentsGivesThePlainTranscript() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn(null, " ", "[]", "{not json");
+
+    for (int i = 0; i < 4; i++) {
+      assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+    }
+  }
+
+  /**
+   * Asked with timestamps, a transcript whose segments fail to be read from the
+   * repository is given as without timestamps: the failure never takes the
+   * transcript away.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsWhenTheSegmentsReadFailsGivesThePlainTranscript() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+
+    assertEquals("Expected a failure on the segments never to take the transcript away",
+                 "the transcription",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Without timestamps, a transcript whose segments do not tell who speaks, or
+   * that has no segment, is given plain, and its speakers are never read.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithoutTimestampsNorSpeakersGivesThePlainTranscript() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.2,\"end\":1,\"text\":\"Bonjour.\"},{\"start\":2,\"end\":3,\"text\":\" \",\"speaker\":\"1\"}]", null);
+
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+
+    verify(documentFileService, never()).getTranscriptionSpeakers(anyString(), anyLong());
+  }
+
+  /**
+   * Asked with timestamps, a transcript whose segments tell who speaks gives,
+   * after its chapters, its speakers in the order they first speak with their
+   * talk time, then each line with its moment and who said it: the person named
+   * for the speaker, the guest's name, or Speaker N when nobody is named or the
+   * person is gone. Two numbers named after the same person are one speaker
+   * (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsGivesTheSpeakersThenEachLineItsSpeaker() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Who is here.\"}]");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn(SPEAKER_SEGMENTS);
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "25", "2", "name:Jean-Luc", "4", "25", "5", "404"));
+    mockFullName(25L, "Speakers Editor");
+
+    assertEquals("""
+        Chapters:
+        - [00:00 · 0s] Welcome: Who is here.
+
+        Speakers:
+        - Speakers Editor (talk time 01:15)
+        - Jean-Luc (talk time 00:20)
+        - Speaker 3 (talk time 00:05)
+        - Speaker 5 (talk time 00:01)
+
+        Transcript:
+        [00:00 · 0s] Speakers Editor: Bonjour.
+        [00:10 · 10s] Speakers Editor: Le budget.
+        [01:00 · 60s] Jean-Luc: Merci.
+        [01:20 · 80s] Speaker 3: Une question.
+        [01:25 · 85s] Applause.
+        [01:30 · 90s] Speakers Editor: Fin.
+        [02:30 · 150s] Speaker 5: Au revoir.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Without timestamps, a transcript whose segments tell who speaks is given
+   * one turn per line, Name: text, with no moment: the following segments of
+   * one speaker make one turn (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithoutTimestampsGivesOneTurnPerLine() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn(SPEAKER_SEGMENTS);
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "25", "2", "name:Jean-Luc", "4", "25"));
+    mockFullName(25L, "Speakers Editor");
+
+    assertEquals("""
+        Speakers:
+        - Speakers Editor (talk time 01:15)
+        - Jean-Luc (talk time 00:20)
+        - Speaker 3 (talk time 00:05)
+        - Speaker 5 (talk time 00:01)
+
+        Transcript:
+        Speakers Editor: Bonjour. Le budget.
+        Jean-Luc: Merci.
+        Speaker 3: Une question.
+        Applause.
+        Speakers Editor: Fin.
+        Speaker 5: Au revoir.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  /**
+   * Speakers whose names cannot be read are given by their number: the
+   * failure never takes the transcript away (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWhenTheSpeakersReadFailsGivesSpeakersByNumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:02)
+
+        Transcript:
+        Speaker 1: Bonjour.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * Two speaker numbers named after the same person who is gone, a deleted
+   * identity still carrying its full name, are each a speaker of their own, by
+   * their number, as the transcript's other readers show them, in the list as
+   * in the lines and the turns; an identity that cannot be read gives its
+   * speaker by its number (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesTheNumbersOfOneGonePersonByTheirNumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
+        [{"start":0,"end":2,"text":"Bonjour.","speaker":"1"},{"start":2,"end":5,"text":"Encore moi.","speaker":"4"},\
+        {"start":5,"end":6,"text":"Merci.","speaker":"2"}]""");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong())).thenReturn(Map.of("1", "404", "4", "404", "2", "26"));
+    mockFullName(404L, "Gone Person");
+    when(identityManager.getIdentity(404L).isDeleted()).thenReturn(true);
+    when(identityManager.getIdentity(26L)).thenThrow(new IllegalStateException("social"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:02)
+        - Speaker 4 (talk time 00:03)
+        - Speaker 2 (talk time 00:01)
+
+        Transcript:
+        [00:00 · 0s] Speaker 1: Bonjour.
+        [00:02 · 2s] Speaker 4: Encore moi.
+        [00:05 · 5s] Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:02)
+        - Speaker 4 (talk time 00:03)
+        - Speaker 2 (talk time 00:01)
+
+        Transcript:
+        Speaker 1: Bonjour.
+        Speaker 4: Encore moi.
+        Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * A guest is known by its name, even a name that reads as a speaker's number:
+   * two numbers named after that guest are one speaker (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesOneSpeakerToTheNumbersOfOneGuestNamedLikeANumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":2,\"end\":5,\"text\":\"Encore moi.\",\"speaker\":\"3\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "name:Speaker 1", "3", "name:Speaker 1"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:05)
+
+        Transcript:
+        Speaker 1: Bonjour. Encore moi.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * A person who can be read is known by their name, even a name that reads as
+   * a speaker's number: two numbers named after that person are one speaker
+   * (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesOneSpeakerToTheNumbersOfOnePersonNamedLikeANumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":2,\"end\":5,\"text\":\"Encore moi.\",\"speaker\":\"3\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "25", "3", "25"));
+    mockFullName(25L, "Speaker 1");
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:05)
+
+        Transcript:
+        Speaker 1: Bonjour. Encore moi.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * Asked with timestamps, a transcript whose segments tell who speaks but
+   * have no usable moment is given in turns, so that its lines still name who
+   * said them (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsAndNoUsableMomentGivesTurns() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":-1,\"text\":\"Merci.\",\"speaker\":\"2\"}]");
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:00)
+        - Speaker 2 (talk time 00:00)
+
+        Transcript:
+        Speaker 1: Bonjour.
+        Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Gives the full name of a person from their identity id.
+   *
+   * @param identityId the person's identity id
+   * @param fullName the person's full name
+   */
+  private void mockFullName(long identityId, String fullName) {
+    org.exoplatform.social.core.identity.model.Identity identity =
+                                                                Mockito.mock(org.exoplatform.social.core.identity.model.Identity.class);
+    org.exoplatform.social.core.identity.model.Profile profile =
+                                                              Mockito.mock(org.exoplatform.social.core.identity.model.Profile.class);
+    when(identity.getProfile()).thenReturn(profile);
+    when(profile.getFullName()).thenReturn(fullName);
+    when(identityManager.getIdentity(identityId)).thenReturn(identity);
+  }
+
+  @Test
+  public void toMomentWritesMinutesAndSecondsThenHours() {
+    assertEquals("[00:00 · 0s]", DocumentMcpTool.toMoment(0));
+    assertEquals("[00:59 · 59s]", DocumentMcpTool.toMoment(59));
+    assertEquals("[59:59 · 3599s]", DocumentMcpTool.toMoment(3599));
+    assertEquals("[1:00:00 · 3600s]", DocumentMcpTool.toMoment(3600));
+    assertEquals("[10:00:01 · 36001s]", DocumentMcpTool.toMoment(36001));
+  }
+
+  /**
+   * A transcript grouped into chapters is given after the list of its chapters,
+   * each with the moment it starts, in the marker the assistant links from, its
+   * title and its summary; a chapter with no title or no start is left out
+   * (EXO-92122).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdStartsWithTheChapters() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Who is here.\"},"
+            + "{\"start\":3725.6,\"index\":40,\"title\":\"Budget\",\"summary\":\"\"},"
+            + "{\"index\":41,\"title\":\"No start\"},{\"start\":3800.0,\"title\":\" \"}]");
+
+    assertEquals("""
+        Chapters:
+        - [00:00 · 0s] Welcome: Who is here.
+        - [1:02:05 · 3725s] Budget
+
+        Transcript:
+        the transcription""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  /**
+   * Asked with timestamps, a transcript grouped into chapters gives its chapters,
+   * then its segments, each starting with its moment (EXO-92112, EXO-92122).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsGivesTheChaptersThenTheTimedSegments() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("Bonjour. Le budget.");
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Who is here.\"}]");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.2,\"end\":1,\"text\":\"Bonjour.\"},{\"start\":65.9,\"end\":70,\"text\":\"Le budget.\"}]");
+
+    assertEquals("""
+        Chapters:
+        - [00:00 · 0s] Welcome: Who is here.
+
+        Transcript:
+        [00:00 · 0s] Bonjour.
+        [01:05 · 65s] Le budget.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Chapters that cannot be read, that hold no usable chapter, or whose read
+   * fails, leave the transcript alone (EXO-92122).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdIgnoresUnreadableChapters() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenReturn("not json");
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenReturn("[{\"summary\":\"untitled\"}]");
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+    assertEquals("Expected a failure on the chapters never to take the transcript away",
+                 "the transcription",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
   }
 
   @Test
@@ -571,7 +956,111 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn(null);
 
-    assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+    assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAQueuedOrRunningTranscription() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build(),
+                                                                                         TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.PROCESSING)
+                                                                                                   .progress("3/9")
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage().contains("queued"));
+    String running = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+    assertTrue(running, running.contains("in progress (3/9 pieces transcribed)"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsARunLostLongAgoAsStopped() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.PROCESSING)
+                                                                                                   .progress("3/9")
+                                                                                                   .updated(System.currentTimeMillis()
+                                                                                                       - TranscriptionState.STALE_MILLIS
+                                                                                                       - 1000)
+                                                                                                   .build());
+
+    String stopped = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue(stopped, stopped.contains("stopped without finishing"));
+    assertFalse("Expected a lost run never told as in progress", stopped.contains("in progress"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFileQueuedForLongAsStillQueued() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .updated(System.currentTimeMillis()
+                                                                                                       - TranscriptionState.STALE_MILLIS
+                                                                                                       - 1000)
+                                                                                                   .build());
+
+    String queued = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue("Expected a file waiting behind other runs told queued, not stopped: " + queued, queued.contains("queued"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFailedAttemptAsScheduledAgain() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .error("provider.timeout")
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build());
+
+    String retried = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue(retried, retried.contains("failed (the transcription service did not answer in time), and a new attempt is scheduled"));
+    assertFalse("Expected a pending retry never told as failed for good", retried.contains("Tell the user it failed"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFailedTranscriptionAndWhy() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.FAILED)
+                                                                                                   .error("ffmpeg.unavailable")
+                                                                                                   .build());
+
+    String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue(failed, failed.contains("failed: the server has no tool to convert this recording, which its format or its size needs"));
+    assertFalse("Expected a failed transcription never told as not ready yet", failed.contains("try again later"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsADisabledTranscriptionAsSwitchedOffOrUnavailable() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/ogg"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.FAILED)
+                                                                                                   .error("transcription.disabled")
+                                                                                                   .build());
+
+    String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue(failed, failed.contains("transcription is switched off, or its transcription assistant is not available"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsATranscriptWithNoSpeech() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/ogg"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.DONE)
+                                                                                                   .build());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage().contains("no speech"));
   }
 
   @Test

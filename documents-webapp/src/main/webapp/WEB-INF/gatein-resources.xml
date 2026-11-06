@@ -499,6 +499,9 @@
       <module>vue</module>
     </depends>
     <depends>
+      <module>versionHistoryDrawer</module>
+    </depends>
+    <depends>
       <module>commonVueComponents</module>
     </depends>
     <depends>
@@ -512,6 +515,33 @@
     </depends>
     <depends>
       <module>extensionRegistry</module>
+    </depends>
+  </module>
+
+  <module>
+    <name>DocumentsTranscriptDrawerListener</name>
+    <load-group>DocumentsListenerGRP</load-group>
+    <script>
+      <path>/js/documentTranscriptDrawerListener.js</path>
+    </script>
+  </module>
+
+  <module>
+    <name>DocumentsTranscriptDrawer</name>
+    <script>
+      <path>/js/documentsTranscriptDrawer.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
     </depends>
   </module>
 

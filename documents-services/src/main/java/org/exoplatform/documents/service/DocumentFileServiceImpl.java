@@ -583,6 +583,163 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getAudioTranscription(documentId);
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public TranscriptionState getTranscriptionState(String documentId,
+                                                  long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionState(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public TranscriptionState getTranscriptionState(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionState(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void updateTranscriptionState(String documentId, TranscriptionState state) throws ObjectNotFoundException {
+    documentFileStorage.updateTranscriptionState(documentId, state);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean markTranscriptionQueued(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.markTranscriptionQueued(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean clearTranscriptionState(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.clearTranscriptionState(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void completeTranscription(String documentId,
+                                    String transcription,
+                                    String segments,
+                                    TranscriptionState state) throws ObjectNotFoundException {
+    documentFileStorage.completeTranscription(documentId, transcription, segments, state);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionSegments(String documentId,
+                                         long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSegments(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionSegments(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSegments(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean saveTranscriptionChapters(String documentId,
+                                           String chapters,
+                                           long transcriptUpdated) throws ObjectNotFoundException {
+    return documentFileStorage.saveTranscriptionChapters(documentId, chapters, transcriptUpdated);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionChapters(String documentId,
+                                         long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionChapters(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, String> getTranscriptionSpeakers(String documentId,
+                                                      long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSpeakers(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void setTranscriptionSpeaker(String documentId,
+                                      String speaker,
+                                      String identityId,
+                                      long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    documentFileStorage.setTranscriptionSpeaker(documentId, speaker, identityId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DocumentAudience getDocumentAudience(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.getDocumentAudience(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean saveTranscriptionSpeakerSuggestions(String documentId,
+                                                     List<TranscriptionSpeakerSuggestion> suggestions,
+                                                     long transcriptUpdated) throws ObjectNotFoundException {
+    return documentFileStorage.saveTranscriptionSpeakerSuggestions(documentId, suggestions, transcriptUpdated);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
+                                                                                 long aclIdentity) throws IllegalAccessException,
+                                                                                                   ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSpeakerSuggestions(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void removeTranscriptionSpeakerSuggestion(String documentId,
+                                                   String speaker,
+                                                   long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    documentFileStorage.removeTranscriptionSpeakerSuggestion(documentId, speaker, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean applyTranscriptionSpeakerSuggestion(String documentId,
+                                                     TranscriptionSpeakerSuggestion suggestion,
+                                                     long transcriptUpdated,
+                                                     long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.applyTranscriptionSpeakerSuggestion(documentId, suggestion, transcriptUpdated, getAclUserIdentity(aclIdentity));
+  }
+
   @Override
   public void createShortcut(String documentId, String destPath, String aclIdentity, String conflictAction) throws IllegalAccessException, ObjectAlreadyExistsException {
     documentFileStorage.createShortcut(documentId, destPath, aclIdentity, conflictAction);

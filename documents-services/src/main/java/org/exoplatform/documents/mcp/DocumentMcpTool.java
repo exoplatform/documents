@@ -38,6 +38,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,6 +47,10 @@ import java.util.UUID;
 import javax.jcr.RepositoryException;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
@@ -79,7 +84,10 @@ import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentTextPage;
 import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DocumentsSize;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.TranscriptSpeakers;
+import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
@@ -93,6 +101,8 @@ import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.attachments.service.AttachmentService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
@@ -168,6 +178,8 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /** The directory, under the temporary directory, of the pieces of the uploads in progress. */
   static final String              UPLOAD_DIRECTORY       = "documents-mcp-uploads";
+
+  private static final Log        LOG = ExoLogger.getLogger(DocumentMcpTool.class);
 
   /**
    * Same password policy DocumentFileRest applies to public-link passwords
@@ -909,19 +921,416 @@ public class DocumentMcpTool implements McpToolPlugin {
     return headings;
   }
 
-  public String getDocumentTranscriptionById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+  /**
+   * The transcript of an audio or video file, read with the user's rights. When
+   * there is none, the answer says why, from the file's transcription state
+   * (EXO-92097): queued, in progress with its progress, stopped when its run was
+   * lost (running, unchanged for {@link TranscriptionState#STALE_MILLIS}), failed
+   * with its reason, transcribed with no speech heard; a file never
+   * sent to transcription answers as before. A transcript grouped into
+   * chapters (EXO-92122) is given after the list of its chapters, each with the
+   * moment it starts, its title and its summary, so that the assistant can say
+   * where in the recording a subject was discussed.
+   * Asked with timestamps, a transcript that has timed segments is given one
+   * segment per line, each starting with the moment it was said,
+   * {@code [mm:ss · Ns]} ({@code [h:mm:ss · Ns]} past an hour), where N is that
+   * moment in whole seconds (EXO-92112); without segments, the plain transcript
+   * is given, as without timestamps, or its turns when it tells who speaks. A
+   * transcript whose segments tell who speaks (EXO-92123) is given after the
+   * list of its speakers, each with its talk time, and each of its lines names
+   * who said it: the person named for the speaker, the guest's name, or
+   * {@code Speaker N}; without timestamps, it is given one turn per line,
+   * {@code Name: text}, with no moment.
+   *
+   * @param documentId the file's UUID
+   * @param timestamps true to have each segment start with its moment
+   * @return the transcript
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   * @throws IllegalStateException when the file has no transcript, saying why
+   */
+  public String getDocumentTranscriptionById(String documentId,
+                                             Boolean timestamps) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode document = checkCanAccessDocument(documentId);
-    String audioTranscription = documentFileService.getAudioTranscription(documentId, getCurrentUserIdentityId());
+    long identityId = getCurrentUserIdentityId();
+    String audioTranscription = documentFileService.getAudioTranscription(documentId, identityId);
     if (StringUtils.isNotBlank(audioTranscription)) {
-      return audioTranscription;
-    } else if (document instanceof FileNode fileNode
-               && StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
-      throw new IllegalStateException("No transcription is available yet for this audio/video file. "
-          + "Transcriptions are generated automatically once the media is processed; tell the user to try again later.");
-    } else {
+      String chapters = toChaptersOutline(documentId, identityId);
+      JSONArray segments = readSegments(documentId, identityId);
+      Map<String, String> speakers = hasSpeaker(segments) ? readSpeakers(documentId, identityId) : null;
+      Map<String, String> namesBySpeaker = new HashMap<>();
+      Map<String, String> keysBySpeaker = new HashMap<>();
+      if (speakers != null) {
+        resolveSpeakers(segments, speakers, namesBySpeaker, keysBySpeaker);
+      }
+      String speakersList = speakers == null ? null : toSpeakersList(segments, namesBySpeaker, keysBySpeaker);
+      String lines = null;
+      if (segments != null && Boolean.TRUE.equals(timestamps)) {
+        lines = toTimedLines(segments, namesBySpeaker);
+      }
+      if (lines == null && speakers != null) {
+        lines = toTurns(segments, namesBySpeaker, keysBySpeaker);
+      }
+      String transcription = lines == null ? audioTranscription : lines;
+      String outline = chapters == null ? speakersList : speakersList == null ? chapters : chapters + "\n\n" + speakersList;
+      return outline == null ? transcription : outline + "\n\nTranscript:\n" + transcription;
+    } else if (!(document instanceof FileNode fileNode)
+               || !StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
       throw new IllegalStateException("The document with id %s isn't an audio nor a video file, so it has no transcription."
           .formatted(documentId));
     }
+    TranscriptionState state = documentFileService.getTranscriptionState(documentId, identityId);
+    TranscriptionStatus status = state == null ? null : state.status();
+    if (status == null) {
+      throw new IllegalStateException("No transcription is available yet for this audio/video file. "
+          + "Transcriptions are generated automatically once the media is processed; tell the user to try again later.");
+    } else if (status == TranscriptionStatus.PROCESSING && !state.isInProgress(System.currentTimeMillis())) {
+      // A running transcription writes its progress after each piece: unchanged for long, its run was lost.
+      // A queued one may wait that long behind other runs, and is not.
+      throw new IllegalStateException("The transcription of this audio/video file stopped without finishing: "
+          + "tell the user it did not complete.");
+    }
+    throw new IllegalStateException(switch (status) {
+    case QUEUED -> StringUtils.isBlank(state.error()) ? "The transcription of this audio/video file is queued and has not started yet: "
+        + "tell the user it is on its way and to ask again later."
+                                                      : "The last attempt to transcribe this audio/video file failed (%s), and a new attempt is scheduled: tell the user it will be tried again and to ask later."
+                                                          .formatted(toTranscriptionFailure(state.error()));
+    case PROCESSING -> "The transcription of this audio/video file is in progress%s: tell the user it is being produced and to ask again in a few minutes."
+        .formatted(StringUtils.isBlank(state.progress()) ? "" : " (" + state.progress() + " pieces transcribed)");
+    case FAILED -> "The transcription of this audio/video file failed: %s. Tell the user it failed, and why."
+        .formatted(toTranscriptionFailure(state.error()));
+    case DONE -> "This audio/video file was transcribed, but no speech was heard in it.";
+    });
+  }
+
+  /**
+   * Writes the chapters a transcript is grouped into, one per line, each with
+   * the moment it starts, its title and its summary.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the outline, starting with {@code Chapters:}, or null when the
+   *         transcript has no chapter, none that can be read, or its chapters
+   *         cannot be read now
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private String toChaptersOutline(String documentId, long identityId) throws IllegalAccessException, ObjectNotFoundException {
+    String chapters;
+    try {
+      chapters = documentFileService.getTranscriptionChapters(documentId, identityId);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its chapters never takes it away
+      LOG.debug("The chapters of media file {} cannot be read, its transcript is given alone", documentId, e);
+      return null;
+    }
+    if (StringUtils.isBlank(chapters)) {
+      return null;
+    }
+    StringBuilder outline = new StringBuilder("Chapters:");
+    try {
+      JSONArray chaptersArray = new JSONArray(chapters);
+      for (int i = 0; i < chaptersArray.length(); i++) {
+        JSONObject chapter = chaptersArray.optJSONObject(i);
+        String title = chapter == null ? null : StringUtils.trimToNull(chapter.optString("title", null));
+        double start = chapter == null ? Double.NaN : chapter.optDouble("start", Double.NaN);
+        if (title != null && Double.isFinite(start) && start >= 0) {
+          String summary = StringUtils.trimToNull(chapter.optString("summary", null));
+          outline.append("\n- ").append(toMoment((long) start)).append(' ').append(title);
+          if (summary != null) {
+            outline.append(": ").append(summary);
+          }
+        }
+      }
+    } catch (JSONException e) {
+      LOG.debug("The chapters of media file {} cannot be read, its transcript is given alone", documentId, e);
+      return null;
+    }
+    return outline.length() == "Chapters:".length() ? null : outline.toString();
+  }
+
+  /**
+   * Reads a transcript's timed segments.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the segments, or null when the file has none, they cannot be
+   *         parsed, or they cannot be read now
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private JSONArray readSegments(String documentId, long identityId) throws IllegalAccessException, ObjectNotFoundException {
+    String segments;
+    try {
+      segments = documentFileService.getTranscriptionSegments(documentId, identityId);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its segments never takes it away
+      LOG.debug("The timed segments of media file {} cannot be read, its plain transcript is given", documentId, e);
+      return null;
+    }
+    if (StringUtils.isBlank(segments)) {
+      return null;
+    }
+    try {
+      JSONArray segmentsArray = new JSONArray(segments);
+      return segmentsArray.isEmpty() ? null : segmentsArray;
+    } catch (JSONException e) {
+      LOG.debug("The timed segments of media file {} cannot be read, its plain transcript is given", documentId, e);
+      return null;
+    }
+  }
+
+  /**
+   * Reads who each named speaker of a transcript is.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the stored value of each named speaker, by speaker number; empty
+   *         when none is named or they cannot be read now, every speaker then
+   *         being {@code Speaker N}
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private Map<String, String> readSpeakers(String documentId, long identityId) throws IllegalAccessException,
+                                                                               ObjectNotFoundException {
+    try {
+      Map<String, String> speakers = documentFileService.getTranscriptionSpeakers(documentId, identityId);
+      return speakers == null ? Map.of() : speakers;
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its speakers' names never takes it away
+      LOG.debug("The speakers of media file {} cannot be read, they are given by their number", documentId, e);
+      return Map.of();
+    }
+  }
+
+  /**
+   * @param segments a transcript's segments, or null
+   * @return true when one of the usable segments tells who said it
+   */
+  private static boolean hasSpeaker(JSONArray segments) {
+    if (segments == null) {
+      return false;
+    }
+    for (int i = 0; i < segments.length(); i++) {
+      if (getSegmentText(segments.optJSONObject(i)) != null && getSegmentSpeaker(segments.optJSONObject(i)) != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Names each speaker of a transcript once per answer, so that the list of
+   * speakers, the lines and the turns always agree, and tells who each speaker
+   * is: two numbers named after the same person or the same guest are one
+   * speaker. A number named after a person who is gone, or cannot be read now,
+   * is a speaker of its own, {@code Speaker N}, as the transcript's other
+   * readers show it; a guest is known by its name, whatever that name.
+   *
+   * @param segments the transcript's segments
+   * @param speakers the stored value of each named speaker, by speaker number
+   * @param namesBySpeaker filled with the name of each speaker number: the
+   *          person's full name, the guest's name or {@code Speaker N}
+   * @param keysBySpeaker filled with who each speaker number is: its stored
+   *          value, or {@code speaker:<number>} when it is given by its number
+   */
+  private void resolveSpeakers(JSONArray segments,
+                               Map<String, String> speakers,
+                               Map<String, String> namesBySpeaker,
+                               Map<String, String> keysBySpeaker) {
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String speaker = getSegmentSpeaker(segment);
+      if (speaker != null && getSegmentText(segment) != null && !namesBySpeaker.containsKey(speaker)) {
+        String value = speakers.get(speaker);
+        boolean guest = TranscriptSpeakers.isGuest(value);
+        String fullName = guest || StringUtils.isBlank(value) ? null : getIdentityFullName(value.trim());
+        namesBySpeaker.put(speaker, TranscriptSpeakers.speakerName(speaker, speakers, identityId -> fullName));
+        boolean named = guest ? StringUtils.isNotBlank(TranscriptSpeakers.guestName(value)) : fullName != null;
+        keysBySpeaker.put(speaker, named ? value : "speaker:" + speaker);
+      }
+    }
+  }
+
+  /**
+   * Writes the speakers of a transcript, one per line, in the order they first
+   * speak, each with its talk time.
+   *
+   * @param segments the transcript's segments
+   * @param namesBySpeaker the name of each speaker number
+   * @param keysBySpeaker who each speaker number is, two numbers of one person
+   *          or guest sharing it
+   * @return the list, starting with {@code Speakers:}
+   */
+  private String toSpeakersList(JSONArray segments, Map<String, String> namesBySpeaker, Map<String, String> keysBySpeaker) {
+    Map<String, String> names = new LinkedHashMap<>();
+    Map<String, Double> talkTimes = new HashMap<>();
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String speaker = getSegmentSpeaker(segment);
+      if (speaker != null && getSegmentText(segment) != null) {
+        String key = keysBySpeaker.get(speaker);
+        names.computeIfAbsent(key, k -> namesBySpeaker.get(speaker));
+        double start = segment.optDouble("start", Double.NaN);
+        double end = segment.optDouble("end", Double.NaN);
+        double talkTime = Double.isFinite(start) && Double.isFinite(end) && end > start ? end - start : 0;
+        talkTimes.merge(key, talkTime, Double::sum);
+      }
+    }
+    StringBuilder list = new StringBuilder("Speakers:");
+    names.forEach((key, name) -> list.append("\n- ")
+                                     .append(name)
+                                     .append(" (talk time ")
+                                     .append(TranscriptSpeakers.formatMoment(talkTimes.get(key)))
+                                     .append(')'));
+    return list.toString();
+  }
+
+  /**
+   * Writes a transcript's timed segments one per line, each starting with the
+   * moment it was said, then who said it when the transcript tells.
+   *
+   * @param segments the transcript's segments
+   * @param namesBySpeaker the name of each speaker number, empty when the
+   *          transcript does not tell who speaks
+   * @return the timed transcript, or null when no segment can be used
+   */
+  private String toTimedLines(JSONArray segments, Map<String, String> namesBySpeaker) {
+    StringBuilder timedTranscription = new StringBuilder();
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String text = getSegmentText(segment);
+      double start = segment == null ? Double.NaN : segment.optDouble("start", Double.NaN);
+      if (text != null && Double.isFinite(start) && start >= 0) {
+        if (!timedTranscription.isEmpty()) {
+          timedTranscription.append('\n');
+        }
+        String name = namesBySpeaker.get(getSegmentSpeaker(segment));
+        timedTranscription.append(TranscriptSpeakers.formatLine(start, name, text));
+      }
+    }
+    return timedTranscription.isEmpty() ? null : timedTranscription.toString();
+  }
+
+  /**
+   * Writes a transcript one turn per line, {@code Name: text}, with no moment:
+   * the following segments of one speaker make one turn.
+   *
+   * @param segments the transcript's segments
+   * @param namesBySpeaker the name of each speaker number
+   * @param keysBySpeaker who each speaker number is, two numbers of one person
+   *          or guest sharing it
+   * @return the transcript in turns, or null when no segment can be used
+   */
+  private String toTurns(JSONArray segments, Map<String, String> namesBySpeaker, Map<String, String> keysBySpeaker) {
+    StringBuilder turns = new StringBuilder();
+    String turnKey = null;
+    StringBuilder turnText = null;
+    String turnName = null;
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String text = getSegmentText(segment);
+      if (text != null) {
+        String speaker = getSegmentSpeaker(segment);
+        String key = speaker == null ? null : keysBySpeaker.get(speaker);
+        if (turnText != null && StringUtils.equals(key, turnKey)) {
+          turnText.append(' ').append(text);
+        } else {
+          appendTurn(turns, turnName, turnText);
+          turnKey = key;
+          turnName = speaker == null ? null : namesBySpeaker.get(speaker);
+          turnText = new StringBuilder(text);
+        }
+      }
+    }
+    appendTurn(turns, turnName, turnText);
+    return turns.isEmpty() ? null : turns.toString();
+  }
+
+  /**
+   * Adds a turn, on its own line, to a transcript in turns.
+   *
+   * @param turns the transcript written so far
+   * @param name who said the turn, or null when the transcript does not tell
+   * @param text what was said, or null when there is no turn yet
+   */
+  private static void appendTurn(StringBuilder turns, String name, StringBuilder text) {
+    if (text != null) {
+      if (!turns.isEmpty()) {
+        turns.append('\n');
+      }
+      turns.append(TranscriptSpeakers.formatTurn(name, text.toString()));
+    }
+  }
+
+  /**
+   * The full name of the person named for a speaker.
+   *
+   * @param identityId the stored identity id
+   * @return the full name, or null when the identity is gone or has no
+   *         profile, the id is not one, or the identity cannot be read now
+   */
+  private String getIdentityFullName(String identityId) {
+    long id = NumberUtils.toLong(identityId, 0);
+    if (id <= 0) {
+      return null;
+    }
+    Identity identity;
+    try {
+      identity = identityManager.getIdentity(id);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on a speaker's name gives it by its number
+      LOG.debug("The identity {} named for a speaker cannot be read, it is given by its number", identityId, e);
+      return null;
+    }
+    if (identity == null || identity.isDeleted() || identity.getProfile() == null) {
+      return null;
+    }
+    return StringUtils.trimToNull(identity.getProfile().getFullName());
+  }
+
+  /**
+   * @param segment a transcript's segment, or null
+   * @return what was said, or null when the segment says nothing
+   */
+  private static String getSegmentText(JSONObject segment) {
+    return segment == null ? null : StringUtils.trimToNull(segment.optString("text", null));
+  }
+
+  /**
+   * @param segment a transcript's segment, or null
+   * @return the segment's speaker number, or null when it does not tell
+   */
+  private static String getSegmentSpeaker(JSONObject segment) {
+    return segment == null ? null : StringUtils.trimToNull(segment.optString("speaker", null));
+  }
+
+  /**
+   * @param seconds a moment, in whole seconds from the beginning of the media
+   * @return the moment as a marker: {@code [mm:ss · Ns]}, or
+   *         {@code [h:mm:ss · Ns]} past an hour, N being the moment in seconds
+   *         so that the assistant links to it without converting
+   */
+  static String toMoment(long seconds) {
+    return TranscriptSpeakers.formatMarker(seconds);
+  }
+
+  /**
+   * Says in words why a transcription failed, from its failure code.
+   *
+   * @param error the failure's message code
+   * @return the reason, for the assistant to tell the user
+   */
+  private String toTranscriptionFailure(String error) {
+    return switch (StringUtils.defaultString(error)) {
+    case "ffmpeg.unavailable" -> "the server has no tool to convert this recording, which its format or its size needs";
+    case "media.unreadable" -> "the file could not be read";
+    case "transcription.disabled" -> "transcription is switched off, or its transcription assistant is not available";
+    case "attempts.exhausted" -> "every attempt failed";
+    case "provider.timeout" -> "the transcription service did not answer in time";
+    case "provider.rejected" -> "the transcription service refused it";
+    default -> "no reason was recorded";
+    };
   }
 
   /**
