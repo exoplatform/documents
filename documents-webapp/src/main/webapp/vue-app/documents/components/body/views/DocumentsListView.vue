@@ -46,11 +46,10 @@
           :disabled="selectAll"
           open-on-hover
           bottom>
-          <template #activator="{ on, attrs }">
+          <template #activator="{ on }">
             <v-simple-checkbox
               v-model="selectAll"
               v-on="on"
-              v-bind="attrs"
               :indeterminate="false"
               :aria-checked="selectAll ? 'true' : 'false'"
               :aria-label="$t('documents.multiSelection.selectAll.element.label')"

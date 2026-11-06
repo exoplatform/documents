@@ -23,10 +23,9 @@
     :disabled="!canSelectRange"
     open-on-hover
     bottom>
-    <template #activator="{ on, attrs }">
+    <template #activator="{ on }">
       <v-simple-checkbox
         v-model="checked"
-        v-bind="attrs"
         v-on="on"
         :aria-checked="checked ? 'true' : 'false'"
         :aria-label="$t('documents.multiSelection.select.element.label', {0: file.name})"
@@ -46,10 +45,9 @@
     v-else
     open-on-hover
     bottom>
-    <template #activator="{ on, attrs }">
+    <template #activator="{ on }">
       <v-simple-checkbox
         v-model="checked"
-        v-bind="attrs"
         v-on="on"
         :aria-checked="checked ? 'true' : 'false'"
         :aria-label="$t('documents.multiSelection.select.element.label', {0: file.name})"
