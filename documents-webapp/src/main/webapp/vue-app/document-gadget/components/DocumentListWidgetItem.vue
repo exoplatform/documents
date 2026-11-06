@@ -15,41 +15,49 @@
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 <template>
-  <v-hover v-slot="{ hover }">
-    <v-list-item
-      class="pa-0 px-3"
-      @click="openPreview">
-      <v-list-item-avatar
-        class="my-0"
-        tile>
-        <v-avatar tile>
-          <v-icon
-            :color="fileIconColor"
-            size="34">
-            {{ fileIconClass }}
-          </v-icon>
-        </v-avatar>
-      </v-list-item-avatar>
-      <v-list-item-content
-        class="pa-0">
-        <v-list-item-title class="text-color text-truncate text-wrap spaceTitle">
-          {{ fileName }}
-        </v-list-item-title>
-        <v-list-item-subtitle>
-          <date-format
-            :value="modifiedDate"
-            :format="dateFormat" />
-        </v-list-item-subtitle>
-      </v-list-item-content>
-      <v-list-item-action v-if="hover" class="ma-0">
-        <v-btn
-          icon
-          @click.stop="showInfo()">
-          <v-icon size="20">fa-info-circle</v-icon>
-        </v-btn>
-      </v-list-item-action>
-    </v-list-item>
-  </v-hover>
+  <div
+    role="listitem"
+    @focusin="focused = true"
+    @focusout="focused = $event.currentTarget.contains($event.relatedTarget)">
+    <v-hover v-slot="{ hover }">
+      <v-list-item
+        :aria-label="fileName"
+        class="pa-0 px-3"
+        role="link"
+        @click="openPreview">
+        <v-list-item-avatar
+          class="my-0"
+          tile>
+          <v-avatar tile>
+            <v-icon
+              :color="fileIconColor"
+              size="34">
+              {{ fileIconClass }}
+            </v-icon>
+          </v-avatar>
+        </v-list-item-avatar>
+        <v-list-item-content
+          class="pa-0">
+          <v-list-item-title class="text-color text-truncate text-wrap spaceTitle">
+            {{ fileName }}
+          </v-list-item-title>
+          <v-list-item-subtitle>
+            <date-format
+              :value="modifiedDate"
+              :format="dateFormat" />
+          </v-list-item-subtitle>
+        </v-list-item-content>
+        <v-list-item-action v-if="hover || focused" class="ma-0">
+          <v-btn
+            :aria-label="$t('documents.label.show.details.of', {0: fileName})"
+            icon
+            @click.stop="showInfo()">
+            <v-icon size="20">fa-info-circle</v-icon>
+          </v-btn>
+        </v-list-item-action>
+      </v-list-item>
+    </v-hover>
+  </div>
 </template>
 <script>
 export default {
@@ -65,6 +73,7 @@ export default {
   },
   data: () => ({
     loading: false,
+    focused: false,
     dateFormat: {
       year: 'numeric',
       month: 'short',

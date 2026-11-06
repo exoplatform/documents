@@ -27,6 +27,7 @@
     <template #titleIcons>
       <v-btn
         :title="$t('documents.documentGadget.seeMore')"
+        :aria-label="$t('documents.documentGadget.seeMore')"
         v-if="$root.settings.displayAccessDrive"
         link
         icon
@@ -39,12 +40,15 @@
     </template>
     <template #content>
       <document-list-empty-message v-if="!hasDocuments && !loading" :title="noDocumentMessage" />
-      <document-list-widget-item
+      <div
         v-else
-        v-for="file in filesToDisplay"
-        :key="file.id"
-        :file="file"
-        :files="filesToDisplay" />
+        role="list">
+        <document-list-widget-item
+          v-for="file in filesToDisplay"
+          :key="file.id"
+          :file="file"
+          :files="filesToDisplay" />
+      </div>
     </template>
     <template #footer>
       <div

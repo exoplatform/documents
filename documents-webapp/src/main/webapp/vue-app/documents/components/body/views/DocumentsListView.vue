@@ -31,6 +31,8 @@
       :loading-text="loadingLabel"
       :class="loadingClass"
       :custom-sort="customSort"
+      :aria-label="tableLabel"
+      role="group"
       mobile-breakpoint="960"
       :show-select="!isMobile"
       hide-default-footer
@@ -50,9 +52,14 @@
               v-on="on"
               v-bind="attrs"
               :indeterminate="false"
+              :aria-checked="selectAll ? 'true' : 'false'"
+              :aria-label="$t('documents.multiSelection.selectAll.element.label')"
+              :class="showSelectAll? 'visible': 'documents-checkbox-hidden'"
               color="primary"
-              :class="showSelectAll? 'visible': 'invisible'"
               class="mt-auto"
+              role="checkbox"
+              tabindex="0"
+              @keydown.space.prevent="$event.currentTarget.click()"
               @mouseover="showSelectAllInputOnHover"
               @mouseleave="hideSelectAllInputOnHover"
               @click="selectAllDocuments" />
@@ -60,10 +67,22 @@
           {{ $t('documents.multiSelection.selectAll.element.tooltip.message') }}
         </v-tooltip>
       </template>
-      <template #[`header.name`]>
+      <template
+        v-for="column in extendedCells"
+        #[`header.${column.value}`]="{ header }">
+        <button
+          v-if="header.sortable && header.text && !isMobile"
+          :id="column.value === 'name' ? 'headerName' : null"
+          :key="column.value"
+          type="button"
+          class="documents-sort-header-button">
+          {{ header.text }}
+        </button>
         <span
-          id="headerName">
-          {{ $t('documents.label.name') }}
+          v-else
+          :id="column.value === 'name' ? 'headerName' : null"
+          :key="column.value">
+          {{ header.text }}
         </span>
       </template>
       <template
@@ -258,6 +277,9 @@ export default {
   computed: {
     isXScreen() {
       return this.$vuetify.breakpoint.width < 600;
+    },
+    tableLabel() {
+      return this.$t('documents.table.label', {0: this.items.length});
     },
     showSelectAll() {
       return this.selectedDocuments && this.selectedDocuments.length  || this.showSelectAllInput;

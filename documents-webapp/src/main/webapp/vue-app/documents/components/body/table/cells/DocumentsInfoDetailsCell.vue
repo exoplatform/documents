@@ -5,16 +5,17 @@
       bottom>
       <template #activator="{ on, attrs }">
         <v-btn
+          v-bind="attrs"
+          v-on="on"
+          :aria-label="$t('documents.label.show.details.of', {0: file.name})"
+          class="documents-hover-reveal"
           icon
           small
-          v-bind="attrs"
-          v-on="on">
+          @click="displayDetails">
           <v-icon
-            v-bind="attrs"
-            v-on="on"
-            class="d-none mx-0 px-0"
+            class="mx-0 px-0"
             size="16"
-            @click="displayDetails">
+            aria-hidden="true">
             fa-info-circle
           </v-icon>
         </v-btn>

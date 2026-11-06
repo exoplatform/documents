@@ -22,7 +22,10 @@
         id="DropFileBox"
         ref="dropFileBox"
         class="dropFileBox py-10 ml-5 d-flex flex-column align-center theme--light"
-        aria-controls
+        role="button"
+        tabindex="0"
+        @keydown.enter.prevent="uploadFile"
+        @keydown.space.prevent="uploadFile"
         @click="uploadFile">
         <i class="uiIconEcmsUploadVersion uiIcon32x32"></i>
         <v-subheader

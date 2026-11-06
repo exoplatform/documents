@@ -24,8 +24,10 @@
     :items="items"
     :search="search"
     :load-children="fetchChildren"
+    :aria-label="$t('documents.tree.title')"
     class="treeView-item my-2"
     item-key="id"
+    role="navigation"
     hoverable
     activatable
     open-on-click
@@ -40,8 +42,12 @@
       </div>
       <div
         v-else
+        :aria-current="idItemActive === item.id ? 'page' : null"
         class="d-flex clickable"
-        @click="openFolder(item)">
+        role="link"
+        tabindex="0"
+        @click="openFolder(item)"
+        @keydown.enter="openFolder(item)">
         <v-list-item-avatar
           v-if="item.avatarUrl"
           size="24"

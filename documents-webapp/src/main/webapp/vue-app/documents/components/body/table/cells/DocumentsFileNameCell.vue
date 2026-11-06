@@ -51,7 +51,10 @@
           class="document-title clickable hover-underline d-inline-flex"
           :class="file.hidden ? 'text-light-color' : ''"
           :title="file.hidden ? `${file.name} (${$t('documents.label.hidden')})`: `${file.name}`"
-          @click="openPreview()">
+          role="link"
+          tabindex="0"
+          @click="openPreview()"
+          @keydown.enter="openPreview()">
           <div
             v-sanitized-html="title"
             class="document-name ms-4"
@@ -100,7 +103,7 @@
       v-if="!isMobile && !file.drive"
       :file="file"
       :is-mobile="isMobile"
-      :class="editNameMode ? '' : 'button-info-details'" />
+      :class="editNameMode ? 'invisible' : 'button-info-details'" />
     <div
       v-if="!file.drive"
       class="ma-auto"
@@ -111,16 +114,19 @@
         bottom>
         <template #activator="{ on, attrs }">
           <v-btn
+            v-bind="attrs"
+            v-on="on"
+            :aria-label="$t('documents.label.menu.action.of', {0: file.name})"
+            :aria-expanded="menuDisplayed ? 'true' : 'false'"
+            :class="actionButtonClass"
+            aria-haspopup="menu"
+            class="button-document-action"
             icon
             small
-            v-bind="attrs"
-            v-on="on">
+            @click="displayActionMenu($event)">
             <v-icon
-              v-show="isMobile || menuDisplayed"
               :size="isMobile ? 14 : 18"
-              class="clickable"
-              :class="editNameMode ? '' : 'button-document-action'"
-              @click="displayActionMenu($event)">
+              aria-hidden="true">
               mdi-dots-vertical
             </v-icon>
           </v-btn>
@@ -257,6 +263,12 @@ export default {
         fileType = this.highlightSearchResult(fileType,this.query);      
       }
       return fileType;
+    },
+    actionButtonClass() {
+      if (this.isMobile || this.menuDisplayed) {
+        return '';
+      }
+      return this.editNameMode ? 'invisible' : 'documents-hover-reveal';
     },
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');

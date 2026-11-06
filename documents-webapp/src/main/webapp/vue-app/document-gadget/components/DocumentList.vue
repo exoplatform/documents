@@ -19,7 +19,9 @@
     <v-hover v-model="hover">
       <widget-wrapper
         :loading="loading"
-        extra-class="application-body">
+        :aria-label="headerTitle"
+        extra-class="application-body"
+        role="region">
         <template #title>
           <span
             class="text-header">
@@ -27,22 +29,27 @@
           </span>
         </template>
         <template #action>
-          <div>
+          <div
+            @focusin="focused = true"
+            @focusout="focused = $event.currentTarget.contains($event.relatedTarget)">
             <v-btn
-              v-if="!hover && displaySeeMore"
+              v-if="displaySeeMore"
+              v-show="!hover"
               color="primary"
               class="pa-0 text-font-size"
               small
               text
-              link>
+              link
+              @click="$refs.listDrawer.open()">
               <span class="primary--text text-none">
                 {{ $t('documents.documentGadget.seeMore') }}
               </span>
             </v-btn>
-            <div v-else>
+            <div v-if="!displaySeeMore || showActions">
               <v-btn
                 v-if="hoverEdit"
                 :title="$t('documents.documentGadget.editTooltip')"
+                :aria-label="$t('documents.documentGadget.editTooltip')"
                 class="text-font-size"
                 small
                 link
@@ -56,6 +63,7 @@
               <v-btn
                 v-if="filesCount"
                 :title="$t('documents.documentGadget.seeMore')"
+                :aria-label="$t('documents.documentGadget.seeMore')"
                 color="primary"
                 class="text-font-size"
                 small
@@ -71,7 +79,10 @@
           </div>
         </template>
         <div v-if="filesCount">
-          <v-list :class="!isCardsView && !!filesToDisplay && 'pb-4'" class="pa-0">
+          <v-list
+            :aria-label="listLabel"
+            :class="!isCardsView && !!filesToDisplay && 'pb-4'"
+            class="pa-0">
             <template v-if="isCardsView">
               <card-carousel parent-class="activity-files-parent px-4">
                 <document-list-widget-item-card
@@ -112,6 +123,7 @@
 export default {
   data: () => ({
     hover: false,
+    focused: false,
     loading: false,
     applicationMounted: false,
     files: [],
@@ -123,8 +135,14 @@ export default {
     canEdit() {
       return this.settings?.canEdit;
     },
+    showActions() {
+      return this.hover || this.focused;
+    },
     hoverEdit() {
-      return this.hover && this.canEdit;
+      return this.showActions && this.canEdit;
+    },
+    listLabel() {
+      return `${this.headerTitle} (${this.filesCount})`;
     },
     filesCount() {
       return this.files.length;

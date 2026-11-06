@@ -1,8 +1,9 @@
 <template>
   <div
-    class="align-center"
     v-show="display"
-    :id="`favorite-cell-file-${fileId}`">
+    :id="`favorite-cell-file-${fileId}`"
+    :class="isFavorite ? '' : 'documents-hover-reveal'"
+    class="align-center">
     <documents-favorite-button
       :file="file"
       @added="favoriteAdded"
@@ -37,7 +38,7 @@ export default {
       return this.file?.id;
     },
     display() {
-      return !this.isMobile && !this.file?.folder && (this.isFavorite || this.hover);
+      return !this.isMobile && !this.file?.folder;
     },
   },
   created() {
