@@ -3,9 +3,8 @@
     <v-tooltip
       :open-delay="500"
       bottom>
-      <template #activator="{ on, attrs }">
+      <template #activator="{ on }">
         <v-btn
-          v-bind="attrs"
           v-on="on"
           :aria-label="$t('documents.label.show.details.of', {0: file.name})"
           class="documents-hover-reveal"

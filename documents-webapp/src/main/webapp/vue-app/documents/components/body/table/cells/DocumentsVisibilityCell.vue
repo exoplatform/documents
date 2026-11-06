@@ -1,16 +1,17 @@
 <template>
   <div class="align-center">
     <v-tooltip bottom>
-      <template #activator="{ on, attrs }">
+      <template #activator="{ on }">
         <v-btn
           class="visibility-btn"
           :class="btnClass"
+          :aria-label="$shareDocumentSuspended ? shareDocumentSuspendedLabel : icon.title"
           icon
+          v-on="on"
           @click="changeVisibility">
           <v-icon
-            v-bind="attrs"
-            v-on="on"
             size="13"
+            aria-hidden="true"
             class="px-2 iconStyle">
             {{ icon.icon }}
           </v-icon>
