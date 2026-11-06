@@ -262,9 +262,17 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      MSG_NAME_SCOPE_UNREADABLE =
                                                              "The space this call is limited to can't be read, so a space can't be named by its space_name. Call it again with its space_id.";
 
-  /** The refusal of a copy or a duplicate into a folder holding too many children to find the new node in. */
+  /** The refusal of a copy into a folder holding too many children to find the copy in. */
   private static final String      MSG_TOO_MANY_CHILDREN_TO_COPY_INTO =
-                                                                      "The target folder holds more than %d items, too many to find the copy in afterwards, so nothing was copied. Copy into a folder holding fewer items.";
+                                                                      "The target folder holds %d items or more, too many to find the copy in afterwards, so nothing was copied. Copy into a folder holding fewer items.";
+
+  /** The refusal of a duplicate in a folder holding too many children to find the duplicate in. */
+  private static final String      MSG_TOO_MANY_CHILDREN_TO_DUPLICATE_IN =
+                                                                         "The document's folder holds %d items or more, too many to find the duplicate in afterwards, so nothing was duplicated. Call copy_document to copy it into a folder holding fewer items instead.";
+
+  /** The failure of a copy or a duplicate made in a folder that has grown too large to find it in. */
+  private static final String      MSG_ADDED_CHILD_NOT_SCANNED =
+                                                               "The document was %s in folder %s, but the folder now holds more than %d items, too many to find it among them. Call list_folder_children on that folder to find it.";
 
   /** The refusal of a date-limited listing of a folder holding too many children. */
   private static final String      MSG_TOO_MANY_CHILDREN  =
@@ -1648,9 +1656,12 @@ public class DocumentMcpTool implements McpToolPlugin {
    *           that space, the node was created by the platform for the space,
    *           or the call's space can't be read
    * @throws ObjectNotFoundException when a node doesn't exist
-   * @throws IllegalArgumentException when the destination folder holds more
-   *           than {@value #MAX_SCANNED_CHILDREN} items: the copy could not be
-   *           found among them afterwards, so nothing is copied
+   * @throws IllegalArgumentException when the destination folder holds
+   *           {@value #MAX_SCANNED_CHILDREN} items or more: the copy could not
+   *           be found among them afterwards, so nothing is copied
+   * @throws IllegalStateException when the copy is made but cannot be found:
+   *           the folder grew past {@value #MAX_SCANNED_CHILDREN} items
+   *           meanwhile, or no added node carries the expected name
    */
   public DocumentModel copyDocument(String documentId,
                                     String destinationFolderId) throws IllegalAccessException, ObjectNotFoundException {
@@ -1672,7 +1683,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     AbstractNode source = getNode(documentId);
     String expectedName = source.getName();
     Class<? extends AbstractNode> kind = kindOf(source);
-    Set<String> beforeIds = currentChildIds(destinationFolderId, kind);
+    Set<String> beforeIds = currentChildIds(destinationFolderId, kind, MSG_TOO_MANY_CHILDREN_TO_COPY_INTO);
     documentFileService.copyDocument(documentId, destinationFolderId, getCurrentUserIdentityId());
     return requireResolvedChild(destinationFolderId, beforeIds, expectedName, kind, "copied");
   }
@@ -1688,9 +1699,12 @@ public class DocumentMcpTool implements McpToolPlugin {
    *           node, or, in a call limited to a space, the node was created by
    *           the platform for the space or the call's space can't be read
    * @throws ObjectNotFoundException when the node doesn't exist
-   * @throws IllegalArgumentException when the source's folder holds more than
-   *           {@value #MAX_SCANNED_CHILDREN} items: the duplicate could not be
-   *           found among them afterwards, so nothing is duplicated
+   * @throws IllegalArgumentException when the source's folder holds
+   *           {@value #MAX_SCANNED_CHILDREN} items or more: the duplicate could
+   *           not be found among them afterwards, so nothing is duplicated
+   * @throws IllegalStateException when the duplicate is made but cannot be
+   *           found: the folder grew past {@value #MAX_SCANNED_CHILDREN} items
+   *           meanwhile, or no added node carries the expected name
    */
   public DocumentModel duplicateDocument(String documentId,
                                          String prefix) throws IllegalAccessException, ObjectNotFoundException {
@@ -1717,7 +1731,7 @@ public class DocumentMcpTool implements McpToolPlugin {
       return toDocumentModel(duplicateReturn);
     }
     Class<? extends AbstractNode> kind = kindOf(source);
-    Set<String> beforeIds = currentChildIds(parentFolderId, kind);
+    Set<String> beforeIds = currentChildIds(parentFolderId, kind, MSG_TOO_MANY_CHILDREN_TO_DUPLICATE_IN);
     documentFileService.duplicateDocument(getOwnerId(documentId), documentId, prefix, getCurrentUserIdentityId());
     return requireResolvedChild(parentFolderId, beforeIds, expectedName, kind, "duplicated");
   }
@@ -2499,16 +2513,16 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Reads the children of a folder a copy or a duplicate adds a node to, to
-   * find that node afterwards: at most {@value #MAX_SCANNED_CHILDREN}, so a
-   * folder holding more is refused before anything is copied, rather than
-   * listed whole twice.
+   * find that node afterwards: at most {@value #MAX_SCANNED_CHILDREN} plus one,
+   * so a larger folder is never listed whole. The callers decide what a full
+   * read means: before the operation, a refusal; after it, a failure saying
+   * the node was made.
    *
    * @param folderId the folder
-   * @return its children, as the current user sees them
+   * @return its children, as the current user sees them, more than
+   *         {@value #MAX_SCANNED_CHILDREN} when the folder holds more
    * @throws IllegalAccessException when the user cannot read the folder
    * @throws ObjectNotFoundException when the folder cannot be read
-   * @throws IllegalArgumentException when the folder holds more children than
-   *           that
    */
   private List<AbstractNode> scannedChildNodes(String folderId) throws IllegalAccessException, ObjectNotFoundException {
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
@@ -2516,12 +2530,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                           0,
                                                                           MAX_SCANNED_CHILDREN + 1,
                                                                           getCurrentUserIdentityId());
-    if (children == null) {
-      return List.of();
-    } else if (children.size() > MAX_SCANNED_CHILDREN) {
-      throw new IllegalArgumentException(MSG_TOO_MANY_CHILDREN_TO_COPY_INTO.formatted(MAX_SCANNED_CHILDREN));
-    }
-    return children;
+    return children == null ? List.of() : children;
   }
 
   /**
@@ -3004,14 +3013,23 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param folderId the folder
    * @param kind {@link FileNode} or {@link FolderNode}, the kind of the added
    *          node
+   * @param refusal the refusal when the folder holds
+   *          {@value #MAX_SCANNED_CHILDREN} children or more: the added node
+   *          could then fall outside the read made after the operation
    * @return the ids of its children of that kind
    * @throws ObjectNotFoundException when the folder doesn't exist
    * @throws IllegalAccessException when the user can't read it
+   * @throws IllegalArgumentException when the folder holds
+   *           {@value #MAX_SCANNED_CHILDREN} children or more
    */
   private Set<String> currentChildIds(String folderId,
-                                      Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
-                                                                          IllegalAccessException {
-    return scannedChildNodes(folderId).stream()
+                                      Class<? extends AbstractNode> kind,
+                                      String refusal) throws ObjectNotFoundException, IllegalAccessException {
+    List<AbstractNode> children = scannedChildNodes(folderId);
+    if (children.size() >= MAX_SCANNED_CHILDREN) {
+      throw new IllegalArgumentException(refusal.formatted(MAX_SCANNED_CHILDREN));
+    }
+    return children.stream()
                               .filter(kind::isInstance)
                               .map(AbstractNode::getId)
                               .collect(java.util.stream.Collectors.toSet());
@@ -3036,16 +3054,23 @@ public class DocumentMcpTool implements McpToolPlugin {
    *          operation
    * @param expectedName the name the created node is expected to carry
    * @param kind {@link FileNode} or {@link FolderNode}
+   * @param operation "copied" or "duplicated", for the failure message
    * @return the resolved created node, or {@code null} if none matches yet
    * @throws ObjectNotFoundException when the folder doesn't exist
    * @throws IllegalAccessException when the user can't read it
+   * @throws IllegalStateException when the folder now holds more than
+   *           {@value #MAX_SCANNED_CHILDREN} children: the node was made but
+   *           may be outside the read
    */
   private DocumentModel resolveAddedChild(String folderId,
                                           Set<String> beforeIds,
                                           String expectedName,
-                                          Class<? extends AbstractNode> kind) throws ObjectNotFoundException,
-                                                                              IllegalAccessException {
+                                          Class<? extends AbstractNode> kind,
+                                          String operation) throws ObjectNotFoundException, IllegalAccessException {
     List<AbstractNode> children = scannedChildNodes(folderId);
+    if (children.size() > MAX_SCANNED_CHILDREN) {
+      throw new IllegalStateException(MSG_ADDED_CHILD_NOT_SCANNED.formatted(operation, folderId, MAX_SCANNED_CHILDREN));
+    }
     List<AbstractNode> candidates = children.stream()
                                             .filter(kind::isInstance)
                                             .filter(node -> !beforeIds.contains(node.getId()))
@@ -3085,7 +3110,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                              String expectedName,
                                              Class<? extends AbstractNode> kind,
                                              String operation) throws ObjectNotFoundException, IllegalAccessException {
-    DocumentModel resolved = resolveAddedChild(folderId, beforeIds, expectedName, kind);
+    DocumentModel resolved = resolveAddedChild(folderId, beforeIds, expectedName, kind, operation);
     if (resolved == null) {
       throw new IllegalStateException(("Could not locate the %s document '%s' in folder %s after the operation. "
           + "Call list_folder_children on that folder to find it.").formatted(operation, expectedName, folderId));
