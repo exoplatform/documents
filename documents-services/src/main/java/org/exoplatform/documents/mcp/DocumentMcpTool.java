@@ -18,6 +18,7 @@ package org.exoplatform.documents.mcp;
 
 import static io.meeds.mcp.server.tool.util.McpToolPluginUtils.getInteger;
 import static io.meeds.mcp.server.util.McpToolUtils.formatDate;
+import static org.exoplatform.documents.util.MacOsMetadataUtils.isMacOsMetadata;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -1363,10 +1364,17 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (bytes == null || bytes.length == 0) {
       throw new IllegalArgumentException("The document content is empty; there is nothing to create.");
     }
+    String entryName = sanitizeFileName(fileName);
+    // The import skips macOS metadata names, so such a document would never be created.
+    if (isMacOsMetadata(entryName)) {
+      throw new IllegalArgumentException("""
+          The document name '%s' is a macOS metadata name (.DS_Store, a name starting with '._', or __MACOSX),
+          which Documents does not create. Ask the user for another name.
+          """.formatted(entryName));
+    }
     // Validate the parent folder exists and is readable before staging anything,
     // so a bad id fails with a clean ObjectNotFoundException / IllegalAccessException.
     getNode(parentFolderId);
-    String entryName = sanitizeFileName(fileName);
     String ownerId = String.valueOf(getOwnerId(parentFolderId));
     long userIdentityId = getCurrentUserIdentityId();
     // Snapshot the destination file ids before the import so the created node can

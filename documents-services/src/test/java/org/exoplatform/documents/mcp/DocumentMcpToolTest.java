@@ -644,6 +644,29 @@ public class DocumentMcpToolTest {
   }
 
   @Test
+  public void createDocumentWithMacOsMetadataNameFails() throws Exception {
+    for (String name : new String[] { ".DS_Store", "._notes.md" }) {
+      IllegalArgumentException ex =
+                                  assertThrows(IllegalArgumentException.class,
+                                               () -> documentMcpTool.createDocument(FOLDER_ID, name, "some content"));
+      assertTrue(ex.getMessage().contains("'" + name + "' is a macOS metadata name"));
+    }
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+  }
+
+  @Test
+  public void uploadDocumentWithMacOsMetadataNameFails() throws Exception {
+    String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
+    for (String name : new String[] { "__MACOSX", "._photo.png", ".DS_Store" }) {
+      IllegalArgumentException ex =
+                                  assertThrows(IllegalArgumentException.class,
+                                               () -> documentMcpTool.uploadDocument(FOLDER_ID, name, base64, null, null, null));
+      assertTrue(ex.getMessage().contains("'" + name + "' is a macOS metadata name"));
+    }
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+  }
+
+  @Test
   public void createDocumentOfficeExtensionFails() {
     // .docx / .xlsx / .pptx / .pdf are structured/binary formats that cannot be
     // built from a text string: fail up front with an LLM-directed message that
