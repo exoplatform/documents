@@ -37,6 +37,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -1260,24 +1261,109 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * A copy into a folder holding more items than the scan reads is refused
-   * before anything is copied, the destination read once and bounded, not
-   * listed whole. Mutants: the bound dropped; the copy run before the check.
+   * A copy into a folder already holding as many items as the scan reads is
+   * refused before anything is copied: the copy would make one more, outside
+   * the read made afterwards. The destination is read once and bounded, not
+   * listed whole. Mutants: the bound tested with {@code >} instead of
+   * {@code >=}; the copy run before the check; the duplicate's wording.
    *
    * @throws Exception when the tool fails
    */
   @Test
-  public void copyDocumentIntoAFolderTooLargeToScanIsRefusedBeforeCopying() throws Exception {
+  public void copyDocumentIntoAFolderAtTheScanBoundIsRefusedBeforeCopying() throws Exception {
     when(documentFileService.getDocumentById(eq(DOCUMENT_ID), anyString())).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     when(documentFileService.getDocumentById(eq(FOLDER_ID), anyString())).thenReturn(folderNode(FOLDER_ID));
-    List<AbstractNode> full = java.util.stream.IntStream.rangeClosed(0, DocumentMcpTool.MAX_SCANNED_CHILDREN)
-                                                        .mapToObj(i -> (AbstractNode) fileNodeNamed("f-" + i, "file" + i + ".pdf"))
-                                                        .toList();
     when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
-        .thenReturn(full);
+        .thenReturn(scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN));
 
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID));
+    IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                    () -> documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID));
+
+    assertTrue(refusal.getMessage(), refusal.getMessage().startsWith("The target folder holds 1000 items or more"));
+    assertTrue(refusal.getMessage(), refusal.getMessage().contains("nothing was copied"));
     verify(documentFileService, never()).copyDocument(anyString(), anyString(), anyLong());
+  }
+
+  /**
+   * A duplicate in a folder already holding as many items as the scan reads is
+   * refused before anything is duplicated, with advice the agent can follow:
+   * duplicate takes no target folder. Mutants: the bound tested with {@code >};
+   * the copy's wording.
+   *
+   * @throws Exception when the tool fails
+   */
+  @Test
+  public void duplicateDocumentInAFolderAtTheScanBoundIsRefusedBeforeDuplicating() throws Exception {
+    FileNode source = fileNode(DOCUMENT_ID, "application/pdf");
+    source.setParentFolderId(FOLDER_ID);
+    when(documentFileService.getDocumentById(eq(DOCUMENT_ID), anyString())).thenReturn(source);
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN));
+
+    IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                    () -> documentMcpTool.duplicateDocument(DOCUMENT_ID, "Copy of"));
+
+    assertTrue(refusal.getMessage(), refusal.getMessage().startsWith("The document's folder holds 1000 items or more"));
+    assertTrue(refusal.getMessage(), refusal.getMessage().contains("nothing was duplicated"));
+    assertTrue(refusal.getMessage(), refusal.getMessage().contains("copy_document"));
+    verify(documentFileService, never()).duplicateDocument(anyLong(), any(), any(), anyLong());
+  }
+
+  /**
+   * A copy into a folder one item under the bound goes through and is found:
+   * the folder then holds exactly as many items as the scan reads. Mutant: the
+   * read after the copy refused at {@code >=}.
+   *
+   * @throws Exception when the tool fails
+   */
+  @Test
+  public void copyDocumentIntoAFolderJustUnderTheScanBoundIsFound() throws Exception {
+    when(documentFileService.getDocumentById(eq(DOCUMENT_ID), anyString())).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(eq(FOLDER_ID), anyString())).thenReturn(folderNode(FOLDER_ID));
+    List<AbstractNode> before = scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN - 1);
+    List<AbstractNode> after = new ArrayList<>(before);
+    after.add(fileNodeNamed("copy-1", "report.pdf"));
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(before)
+        .thenReturn(after);
+
+    assertEquals("copy-1", documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID).getId());
+  }
+
+  /**
+   * When the destination grows past the bound between the two reads (another
+   * user adds an item), the copy has been made: the failure says so, names the
+   * folder and the tool to find it, and never says nothing was copied.
+   * Mutants: the overflow after the copy raised as the pre-copy refusal; the
+   * check dropped, so a copy outside the read is reported as not found.
+   *
+   * @throws Exception when the tool fails
+   */
+  @Test
+  public void aCopyMadeInAFolderThatGrewPastTheScanBoundSaysItWasMade() throws Exception {
+    when(documentFileService.getDocumentById(eq(DOCUMENT_ID), anyString())).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(eq(FOLDER_ID), anyString())).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN - 1))
+        .thenReturn(scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1));
+
+    IllegalStateException failure = assertThrows(IllegalStateException.class,
+                                                  () -> documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID));
+
+    assertTrue(failure.getMessage(), failure.getMessage().startsWith("The document was copied in folder " + FOLDER_ID));
+    assertTrue(failure.getMessage(), failure.getMessage().contains("list_folder_children"));
+    assertFalse(failure.getMessage(), failure.getMessage().contains("nothing was"));
+    verify(documentFileService).copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID);
+  }
+
+  /**
+   * @param count the number of files
+   * @return that many distinctly named files, as a folder read returns them
+   */
+  private List<AbstractNode> scannedFiles(int count) {
+    return java.util.stream.IntStream.range(0, count)
+                                     .mapToObj(i -> (AbstractNode) fileNodeNamed("f-" + i, "file" + i + ".pdf"))
+                                     .toList();
   }
 
   @Test
