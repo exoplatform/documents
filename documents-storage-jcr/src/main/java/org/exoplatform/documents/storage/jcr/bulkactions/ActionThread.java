@@ -18,6 +18,7 @@
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
 import static org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanFiles;
+import static org.exoplatform.documents.util.MacOsMetadataUtils.isMacOsMetadata;
 
 import java.io.*;
 import java.net.URLDecoder;
@@ -342,6 +343,9 @@ public class ActionThread implements Runnable {
     }
 
     File outFile = validateZipEntry(outputDir, entryName);
+    if (isMacOsMetadata(entryName)) {
+      return;
+    }
     Path outPath = outFile.toPath();
 
     if (header.isDirectory()) {
