@@ -21,9 +21,9 @@
     @focusout="focused = $event.currentTarget.contains($event.relatedTarget)">
     <v-hover v-slot="{ hover }">
       <v-list-item
-        :aria-label="fileName"
         class="pa-0 px-3"
-        role="link"
+        role="none"
+        tabindex="-1"
         @click="openPreview">
         <v-list-item-avatar
           class="my-0"
@@ -37,7 +37,11 @@
           </v-avatar>
         </v-list-item-avatar>
         <v-list-item-content
-          class="pa-0">
+          :aria-label="fileName"
+          class="pa-0"
+          role="link"
+          tabindex="0"
+          @keydown.enter.stop="openPreview">
           <v-list-item-title class="text-color text-truncate text-wrap spaceTitle">
             {{ fileName }}
           </v-list-item-title>
@@ -47,7 +51,10 @@
               :format="dateFormat" />
           </v-list-item-subtitle>
         </v-list-item-content>
-        <v-list-item-action v-if="hover || focused" class="ma-0">
+        <v-list-item-action
+          v-if="hover || focused"
+          class="ma-0"
+          @keydown.enter.stop>
           <v-btn
             :aria-label="$t('documents.label.show.details.of', {0: fileName})"
             icon
