@@ -143,6 +143,7 @@
             close-on-click
             absolute>
             <documents-actions-menu
+              :active="menuDisplayed"
               :file="file"
               :current-view="selectedView"
               :is-search-result="isSearchResult"

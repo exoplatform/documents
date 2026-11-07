@@ -26,6 +26,8 @@
       dense
       link
       class="ps-3"
+      :role="isMobile ? null : 'menuitem'"
+      :aria-haspopup="isGroup ? 'menu' : null"
       :href="href"
       :target="href && target"
       @click.stop="handleClick">

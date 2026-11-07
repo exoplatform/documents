@@ -149,6 +149,7 @@
                     </v-btn>
                   </template>
                   <documents-actions-menu
+                    :active="menuDisplayed"
                     :file="file"
                     :current-view="currentView"
                     :is-search-result="isSearchResult"

@@ -98,6 +98,7 @@
               </v-btn>
             </template>
             <documents-actions-menu
+              :active="menuDisplayed"
               :file="folder"
               :current-view="currentView"
               :is-search-result="isSearchResult"
