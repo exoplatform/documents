@@ -25,8 +25,8 @@
       down>
       <template #activator="{ on, attrs }">
         <v-tooltip bottom>
-          <template #activator="{ on: tooltipOn, attrs: tooltipAttrs }">
-            <span v-bind="tooltipAttrs" v-on="disableButton ? tooltipOn : {}">
+          <template #activator="{ on: tooltipOn }">
+            <span v-on="disableButton ? tooltipOn : {}">
               <v-btn
                 :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
                 class="btn btn-primary"

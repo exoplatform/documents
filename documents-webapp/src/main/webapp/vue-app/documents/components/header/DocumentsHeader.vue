@@ -42,16 +42,16 @@
         <template #right>
           <div v-if="!filterDispalyed" class="d-flex ms-auto">
             <v-tooltip
-              v-if="$root.canEdit && $root.hover"
+              v-if="$root.canEdit"
               max-width="300"
               bottom>
-              <template #activator="{ on, attrs }">
+              <template #activator="{ on }">
                 <v-btn
                   id="documentSettingsButton"
                   :aria-label="$t('documents.settings.button.tooltip')"
+                  class="documents-settings-button"
                   small
                   icon
-                  v-bind="attrs"
                   v-on="on"
                   @click="$root.$emit('open-document-settings')">
                   <v-icon size="20">fa-cog</v-icon>
