@@ -1,6 +1,5 @@
 <template>
   <v-list 
-    :role="isMobile ? null : 'menu'"
     class="py-0 transparent"
     dense
     @click.native.capture="handleItemActivation"
