@@ -1,6 +1,8 @@
 <template>
-  <v-list 
+  <v-list
+    :role="!isMobile && standalone ? 'menu' : null"
     class="py-0 transparent"
+    data-documents-action-menu
     dense
     @click.native.capture="handleItemActivation"
     @keydown.native="handleKeydown">
@@ -22,6 +24,11 @@
 
 export default {
   props: {
+    // shown outside a v-menu (the right-click menu): the list itself is the menu
+    standalone: {
+      type: Boolean,
+      default: false,
+    },
     file: {
       type: Object,
       default: null,
@@ -96,8 +103,9 @@ export default {
       this.focusMenuItem(0);
     },
     getMenuItems() {
+      // this menu's own entries, not those of a sub-menu rendered inside it
       return Array.from(this.$el.querySelectorAll('[role="menuitem"]'))
-        .filter(item => item.closest('[role="menu"]') === this.$el);
+        .filter(item => item.closest('[data-documents-action-menu]') === this.$el);
     },
     focusMenuItem(index, attempt = 0) {
       const item = this.getMenuItems()[index];
