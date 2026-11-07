@@ -36,7 +36,7 @@
             class="document-breadcrumb-item"
             role="listitem">
             <v-tooltip max-width="300" bottom>
-              <template #activator="{ on, attrs }">
+              <template #activator="{ on }">
                 <a
                   :id="document.isLast && 'lastBreadcrumbItem'"
                   :ref="document.id"
@@ -44,7 +44,6 @@
                   :aria-current="document.isLast ? 'page' : null"
                   :role="document.isLast ? null : 'link'"
                   :tabindex="document.isLast ? null : 0"
-                  v-bind="attrs"
                   v-on="on"
                   @click="!document.isLast && openFolder(documentsBreadcrumb[document.index])"
                   @keydown.enter="!document.isLast && openFolder(documentsBreadcrumb[document.index])">{{ getName(document.name) }}</a>
@@ -74,10 +73,9 @@
             class="min-width-content long-path-second-item d-flex"
             role="listitem">
             <v-tooltip :key="tooltipKey" bottom>
-              <template #activator="{ on, attrs }">
+              <template #activator="{ on }">
                 <v-icon
                   v-show="documentsEllipsisList.length > 0"
-                  v-bind="attrs"
                   v-on="on"
                   :aria-label="ellipsisLabel"
                   class="text-sub-title"
