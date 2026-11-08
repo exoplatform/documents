@@ -16,7 +16,7 @@
 -->
 <template>
   <v-app>
-    <v-hover v-model="hover">
+    <div class="document-gadget-widget">
       <widget-wrapper
         :loading="loading"
         :aria-label="headerTitle"
@@ -29,14 +29,18 @@
           </span>
         </template>
         <template #action>
+          <!-- the settings and link icons show on the card's hover and on the keyboard focus of one of them (global-documents.less):
+               when 'See all' is displayed, the text they replace is the mouse's and the keyboard reaches the same link among them -->
           <div
-            @focusin="focused = true"
-            @focusout="focused = $event.currentTarget.contains($event.relatedTarget)">
+            :class="displaySeeMore && 'document-gadget-actions-with-text'"
+            class="document-gadget-actions">
             <v-btn
               v-if="displaySeeMore"
-              v-show="!hover"
+              :tabindex="filesCount ? '-1' : null"
+              :aria-hidden="filesCount ? 'true' : null"
+              :class="filesCount && 'document-gadget-see-all-replaced'"
               color="primary"
-              class="pa-0 text-font-size"
+              class="document-gadget-see-all pa-0 text-font-size"
               small
               text
               link
@@ -45,12 +49,12 @@
                 {{ $t('documents.documentGadget.seeMore') }}
               </span>
             </v-btn>
-            <div v-if="!displaySeeMore || showActions">
+            <div class="document-gadget-hover-actions">
               <v-btn
-                v-if="hoverEdit"
+                v-if="canEdit"
                 :title="$t('documents.documentGadget.editTooltip')"
                 :aria-label="$t('documents.documentGadget.editTooltip')"
-                class="text-font-size"
+                class="document-gadget-settings-button text-font-size"
                 small
                 link
                 icon
@@ -114,7 +118,7 @@
             :title="$t('documents.documentGadget.placeholder')" />
         </v-card>
       </widget-wrapper>
-    </v-hover>
+    </div>
     <document-list-settings-drawer v-if="canEdit" @settings-updated="settingsUpdated" />
     <document-list-drawer ref="listDrawer" />
   </v-app>
@@ -122,8 +126,6 @@
 <script>
 export default {
   data: () => ({
-    hover: false,
-    focused: false,
     loading: false,
     applicationMounted: false,
     files: [],
@@ -134,12 +136,6 @@ export default {
     },
     canEdit() {
       return this.settings?.canEdit;
-    },
-    showActions() {
-      return this.hover || this.focused;
-    },
-    hoverEdit() {
-      return this.showActions && this.canEdit;
     },
     listLabel() {
       return `${this.headerTitle} (${this.filesCount})`;

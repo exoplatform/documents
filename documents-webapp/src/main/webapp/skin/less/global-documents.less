@@ -307,3 +307,37 @@
   font-weight: 600;
   line-height: 1;
 }
+
+/* Documents gadget: the settings and link icons replace the 'See all' text while
+   the card is hovered, and while the keyboard focus is on one of them: hidden,
+   they keep their place in the tab order, so the keyboard reaches them as the
+   mouse does. */
+.document-gadget-actions {
+  position: relative;
+  .document-gadget-hover-actions {
+    display: flex;
+  }
+  .document-gadget-settings-button {
+    opacity: 0;
+  }
+  &.document-gadget-actions-with-text .document-gadget-hover-actions {
+    position: absolute;
+    top: 0;
+    inset-inline-end: 0;
+    opacity: 0;
+  }
+}
+.document-gadget-widget:hover .document-gadget-actions,
+.document-gadget-actions:focus-within {
+  .document-gadget-hover-actions {
+    position: static;
+    opacity: 1;
+  }
+  .document-gadget-settings-button {
+    opacity: 1;
+  }
+}
+.document-gadget-widget:hover .document-gadget-see-all,
+.document-gadget-actions:focus-within .document-gadget-see-all-replaced {
+  display: none;
+}
