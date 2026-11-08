@@ -103,6 +103,7 @@ export default {
       this.focusMenuItem(0);
     },
     getMenuItems() {
+      // every entry must carry role="menuitem" to be reachable by the arrow keys
       // this menu's own entries, not those of a sub-menu rendered inside it
       return Array.from(this.$el.querySelectorAll('[role="menuitem"]'))
         .filter(item => item.closest('[data-documents-action-menu]') === this.$el);

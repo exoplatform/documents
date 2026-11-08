@@ -19,19 +19,14 @@
 <template>
   <v-tooltip :disabled="showPast" bottom>
     <template #activator="{on, attrs}">
-      <div
-        class="py-10px px-4"
-        :class="showPast?'clickable':'non-clickable'"
-        v-bind="attrs"
-        v-on="on"
-        @click="past()">
-        <v-icon
-          :class="!showPast?'icon-disabled-color':''"
-          size="16"
-          class="pe-1">
-          fas fa-paste
-        </v-icon>
-        <span class="ps-1 text-body" :class="showPast?'menu-text-color':'text-disabled-color'">{{ $t('documents.label.paste') }}</span>
+      <div v-bind="attrs" v-on="on">
+        <document-action-item
+          icon="fas fa-paste"
+          :icon-extra-class="!showPast ? 'icon-disabled-color' : null"
+          :label="$t('documents.label.paste')"
+          :label-extra-class="!showPast ? 'text-disabled-color' : null"
+          :disabled="!showPast"
+          @click="past" />
       </div>
     </template>
     <span>{{ noPastMassage }}</span> 

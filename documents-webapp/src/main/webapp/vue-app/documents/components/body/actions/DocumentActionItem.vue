@@ -28,6 +28,7 @@
       class="ps-3"
       :role="isMobile ? null : 'menuitem'"
       :aria-haspopup="isGroup ? 'menu' : null"
+      :aria-disabled="disabled ? 'true' : null"
       :href="href"
       :target="href && target"
       @click.stop="handleClick">
@@ -92,6 +93,10 @@ export default {
       type: Boolean,
       default: false
     },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
     href: {
       type: String,
       default: null
@@ -103,8 +108,11 @@ export default {
   },
   methods: {
     handleClick(event) {
-      if (!this.href) {
+      if (!this.href || this.disabled) {
         event.preventDefault();
+      }
+      if (this.disabled) {
+        return;
       }
       this.$emit('click');
       if (!this.isGroup) {
