@@ -319,12 +319,14 @@
   }
   .document-gadget-settings-button {
     opacity: 0;
+    pointer-events: none;
   }
   &.document-gadget-actions-with-text .document-gadget-hover-actions {
     position: absolute;
     top: 0;
     inset-inline-end: 0;
     opacity: 0;
+    pointer-events: none;
   }
 }
 .document-gadget-widget:hover .document-gadget-actions,
@@ -332,9 +334,11 @@
   .document-gadget-hover-actions {
     position: static;
     opacity: 1;
+    pointer-events: auto;
   }
   .document-gadget-settings-button {
     opacity: 1;
+    pointer-events: auto;
   }
 }
 .document-gadget-widget:hover .document-gadget-see-all,

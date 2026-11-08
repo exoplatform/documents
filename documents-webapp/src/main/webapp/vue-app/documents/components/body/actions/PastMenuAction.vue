@@ -18,8 +18,8 @@
 
 <template>
   <v-tooltip :disabled="showPast" bottom>
-    <template #activator="{on, attrs}">
-      <div v-bind="attrs" v-on="on">
+    <template #activator="{on}">
+      <div v-on="on">
         <document-action-item
           icon="fas fa-paste"
           :icon-extra-class="!showPast ? 'icon-disabled-color' : null"
