@@ -28,6 +28,7 @@
       class="ps-3"
       :role="isMobile ? null : 'menuitem'"
       :aria-haspopup="isGroup ? 'menu' : null"
+      :aria-expanded="isGroup ? String(expanded) : null"
       :aria-disabled="disabled ? 'true' : null"
       :href="href"
       :target="href && target"
@@ -90,6 +91,10 @@ export default {
       default: false
     },
     isGroup: {
+      type: Boolean,
+      default: false
+    },
+    expanded: {
       type: Boolean,
       default: false
     },
