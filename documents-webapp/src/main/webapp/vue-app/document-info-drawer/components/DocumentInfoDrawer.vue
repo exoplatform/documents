@@ -198,10 +198,9 @@
                   </v-col>
                   <v-col class="col-1 px-0 py-0">
                     <v-tooltip :disabled="isMobile" bottom>
-                      <template #activator="{ on, attrs }">
+                      <template #activator="{ on }">
                         <v-icon
                           v-show="showDescription"
-                          v-bind="attrs"
                           v-on="on"
                           :class="{'d-sr-only-focusable': !(hover || isMobile)}"
                           :aria-label="$t('documents.drawer.details.description.edit')"
