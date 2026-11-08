@@ -30,11 +30,11 @@
       <v-card-text
         class="activity-attachment-thumbnail d-flex flex-grow-1 pa-0"
         :class="isMediaFile && 'black'"
-        :aria-label="fileName"
-        role="link"
-        tabindex="0"
+        :aria-label="showPlayer ? null : fileName"
+        :role="showPlayer ? null : 'link'"
+        :tabindex="showPlayer ? null : '0'"
         @click="openPreview"
-        @keydown.enter="openPreview">
+        @keydown.enter="!showPlayer && openPreview()">
         <video
           v-if="showPlayer"
           :src="`${downloadUrl}#t=0.001`"
@@ -66,7 +66,11 @@
           class="d-flex flex-column transition-fast-in-fast-out light-grey-background-opacity-3 v-card--reveal"
           elevation="0"
           height="100%"
-          @click="playMedia($event)">
+          role="button"
+          tabindex="0"
+          :aria-label="$t('documents.label.play.media', {0: fileName})"
+          @click="playMedia($event)"
+          @keydown.enter.space.prevent="playMedia($event)">
           <v-card-text class="pb-0 d-flex flex-row">
             <div class="absolute-all-center align-center">
               <v-icon class="playIcon" size="60px">far fa-play-circle</v-icon>
@@ -421,6 +425,7 @@ export default {
         event.stopPropagation();
       }
       this.showPlayer = true;
+      this.$nextTick(() => this.$el.querySelector('video')?.focus());
     },
     playError(event) {
       const video = event.target;
