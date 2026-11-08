@@ -40,7 +40,7 @@
     <button
       v-else
       :title="$t('documents.drawer.details.clickToOpen')"
-      :aria-label="$t('documents.drawer.details.clickToOpen')"
+      :aria-label="$t('documents.drawer.details.open', {0: file.name})"
       type="button"
       class="documentInfoContentOpen d-flex align-center justify-center"
       @click="$emit('open')">
