@@ -104,9 +104,12 @@
                 <v-card
                   :loading="loading"
                   :title="$t('documents.drawer.details.clickToOpen')"
+                  :aria-label="$t('documents.drawer.details.open', {0: file.name})"
                   class="documentInfoPreview overflow-hidden d-flex mb-2"
+                  role="button"
                   outlined
-                  @click="openPreview">
+                  @click="openPreview"
+                  @keydown.enter.space.prevent="openPreview">
                   <document-media-thumbnail
                     v-if="mediaKind"
                     :src="downloadUrl"
@@ -127,9 +130,12 @@
               <v-card
                 v-else
                 :title="$t('documents.drawer.details.clickToOpen')"
+                :aria-label="$t('documents.drawer.details.open', {0: file.name})"
                 class="documentInfoCompactHeader d-flex align-center pa-3 mb-2"
+                role="button"
                 outlined
-                @click="openPreview">
+                @click="openPreview"
+                @keydown.enter.space.prevent="openPreview">
                 <v-avatar
                   size="52"
                   class="flex-shrink-0 light-grey-background-color"
@@ -179,7 +185,10 @@
               <a
                 v-if="file.acl.canEdit"
                 class="font-weight-bold ps-4 clickable py-auto documentDescription"
-                @click="openEditor">
+                role="button"
+                tabindex="0"
+                @click="openEditor"
+                @keydown.enter.space.prevent="openEditor">
                 <span>{{ $t('documents.message.addYourDescription') }}</span>
               </a>
             </div>
