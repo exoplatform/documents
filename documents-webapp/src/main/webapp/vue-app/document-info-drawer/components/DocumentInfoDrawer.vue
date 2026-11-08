@@ -200,9 +200,11 @@
                     <v-tooltip :disabled="isMobile" bottom>
                       <template #activator="{ on, attrs }">
                         <v-icon
-                          v-show="showDescription && (hover || isMobile)"
+                          v-show="showDescription"
                           v-bind="attrs"
                           v-on="on"
+                          :class="{'d-sr-only-focusable': !(hover || isMobile)}"
+                          :aria-label="$t('documents.drawer.details.description.edit')"
                           class="primary--text"
                           size="20"
                           @click="openEditor">
