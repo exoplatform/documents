@@ -552,7 +552,7 @@ public class JCRDocumentsUtilTest {
    * The walk completes, with each file of the folder copied once.
    */
   @Test(timeout = 30000)
-  public void createTempFilesAndFoldersStopsAtAShortcutToAnAncestor() throws Exception {
+  public void createTempFilesAndFoldersEndsEachBranch() throws Exception {
     ExtendedSession session = mock(ExtendedSession.class);
     ExtendedNode documents = folderNode("documentsId", "Documents", null);
     ExtendedNode folderA = folderNode("aId", "A", documents);
