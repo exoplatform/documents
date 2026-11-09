@@ -150,6 +150,10 @@ export default {
     openNodes() {
       this.$nextTick(this.describeTree);
     },
+    // a search renders the nodes it had filtered out anew
+    search() {
+      this.$nextTick(this.describeTree);
+    },
   },
   created() {
     this.$root.$on('documentsBreadcrumb',this.documentsBreadcrumbUpdated);
