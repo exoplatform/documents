@@ -323,8 +323,9 @@ public class WebdavWriteCommandHandlerTest {
     givenExistingTarget();
     doThrow(new AccessControlException("denied")).when(existingNode).checkPermission(PermissionType.REMOVE);
 
-    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+    WebDavException exception = assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
 
+    assertFalse(exception.getMessage().contains(TARGET_JCR_PATH));
     assertTargetUntouched();
   }
 
@@ -408,6 +409,11 @@ public class WebdavWriteCommandHandlerTest {
     assertTargetReplacedThenCopied();
   }
 
+  /**
+   * Pins the {@code removeDestination} flag of the
+   * {@code DocumentWebDavService#copy} contract on its own. The WebDAV WAR does
+   * not send this combination: {@code Overwrite: T} sets both flags.
+   */
   @Test
   @SneakyThrows
   public void testCopyOntoExistingNameReplacesTheTargetWhenDestinationRemovalIsAsked() {
@@ -513,8 +519,9 @@ public class WebdavWriteCommandHandlerTest {
     verify(pathCommandHandler, never()).saveMapping(any(), anyString(), anyString(), any());
   }
 
-  private void assertStatus(int status, org.junit.function.ThrowingRunnable runnable) {
+  private WebDavException assertStatus(int status, org.junit.function.ThrowingRunnable runnable) {
     WebDavException exception = assertThrows(WebDavException.class, runnable);
     assertEquals(status, exception.getHttpError());
+    return exception;
   }
 }
