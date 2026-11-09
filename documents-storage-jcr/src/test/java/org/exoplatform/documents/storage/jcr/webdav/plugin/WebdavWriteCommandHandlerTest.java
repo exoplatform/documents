@@ -361,6 +361,7 @@ public class WebdavWriteCommandHandlerTest {
   @SneakyThrows
   public void testMoveOntoItselfIsRefused() {
     givenMoveSource();
+    givenTargetParentAt(PARENT_JCR_PATH + "/folder");
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(SOURCE_JCR_PATH);
 
     assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
@@ -384,6 +385,7 @@ public class WebdavWriteCommandHandlerTest {
   @SneakyThrows
   public void testMoveOntoADescendantOfTheSourceIsRefused() {
     givenMoveSource();
+    givenTargetParentAt(SOURCE_JCR_PATH);
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(SOURCE_JCR_PATH + "/child");
     givenNodeAt(SOURCE_JCR_PATH + "/child", SOURCE_JCR_PATH + "/child");
 
@@ -412,12 +414,9 @@ public class WebdavWriteCommandHandlerTest {
   @SneakyThrows
   public void testMoveOntoTheRootOfTheTargetDriveIsRefused() {
     givenMoveSource();
-    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_SOURCE_PATH)).thenReturn("/other/source");
-    when(session.getItem("/other/source")).thenReturn(sourceNode);
-    when(session.itemExists("/other/source")).thenReturn(true);
-    when(sourceNode.getPath()).thenReturn("/other/source");
-    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH + "/folder/..");
-    givenNodeAt(PARENT_JCR_PATH + "/folder/..", PARENT_JCR_PATH);
+    givenTargetParentAt("/");
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH);
+    givenNodeAt(PARENT_JCR_PATH, PARENT_JCR_PATH);
 
     assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
 
@@ -428,8 +427,21 @@ public class WebdavWriteCommandHandlerTest {
   @SneakyThrows
   public void testMoveOntoANodeOutsideTheTargetDriveIsRefused() {
     givenMoveSource();
-    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH + "/../home/file");
-    givenNodeAt(PARENT_JCR_PATH + "/../home/file", "/home/file");
+    givenTargetParentAt("/home");
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn("/home/file");
+    givenNodeAt("/home/file", "/home/file");
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoANodeThatIsNotAChildOfTheTargetParentIsRefused() {
+    givenMoveSource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH + "/other/file");
+    givenNodeAt(PARENT_JCR_PATH + "/other/file", PARENT_JCR_PATH + "/other/file");
 
     assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
 
@@ -440,6 +452,7 @@ public class WebdavWriteCommandHandlerTest {
   @SneakyThrows
   public void testMoveOntoAnotherSpellingOfTheSourcePathIsRefused() {
     givenMoveSource();
+    givenTargetParentAt(PARENT_JCR_PATH + "/folder");
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH + "/other/../folder/source");
     givenNodeAt(PARENT_JCR_PATH + "/other/../folder/source", SOURCE_JCR_PATH);
 
@@ -564,6 +577,7 @@ public class WebdavWriteCommandHandlerTest {
   @SneakyThrows
   public void testCopyOntoItselfIsRefused() {
     givenCopySource();
+    givenTargetParentAt(PARENT_JCR_PATH + "/folder");
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(SOURCE_JCR_PATH);
 
     assertStatus(403, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true, true));
@@ -580,6 +594,12 @@ public class WebdavWriteCommandHandlerTest {
     when(session.itemExists(NEW_TARGET_JCR_PATH)).thenReturn(false);
     when(sourceNode.getPath()).thenReturn(SOURCE_JCR_PATH);
     when(sourceNode.isLocked()).thenReturn(false);
+  }
+
+  @SneakyThrows
+  private void givenTargetParentAt(String parentPath) {
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_PARENT_PATH)).thenReturn(parentPath);
+    givenNodeAt(parentPath, parentPath);
   }
 
   @SneakyThrows
