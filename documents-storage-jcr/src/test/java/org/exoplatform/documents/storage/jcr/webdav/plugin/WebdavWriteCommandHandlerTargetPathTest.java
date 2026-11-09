@@ -134,7 +134,12 @@ public class WebdavWriteCommandHandlerTargetPathTest {
     when(userNode.getNode("Private")).thenReturn(driveRoot);
     when(node(EXISTING_JCR_PATH, "existing").getParent()).thenReturn(driveRoot);
     when(node(SOURCE_JCR_PATH, "source").getParent()).thenReturn(driveRoot);
+    NodeImpl folder = node(DRIVE_ROOT_JCR_PATH + "/F", "folder");
+    when(folder.getParent()).thenReturn(driveRoot);
+    when(node(DRIVE_ROOT_JCR_PATH + "/F/G", "child").getParent()).thenReturn(folder);
     existingMapping = mapping("B", EXISTING_JCR_PATH, "existing");
+    mapping("F", DRIVE_ROOT_JCR_PATH + "/F", "folder");
+    mapping(DRIVE_ROOT_JCR_PATH + "/F", "G", DRIVE_ROOT_JCR_PATH + "/F/G", "child", DRIVE + "/F/G");
     mapping("S", SOURCE_JCR_PATH, "source");
 
     when(session.itemExists(anyString())).thenAnswer(invocation -> nodes.containsKey(normalize(invocation.getArgument(0))));
@@ -194,6 +199,21 @@ public class WebdavWriteCommandHandlerTargetPathTest {
     assertExistingDocumentKeepsItsName();
   }
 
+  @Test
+  public void testMoveOntoATargetNameThatIsADotSegmentIsRefused() {
+    assertStatus(403, () -> handler.move(session, DRIVE + "/S", DRIVE + "/F/G/..", true));
+    assertStatus(403, () -> handler.move(session, DRIVE + "/S", DRIVE + "/F/.", true));
+
+    assertExistingDocumentKeepsItsName();
+  }
+
+  @Test
+  public void testMoveOntoATargetNameHoldingASlashIsRefused() {
+    assertStatus(403, () -> handler.move(session, DRIVE + "/S", DRIVE + "/F%2FG%2F..", true));
+
+    assertExistingDocumentKeepsItsName();
+  }
+
   private void assertExistingDocumentKeepsItsName() {
     assertEquals(EXISTING_JCR_PATH, existingMapping.getJcrPath());
     try {
@@ -221,15 +241,23 @@ public class WebdavWriteCommandHandlerTargetPathTest {
   }
 
   private WebDavPathMappingEntity mapping(String visibleName, String jcrPath, String identifier) {
+    return mapping(DRIVE_ROOT_JCR_PATH, visibleName, jcrPath, identifier, DRIVE + "/" + visibleName);
+  }
+
+  private WebDavPathMappingEntity mapping(String parentJcrPath,
+                                          String visibleName,
+                                          String jcrPath,
+                                          String identifier,
+                                          String webDavPath) {
     WebDavPathMappingEntity entity = new WebDavPathMappingEntity();
-    entity.setId(WebDavPathMappingEntity.buildId(DRIVE_ROOT_JCR_PATH, visibleName));
-    entity.setParentJcrPath(DRIVE_ROOT_JCR_PATH);
+    entity.setId(WebDavPathMappingEntity.buildId(parentJcrPath, visibleName));
+    entity.setParentJcrPath(parentJcrPath);
     entity.setVisibleName(visibleName);
     entity.setNormalizedVisibleName(visibleName);
     entity.setJcrPath(jcrPath);
     entity.setNodeIdentifier(identifier);
-    entity.setWebDavPath(DRIVE + "/" + visibleName);
-    mappings.put(key(DRIVE_ROOT_JCR_PATH, visibleName), entity);
+    entity.setWebDavPath(webDavPath);
+    mappings.put(key(parentJcrPath, visibleName), entity);
     return entity;
   }
 
