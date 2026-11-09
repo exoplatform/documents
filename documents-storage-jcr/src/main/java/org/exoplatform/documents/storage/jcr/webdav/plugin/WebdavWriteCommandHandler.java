@@ -768,7 +768,7 @@ public class WebdavWriteCommandHandler {
     // may still carry segments the repository normalises, such as '.' or '..'
     String targetPath = ((Node) session.getItem(targetJcrPath)).getPath();
     String sourcePath = ((Node) session.getItem(sourceJcrPath)).getPath();
-    if (StringUtils.equals(targetPath, "/") || isDriveRootOrAbove(targetPath, webDavTargetPath)) {
+    if (!isInsideTargetDrive(targetPath, webDavTargetPath)) {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN,
                                 String.format("Resource with path '%s' can't be replaced", webDavTargetPath));
     }
@@ -786,9 +786,9 @@ public class WebdavWriteCommandHandler {
     return true;
   }
 
-  private boolean isDriveRootOrAbove(String targetPath, String webDavTargetPath) {
+  private boolean isInsideTargetDrive(String targetPath, String webDavTargetPath) {
     String driveRootPath = pathCommandHandler.getIdentityBaseJcrPath(webDavTargetPath);
-    return StringUtils.equals(targetPath, driveRootPath) || StringUtils.startsWith(driveRootPath, targetPath + "/");
+    return StringUtils.startsWith(targetPath, driveRootPath + "/");
   }
 
   @SneakyThrows
