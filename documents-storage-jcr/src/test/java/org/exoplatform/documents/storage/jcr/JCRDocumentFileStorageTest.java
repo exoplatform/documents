@@ -2211,10 +2211,8 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
-   * EXO-93681: a document created from the template card used to be a copy
-   * followed by a client-side rename, so a kept name recorded nothing and a
-   * changed name recorded one file update. The copy is created under its final
-   * name in one call, and that call broadcasts the creation event once.
+   * A document created from a template document is created under its final
+   * name in one call, which broadcasts the creation event once (EXO-93681).
    */
   @Test
   public void createDocumentFromTemplateDocumentWithTheProposedNameRecordsOneCreation() throws Exception {
