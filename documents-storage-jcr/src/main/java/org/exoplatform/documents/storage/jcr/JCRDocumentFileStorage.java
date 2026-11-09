@@ -1794,11 +1794,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   /**
-   * The node name a file title gets, shared by the rename and the creation from a
-   * template document: the special characters replaced, the accents removed, the
-   * JCR-illegal characters escaped, then one URL-decoding, which undoes the second
-   * escaping of {@code %} (and turns a {@code +} into a space, as the rename
-   * always did). The folder paths compute their name apart.
+   * The node name a title gets, shared by the rename of a file or a folder and by
+   * the creation from a template document: the special characters replaced, the
+   * accents removed, the JCR-illegal characters escaped, then one URL-decoding,
+   * which undoes the second escaping of {@code %} (and turns a {@code +} into a
+   * space, as the rename always did). createFolder and getNewName compute a
+   * folder's name apart.
    *
    * @param title the title the user gave
    * @param nodeType the node type, which decides whether an extension is kept apart
