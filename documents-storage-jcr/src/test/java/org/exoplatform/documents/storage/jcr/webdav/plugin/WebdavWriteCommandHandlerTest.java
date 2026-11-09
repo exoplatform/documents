@@ -326,6 +326,7 @@ public class WebdavWriteCommandHandlerTest {
     WebDavException exception = assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
 
     assertFalse(exception.getMessage().contains(TARGET_JCR_PATH));
+    assertTrue(exception.getMessage().contains(WEBDAV_FILE_PATH));
     assertTargetUntouched();
   }
 
