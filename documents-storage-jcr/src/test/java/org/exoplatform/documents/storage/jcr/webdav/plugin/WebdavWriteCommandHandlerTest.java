@@ -388,6 +388,28 @@ public class WebdavWriteCommandHandlerTest {
 
   @Test
   @SneakyThrows
+  public void testMoveOntoTheRepositoryRootIsRefused() {
+    givenMoveSource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn("/");
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveKeepsATargetResolutionFailureOtherThanNotFound() {
+    givenMoveSource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenThrow(new WebDavException(400, "unsupported"));
+
+    assertStatus(400, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
   public void testCopyToFreeNameCreatesTheTarget() {
     givenCopySource();
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenThrow(new WebDavException(404, "missing"));
