@@ -299,19 +299,10 @@ public class WebdavWriteCommandHandler {
     String sourceJcrPath = pathCommandHandler.resolveToJcrPath(session, webDavSourcePath);
     String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
+    checkResourceExists(session, sourceJcrPath);
+    boolean itemExists = removeExistingTarget(session, sourceJcrPath, webDavTargetPath, overwrite);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
-    checkResourceExists(session, sourceJcrPath);
-    boolean itemExists = session.itemExists(targetJcrPath);
-    if (itemExists) {
-      if (overwrite) {
-        Node targetNodeToremove = (Node) session.getItem(targetJcrPath);
-        targetNodeToremove.remove();
-        session.save();
-      } else {
-        throw new WebDavException(HttpStatus.SC_CONFLICT, String.format("Resource with path '%s' already exists", targetJcrPath));
-      }
-    }
     forceUnlock((Node) session.getItem(sourceJcrPath));
     session.move(sourceJcrPath, targetJcrPath);
     session.save();
@@ -337,17 +328,10 @@ public class WebdavWriteCommandHandler {
     String sourceJcrPath = pathCommandHandler.resolveToJcrPath(session, webDavSourcePath);
     String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
+    checkResourceExists(session, sourceJcrPath);
+    removeExistingTarget(session, sourceJcrPath, webDavTargetPath, overwrite || removeDestination);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
-    checkResourceExists(session, sourceJcrPath);
-    boolean itemExists = session.itemExists(targetJcrPath);
-    if (itemExists && removeDestination) {
-      Item destItem = session.getItem(targetJcrPath);
-      destItem.remove();
-      session.save();
-    } else if (itemExists && !overwrite) {
-      throw new WebDavException(HttpStatus.SC_CONFLICT, String.format("Resource with path '%s' already exists", targetJcrPath));
-    }
     Workspace workspace = session.getWorkspace();
     workspace.copy(sourceJcrPath, targetJcrPath);
     Node targetNode = (Node) session.getItem(targetJcrPath);
@@ -751,6 +735,47 @@ public class WebdavWriteCommandHandler {
     String normalizedPath = StringUtils.removeEnd(webDavPath, "/");
     int index = normalizedPath.lastIndexOf('/');
     return index <= 0 ? "/" : normalizedPath.substring(0, index);
+  }
+
+  /**
+   * Frees the WebDAV path a MOVE or a COPY writes to. The path is resolved the
+   * way every other request resolves it, so that the document it currently
+   * names is found whatever its technical node name. That document is replaced
+   * only when overwriting is allowed and the user may delete it, through the
+   * same steps as a WebDAV DELETE; otherwise the request is refused, and the
+   * path keeps naming that document.
+   *
+   * @return true when the path named a document, which was moved to the trash
+   */
+  private boolean removeExistingTarget(Session session,
+                                       String sourceJcrPath,
+                                       String webDavTargetPath,
+                                       boolean overwrite) throws RepositoryException, WebDavException {
+    String targetJcrPath;
+    try {
+      targetJcrPath = pathCommandHandler.resolveToJcrPath(session, webDavTargetPath);
+    } catch (WebDavException e) {
+      if (e.getHttpError() == HttpStatus.SC_NOT_FOUND) {
+        return false;
+      }
+      throw e;
+    }
+    if (!session.itemExists(targetJcrPath)) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' can't be replaced", webDavTargetPath));
+    }
+    if (StringUtils.equals(targetJcrPath, sourceJcrPath)
+        || StringUtils.startsWith(sourceJcrPath, targetJcrPath + "/")
+        || StringUtils.startsWith(targetJcrPath, sourceJcrPath + "/")) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' overlaps the source resource", webDavTargetPath));
+    }
+    if (!overwrite) {
+      throw new WebDavException(HttpStatus.SC_CONFLICT,
+                                String.format("Resource with path '%s' already exists", webDavTargetPath));
+    }
+    delete(session, webDavTargetPath);
+    return true;
   }
 
   @SneakyThrows

@@ -16,13 +16,17 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,6 +46,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
@@ -57,6 +62,7 @@ import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
+import org.exoplatform.services.jcr.impl.core.WorkspaceImpl;
 import org.exoplatform.services.security.ConversationState;
 
 import lombok.SneakyThrows;
@@ -79,6 +85,14 @@ public class WebdavWriteCommandHandlerTest {
   private static final String       VISIBLE_NAME       = "New File.txt";
 
   private static final String       TECHNICAL_NAME     = "New_File.txt";
+
+  private static final String       WEBDAV_SOURCE_PATH = "/John%20Doe%20%281%29/Source.txt";// NOSONAR
+
+  private static final String       SOURCE_JCR_PATH    = "/jcr/source";               // NOSONAR
+
+  private static final String       TARGET_JCR_PATH    = "/jcr/existing";             // NOSONAR
+
+  private static final String       NEW_TARGET_JCR_PATH = PARENT_JCR_PATH + "/" + TECHNICAL_NAME;
 
   @Mock
   private RepositoryService         repositoryService;
@@ -118,6 +132,15 @@ public class WebdavWriteCommandHandlerTest {
 
   @Mock
   private Version                   version;
+
+  @Mock
+  private NodeImpl                  sourceNode;
+
+  @Mock
+  private NodeImpl                  existingNode;
+
+  @Mock
+  private WorkspaceImpl             workspace;
 
   @InjectMocks
   private WebdavWriteCommandHandler handler;
@@ -246,5 +269,252 @@ public class WebdavWriteCommandHandlerTest {
     verify(pathCommandHandler).resolveToJcrPath(session, JCR_PATH);
     verify(node).addMixin("mix:versionable");
     verify(session).save();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testDeleteChecksThenTrashesThenDeletesMappingInOrder() {
+    givenExistingTarget();
+
+    handler.delete(session, WEBDAV_FILE_PATH);
+
+    InOrder inOrder = inOrder(pathCommandHandler, existingNode, trashStorage, session);
+    inOrder.verify(pathCommandHandler).isIdentityRootWebDavPath(WEBDAV_FILE_PATH);
+    inOrder.verify(pathCommandHandler).resolveToJcrPath(session, WEBDAV_FILE_PATH);
+    inOrder.verify(existingNode).checkPermission(PermissionType.REMOVE);
+    inOrder.verify(trashStorage).moveToTrash(eq(existingNode), any(SessionProvider.class));
+    inOrder.verify(pathCommandHandler).deleteMapping(TARGET_JCR_PATH);
+    inOrder.verify(session).save();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveToFreeNameCreatesTheTarget() {
+    givenMoveSource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenThrow(new WebDavException(404, "missing"));
+
+    assertFalse(handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    verify(trashStorage, never()).moveToTrash(any(), any());
+    verify(session).move(SOURCE_JCR_PATH, NEW_TARGET_JCR_PATH);
+    verify(pathCommandHandler).saveMapping(session, WEBDAV_FILE_PATH, VISIBLE_NAME, node);
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoExistingNameReplacesTheTargetWhenUserMayRemoveIt() {
+    givenMoveSource();
+    givenExistingTarget();
+
+    assertTrue(handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    InOrder inOrder = inOrder(trashStorage, pathCommandHandler, session);
+    inOrder.verify(trashStorage).moveToTrash(eq(existingNode), any(SessionProvider.class));
+    inOrder.verify(pathCommandHandler).deleteMapping(TARGET_JCR_PATH);
+    inOrder.verify(pathCommandHandler).allocateTechnicalName(session, PARENT_JCR_PATH, VISIBLE_NAME);
+    inOrder.verify(session).move(SOURCE_JCR_PATH, NEW_TARGET_JCR_PATH);
+    inOrder.verify(pathCommandHandler).saveMapping(session, WEBDAV_FILE_PATH, VISIBLE_NAME, node);
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoExistingNameIsRefusedWhenUserMayNotRemoveTheTarget() {
+    givenMoveSource();
+    givenExistingTarget();
+    doThrow(new AccessControlException("denied")).when(existingNode).checkPermission(PermissionType.REMOVE);
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoExistingNameIsRefusedWithoutOverwrite() {
+    givenMoveSource();
+    givenExistingTarget();
+
+    assertStatus(409, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoNameOfADocumentTheUserCannotSeeIsRefused() {
+    givenMoveSource();
+    givenExistingTarget();
+    when(session.itemExists(TARGET_JCR_PATH)).thenReturn(false);
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoItselfIsRefused() {
+    givenMoveSource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(SOURCE_JCR_PATH);
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoAnAncestorOfTheSourceIsRefused() {
+    givenMoveSource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH);
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoADescendantOfTheSourceIsRefused() {
+    givenMoveSource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(SOURCE_JCR_PATH + "/child");
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyToFreeNameCreatesTheTarget() {
+    givenCopySource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenThrow(new WebDavException(404, "missing"));
+
+    handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true, false);
+
+    verify(trashStorage, never()).moveToTrash(any(), any());
+    verify(workspace).copy(SOURCE_JCR_PATH, NEW_TARGET_JCR_PATH);
+    verify(pathCommandHandler).saveMapping(session, WEBDAV_FILE_PATH, VISIBLE_NAME, node);
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyOntoExistingNameReplacesTheTargetWhenOverwriteIsAllowed() {
+    givenCopySource();
+    givenExistingTarget();
+
+    handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true, false);
+
+    assertTargetReplacedThenCopied();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyOntoExistingNameReplacesTheTargetWhenDestinationRemovalIsAsked() {
+    givenCopySource();
+    givenExistingTarget();
+
+    handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false, true);
+
+    assertTargetReplacedThenCopied();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyOntoExistingNameIsRefusedWhenUserMayNotRemoveTheTarget() {
+    givenCopySource();
+    givenExistingTarget();
+    doThrow(new AccessControlException("denied")).when(existingNode).checkPermission(PermissionType.REMOVE);
+
+    assertStatus(403, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true, true));
+
+    assertTargetUntouched();
+    verify(workspace, never()).copy(anyString(), anyString());
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyOntoExistingNameIsRefusedWithoutOverwrite() {
+    givenCopySource();
+    givenExistingTarget();
+
+    assertStatus(409, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false, false));
+
+    assertTargetUntouched();
+    verify(workspace, never()).copy(anyString(), anyString());
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyOntoNameOfADocumentTheUserCannotSeeIsRefused() {
+    givenCopySource();
+    givenExistingTarget();
+    when(session.itemExists(TARGET_JCR_PATH)).thenReturn(false);
+
+    assertStatus(403, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true, true));
+
+    assertTargetUntouched();
+    verify(workspace, never()).copy(anyString(), anyString());
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyOntoItselfIsRefused() {
+    givenCopySource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(SOURCE_JCR_PATH);
+
+    assertStatus(403, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true, true));
+
+    assertTargetUntouched();
+    verify(workspace, never()).copy(anyString(), anyString());
+  }
+
+  @SneakyThrows
+  private void givenMoveSource() {
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_SOURCE_PATH)).thenReturn(SOURCE_JCR_PATH);
+    when(session.getItem(SOURCE_JCR_PATH)).thenReturn(sourceNode);
+    when(session.itemExists(SOURCE_JCR_PATH)).thenReturn(true);
+    when(session.itemExists(NEW_TARGET_JCR_PATH)).thenReturn(false);
+    when(sourceNode.getPath()).thenReturn(SOURCE_JCR_PATH);
+    when(sourceNode.isLocked()).thenReturn(false);
+  }
+
+  @SneakyThrows
+  private void givenCopySource() {
+    givenMoveSource();
+    when(session.getWorkspace()).thenReturn(workspace);
+  }
+
+  @SneakyThrows
+  private void givenExistingTarget() {
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(TARGET_JCR_PATH);
+    when(session.itemExists(TARGET_JCR_PATH)).thenReturn(true);
+    when(session.getItem(TARGET_JCR_PATH)).thenReturn(existingNode);
+    when(session.getUserState()).thenReturn(conversationState);
+    when(existingNode.getPath()).thenReturn(TARGET_JCR_PATH);
+    when(existingNode.getSession()).thenReturn(session);
+    when(existingNode.isLocked()).thenReturn(false);
+  }
+
+  @SneakyThrows
+  private void assertTargetReplacedThenCopied() {
+    InOrder inOrder = inOrder(trashStorage, pathCommandHandler, workspace);
+    inOrder.verify(trashStorage).moveToTrash(eq(existingNode), any(SessionProvider.class));
+    inOrder.verify(pathCommandHandler).deleteMapping(TARGET_JCR_PATH);
+    inOrder.verify(workspace).copy(SOURCE_JCR_PATH, NEW_TARGET_JCR_PATH);
+    inOrder.verify(pathCommandHandler).saveMapping(session, WEBDAV_FILE_PATH, VISIBLE_NAME, node);
+  }
+
+  @SneakyThrows
+  private void assertTargetUntouched() {
+    verify(trashStorage, never()).moveToTrash(any(), any());
+    verify(pathCommandHandler, never()).deleteMapping(anyString());
+    verify(session, never()).move(anyString(), anyString());
+    verify(pathCommandHandler, never()).saveMapping(any(), anyString(), anyString(), any());
+  }
+
+  private void assertStatus(int status, org.junit.function.ThrowingRunnable runnable) {
+    WebDavException exception = assertThrows(WebDavException.class, runnable);
+    assertEquals(status, exception.getHttpError());
   }
 }
