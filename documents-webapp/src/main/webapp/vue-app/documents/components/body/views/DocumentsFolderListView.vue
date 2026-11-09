@@ -51,8 +51,6 @@
             :loading-text="loadingLabel"
             :class="loadingClass"
             :custom-sort="customSort"
-            :aria-label="tableLabel"
-            role="group"
             mobile-breakpoint="960"
             :show-select="!isMobile"
             hide-default-footer
@@ -358,6 +356,9 @@ export default {
     }
   },
   watch: {
+    tableLabel() {
+      this.$nextTick(this.nameTable);
+    },
     options() {
       if (!this.initialized) {
         return;
@@ -387,6 +388,7 @@ export default {
   mounted(){
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
     DocumentsDraggable.invoke('folderView', 'breadcrumb-list-items');
+    this.nameTable();
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
@@ -396,6 +398,10 @@ export default {
     this.$root.$off('documents-file-name-edit', this.setEditName);
   },
   methods: {
+    // v-data-table renders its <table> inside a wrapper and gives it no name
+    nameTable() {
+      this.$refs.dataTable?.$el?.querySelector?.('table')?.setAttribute('aria-label', this.tableLabel);
+    },
     setEditName(value) {
       this.editName = value;
     },
