@@ -764,7 +764,8 @@ public class WebdavWriteCommandHandler {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN,
                                 String.format("Resource with path '%s' can't be replaced", webDavTargetPath));
     }
-    if (StringUtils.equals(targetJcrPath, sourceJcrPath)
+    if (StringUtils.equals(targetJcrPath, "/")
+        || StringUtils.equals(targetJcrPath, sourceJcrPath)
         || StringUtils.startsWith(sourceJcrPath, targetJcrPath + "/")
         || StringUtils.startsWith(targetJcrPath, sourceJcrPath + "/")) {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN,
