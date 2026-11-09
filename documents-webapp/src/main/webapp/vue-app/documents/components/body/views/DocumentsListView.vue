@@ -31,8 +31,6 @@
       :loading-text="loadingLabel"
       :class="loadingClass"
       :custom-sort="customSort"
-      :aria-label="tableLabel"
-      role="group"
       mobile-breakpoint="960"
       :show-select="!isMobile"
       hide-default-footer
@@ -357,6 +355,9 @@ export default {
     },
   },
   watch: {
+    tableLabel() {
+      this.$nextTick(this.nameTable);
+    },
     options() {
       if (!this.initialized) {
         return;
@@ -389,8 +390,13 @@ export default {
     document.getElementById('headerName')?.closest('tr').addEventListener('mouseover', this.showSelectAllInputOnHover);
     document.getElementById('headerName')?.closest('tr').addEventListener('mouseleave', this.hideSelectAllInputOnHover);
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
+    this.nameTable();
   },
   methods: {
+    // v-data-table renders its <table> inside a wrapper and gives it no name
+    nameTable() {
+      this.$refs.dataTable?.$el?.querySelector?.('table')?.setAttribute('aria-label', this.tableLabel);
+    },
     showSelectAllInputOnHover(){
       clearTimeout(this.showSelectInputTimer);
       this.showSelectAllInput = true;
