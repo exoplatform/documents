@@ -410,9 +410,13 @@ public class WebdavWriteCommandHandlerTest {
     assertTargetUntouched();
   }
 
+  /**
+   * A drive root directly under the repository root: refused by the direct-child check,
+   * which reads an empty parent path for it, before the drive guard.
+   */
   @Test
   @SneakyThrows
-  public void testMoveOntoTheRootOfTheTargetDriveIsRefused() {
+  public void testMoveOntoADriveRootUnderTheRepositoryRootIsRefused() {
     givenMoveSource();
     givenTargetParentAt("/");
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH);
@@ -423,6 +427,10 @@ public class WebdavWriteCommandHandlerTest {
     assertTargetUntouched();
   }
 
+  /**
+   * Drive guard on its own. Only an intermediate name mapping that names a node outside
+   * its drive leads here: consistent mappings never resolve the parent above the drive root.
+   */
   @Test
   @SneakyThrows
   public void testMoveOntoTheTargetDriveRootNamedFromItsParentIsRefused() {
@@ -435,6 +443,10 @@ public class WebdavWriteCommandHandlerTest {
     assertTargetUntouched();
   }
 
+  /**
+   * Drive guard on its own. Only an intermediate name mapping that names a node outside
+   * its drive leads here: consistent mappings never resolve the parent outside the drive.
+   */
   @Test
   @SneakyThrows
   public void testMoveOntoANodeOutsideTheTargetDriveIsRefused() {
