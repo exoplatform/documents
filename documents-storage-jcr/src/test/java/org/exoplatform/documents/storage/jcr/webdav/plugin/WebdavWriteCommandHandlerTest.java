@@ -425,6 +425,18 @@ public class WebdavWriteCommandHandlerTest {
 
   @Test
   @SneakyThrows
+  public void testMoveOntoTheTargetDriveRootNamedFromItsParentIsRefused() {
+    givenMoveSource();
+    givenExistingTarget();
+    when(pathCommandHandler.getIdentityBaseJcrPath(WEBDAV_FILE_PATH)).thenReturn(TARGET_JCR_PATH);
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
   public void testMoveOntoANodeOutsideTheTargetDriveIsRefused() {
     givenMoveSource();
     givenTargetParentAt("/home");
