@@ -88,7 +88,7 @@ public class WebdavWriteCommandHandlerTest {
 
   private static final String       WEBDAV_SOURCE_PATH = "/John%20Doe%20%281%29/Source.txt";// NOSONAR
 
-  private static final String       SOURCE_JCR_PATH    = "/jcr/source";               // NOSONAR
+  private static final String       SOURCE_JCR_PATH    = "/jcr/folder/source";        // NOSONAR
 
   private static final String       TARGET_JCR_PATH    = "/jcr/existing";             // NOSONAR
 
@@ -158,6 +158,7 @@ public class WebdavWriteCommandHandlerTest {
     when(pathCommandHandler.getLastVisibleSegment(anyString())).thenReturn(VISIBLE_NAME);
     when(pathCommandHandler.allocateTechnicalName(eq(session), eq(PARENT_JCR_PATH), anyString())).thenReturn(TECHNICAL_NAME);
     when(pathCommandHandler.getVisibleName(any(Node.class))).thenReturn(TECHNICAL_NAME);
+    when(pathCommandHandler.getIdentityBaseJcrPath(anyString())).thenReturn(PARENT_JCR_PATH);
 
     when(session.itemExists(anyString())).thenReturn(true);
     when(session.getItem(JCR_PATH)).thenReturn(node);
@@ -368,7 +369,8 @@ public class WebdavWriteCommandHandlerTest {
   @SneakyThrows
   public void testMoveOntoAnAncestorOfTheSourceIsRefused() {
     givenMoveSource();
-    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH);
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH + "/folder");
+    givenNodeAt(PARENT_JCR_PATH + "/folder", PARENT_JCR_PATH + "/folder");
 
     assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
 
@@ -380,6 +382,7 @@ public class WebdavWriteCommandHandlerTest {
   public void testMoveOntoADescendantOfTheSourceIsRefused() {
     givenMoveSource();
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(SOURCE_JCR_PATH + "/child");
+    givenNodeAt(SOURCE_JCR_PATH + "/child", SOURCE_JCR_PATH + "/child");
 
     assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
 
@@ -391,6 +394,35 @@ public class WebdavWriteCommandHandlerTest {
   public void testMoveOntoTheRepositoryRootIsRefused() {
     givenMoveSource();
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn("/");
+    givenNodeAt("/", "/");
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoTheRootOfTheTargetDriveIsRefused() {
+    givenMoveSource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_SOURCE_PATH)).thenReturn("/other/source");
+    when(session.getItem("/other/source")).thenReturn(sourceNode);
+    when(session.itemExists("/other/source")).thenReturn(true);
+    when(sourceNode.getPath()).thenReturn("/other/source");
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH + "/folder/..");
+    givenNodeAt(PARENT_JCR_PATH + "/folder/..", PARENT_JCR_PATH);
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoAnotherSpellingOfTheSourcePathIsRefused() {
+    givenMoveSource();
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn(PARENT_JCR_PATH + "/other/../folder/source");
+    givenNodeAt(PARENT_JCR_PATH + "/other/../folder/source", SOURCE_JCR_PATH);
 
     assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
 
@@ -506,6 +538,13 @@ public class WebdavWriteCommandHandlerTest {
     when(session.itemExists(NEW_TARGET_JCR_PATH)).thenReturn(false);
     when(sourceNode.getPath()).thenReturn(SOURCE_JCR_PATH);
     when(sourceNode.isLocked()).thenReturn(false);
+  }
+
+  @SneakyThrows
+  private void givenNodeAt(String resolvedPath, String nodePath) {
+    NodeImpl resolvedNode = org.mockito.Mockito.mock(NodeImpl.class);
+    when(resolvedNode.getPath()).thenReturn(nodePath);
+    when(session.getItem(resolvedPath)).thenReturn(resolvedNode);
   }
 
   @SneakyThrows

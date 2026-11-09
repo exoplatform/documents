@@ -764,10 +764,17 @@ public class WebdavWriteCommandHandler {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN,
                                 String.format("Resource with path '%s' can't be replaced", webDavTargetPath));
     }
-    if (StringUtils.equals(targetJcrPath, "/")
-        || StringUtils.equals(targetJcrPath, sourceJcrPath)
-        || StringUtils.startsWith(sourceJcrPath, targetJcrPath + "/")
-        || StringUtils.startsWith(targetJcrPath, sourceJcrPath + "/")) {
+    // Compare the paths the repository reports for the nodes: a resolved path
+    // may still carry segments the repository normalises, such as '.' or '..'
+    String targetPath = ((Node) session.getItem(targetJcrPath)).getPath();
+    String sourcePath = ((Node) session.getItem(sourceJcrPath)).getPath();
+    if (StringUtils.equals(targetPath, "/") || isDriveRootOrAbove(targetPath, webDavTargetPath)) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' can't be replaced", webDavTargetPath));
+    }
+    if (StringUtils.equals(targetPath, sourcePath)
+        || StringUtils.startsWith(sourcePath, targetPath + "/")
+        || StringUtils.startsWith(targetPath, sourcePath + "/")) {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN,
                                 String.format("Resource with path '%s' overlaps the source resource", webDavTargetPath));
     }
@@ -777,6 +784,11 @@ public class WebdavWriteCommandHandler {
     }
     delete(session, webDavTargetPath);
     return true;
+  }
+
+  private boolean isDriveRootOrAbove(String targetPath, String webDavTargetPath) {
+    String driveRootPath = pathCommandHandler.getIdentityBaseJcrPath(webDavTargetPath);
+    return StringUtils.equals(targetPath, driveRootPath) || StringUtils.startsWith(driveRootPath, targetPath + "/");
   }
 
   @SneakyThrows
