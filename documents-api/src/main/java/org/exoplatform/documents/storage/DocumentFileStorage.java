@@ -204,6 +204,35 @@ public interface DocumentFileStorage {
   public AbstractNode copyDocument(String nodeId, String destintionNodeId, Identity aclIdentity) throws ObjectNotFoundException;
 
   /**
+   * Creates a document from a template document: copies the template node, or
+   * the target of a shortcut template, into the destination folder under the
+   * given title, in one call, and broadcasts the document creation event the
+   * blank-document paths broadcast, so Analytics records one document creation
+   * whatever the name the user chose. The Documents app's Duplicate and
+   * copy-paste keep {@link #copyDocument} and record nothing.
+   *
+   * @param ownerId owner identity id, used when destinationFolderId is blank
+   * @param templateDocumentId identifier of the template document node
+   * @param destinationFolderId identifier of the destination folder node
+   * @param title title the user gave, with or without the template's extension
+   * @param aclIdentity {@link Identity} of the user creating the document
+   * @return the created {@link AbstractNode}, the copy itself
+   * @throws IllegalAccessException when the user may not add a document to the
+   *           destination folder
+   * @throws ObjectNotFoundException when the template document or the
+   *           destination folder doesn't exist
+   * @throws ObjectAlreadyExistsException when the destination folder already
+   *           holds a node of the computed name
+   */
+  AbstractNode createDocumentFromTemplateDocument(long ownerId,
+                                                  String templateDocumentId,
+                                                  String destinationFolderId,
+                                                  String title,
+                                                  Identity aclIdentity) throws IllegalAccessException,
+                                                                        ObjectNotFoundException,
+                                                                        ObjectAlreadyExistsException;
+
+  /**
    * Move the given node.
    *
    * @param session current jcr session

@@ -210,6 +210,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   public static final String                        TEMP_IMPORT_FOLDER_PREFIX   = "temp_import";
 
+  /**
+   * The event ecms broadcasts when a blank document is created from the
+   * platform's templates (ecms {@code DocumentServiceImpl.CREATE_DOC_NEW_APP}),
+   * registered on ecms-social-integration's {@code AnalyticsDocumentsListener},
+   * which records it as the {@code documentCreated} operation. Broadcast here
+   * for a document created from a template document, so both creation paths
+   * record one creation.
+   */
+  public static final String                        CREATE_DOCUMENT_EVENT       = "exo.create.doc.newApp";
+
   private static final String                       ZIP_EXTENSION               = ".zip";
 
   static final String                               DOCUMENT_CATEGORY_IDS_QUERY = "SELECT exo:categoryIds FROM nt:base " +
@@ -1421,6 +1431,83 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       return toFileNode(identityManager, aclIdentity, parentNode, "", spaceService);
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public AbstractNode createDocumentFromTemplateDocument(long ownerId,
+                                                         String templateDocumentId,
+                                                         String destinationFolderId,
+                                                         String title,
+                                                         Identity aclIdentity) throws IllegalAccessException,
+                                                                               ObjectNotFoundException,
+                                                                               ObjectAlreadyExistsException {
+    if (StringUtils.isBlank(templateDocumentId)) {
+      throw new IllegalArgumentException("template document id is mandatory");
+    }
+    if (!isValidDocumentTitle(title)) {
+      throw new IllegalArgumentException("document title is not valid");
+    }
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      Node templateNode = getNodeByIdentifier(session, templateDocumentId);
+      if (templateNode != null && templateNode.isNodeType(EXO_SYMLINK)) {
+        // A shortcut template copies its target, so the new document holds the
+        // content, not a link
+        templateNode = getNodeByIdentifier(session, templateNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+      }
+      if (templateNode == null || !templateNode.isNodeType(NodeTypeConstants.NT_FILE)) {
+        throw new ObjectNotFoundException("Template document with id '" + templateDocumentId + "' not found");
+      }
+      Node destinationNode;
+      if (StringUtils.isBlank(destinationFolderId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        destinationNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+      } else {
+        destinationNode = getNodeByIdentifier(session, destinationFolderId);
+      }
+      if (destinationNode == null) {
+        throw new ObjectNotFoundException("Destination folder with id '" + destinationFolderId + "' not found");
+      }
+      Map<String, Boolean> nodeAccessList = countNodeAccessList(destinationNode, aclIdentity);
+      String canEdit = "canEdit";
+      if (nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue()) {
+        throw new IllegalAccessException("Permission to add document is missing");
+      }
+      // The drawer shows the template's extension apart from the name field, so
+      // a title typed without one takes the template's
+      String documentTitle = title.trim();
+      String templateName = templateNode.getName();
+      if (documentTitle.lastIndexOf('.') <= 0 && templateName.lastIndexOf('.') > 0) {
+        documentTitle = documentTitle.concat(templateName.substring(templateName.lastIndexOf('.')));
+      }
+      // The node name and exo:title come from the same string, as renameDocument
+      // computes them
+      String name = Text.escapeIllegalJcrChars(cleanName(documentTitle.toLowerCase(), NodeTypeConstants.NT_FILE));
+      name = cleanNameWithAccents(name, NodeTypeConstants.NT_FILE);
+      if (destinationNode.hasNode(name)) {
+        throw new ObjectAlreadyExistsException("A document named '" + documentTitle + "' already exists in the target folder");
+      }
+      Node newNode = destinationNode.addNode(name, templateNode.getPrimaryNodeType().getName());
+      addProperties(templateNode, newNode, documentTitle);
+      destinationNode.save();
+      VersionHistoryUtils.createVersion(newNode);
+      // One creation per document, whatever the name the user chose: the copy is
+      // created under its final name, so no rename follows
+      listenerService.broadcast(CREATE_DOCUMENT_EVENT, username, newNode);
+      return toFileNode(identityManager, aclIdentity, newNode, "", spaceService);
+    } catch (IllegalAccessException | ObjectNotFoundException | ObjectAlreadyExistsException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IllegalStateException("Error creating document from template '" + templateDocumentId + "'", e);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
