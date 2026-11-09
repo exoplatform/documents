@@ -2268,6 +2268,31 @@ public class JCRDocumentFileStorageTest {
     verify(listenerService, times(1)).broadcast(anyString(), any(), any());
   }
 
+  /**
+   * A title with a percent sign gets the node name renameDocument computes:
+   * the JCR escaping runs twice (once in cleanNameWithAccents), and one URL
+   * decoding brings it back to a single escaping, so a clash with a renamed
+   * document of the same title is seen.
+   */
+  @Test
+  public void createDocumentFromTemplateDocumentNamesAPercentAsRenameDoes() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
+    Node template = mockTemplateFile("modele-test.docx");
+    ExtendedNode destination = mockDestinationFolder("john", true);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
+    Node newNode = mock(Node.class);
+    when(destination.addNode("50%25 plan.docx", "nt:file")).thenReturn(newNode);
+
+    jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "50% plan.docx", aclIdentity);
+
+    verify(destination).hasNode("50%25 plan.docx");
+    verify(destination).addNode("50%25 plan.docx", "nt:file");
+    verify(newNode).setProperty(NodeTypeConstants.EXO_TITLE, "50% plan.docx");
+  }
+
   @Test
   public void createDocumentFromTemplateDocumentRefusesANameAlreadyTaken() throws Exception {
     org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");

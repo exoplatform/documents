@@ -1259,10 +1259,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, documentID);
       }
-      String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), node.getPrimaryNodeType().getName()));
-      name = cleanNameWithAccents(name, node.getPrimaryNodeType().getName());
-      // clean node name
-      name = URLDecoder.decode(name, "UTF-8");
+      String name = cleanedNodeName(title, node.getPrimaryNodeType().getName());
       if (name.indexOf('.') == -1) {
         String oldName = node.getName().indexOf('.') == -1 && node.isNodeType(NodeTypeConstants.NT_FILE)
                          && node.hasProperty(NodeTypeConstants.EXO_TITLE) ?
@@ -1489,10 +1486,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (documentTitle.lastIndexOf('.') <= 0 && templateName.lastIndexOf('.') > 0) {
         documentTitle = documentTitle.concat(templateName.substring(templateName.lastIndexOf('.')));
       }
-      // The node name and exo:title come from the same string, as renameDocument
-      // computes them
-      String name = Text.escapeIllegalJcrChars(cleanName(documentTitle.toLowerCase(), NodeTypeConstants.NT_FILE));
-      name = cleanNameWithAccents(name, NodeTypeConstants.NT_FILE);
+      // The node name and exo:title come from the same string, through the
+      // helper renameDocument uses, so a clash with a renamed document is seen
+      String name = cleanedNodeName(documentTitle, NodeTypeConstants.NT_FILE);
       if (destinationNode.hasNode(name)) {
         throw new ObjectAlreadyExistsException("A document named '" + documentTitle + "' already exists in the target folder");
       }
@@ -1795,6 +1791,23 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       addProperties(oldNode, newNode, title);
     }
     return newNode;
+  }
+
+  /**
+   * The node name a title gets, computed the same way on every path that names
+   * a node from a title: the special characters replaced, the accents removed,
+   * the JCR-illegal characters escaped, then one URL-decoding, which undoes the
+   * second escaping of {@code %} and {@code +}.
+   *
+   * @param title the title the user gave
+   * @param nodeType the node type, which decides whether an extension is kept apart
+   * @return the node name
+   * @throws UnsupportedEncodingException never, UTF-8 being always supported
+   */
+  private String cleanedNodeName(String title, String nodeType) throws UnsupportedEncodingException {
+    String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), nodeType));
+    name = cleanNameWithAccents(name, nodeType);
+    return URLDecoder.decode(name, "UTF-8");
   }
 
   private void addProperties(Node oldNode, Node newNode, String title) throws RepositoryException {
