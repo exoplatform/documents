@@ -753,9 +753,13 @@ public class WebdavWriteCommandHandler {
                                        String webDavTargetPath,
                                        boolean overwrite) throws RepositoryException, WebDavException {
     // The new node's name mapping is keyed by the path the repository reports
-    // for its parent: a parent path spelled otherwise ('.', '..') would let the
-    // lookup below miss a document that mapping key already names
-    if (!StringUtils.equals(((Node) session.getItem(targetParentJcrPath)).getPath(), targetParentJcrPath)) {
+    // for its parent and by the target name: a parent path spelled otherwise
+    // ('.', '..'), or a target name the repository reads as a path, would let
+    // the lookup below miss a document that mapping key already names
+    String targetName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
+    if (StringUtils.equalsAny(targetName, ".", "..")
+        || StringUtils.contains(targetName, '/')
+        || !StringUtils.equals(((Node) session.getItem(targetParentJcrPath)).getPath(), targetParentJcrPath)) {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN,
                                 String.format("Resource with path '%s' can't be written", webDavTargetPath));
     }
