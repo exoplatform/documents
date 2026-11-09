@@ -1106,32 +1106,59 @@ public class JCRDocumentsUtil {
                                                String sourcePath,
                                                String tempFolderPath,
                                                Node parentNode) throws Exception {
+    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, parentNode, new HashSet<>());
+  }
+
+  /**
+   * Copies the tree under a node, following shortcuts to their targets.
+   * {@code walkPath} holds the identifiers of the nodes on the current branch of
+   * the walk, so a node is walked at most once on any one branch.
+   */
+  private static void createTempFilesAndFolders(Node node,
+                                                String symlinkPath,
+                                                String sourcePath,
+                                                String tempFolderPath,
+                                                Node parentNode,
+                                                Set<String> walkPath) throws Exception {
     if (node == null) {
       return;
     }
-    if (JCRDocumentsUtil.isFolder(node)) {
-      String nodePath = getPathWithTitles(node);
-      String parentPath = getPathWithTitles(parentNode);
-      if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
-        nodePath = symlinkPath + nodePath.replace(sourcePath, "");
-      }
-      String path = tempFolderPath + nodePath.replace(parentPath, "");
-      Files.createDirectories(Paths.get(path));
-      NodeIterator nodeIterator = node.getNodes();
-      while (nodeIterator.hasNext()) {
-        Node child = nodeIterator.nextNode();
-        createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentNode);
-      }
-    } else {
-      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-        String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-        Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(node.getSession(), sourceID);
-        if (sourceNode != null) {
-          createTempFilesAndFolders(sourceNode, getPathWithTitles(node), getPathWithTitles(sourceNode), tempFolderPath, parentNode);
+    String nodeId = ((ExtendedNode) node).getIdentifier();
+    if (!walkPath.add(nodeId)) {
+      return;
+    }
+    try {
+      if (JCRDocumentsUtil.isFolder(node)) {
+        String nodePath = getPathWithTitles(node);
+        String parentPath = getPathWithTitles(parentNode);
+        if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
+          nodePath = symlinkPath + nodePath.replace(sourcePath, "");
+        }
+        String path = tempFolderPath + nodePath.replace(parentPath, "");
+        Files.createDirectories(Paths.get(path));
+        NodeIterator nodeIterator = node.getNodes();
+        while (nodeIterator.hasNext()) {
+          Node child = nodeIterator.nextNode();
+          createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentNode, walkPath);
         }
       } else {
-        createFile(node, symlinkPath, sourcePath, tempFolderPath, parentNode);
+        if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+          String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(node.getSession(), sourceID);
+          if (sourceNode != null) {
+            createTempFilesAndFolders(sourceNode,
+                                      getPathWithTitles(node),
+                                      getPathWithTitles(sourceNode),
+                                      tempFolderPath,
+                                      parentNode,
+                                      walkPath);
+          }
+        } else {
+          createFile(node, symlinkPath, sourcePath, tempFolderPath, parentNode);
+        }
       }
+    } finally {
+      walkPath.remove(nodeId);
     }
   }
   public static void cleanFiles(File file) {

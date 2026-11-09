@@ -32,11 +32,22 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.Property;
@@ -536,4 +547,185 @@ public class JCRDocumentsUtilTest {
     assertEquals(" (1).gitignore", JCRDocumentsUtil.getNewIndexedName(".gitignore", " (1)"));
   }
 
+
+  /**
+   * The walk completes, with each file of the folder copied once.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersStopsAtAShortcutToAnAncestor() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode documents = folderNode("documentsId", "Documents", null);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode folderB = folderNode("bId", "B", folderA);
+    ExtendedNode fileA = fileNode("fId", "f.txt", folderA);
+    ExtendedNode fileB = fileNode("gId", "g.txt", folderB);
+    ExtendedNode shortcutToA = shortcutNode("linkId", "toA", folderB, folderA, session);
+    childrenOf(folderA, fileA, folderB);
+    childrenOf(folderB, fileB, shortcutToA);
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("A/f.txt", "A/B/g.txt"), filesUnder(tempFolder));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * The walked folder is not copied a second time inside its own copy.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersDoesNotWalkTheDownloadedFolderTwice() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode documents = folderNode("documentsId", "Documents", null);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode folderB = folderNode("bId", "B", folderA);
+    ExtendedNode fileA = fileNode("fId", "a.txt", folderA);
+    ExtendedNode fileB = fileNode("gId", "b.txt", folderB);
+    ExtendedNode shortcutToA = shortcutNode("linkId", "toA", folderB, folderA, session);
+    childrenOf(folderA, fileA, folderB);
+    childrenOf(folderB, fileB, shortcutToA);
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderB, "", "", tempFolder.toString(), folderA);
+      assertEquals(Set.of("B/b.txt", "B/toA/a.txt"), filesUnder(tempFolder));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * A shortcut's target folder is copied under the shortcut, as before, also
+   * when the same folder is copied elsewhere in the same download.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersKeepsAShortcutToASiblingFolder() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode documents = folderNode("documentsId", "Documents", null);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode folderC = folderNode("cId", "C", folderA);
+    ExtendedNode folderB = folderNode("bId", "B", folderA);
+    ExtendedNode fileC = fileNode("fId", "c.txt", folderC);
+    ExtendedNode shortcutToC = shortcutNode("linkId", "toC", folderB, folderC, session);
+    childrenOf(folderA, folderC, folderB);
+    childrenOf(folderC, fileC);
+    childrenOf(folderB, shortcutToC);
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("A/C/c.txt", "A/B/toC/c.txt"), filesUnder(tempFolder));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  private static ExtendedNode folderNode(String id, String name, ExtendedNode parent) throws RepositoryException {
+    ExtendedNode node = namedNode(id, name, parent, NodeTypeConstants.NT_FOLDER);
+    childrenOf(node);
+    return node;
+  }
+
+  private static ExtendedNode fileNode(String id, String name, ExtendedNode parent) throws RepositoryException {
+    ExtendedNode node = namedNode(id, name, parent, NodeTypeConstants.NT_FILE);
+    Node content = mock(Node.class);
+    Property data = mock(Property.class);
+    when(node.getNode("jcr:content")).thenReturn(content);
+    when(content.getProperty("jcr:data")).thenReturn(data);
+    when(data.getStream()).thenAnswer(invocation -> new ByteArrayInputStream(name.getBytes(StandardCharsets.UTF_8)));
+    return node;
+  }
+
+  private static ExtendedNode shortcutNode(String id,
+                                           String name,
+                                           ExtendedNode parent,
+                                           ExtendedNode target,
+                                           ExtendedSession session) throws RepositoryException {
+    ExtendedNode node = namedNode(id, name, parent, NodeTypeConstants.EXO_SYMLINK);
+    when(node.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property targetId = mock(Property.class);
+    String targetIdentifier = target.getIdentifier();
+    when(targetId.getString()).thenReturn(targetIdentifier);
+    when(node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(targetId);
+    when(node.getSession()).thenReturn(session);
+    when(session.getNodeByIdentifier(targetIdentifier)).thenReturn(target);
+    return node;
+  }
+
+  private static ExtendedNode namedNode(String id, String name, ExtendedNode parent, String primaryType) throws RepositoryException {
+    ExtendedNode node = mock(ExtendedNode.class);
+    when(node.getIdentifier()).thenReturn(id);
+    when(node.getName()).thenReturn(name);
+    NodeType nodeType = mock(NodeType.class);
+    when(nodeType.getName()).thenReturn(primaryType);
+    when(node.getPrimaryNodeType()).thenReturn(nodeType);
+    if (parent == null) {
+      when(node.getParent()).thenThrow(new ItemNotFoundException("root"));
+    } else {
+      when(node.getParent()).thenReturn(parent);
+    }
+    return node;
+  }
+
+  private static void childrenOf(ExtendedNode folder, Node... children) throws RepositoryException {
+    when(folder.getNodes()).thenAnswer(invocation -> new ChildNodeIterator(Arrays.asList(children)));
+  }
+
+  private static Set<String> filesUnder(Path folder) throws IOException {
+    try (Stream<Path> paths = Files.walk(folder)) {
+      return paths.filter(Files::isRegularFile)
+                  .map(path -> folder.relativize(path).toString().replace(File.separatorChar, '/'))
+                  .collect(Collectors.toSet());
+    }
+  }
+
+
+  private static class ChildNodeIterator implements NodeIterator {
+
+    private final List<Node>     children;
+
+    private final Iterator<Node> iterator;
+
+    private int                  position;
+
+    ChildNodeIterator(List<Node> children) {
+      this.children = children;
+      this.iterator = children.iterator();
+    }
+
+    @Override
+    public Node nextNode() {
+      position++;
+      return iterator.next();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iterator.hasNext();
+    }
+
+    @Override
+    public Object next() {
+      return nextNode();
+    }
+
+    @Override
+    public void skip(long skipNum) {
+      for (long i = 0; i < skipNum; i++) {
+        nextNode();
+      }
+    }
+
+    @Override
+    public long getSize() {
+      return children.size();
+    }
+
+    @Override
+    public long getPosition() {
+      return position;
+    }
+  }
 }
