@@ -284,7 +284,7 @@ public class WebdavWriteCommandHandler {
                                new SessionProvider(((SessionImpl) session).getUserState()));
       pathCommandHandler.deleteMapping(jcrPath);
     } else {
-      throw new WebDavException(HttpStatus.SC_FORBIDDEN, String.format("Resource with path '%s' can't be removed", jcrPath));
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN, String.format("Resource with path '%s' can't be removed", webDavPath));
     }
     session.save();
   }
