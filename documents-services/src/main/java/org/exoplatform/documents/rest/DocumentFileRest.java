@@ -1764,7 +1764,7 @@ public class DocumentFileRest implements ResourceContainer {
                                      @Parameter(description = "The value of lastModified parameter will determine whether the query should be cached by browser or not. If not set, no 'expires HTTP Header will be sent'")
                                      @QueryParam("lastModified")
                                      String lastModified,
-                                     @Parameter(description = "Resized image size. Use 250x250 as default size.")
+                                     @Parameter(description = "Preview size asked. The preview is always computed for 250x250, whatever size is asked.")
                                      @DefaultValue("0x0")
                                      @QueryParam("size")
                                      String size) {
