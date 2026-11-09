@@ -58,8 +58,8 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 
 /**
  * Runs the real {@link PathCommandHandler} under {@link WebdavWriteCommandHandler}
- * against an in-memory name mapping and a session that resolves paths the way
- * the repository does ('.' skipped, '..' moving up), so that the target a move
+ * against an in-memory name mapping and a session stub that applies the
+ * repository's '.' and '..' rule (skipped, moving up), so that the target a move
  * checks and the mapping key it then writes are computed by the production code.
  */
 @RunWith(MockitoJUnitRunner.Silent.class)
@@ -210,6 +210,20 @@ public class WebdavWriteCommandHandlerTargetPathTest {
   @Test
   public void testMoveOntoATargetNameHoldingASlashIsRefused() {
     assertStatus(403, () -> handler.move(session, DRIVE + "/S", DRIVE + "/F%2FG%2F..", true));
+
+    assertExistingDocumentKeepsItsName();
+  }
+
+  @Test
+  public void testMoveOntoAPathWithAnEmptyLastSegmentIsRefused() {
+    assertStatus(403, () -> handler.move(session, DRIVE + "/S", DRIVE + "/F//", true));
+
+    assertExistingDocumentKeepsItsName();
+  }
+
+  @Test
+  public void testMoveOfAFolderOntoAnExistingNameWithATrailingSlashChecksThatName() {
+    assertStatus(409, () -> handler.move(session, DRIVE + "/S", DRIVE + "/F/", false));
 
     assertExistingDocumentKeepsItsName();
   }
