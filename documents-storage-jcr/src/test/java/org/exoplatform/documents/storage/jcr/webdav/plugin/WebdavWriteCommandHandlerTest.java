@@ -394,6 +394,10 @@ public class WebdavWriteCommandHandlerTest {
   public void testMoveOntoTheRepositoryRootIsRefused() {
     givenMoveSource();
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenReturn("/");
+    // the resolver answers the root only for a path outside every drive
+    when(pathCommandHandler.getIdentityBaseJcrPath(WEBDAV_FILE_PATH)).thenAnswer(invocation -> {
+      throw new WebDavException(404, "no drive"); // NOSONAR thrown by @SneakyThrows in production
+    });
     givenNodeAt("/", "/");
 
     assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
