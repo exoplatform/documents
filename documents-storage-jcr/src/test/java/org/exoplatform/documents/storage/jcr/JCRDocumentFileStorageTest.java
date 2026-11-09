@@ -2312,13 +2312,15 @@ public class JCRDocumentFileStorageTest {
     SessionProvider sessionProvider = mock(SessionProvider.class);
     Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
     Node template = mockTemplateFile("modele-test.docx");
-    // set_property alone makes canEdit true, and the repository refuses the addNode
+    // set_property alone makes canEdit true; eXo JCR checks add_node at save time
+    // (SessionDataManager.validateAccessPermissions), so the refusal comes from save()
     ExtendedNode destination = mock(ExtendedNode.class);
     AccessControlEntry entry = new AccessControlEntry("john", PermissionType.SET_PROPERTY);
     when(destination.getACL()).thenReturn(new AccessControlList("john", Arrays.asList(entry)));
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
-    when(destination.addNode("modele-test.docx", "nt:file")).thenThrow(new AccessDeniedException("denied"));
+    when(destination.addNode("modele-test.docx", "nt:file")).thenReturn(mock(Node.class));
+    doThrow(new AccessDeniedException("denied")).when(destination).save();
 
     assertThrows(IllegalAccessException.class,
                  () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "modele-test.docx", aclIdentity));

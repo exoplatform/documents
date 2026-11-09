@@ -1508,7 +1508,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw e;
     } catch (AccessDeniedException e) {
       // The ACL grants the edit right through set_property alone: the repository
-      // refuses the addNode, which is the same missing right
+      // refuses the save of the added node, which is the same missing right
       throw new IllegalAccessException("Permission to add document is missing");
     } catch (Exception e) {
       throw new IllegalStateException("Error creating document from template '" + templateDocumentId + "'", e);
