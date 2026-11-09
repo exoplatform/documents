@@ -2232,10 +2232,12 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(identityManager, aclIdentity, newNode, "", spaceService))
                       .thenReturn(expected);
 
-    AbstractNode result = jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "modele-test", aclIdentity);
+    // The drawer sends the title with the template's extension
+    AbstractNode result = jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "modele-test.docx", aclIdentity);
 
     assertEquals("new-1", result.getId());
-    // Both names the pitfall names: the node name and exo:title, from one string
+    // Both names the pitfall names: the node name and exo:title, from one string,
+    // and the extension is not doubled
     verify(destination).addNode("modele-test.docx", "nt:file");
     verify(newNode).setProperty(NodeTypeConstants.EXO_TITLE, "modele-test.docx");
     verify(destination).save();
@@ -2257,9 +2259,9 @@ public class JCRDocumentFileStorageTest {
     Node newNode = mock(Node.class);
     when(destination.addNode("rapport q3.docx", "nt:file")).thenReturn(newNode);
 
-    jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "Rapport Q3", aclIdentity);
+    jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "Rapport Q3.docx", aclIdentity);
 
-    // The copy is created under its final name: the title keeps the user's case and the template's extension
+    // The copy is created under its final name: the node name is lowercased, the title keeps the user's case
     verify(destination).addNode("rapport q3.docx", "nt:file");
     verify(newNode).setProperty(NodeTypeConstants.EXO_TITLE, "Rapport Q3.docx");
     verify(listenerService).broadcast(JCRDocumentFileStorage.CREATE_DOCUMENT_EVENT, "john", newNode);
@@ -2275,10 +2277,12 @@ public class JCRDocumentFileStorageTest {
     ExtendedNode destination = mockDestinationFolder("john", true);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
-    when(destination.hasNode("modele-test.docx")).thenReturn(true);
+    // The existing node has the lowercased node name: the probe must run on that
+    // name, never on the title the user typed
+    when(destination.hasNode("rapport q3.docx")).thenReturn(true);
 
     assertThrows(ObjectAlreadyExistsException.class,
-                 () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "modele-test", aclIdentity));
+                 () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "Rapport Q3.docx", aclIdentity));
 
     verify(destination, never()).addNode(anyString(), anyString());
     verify(listenerService, never()).broadcast(anyString(), any(), any());
@@ -2300,6 +2304,27 @@ public class JCRDocumentFileStorageTest {
 
     verify(destination, never()).addNode(anyString(), anyString());
     verify(listenerService, never()).broadcast(anyString(), any(), any());
+  }
+
+  @Test
+  public void createDocumentFromTemplateDocumentReportsARepositoryRefusalAsAMissingRight() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
+    Node template = mockTemplateFile("modele-test.docx");
+    // set_property alone makes canEdit true, and the repository refuses the addNode
+    ExtendedNode destination = mock(ExtendedNode.class);
+    AccessControlEntry entry = new AccessControlEntry("john", PermissionType.SET_PROPERTY);
+    when(destination.getACL()).thenReturn(new AccessControlList("john", Arrays.asList(entry)));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
+    when(destination.addNode("modele-test.docx", "nt:file")).thenThrow(new AccessDeniedException("denied"));
+
+    assertThrows(IllegalAccessException.class,
+                 () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "modele-test.docx", aclIdentity));
+
+    verify(listenerService, never()).broadcast(anyString(), any(), any());
+    verify(sessionProvider).close();
   }
 
   @Test
