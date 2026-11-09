@@ -300,7 +300,7 @@ public class WebdavWriteCommandHandler {
     String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
     checkResourceExists(session, sourceJcrPath);
-    boolean itemExists = removeExistingTarget(session, sourceJcrPath, webDavTargetPath, overwrite);
+    boolean itemExists = removeExistingTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, overwrite);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
     forceUnlock((Node) session.getItem(sourceJcrPath));
@@ -329,7 +329,7 @@ public class WebdavWriteCommandHandler {
     String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
     checkResourceExists(session, sourceJcrPath);
-    removeExistingTarget(session, sourceJcrPath, webDavTargetPath, overwrite || removeDestination);
+    removeExistingTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, overwrite || removeDestination);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
     Workspace workspace = session.getWorkspace();
@@ -749,8 +749,16 @@ public class WebdavWriteCommandHandler {
    */
   private boolean removeExistingTarget(Session session,
                                        String sourceJcrPath,
+                                       String targetParentJcrPath,
                                        String webDavTargetPath,
                                        boolean overwrite) throws RepositoryException, WebDavException {
+    // The new node's name mapping is keyed by the path the repository reports
+    // for its parent: a parent path spelled otherwise ('.', '..') would let the
+    // lookup below miss a document that mapping key already names
+    if (!StringUtils.equals(((Node) session.getItem(targetParentJcrPath)).getPath(), targetParentJcrPath)) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' can't be written", webDavTargetPath));
+    }
     String targetJcrPath;
     try {
       targetJcrPath = pathCommandHandler.resolveToJcrPath(session, webDavTargetPath);

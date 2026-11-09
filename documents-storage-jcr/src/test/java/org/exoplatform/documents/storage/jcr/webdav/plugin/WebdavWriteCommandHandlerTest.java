@@ -94,6 +94,8 @@ public class WebdavWriteCommandHandlerTest {
 
   private static final String       NEW_TARGET_JCR_PATH = PARENT_JCR_PATH + "/" + TECHNICAL_NAME;
 
+  private static final String       WEBDAV_DOT_FILE_PATH = WEBDAV_PARENT_PATH + "/./New%20File.txt";// NOSONAR
+
   @Mock
   private RepositoryService         repositoryService;
 
@@ -165,6 +167,7 @@ public class WebdavWriteCommandHandlerTest {
     when(session.getItem(PARENT_JCR_PATH)).thenReturn(parentNode);
     when(session.getItem(PARENT_JCR_PATH + "/" + TECHNICAL_NAME)).thenReturn(node);
 
+    when(parentNode.getPath()).thenReturn(PARENT_JCR_PATH);
     when(parentNode.addNode(TECHNICAL_NAME, "nt:file")).thenReturn(node);
     when(parentNode.addNode(TECHNICAL_NAME, "nt:folder")).thenReturn(node);
 
@@ -447,6 +450,29 @@ public class WebdavWriteCommandHandlerTest {
 
   @Test
   @SneakyThrows
+  public void testMoveUnderAParentPathSpelledOtherwiseIsRefused() {
+    givenMoveSource();
+    givenParentSpelledOtherwise();
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_DOT_FILE_PATH, false));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyUnderAParentPathSpelledOtherwiseIsRefused() {
+    givenCopySource();
+    givenParentSpelledOtherwise();
+
+    assertStatus(403, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_DOT_FILE_PATH, false, false));
+
+    assertTargetUntouched();
+    verify(workspace, never()).copy(anyString(), anyString());
+  }
+
+  @Test
+  @SneakyThrows
   public void testMoveKeepsATargetResolutionFailureOtherThanNotFound() {
     givenMoveSource();
     when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenThrow(new WebDavException(400, "unsupported"));
@@ -554,6 +580,13 @@ public class WebdavWriteCommandHandlerTest {
     when(session.itemExists(NEW_TARGET_JCR_PATH)).thenReturn(false);
     when(sourceNode.getPath()).thenReturn(SOURCE_JCR_PATH);
     when(sourceNode.isLocked()).thenReturn(false);
+  }
+
+  @SneakyThrows
+  private void givenParentSpelledOtherwise() {
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_PARENT_PATH + "/.")).thenReturn(PARENT_JCR_PATH + "/.");
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_DOT_FILE_PATH)).thenThrow(new WebDavException(404, "missing"));
+    givenNodeAt(PARENT_JCR_PATH + "/.", PARENT_JCR_PATH);
   }
 
   @SneakyThrows
