@@ -79,6 +79,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   private static final String   VIDEO_THUMBNAIL_TYPE = "videoThumbnail";
 
+  /** The one preview size the documents clients display, width and height. */
+  private static final int      PREVIEW_SIZE         = 250;
+
   private DocumentFileStorage   documentFileStorage;
 
   private IdentityManager       identityManager;
@@ -816,7 +819,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (!canAccess(documentId, getViewerAclIdentity(userName))) {
       throw new IllegalAccessException("User " + userName + " can't access document " + documentId);
     }
-    FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType, documentId, userName, width, height);
+    FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType, documentId, userName, PREVIEW_SIZE, PREVIEW_SIZE);
     if (image != null) {
       FileInfo imageInfo = image.getFileInfo();
       return new FileContent(String.valueOf(imageInfo.getId()),

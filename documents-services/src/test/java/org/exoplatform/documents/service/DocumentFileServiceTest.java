@@ -834,8 +834,45 @@ public class DocumentFileServiceTest {
     FileItem fileItem = mock(FileItem.class);
     FileInfo fileInfo = new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "user", null, false);
     when(fileItem.getFileInfo()).thenReturn(fileInfo);
-    when(imageThumbnailService.getOrCreateThumbnail("imageThumbnail", "docId", IdentityConstants.ANONIM, 0, 0)).thenReturn(fileItem);
-    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", IdentityConstants.ANONIM, 0, 0));
+    when(imageThumbnailService.getOrCreateThumbnail("imageThumbnail", "docId", IdentityConstants.ANONIM, 250, 250)).thenReturn(fileItem);
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", IdentityConstants.ANONIM, 250, 250));
+  }
+
+  /**
+   * 250x250 is the size every documents client asks for a preview
+   * (DocumentsUtils.getThumbnailUrl callers): any other size asked is served
+   * and stored at that one size, so a read never stores a preview at a new size.
+   */
+  @Test
+  public void testGetImageThumbnailContentStoresOnlyThePreviewSize() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+    when(documentFileStorage.canAccess("docId", aclIdentity)).thenReturn(true);
+    FileItem fileItem = mock(FileItem.class);
+    FileInfo fileInfo = new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "user", null, false);
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    when(imageThumbnailService.getOrCreateThumbnail(anyString(), anyString(), anyString(), anyInt(), anyInt())).thenReturn(fileItem);
+
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250));
+    verify(imageThumbnailService, times(1)).getOrCreateThumbnail("imageThumbnail", "docId", "user", 250, 250);
+
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 500, 500));
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 0, 0));
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 99999));
+    assertNotNull(documentFileService.getImageThumbnailContent("officeThumbnail", "docId", "user", 1, 1));
+
+    verify(imageThumbnailService, times(4)).getOrCreateThumbnail("imageThumbnail", "docId", "user", 250, 250);
+    verify(imageThumbnailService, times(1)).getOrCreateThumbnail("officeThumbnail", "docId", "user", 250, 250);
+    verify(imageThumbnailService, never()).getOrCreateThumbnail(anyString(),
+                                                                anyString(),
+                                                                anyString(),
+                                                                intThat(width -> width != 250),
+                                                                anyInt());
+    verify(imageThumbnailService, never()).getOrCreateThumbnail(anyString(),
+                                                                anyString(),
+                                                                anyString(),
+                                                                anyInt(),
+                                                                intThat(height -> height != 250));
   }
 
   @Test
