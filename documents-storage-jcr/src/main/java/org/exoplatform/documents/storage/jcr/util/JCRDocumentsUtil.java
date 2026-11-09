@@ -1022,6 +1022,24 @@ public class JCRDocumentsUtil {
                             mimeType);
   }
 
+  /**
+   * Builds a {@link DownloadItem} holding the node's identifier, title and mime
+   * type, with no content: the {@code jcr:data} property is neither read nor
+   * tested, whatever the document's size.
+   *
+   * @param node the document node
+   * @return the {@link DownloadItem}, its content null, its mime type null for
+   *         a node without {@code jcr:content}
+   * @throws RepositoryException when a property cannot be read
+   */
+  public static DownloadItem toDownloadInfo(Node node) throws RepositoryException {
+    String mimeType = null;
+    if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+      mimeType = Utils.getStringProperty(node.getNode(NodeTypeConstants.JCR_CONTENT), NodeTypeConstants.JCR_MIME_TYPE);
+    }
+    return new DownloadItem(((NodeImpl) node).getIdentifier(), getTitle(node), null, mimeType);
+  }
+
   private static ByteArrayOutputStream write(InputStream is) throws Exception {
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     int length;

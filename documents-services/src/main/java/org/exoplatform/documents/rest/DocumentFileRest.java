@@ -70,6 +70,7 @@ import org.exoplatform.documents.model.DocumentNodeFilter;
 import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
+import org.exoplatform.documents.model.PublicDocumentInfo;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
@@ -120,8 +121,12 @@ public class DocumentFileRest implements ResourceContainer {
 
   private static final CacheControl         CACHE_CONTROL          = new CacheControl();
 
+  private static final CacheControl         NO_STORE_CACHE_CONTROL = new CacheControl();
+
   static {
     CACHE_CONTROL.setPrivate(true);
+    NO_STORE_CACHE_CONTROL.setPrivate(true);
+    NO_STORE_CACHE_CONTROL.setNoStore(true);
   }
 
   private static final int                  CACHE_IN_SECONDS       = 7 * 86400;
@@ -220,22 +225,19 @@ public class DocumentFileRest implements ResourceContainer {
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     // Both the path and its absence depend on what the caller can read
-    CacheControl noStore = new CacheControl();
-    noStore.setPrivate(true);
-    noStore.setNoStore(true);
     try {
       String path = documentFileService.getDocumentPathInDrive(documentId, ownerId, userIdentityId);
       if (path == null) {
-        return Response.noContent().cacheControl(noStore).build();
+        return Response.noContent().cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
-      return Response.ok(path).cacheControl(noStore).build();
+      return Response.ok(path).cacheControl(NO_STORE_CACHE_CONTROL).build();
     } catch (ObjectNotFoundException e) {
-      return Response.status(Status.NOT_FOUND).entity("document_or_drive_not_found").cacheControl(noStore).build();
+      return Response.status(Status.NOT_FOUND).entity("document_or_drive_not_found").cacheControl(NO_STORE_CACHE_CONTROL).build();
     } catch (IllegalAccessException e) {
-      return Response.status(Status.FORBIDDEN).entity("user_identity_not_resolved").cacheControl(noStore).build();
+      return Response.status(Status.FORBIDDEN).entity("user_identity_not_resolved").cacheControl(NO_STORE_CACHE_CONTROL).build();
     } catch (Exception e) {
       LOG.warn("Error retrieving the path of document '{}' in the drive of owner '{}'", documentId, ownerId, e);
-      return Response.serverError().entity("error_retrieving_document_path_in_drive").cacheControl(noStore).build();
+      return Response.serverError().entity("error_retrieving_document_path_in_drive").cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
   }
 
@@ -1417,30 +1419,28 @@ public class DocumentFileRest implements ResourceContainer {
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "404", description = "No public access link for this node, or its document no longer exists or cannot be read"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response publicAccessDocument(@Parameter(description = "public link node id", required = true)
                                    @QueryParam("nodeId") String nodeId) {
-
-    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
-    DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
-
-    boolean hasPublicLink = publicDocumentAccess != null;
-    boolean isAccessLocked = hasPublicLink && publicDocumentAccess.getPasswordHashKey() != null;
-    boolean isAccessExpired = publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId);
-
+    // The answer depends on the node's public link, which can be revoked or changed at any time
+    if (StringUtils.isBlank(nodeId)) {
+      return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").cacheControl(NO_STORE_CACHE_CONTROL).build();
+    }
+    PublicDocumentInfo publicDocumentInfo;
+    try {
+      publicDocumentInfo = publicDocumentAccessService.getPublicDocumentInfo(nodeId);
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).cacheControl(NO_STORE_CACHE_CONTROL).build();
+    }
     JSONObject response = new JSONObject();
     response.put("nodeId", nodeId);
-    response.put("hasPublicLink", hasPublicLink);
-    response.put("isAccessLocked", isAccessLocked);
-    response.put("isAccessExpired", isAccessExpired);
-    if (downloadItem != null) {
-      response.put("documentName", downloadItem.getItemName());
-      response.put("documentType", downloadItem.getMimeType());
-    }
-
-    return Response.ok(response.toString()).build();
-
-
+    response.put("hasPublicLink", true);
+    response.put("isAccessLocked", publicDocumentInfo.isAccessLocked());
+    response.put("isAccessExpired", publicDocumentInfo.isAccessExpired());
+    response.put("documentName", publicDocumentInfo.getDocumentName());
+    response.put("documentType", publicDocumentInfo.getMimeType());
+    return Response.ok(response.toString()).cacheControl(NO_STORE_CACHE_CONTROL).build();
   }
 
   @GET

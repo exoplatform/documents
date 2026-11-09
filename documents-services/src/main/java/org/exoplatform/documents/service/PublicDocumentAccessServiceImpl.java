@@ -17,7 +17,11 @@
 package org.exoplatform.documents.service;
 
 import org.apache.commons.codec.binary.Hex;
+import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
+import org.exoplatform.documents.model.PublicDocumentInfo;
+import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.PublicDocumentAccessStorage;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -39,6 +43,8 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
 
   private PublicDocumentAccessStorage publicDocumentAccessStorage;
 
+  private final DocumentFileStorage   documentFileStorage;
+
   private final AbstractCodec codec;
 
 
@@ -50,9 +56,11 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
   
   
   public PublicDocumentAccessServiceImpl(PublicDocumentAccessStorage publicDocumentAccessStorage,
+                                         DocumentFileStorage documentFileStorage,
                                          CodecInitializer codecInitializer)
       throws TokenServiceInitializationException {
     this.publicDocumentAccessStorage = publicDocumentAccessStorage;
+    this.documentFileStorage = documentFileStorage;
     this.codec = codecInitializer.getCodec();
   }
 
@@ -145,8 +153,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
     if (publicDocumentAccess == null) {
       return true;
     }
-    Date expiration = publicDocumentAccess.getExpirationDate();
-    return expiration != null && expiration.before(new Date());
+    return isExpired(publicDocumentAccess);
   }
 
   /**
@@ -176,7 +183,34 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
    * {@inheritDoc}
    */
   @Override
+  public PublicDocumentInfo getPublicDocumentInfo(String documentId) throws ObjectNotFoundException {
+    if (documentId == null) {
+      throw new IllegalArgumentException("document id is mandatory");
+    }
+    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    if (publicDocumentAccess == null) {
+      throw new ObjectNotFoundException("Document has no public access link");
+    }
+    DownloadItem documentInfo = documentFileStorage.getDocumentDownloadInfo(documentId);
+    if (documentInfo == null) {
+      throw new ObjectNotFoundException("Document with a public access link not found");
+    }
+    return new PublicDocumentInfo(documentInfo.getItemName(),
+                                  documentInfo.getMimeType(),
+                                  publicDocumentAccess.getPasswordHashKey() != null,
+                                  isExpired(publicDocumentAccess));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
   public void revokeDocumentPublicAccess(String documentId) {
     publicDocumentAccessStorage.removePublicDocumentAccess(documentId);
+  }
+
+  private static boolean isExpired(PublicDocumentAccess publicDocumentAccess) {
+    Date expiration = publicDocumentAccess.getExpirationDate();
+    return expiration != null && expiration.before(new Date());
   }
 }

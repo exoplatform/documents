@@ -354,16 +354,8 @@ export default {
   },
   methods: {
     getDocumentPublicAccessInfo() {
-      this.$documentFileService.getPublicAccessLink(this.file.id)
-        .then(info => {
-          if (info?.hasPublicLink) {
-            return this.$documentFileService.getDocumentPublicAccess(this.file.id)
-              .then(this.onPublicAccessLoaded);
-          } else {
-            this.resetPublicAccessState();
-            this.openDrawer();
-          }
-        })
+      this.$documentFileService.getDocumentPublicAccess(this.file.id)
+        .then(this.onPublicAccessLoaded)
         .catch(this.onPublicAccessLoadError);
     },
     onPublicAccessLoaded(publicDocumentAccess) {
