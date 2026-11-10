@@ -3062,13 +3062,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
-  public String downloadFolder(String folderId) {
-    SessionProvider sessionProvider = null;
+  public String downloadFolder(String folderId, Identity aclIdentity) throws ObjectNotFoundException {
+    if (aclIdentity == null) {
+      throw new IllegalArgumentException("the identity whose rights apply is mandatory");
+    }
+    Session userSession = null;
     try {
-      sessionProvider = SessionProvider.createSystemProvider();
-      ManageableRepository repository = repositoryService.getCurrentRepository();
-      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-      Node node = getNodeByIdentifier(systemSession, folderId);
+      // Not a getUserSessionProvider session: the visitor's request carries no
+      // identity of aclIdentity's user
+      userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
+      Node node = getNodeByIdentifier(userSession, folderId);
       if (node != null) {
         Path tempFolder = Files.createTempDirectory(TEMP_DOWNLOAD_FOLDER_PREFIX + System.nanoTime()); // NOSONAR
         tempFolder.toFile().deleteOnExit();
@@ -3083,11 +3086,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         JCRDocumentsUtil.cleanFiles(folder);
         return zipped.getPath();
       }
+      throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       LOG.error("Error while getting folder: {}", folderId, e);
     } finally {
-      if (sessionProvider != null) {
-        sessionProvider.close();
+      if (userSession != null) {
+        userSession.logout();
       }
     }
     return null;

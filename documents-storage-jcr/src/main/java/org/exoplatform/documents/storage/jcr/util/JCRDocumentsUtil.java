@@ -59,7 +59,10 @@ import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.impl.RepositoryServiceImpl;
+import org.exoplatform.services.jcr.impl.WorkspaceContainer;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -816,6 +819,30 @@ public class JCRDocumentsUtil {
     } catch (RepositoryException e) {
       throw new IllegalStateException("Can't build a SessionProvider", e);
     }
+  }
+
+  /**
+   * Opens a session of the default workspace that carries the given identity,
+   * whatever the identity of the current thread. A session of
+   * {@link #getUserSessionProvider(RepositoryService, Identity)} carries the
+   * current thread's identity instead, the JCR login reading
+   * {@link ConversationState#getCurrent()}: it is the given user's only on that
+   * user's own request. The caller logs the session out.
+   *
+   * @param repositoryService the repository service
+   * @param aclIdentity the identity whose rights the session applies
+   * @return the session
+   * @throws RepositoryException when the session cannot be opened
+   */
+  public static Session openUserSession(RepositoryService repositoryService, Identity aclIdentity) throws RepositoryException {
+    if (!(repositoryService instanceof RepositoryServiceImpl repositoryServiceImpl)) {
+      throw new RepositoryException("A session of a given identity needs the repository's own service");
+    }
+    ManageableRepository repository = repositoryService.getCurrentRepository();
+    String workspaceName = repository.getConfiguration().getDefaultWorkspaceName();
+    WorkspaceContainer workspaceContainer = repositoryServiceImpl.getRepositoryContainer(repository.getConfiguration().getName())
+                                                                 .getWorkspaceContainer(workspaceName);
+    return new SessionImpl(workspaceName, new ConversationState(aclIdentity), workspaceContainer);
   }
 
   public static long getUserIdentityId(IdentityManager identityManager, String username) {

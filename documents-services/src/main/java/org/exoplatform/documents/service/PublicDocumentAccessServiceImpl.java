@@ -86,13 +86,11 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
         hashKey = publicDocumentAccess.getPasswordHashKey();
         encodedPassword = publicDocumentAccess.getEncodedPassword();
       }
-      publicDocumentAccess = publicDocumentAccessStorage.savePublicDocumentAccess(
-                                                                                  new PublicDocumentAccess(id,
-                                                                                                           nodeId,
-                                                                                                           hashKey,
-                                                                                                           encodedPassword,
-                                                                                                           expiration),
-                                                                                  docOwnerId);
+      PublicDocumentAccess documentAccessToSave = new PublicDocumentAccess(id, nodeId, hashKey, encodedPassword, expiration);
+      // The user creating or replacing the link: a folder link is archived with
+      // this user's rights
+      documentAccessToSave.setCreatorId(docOwnerId);
+      publicDocumentAccess = publicDocumentAccessStorage.savePublicDocumentAccess(documentAccessToSave, docOwnerId);
       publicDocumentAccess.setDecodedPassword(password);
       return publicDocumentAccess;
     } catch (Exception e) {

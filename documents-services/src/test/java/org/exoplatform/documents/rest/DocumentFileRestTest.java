@@ -1725,6 +1725,38 @@ public class DocumentFileRestTest {
 
   }
 
+  /**
+   * A folder link the creator's rights cannot archive (no creator recorded,
+   * creator gone or disabled, folder unreadable by the creator) answers 404; a
+   * file link never asks for the creator (EXO-91530).
+   */
+  @Test
+  public void downloadFolderOfAPublicLinkTheCreatorCannotArchiveIsNotFound() throws Exception {
+    DownloadItem folderItem = new DownloadItem("456", "folder", null, null);
+    when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
+    when(externalDownloadService.getDocumentDownloadItem("456")).thenReturn(folderItem);
+    when(externalDownloadService.downloadZippedFolder("456")).thenThrow(ObjectNotFoundException.class);
+
+    Response response = documentFileRest.downloadDocument("456", null);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+
+    reset(externalDownloadService);
+    when(externalDownloadService.getDocumentDownloadItem("456")).thenReturn(folderItem);
+    when(externalDownloadService.downloadZippedFolder("456")).thenReturn("zip".getBytes());
+    response = documentFileRest.downloadDocument("456", null);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertEquals("application/zip", String.valueOf(response.getMetadata().getFirst("Content-Type")));
+
+    ByteArrayOutputStream content = new ByteArrayOutputStream();
+    content.write(1);
+    DownloadItem fileItem = new DownloadItem("789", "file.txt", content, "text/plain");
+    when(publicDocumentAccessService.isDocumentPublicAccessValid("789", null)).thenReturn(true);
+    when(externalDownloadService.getDocumentDownloadItem("789")).thenReturn(fileItem);
+    response = documentFileRest.downloadDocument("789", null);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    verify(externalDownloadService, never()).downloadZippedFolder("789");
+  }
+
   @Test
   public void importDocuments() throws Exception {
     String username = "user";
