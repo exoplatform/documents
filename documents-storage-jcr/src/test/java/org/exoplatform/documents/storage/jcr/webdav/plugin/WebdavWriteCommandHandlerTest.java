@@ -60,6 +60,8 @@ import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
+import org.exoplatform.services.jcr.impl.core.LocationFactory;
+import org.exoplatform.services.jcr.impl.core.NamespaceRegistryImpl;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.WorkspaceImpl;
@@ -161,6 +163,8 @@ public class WebdavWriteCommandHandlerTest {
     when(pathCommandHandler.allocateTechnicalName(eq(session), eq(PARENT_JCR_PATH), anyString())).thenReturn(TECHNICAL_NAME);
     when(pathCommandHandler.getVisibleName(any(Node.class))).thenReturn(TECHNICAL_NAME);
     when(pathCommandHandler.getIdentityBaseJcrPath(anyString())).thenReturn(PARENT_JCR_PATH);
+    when(pathCommandHandler.toTechnicalName(anyString())).thenReturn(TECHNICAL_NAME);
+    when(session.getLocationFactory()).thenReturn(new LocationFactory(new NamespaceRegistryImpl()));
 
     when(session.itemExists(anyString())).thenReturn(true);
     when(session.getItem(JCR_PATH)).thenReturn(node);

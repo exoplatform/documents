@@ -20,6 +20,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -38,6 +40,7 @@ import javax.jcr.PathNotFoundException;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -49,8 +52,12 @@ import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.impl.core.LocationFactory;
+import org.exoplatform.services.jcr.impl.core.NamespaceRegistryImpl;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
+import org.exoplatform.services.jcr.impl.core.WorkspaceImpl;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -106,6 +113,11 @@ public class WebdavWriteCommandHandlerTargetPathTest {
   @Mock
   private TrashStorage                                trashStorage;
 
+  @Mock
+  private WorkspaceImpl                               workspace;
+
+  private final LocationFactory                       locationFactory     = new LocationFactory(new NamespaceRegistryImpl());
+
   private final Map<String, NodeImpl>                 nodes               = new HashMap<>();
 
   private final Map<String, WebDavPathMappingEntity>  mappings            = new HashMap<>();
@@ -129,6 +141,8 @@ public class WebdavWriteCommandHandlerTargetPathTest {
     when(identity.getProfile()).thenReturn(profile);
     when(profile.getFullName()).thenReturn("John Doe");
     when(session.getUserID()).thenReturn("user1");
+    when(session.getLocationFactory()).thenReturn(locationFactory);
+    when(session.getWorkspace()).thenReturn(workspace);
 
     NodeImpl driveRoot = node(DRIVE_ROOT_JCR_PATH, "drive-root");
     when(userNode.getNode("Private")).thenReturn(driveRoot);
@@ -226,6 +240,107 @@ public class WebdavWriteCommandHandlerTargetPathTest {
     assertStatus(409, () -> handler.move(session, DRIVE + "/S", DRIVE + "/F/", false));
 
     assertExistingDocumentKeepsItsName();
+  }
+
+  /**
+   * A document named in the Documents app with a ':' (its node name cleaned,
+   * its title kept) is replaced by a move onto that name. The new node takes
+   * the name with ':' encoded, which the repository's own parser accepts:
+   * unencoded, it reads 'a' as a namespace prefix no namespace has, and
+   * refuses the move after the replaced document went to the trash.
+   */
+  @Test
+  public void testMoveOntoAnExistingNameHoldingAColonReplacesIt() throws Exception {
+    NodeImpl colonDocument = givenExistingColonDocument();
+    doAnswer(invocation -> arrive(invocation.getArgument(1))).when(session).move(anyString(), anyString());
+
+    handler.move(session, DRIVE + "/S", DRIVE + "/a:b", true);
+
+    verify(trashStorage).moveToTrash(eq(colonDocument), any());
+    verify(session).move(SOURCE_JCR_PATH, DRIVE_ROOT_JCR_PATH + "/a%3Ab");
+    assertMappingSaved("a:b", DRIVE_ROOT_JCR_PATH + "/a%3Ab");
+  }
+
+  /**
+   * The copy counterpart of {@link #testMoveOntoAnExistingNameHoldingAColonReplacesIt()}.
+   */
+  @Test
+  public void testCopyOntoAnExistingNameHoldingAColonReplacesIt() throws Exception {
+    NodeImpl colonDocument = givenExistingColonDocument();
+    doAnswer(invocation -> arrive(invocation.getArgument(1))).when(workspace).copy(anyString(), anyString());
+
+    handler.copy(session, DRIVE + "/S", DRIVE + "/a:b", true, true);
+
+    verify(trashStorage).moveToTrash(eq(colonDocument), any());
+    verify(workspace).copy(SOURCE_JCR_PATH, DRIVE_ROOT_JCR_PATH + "/a%3Ab");
+    assertMappingSaved("a:b", DRIVE_ROOT_JCR_PATH + "/a%3Ab");
+  }
+
+  /**
+   * A name ending with a blank is no node name the repository stores, and no
+   * encoding makes it one here: the move is refused before the document that
+   * name maps to goes to the trash.
+   */
+  @Test
+  public void testMoveOntoAnExistingNameEndingWithABlankIsRefusedBeforeTheTrash() throws Exception {
+    givenExistingBlankEndedDocument();
+
+    Exception refusal = assertThrows(Exception.class, () -> handler.move(session, DRIVE + "/S", DRIVE + "/B%20", true));
+
+    assertExistingDocumentKeepsItsName();
+    assertEquals(400, ((WebDavException) refusal).getHttpError());
+  }
+
+  /**
+   * The copy counterpart of {@link #testMoveOntoAnExistingNameEndingWithABlankIsRefusedBeforeTheTrash()}.
+   */
+  @Test
+  public void testCopyOntoAnExistingNameEndingWithABlankIsRefusedBeforeTheTrash() throws Exception {
+    givenExistingBlankEndedDocument();
+
+    Exception refusal = assertThrows(Exception.class, () -> handler.copy(session, DRIVE + "/S", DRIVE + "/B%20", true, true));
+
+    assertExistingDocumentKeepsItsName();
+    verify(workspace, never()).copy(anyString(), anyString());
+    assertEquals(400, ((WebDavException) refusal).getHttpError());
+  }
+
+  private NodeImpl givenExistingColonDocument() throws Exception {
+    NodeImpl colonDocument = node(DRIVE_ROOT_JCR_PATH + "/a_b", "colon");
+    when(colonDocument.getParent()).thenReturn(nodes.get(DRIVE_ROOT_JCR_PATH));
+    mapping("a:b", DRIVE_ROOT_JCR_PATH + "/a_b", "colon");
+    when(session.getUserState()).thenReturn(mock(ConversationState.class));
+    return colonDocument;
+  }
+
+  private void givenExistingBlankEndedDocument() throws Exception {
+    NodeImpl blankEndedDocument = node(DRIVE_ROOT_JCR_PATH + "/B_", "blank");
+    when(blankEndedDocument.getParent()).thenReturn(nodes.get(DRIVE_ROOT_JCR_PATH));
+    mapping("B ", DRIVE_ROOT_JCR_PATH + "/B_", "blank");
+    // the trash and the repository's own parse of the destination are wired
+    // as for a replacement that goes ahead, so that only the refusal keeps the
+    // document out of the trash
+    when(session.getUserState()).thenReturn(mock(ConversationState.class));
+    doAnswer(invocation -> arrive(invocation.getArgument(1))).when(session).move(anyString(), anyString());
+    doAnswer(invocation -> arrive(invocation.getArgument(1))).when(workspace).copy(anyString(), anyString());
+  }
+
+  /**
+   * Stands for the repository writing the node at the destination path, after
+   * parsing that path with its own parser, which is the first step of
+   * <code>SessionImpl#move</code> and <code>WorkspaceImpl#copy</code>.
+   */
+  private Object arrive(String destinationPath) throws Exception {
+    locationFactory.parseAbsPath(destinationPath);
+    node(destinationPath, "arrived");
+    return null;
+  }
+
+  private void assertMappingSaved(String visibleName, String jcrPath) {
+    ArgumentCaptor<WebDavPathMappingEntity> saved = ArgumentCaptor.forClass(WebDavPathMappingEntity.class);
+    verify(mappingStorage).save(saved.capture());
+    assertEquals(visibleName, saved.getValue().getVisibleName());
+    assertEquals(jcrPath, saved.getValue().getJcrPath());
   }
 
   private void assertExistingDocumentKeepsItsName() {
