@@ -839,11 +839,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (!hasEditPermissionOnDocument(file.getId(), getAclUserIdentity(userName))) {
       throw new IllegalAccessException("User " + userName + " can't edit document " + file.getId());
     }
-    FileItem image = imageThumbnailService.getThumbnail(fileType + file.getId(), width, height);
+    FileItem image = imageThumbnailService.getThumbnail(fileType + file.getId(), PREVIEW_SIZE, PREVIEW_SIZE);
     if (image != null) {
       imageThumbnailService.deleteThumbnails(fileType, file.getId());
     }
-    return imageThumbnailService.createThumbnail(fileType + file.getId(), file, userName, width, height);
+    return imageThumbnailService.createThumbnail(fileType + file.getId(), file, userName, PREVIEW_SIZE, PREVIEW_SIZE);
   }
 
   public AbstractNode getDocumentById(String documentId) {
