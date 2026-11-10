@@ -299,13 +299,6 @@
       color: @transcriptSpeakerChangeActiveColor;
     }
   }
-  // a speaker's chip shows the keyboard focus with a ring in its own colour, not the browser's heavy outline
-  [role=button] {
-    outline: none;
-    &:focus-visible .v-chip {
-      box-shadow: 0 0 0 2px currentColor;
-    }
-  }
 }
 
 // a guest speaker's initials, in the neutral 20px avatar beside the name
