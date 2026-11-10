@@ -32,7 +32,7 @@
       activatable
       open-on-click
       transition>
-      <template #label="{ item }">
+      <template #label="{ item, open }">
         <div class="d-flex clickable" v-if="item.isLoadMore">
           <v-btn
             class="white mx-auto no-border primary--text no-box-shadow"
@@ -42,6 +42,7 @@
         </div>
         <div
           v-else
+          v-tree-node="{ label: $t('documents.tree.subFoldersOf', {0: displayName(item.name)}), open }"
           :aria-current="idItemActive === item.id ? 'page' : null"
           class="d-flex clickable"
           role="link"
@@ -85,6 +86,20 @@
   </nav>
 </template>
 <script>
+function describeTreeNode(el, binding) {
+  const node = el.closest('.v-treeview-node');
+  if (!node) {
+    return;
+  }
+  node.setAttribute('role', 'listitem');
+  node.parentElement?.setAttribute('role', 'list');
+  const toggle = el.closest('.v-treeview-node__root')?.querySelector('.v-treeview-node__toggle');
+  if (toggle) {
+    toggle.setAttribute('aria-label', binding.value?.label || '');
+    toggle.setAttribute('aria-expanded', String(!!binding.value?.open));
+  }
+}
+
 
 export default {
 
@@ -129,6 +144,14 @@ export default {
       return this.currentFolderPathTab?.length ? this.currentFolderPathTab[this.currentFolderPathTab.length-1] : [];
     }
   },
+  directives: {
+    // v-treeview renders nested divs and an unnamed toggle button per folder. On a node's label, each time it
+    // renders (a node opened included): the node is a list item of its parent list, its toggle named after it
+    treeNode: {
+      inserted: describeTreeNode,
+      componentUpdated: describeTreeNode,
+    },
+  },
   watch: {
     // When the breadcrumb path is (re)computed, open every ancestor down to the
     // current folder, mark it active, and scroll it into view.
@@ -139,20 +162,6 @@ export default {
         this.$nextTick(this.scrollToActiveNode);
       },
       deep: true,
-    },
-    // folders load and unfold inside the tree's own nodes
-    items: {
-      handler() {
-        this.$nextTick(this.describeTree);
-      },
-      deep: true,
-    },
-    openNodes() {
-      this.$nextTick(this.describeTree);
-    },
-    // a search renders the nodes it had filtered out anew
-    search() {
-      this.$nextTick(this.describeTree);
     },
   },
   created() {
@@ -169,22 +178,7 @@ export default {
     this.$root.$off('hide-element', this.hideElement);
     this.$root.$off('load-more-drives', this.loadMoreDrives);
   },
-  mounted() {
-    this.describeTree();
-  },
   methods: {
-    // v-treeview renders nested divs and an unnamed toggle button per folder: the
-    // folders are announced as nested lists, each toggle by the folder it unfolds
-    describeTree() {
-      this.$el?.querySelectorAll?.('.v-treeview-node__children').forEach(children => children.setAttribute('role', 'list'));
-      this.$el?.querySelectorAll?.('.v-treeview-node').forEach(node => node.setAttribute('role', 'listitem'));
-      this.$el?.querySelectorAll?.('.v-treeview-node__toggle').forEach(toggle => {
-        const root = toggle.closest('.v-treeview-node__root');
-        const name = root?.querySelector('.v-treeview-node__label')?.textContent?.trim();
-        toggle.setAttribute('aria-label', this.$t('documents.tree.subFoldersOf', {0: name}));
-        toggle.setAttribute('aria-expanded', String(toggle.classList.contains('v-treeview-node__toggle--open')));
-      });
-    },
     // Scrolls the currently active (current folder) tree node into view.
     scrollToActiveNode() {
       const el = this.$el && this.$el.querySelector && this.$el.querySelector('.v-treeview-node--active');
