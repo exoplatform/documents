@@ -300,6 +300,7 @@ public class WebdavWriteCommandHandler {
     String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
     checkResourceExists(session, sourceJcrPath);
+    checkCanWriteTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, true);
     boolean itemExists = removeExistingTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, overwrite);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
@@ -329,6 +330,7 @@ public class WebdavWriteCommandHandler {
     String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
     checkResourceExists(session, sourceJcrPath);
+    checkCanWriteTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, false);
     removeExistingTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, overwrite || removeDestination);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
@@ -797,6 +799,26 @@ public class WebdavWriteCommandHandler {
     }
     delete(session, webDavTargetPath);
     return true;
+  }
+
+  /**
+   * Refuses a MOVE or a COPY that the repository would refuse on its own
+   * permission checks, before an existing target is sent to the trash: the
+   * repository runs those checks only when the operation itself starts. A move
+   * needs ADD_NODE on the target parent and REMOVE on the source
+   * (<code>SessionImpl#move</code>), a copy needs ADD_NODE on the target parent
+   * (<code>WorkspaceImpl#copy</code>).
+   */
+  private void checkCanWriteTarget(Session session,
+                                   String sourceJcrPath,
+                                   String targetParentJcrPath,
+                                   String webDavTargetPath,
+                                   boolean removesSource) throws RepositoryException, WebDavException {
+    if (!checkPermission((Node) session.getItem(targetParentJcrPath), PermissionType.ADD_NODE)
+        || (removesSource && !checkPermission((Node) session.getItem(sourceJcrPath), PermissionType.REMOVE))) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' can't be written", webDavTargetPath));
+    }
   }
 
   private boolean isInsideTargetDrive(String targetPath, String webDavTargetPath) {
