@@ -2,10 +2,7 @@
   <v-hover v-slot="{ hover }">
     <v-card
       flat
-      class="pa-0"
-      :aria-label="$t('search.access.to.result', {0 : excerptText})"
-      :href="fileUrl"
-      @click.stop.prevent="openFilePreview">
+      class="search-result-card pa-0">
       <v-list class="pa-0" :class="hover && 'light-grey-background-color no-border-radius' || ''">
         <v-list-item>
           <v-list-item-icon class="ms-1 me-3">
@@ -19,19 +16,28 @@
 
           <v-list-item-content>
             <v-list-item-title class="d-flex flex-row full-width align-center">
-              <h1
-                class="flex-grow-1 title primary--text pt-1 mb-0 ps-0 my-auto align-center text-start text-truncate"
-                :aria-label="fileTitleText"
-                v-sanitized-html="fileTitle"></h1>
-              <span>
-                <span v-show="hover || isMobile" class="flex-row align-center justify-center">
+              <h1 class="flex-grow-1 title primary--text pt-1 mb-0 ps-0 my-auto align-center text-start text-truncate">
+                <a
+                  :href="fileUrl"
+                  class="search-result-link"
+                  v-sanitized-html="fileTitle"
+                  @click.prevent="openFilePreview"></a>
+              </h1>
+              <span
+                :class="{'search-result-actions-visible': isMobile}"
+                class="search-result-interactive search-result-actions">
+                <span class="flex-row align-center justify-center">
                   <v-btn
+                    :aria-label="$t('documents.label.show.details')"
                     icon
                     small
                     class="me-2"
                     @click.prevent.stop="showInfo">
-                    <v-icon class="icon-default-color" size="16">
-                      as fa-info-circle
+                    <v-icon
+                      class="icon-default-color"
+                      size="16"
+                      aria-hidden="true">
+                      fas fa-info-circle
                     </v-icon>
                   </v-btn>
                   <file-favorite-action
@@ -49,7 +55,7 @@
                     v-bind="attrs"
                     v-on="on"
                     :href="spaceUrl"
-                    class="flex-nowrap flex-shrink-0 d-flex spaceAvatar">
+                    class="search-result-interactive flex-nowrap flex-shrink-0 d-flex spaceAvatar">
                     <v-avatar
                       :size="18"
                       tile
@@ -63,13 +69,14 @@
                     <p v-if="!isMobile" class="ms-2 my-auto text-subtitle">{{ space.displayName }}</p>
                   </a>
                 </span>
-                <exo-user-avatar
-                  v-if="fileAuthor"
-                  :profile-id="fileAuthor"
-                  :size="18"
-                  small-font-size
-                  :avatar="isMobile"
-                  :popover="false" />
+                <span v-if="fileAuthor" class="search-result-interactive d-inline-flex align-center">
+                  <exo-user-avatar
+                    :profile-id="fileAuthor"
+                    :size="18"
+                    small-font-size
+                    :avatar="isMobile"
+                    :popover="false" />
+                </span>
                 <span v-if="fileUpdateDate" class="d-flex flex-row align-center">
                   <v-icon
                     size="3"
@@ -83,12 +90,14 @@
                   <v-icon
                     size="3"
                     class="icon-default-color mx-3">fas fa-circle</v-icon>
-                  <exo-user-avatar
-                    :profile-id="fileLastEditor"
-                    :size="18"
-                    small-font-size
-                    :avatar="isMobile"
-                    :popover="false" />
+                  <span class="search-result-interactive d-inline-flex align-center">
+                    <exo-user-avatar
+                      :profile-id="fileLastEditor"
+                      :size="18"
+                      small-font-size
+                      :avatar="isMobile"
+                      :popover="false" />
+                  </span>
                 </span>
               </span>
               <div
@@ -133,14 +142,8 @@ export default {
     fileTitle() {
       return window.decodeURIComponent(this.result?.title);
     },
-    fileTitleText() {
-      return this.$utils.htmlToText(this.fileTitle);
-    },
     excerptHtml() {
       return this.result.excerpts['attachment.content'] && this.result?.excerpt || '';
-    },
-    excerptText() {
-      return this.$utils.htmlToText(this.excerptHtml);
     },
     fileIcon() {
       return this.$documentsIconsExtension[0]?.get(this.result?.fileType) || this.defaultFileIcon;
