@@ -421,13 +421,27 @@ public class PathCommandHandler {
     String candidateVisibleName = visibleName;
     int counter = 1;
     while (true) {
-      String technicalName = Utils.encodeNodeName(candidateVisibleName);
+      String technicalName = toTechnicalName(candidateVisibleName);
       String candidateJcrPath = appendJcrPath(parentJcrPath, technicalName);
       if (!session.itemExists(candidateJcrPath)) {
         return technicalName;
       }
       candidateVisibleName = addSuffix(visibleName, counter++);
     }
+  }
+
+  /**
+   * The node name a new node takes for a visible name, before any suffix that
+   * makes it free. On top of {@link Utils#encodeNodeName}, a ':' is encoded:
+   * the repository reads the part of a name before a ':' as a namespace prefix,
+   * and refuses the name when no namespace has that prefix. The visible name
+   * itself stays in the node's title and its WebDAV mapping.
+   *
+   * @param visibleName the name the WebDAV client gave
+   * @return the node name, with no suffix
+   */
+  public String toTechnicalName(String visibleName) {
+    return StringUtils.replace(Utils.encodeNodeName(visibleName), ":", "%3A");
   }
 
   @SneakyThrows

@@ -301,6 +301,7 @@ public class WebdavWriteCommandHandler {
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
     checkResourceExists(session, sourceJcrPath);
     checkCanWriteTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, true);
+    checkTargetNameIsStorable(session, targetVisibleName, webDavTargetPath);
     boolean itemExists = removeExistingTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, overwrite);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
@@ -331,6 +332,7 @@ public class WebdavWriteCommandHandler {
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
     checkResourceExists(session, sourceJcrPath);
     checkCanWriteTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, false);
+    checkTargetNameIsStorable(session, targetVisibleName, webDavTargetPath);
     removeExistingTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, overwrite || removeDestination);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
@@ -818,6 +820,27 @@ public class WebdavWriteCommandHandler {
         || (removesSource && !checkPermission((Node) session.getItem(sourceJcrPath), PermissionType.REMOVE))) {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN,
                                 String.format("Resource with path '%s' can't be written", webDavTargetPath));
+    }
+  }
+
+  /**
+   * Refuses a MOVE or a COPY whose target the repository cannot store under
+   * the node name the target gets, before an existing target is sent to the
+   * trash: the repository parses the destination path only when the operation
+   * itself starts (<code>LocationFactory#parseAbsPath</code>, the first step of
+   * <code>SessionImpl#move</code> and <code>WorkspaceImpl#copy</code>), with
+   * the same rule for each name as the one checked here. A name starting or
+   * ending with a blank, or holding a tab or a line break, is such a name.
+   */
+  private void checkTargetNameIsStorable(Session session,
+                                         String targetVisibleName,
+                                         String webDavTargetPath) throws WebDavException {
+    try {
+      ((SessionImpl) session).getLocationFactory().parseRelPath(pathCommandHandler.toTechnicalName(targetVisibleName));
+    } catch (RepositoryException e) {
+      LOG.debug("WebDAV target name refused by the repository", e);
+      throw new WebDavException(HttpStatus.SC_BAD_REQUEST,
+                                String.format("Resource with path '%s' has a name that can't be stored", webDavTargetPath));
     }
   }
 
