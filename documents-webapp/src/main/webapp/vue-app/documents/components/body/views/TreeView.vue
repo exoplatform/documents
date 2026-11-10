@@ -32,8 +32,11 @@
       activatable
       open-on-click
       transition>
-      <template #label="{ item, open }">
-        <div class="d-flex clickable" v-if="item.isLoadMore">
+      <template #label="{ item }">
+        <div
+          v-if="item.isLoadMore"
+          v-tree-node
+          class="d-flex clickable">
           <v-btn
             class="white mx-auto no-border primary--text no-box-shadow"
             @click="loadMoreDrives(item.query,item.offset,item.limit)">
@@ -42,7 +45,7 @@
         </div>
         <div
           v-else
-          v-tree-node="{ label: $t('documents.tree.subFoldersOf', {0: displayName(item.name)}), open }"
+          v-tree-node="$t('documents.tree.subFoldersOf', {0: displayName(item.name)})"
           :aria-current="idItemActive === item.id ? 'page' : null"
           class="d-flex clickable"
           role="link"
@@ -86,20 +89,6 @@
   </nav>
 </template>
 <script>
-function describeTreeNode(el, binding) {
-  const node = el.closest('.v-treeview-node');
-  if (!node) {
-    return;
-  }
-  node.setAttribute('role', 'listitem');
-  node.parentElement?.setAttribute('role', 'list');
-  const toggle = el.closest('.v-treeview-node__root')?.querySelector('.v-treeview-node__toggle');
-  if (toggle) {
-    toggle.setAttribute('aria-label', binding.value?.label || '');
-    toggle.setAttribute('aria-expanded', String(!!binding.value?.open));
-  }
-}
-
 
 export default {
 
@@ -143,14 +132,6 @@ export default {
     idItemActive() {
       return this.currentFolderPathTab?.length ? this.currentFolderPathTab[this.currentFolderPathTab.length-1] : [];
     }
-  },
-  directives: {
-    // v-treeview renders nested divs and an unnamed toggle button per folder. On a node's label, each time it
-    // renders (a node opened included): the node is a list item of its parent list, its toggle named after it
-    treeNode: {
-      inserted: describeTreeNode,
-      componentUpdated: describeTreeNode,
-    },
   },
   watch: {
     // When the breadcrumb path is (re)computed, open every ancestor down to the
