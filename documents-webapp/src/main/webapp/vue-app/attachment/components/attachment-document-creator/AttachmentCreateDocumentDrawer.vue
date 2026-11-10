@@ -637,9 +637,11 @@ export default {
       event.stopPropagation();
       this.selectTemplate(template);
     },
-    // Copies the template node into the current target folder (JCR duplicate),
-    // then reuses the exact blank-create post-processing (attachment list add /
-    // Drive refresh + OnlyOffice open).
+    // Creates the document from the picked template in one server call: the copy
+    // lands in the current target folder under the name the user gave, and the
+    // server records it as one document creation, whether the proposed name was
+    // kept or changed. Then the same post-processing as the blank-create path
+    // (attachment list add / Drive refresh + OnlyOffice open).
     createFromTemplate(template) {
       if (this.templateCreating) {
         return;
@@ -654,11 +656,11 @@ export default {
         return;
       }
       const ownerId = this.templatesOwnerId;
-      // The user-provided name (option B), captured before the async chain.
+      // The user-provided name, captured before the async chain.
       const targetName = this.newDocumentTitle;
       // When the template is a symlink to a global/other-space file, copy its
       // target (sourceID) so the new document holds the real content, not a link.
-      const copySourceId = template.sourceID || template.id;
+      const templateId = template.sourceID || template.id;
       this.templateCreating = true;
       this.$root.$emit('start-loading-attachment-drawer');
       this.resolveDestinationFolder(ownerId)
@@ -666,46 +668,19 @@ export default {
           if (!dest || !dest.id) {
             throw new Error('Could not resolve the destination folder');
           }
-          // Snapshot the destination's current file ids so we can identify the copy
-          // by id-diff afterwards. The copy endpoint returns the destination folder
-          // (not the new file), and matching by name is unreliable — the backend
-          // de-duplicates a clashing name to "name (1)", which would make a name
-          // match pick the WRONG node (e.g. the source template itself). The one
-          // new id in the folder is unambiguously the copy.
-          return this.listFolderFileIds(ownerId, dest.id).then(beforeIds => ({ dest, beforeIds }));
-        })
-        .then(({ dest, beforeIds }) => {
-          // Primary path: copy the template into the target folder, then find the
-          // node whose id is new. If the copy fails because a same-named file
-          // already exists there (JCR "same name sibling" 500), duplicate in
-          // place in the Templates folder instead (dedupe-safe there), then move
-          // that copy into the actual destination with conflictAction 'keepBoth' —
-          // the same JCR-side auto-dedupe ("(n)" appended to both name and title)
-          // used by drag-and-drop moves elsewhere in the app — so a clash there is
-          // deduped rather than leaving the file stranded in Templates.
-          return this.$documentFileService.duplicateDocument(copySourceId, dest.id, ownerId)
-            .then(() => this.findNewCopy(ownerId, dest.id, beforeIds))
-            .catch(() => this.$documentFileService.duplicateDocument(copySourceId, null, ownerId)
-              .then(newDoc => this.$documentFileService.moveDocument(ownerId, newDoc.id, dest.path, 'keepBoth')
-                .then(() => newDoc)));
+          return this.$documentFileService.createDocumentFromTemplate(ownerId, templateId, dest.id, targetName);
         })
         .then(newDoc => {
+          if (newDoc && newDoc.status === 409) {
+            // The name is already taken in the target folder: same message as the
+            // blank-create path.
+            this.$root.$emit('alert-message', this.newDocTitleExistLabel, 'error');
+            this.$root.$emit('end-loading-attachment-drawer');
+            return;
+          }
           if (!newDoc || !newDoc.id) {
             throw new Error('Error creating document from template');
           }
-          // Apply the user-provided name (option B). Keep the copy as-is if the
-          // rename clashes with an existing file (the user can rename in the editor).
-          if (targetName && newDoc.name !== targetName) {
-            return this.$documentFileService.renameDocument(ownerId, newDoc.id, targetName)
-              .then(() => {
-                newDoc.name = targetName;
-                return newDoc;
-              })
-              .catch(() => newDoc);
-          }
-          return newDoc;
-        })
-        .then(newDoc => {
           newDoc.title = newDoc.name || targetName;
           newDoc.created = newDoc.created || newDoc.createdDate;
           // Only open OnlyOffice for editable office types; PDFs/images copied
@@ -720,33 +695,14 @@ export default {
           this.templateCreating = false;
         });
     },
-    // Resolves the current target folder (its JCR node id and absolute path) from
-    // the drive-root-relative path via the breadcrumb endpoint. The last crumb is
+    // Resolves the current target folder (its JCR node id) from the
+    // drive-root-relative path via the breadcrumb endpoint. The last crumb is
     // the target folder; at the drive root (empty path) it is the drive root node.
-    // The absolute path is used as the move destination.
     resolveDestinationFolder(ownerId) {
       return this.$documentFileService.getBreadCrumbs(null, ownerId, this.destinationRelativePath)
         .then(crumbs => {
           const last = crumbs && crumbs.length ? crumbs[crumbs.length - 1] : null;
-          return last ? { id: last.id, path: last.path } : null;
-        });
-    },
-    // Set of the current (non-folder) file ids in a folder, used to snapshot state
-    // before a copy so the new node can be identified by id-diff afterwards.
-    listFolderFileIds(ownerId, folderId) {
-      return this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER', parentFolderId: folderId }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator')
-        .then(items => new Set((items || []).filter(item => !item.folder).map(item => item.id)))
-        .catch(() => new Set());
-    },
-    // Locates the copy just created by the backend copy: the one file in the
-    // destination folder whose id was not present before the copy. Matching by id
-    // (not name) is robust against the backend de-duplicating a clashing name.
-    findNewCopy(ownerId, destinationFolderId, beforeIds) {
-      return this.$documentFileService.getDocumentItems({ ownerId, listingType: 'FOLDER', parentFolderId: destinationFolderId }, null, null, 0, this.TEMPLATES_LIST_LIMIT, 'creator')
-        .then(items => {
-          const created = (items || []).filter(item => !item.folder && !beforeIds.has(item.id));
-          const byNewest = (a, b) => Number(b.modifiedDate || b.created || b.createdDate || 0) - Number(a.modifiedDate || a.created || a.createdDate || 0);
-          return created.sort(byNewest)[0] || null;
+          return last ? { id: last.id } : null;
         });
     }
   }
