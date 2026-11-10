@@ -347,6 +347,31 @@ public class WebdavWriteCommandHandlerTest {
 
   @Test
   @SneakyThrows
+  public void testMoveOntoExistingNameIsRefusedBeforeTheTrashWhenUserMayNotAddToTheTargetParent() {
+    givenMoveSource();
+    givenExistingTarget();
+    doThrow(new AccessControlException("denied")).when(parentNode).checkPermission(PermissionType.ADD_NODE);
+
+    WebDavException exception = assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertFalse(exception.getMessage().contains(PARENT_JCR_PATH));
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testMoveOntoExistingNameIsRefusedBeforeTheTrashWhenUserMayNotRemoveTheSource() {
+    givenMoveSource();
+    givenExistingTarget();
+    doThrow(new AccessControlException("denied")).when(sourceNode).checkPermission(PermissionType.REMOVE);
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
   public void testMoveOntoNameOfADocumentTheUserCannotSeeIsRefused() {
     givenMoveSource();
     givenExistingTarget();
@@ -582,6 +607,36 @@ public class WebdavWriteCommandHandlerTest {
 
     assertTargetUntouched();
     verify(workspace, never()).copy(anyString(), anyString());
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyOntoExistingNameIsRefusedBeforeTheTrashWhenUserMayNotAddToTheTargetParent() {
+    givenCopySource();
+    givenExistingTarget();
+    doThrow(new AccessControlException("denied")).when(parentNode).checkPermission(PermissionType.ADD_NODE);
+
+    assertStatus(403, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true, true));
+
+    assertTargetUntouched();
+    verify(workspace, never()).copy(anyString(), anyString());
+  }
+
+  /**
+   * A copy leaves its source in place, so the repository asks no REMOVE on it
+   * (<code>WorkspaceImpl#copy</code>) and neither does the check run before the
+   * target is replaced.
+   */
+  @Test
+  @SneakyThrows
+  public void testCopyOntoExistingNameReplacesTheTargetWhenUserMayNotRemoveTheSource() {
+    givenCopySource();
+    givenExistingTarget();
+    doThrow(new AccessControlException("denied")).when(sourceNode).checkPermission(PermissionType.REMOVE);
+
+    handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, true, true);
+
+    assertTargetReplacedThenCopied();
   }
 
   @Test
