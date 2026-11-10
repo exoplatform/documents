@@ -208,6 +208,32 @@ export function saveVisibility(file) {
 
 }
 
+export function createDocumentFromTemplate(ownerId, templateId, destinationFolderId, title) {
+  const formData = new FormData();
+  formData.append('templateId', templateId);
+  formData.append('title', title);
+  if (destinationFolderId) {
+    formData.append('destinationId', destinationFolderId);
+  }
+  if (ownerId) {
+    formData.append('ownerId', ownerId);
+  }
+  const params = new URLSearchParams(formData).toString();
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/fromTemplate?${params}`, {
+    method: 'post',
+    credentials: 'include',
+  }).then(resp => {
+    if (resp?.ok) {
+      return resp.json();
+    } else if (resp?.status === 409) {
+      // The title is already taken in the destination folder: the caller shows its message
+      return resp;
+    } else {
+      throw new Error('Response code indicates a server error', resp);
+    }
+  });
+}
+
 export function renameDocument(ownerId,documentID,newName) {
   const formData = new FormData();
   if (ownerId) {

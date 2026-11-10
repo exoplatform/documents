@@ -626,6 +626,73 @@ public class DocumentFileRest implements ResourceContainer {
     }
   }
 
+  @POST
+  @Path("/fromTemplate")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Operation(summary = "Creates a document from a template document", method = "POST",
+             description = "Copies the template document into the destination folder under the given title, in one call, and records one document creation")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+                          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+                          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+                          @ApiResponse(responseCode = "404", description = "Not found"),
+                          @ApiResponse(responseCode = "409", description = "A document with the same name already exists in the destination folder"),
+                          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response createDocumentFromTemplateDocument(@Parameter(description = "Identity technical identifier, used when destinationId is blank")
+                                                     @QueryParam("ownerId")
+                                                     Long ownerId,
+                                                     @Parameter(description = "Template document technical identifier", required = true)
+                                                     @QueryParam("templateId")
+                                                     String templateId,
+                                                     @Parameter(description = "Destination folder technical identifier")
+                                                     @QueryParam("destinationId")
+                                                     String destinationId,
+                                                     @Parameter(description = "Title of the new document, with or without the template's extension",
+                                                                required = true)
+                                                     @QueryParam("title")
+                                                     String title,
+                                                     @Parameter(description = "File properties to expand.")
+                                                     @QueryParam("expand")
+                                                     String expand) {
+    if (StringUtils.isBlank(templateId)) {
+      return Response.status(Status.BAD_REQUEST).entity("templateId_is_mandatory").build();
+    }
+    if (ownerId == null && StringUtils.isBlank(destinationId)) {
+      return Response.status(Status.BAD_REQUEST).entity("either_ownerId_or_destinationId_is_mandatory").build();
+    }
+    if (StringUtils.isBlank(title)) {
+      return Response.status(Status.BAD_REQUEST).entity("title_is_mandatory").build();
+    }
+    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      AbstractNode createdNode = documentFileService.createDocumentFromTemplateDocument(ownerId == null ? 0 : ownerId,
+                                                                                        templateId,
+                                                                                        destinationId,
+                                                                                        title,
+                                                                                        userIdentityId);
+      AbstractNodeEntity abstractNodeEntity = EntityBuilder.toDocumentItemEntity(documentFileService,
+                                                                                 identityManager,
+                                                                                 spaceService,
+                                                                                 metadataService,
+                                                                                 publicDocumentAccessService,
+                                                                                 createdNode,
+                                                                                 expand,
+                                                                                 userIdentityId);
+      return Response.ok(abstractNodeEntity).build();
+    } catch (IllegalArgumentException e) {
+      return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
+    } catch (ObjectAlreadyExistsException e) {
+      return Response.status(Status.CONFLICT).build();
+    } catch (Exception e) {
+      LOG.warn("Error creating a document from template '{}'", templateId, e);
+      return Response.serverError().build();
+    }
+  }
+
   @PUT
   @Path("/move")
   @Produces(MediaType.APPLICATION_JSON)
