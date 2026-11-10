@@ -631,13 +631,15 @@ public interface DocumentFileService {
   FileContent getImageThumbnailContent(String fileType, String documentId, String userName, int width, int height) throws Exception;
 
   /**
-   * Create  thumbnail for given image.
+   * Create  thumbnail for given image, always at the one preview size
+   * {@link #getImageThumbnailContent} reads, whatever width and height are
+   * asked.
    *
    * @param fileType the file type
    * @param fileContent the FileContent object
    * @param userName the user name
-   * @param width the width of the thumbnail
-   * @param height the height of the thumbnail
+   * @param width the width asked, not used to size the thumbnail
+   * @param height the height asked, not used to size the thumbnail
    */
   FileItem createThumbnail(String fileType, FileContent fileContent, String userName, int width, int height) throws Exception;
 

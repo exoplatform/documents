@@ -899,4 +899,37 @@ public class DocumentFileServiceTest {
     verify(imageThumbnailService).createThumbnail("videoThumbnaildocId", content, "user", 250, 250);
   }
 
+  /**
+   * POST /{fileType}/{documentId} takes its size from the query: whatever is
+   * asked, the thumbnail is looked up, replaced and stored at the 250x250
+   * preview size the read serves, so a new size never adds a stored copy.
+   */
+  @Test
+  public void testCreateThumbnailStoresOnlyThePreviewSize() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+    when(documentFileStorage.hasEditPermissions("docId", aclIdentity)).thenReturn(true);
+    FileContent content = new FileContent("docId", "docId", "image/jpeg", new ByteArrayInputStream(new byte[] { 1 }));
+    when(imageThumbnailService.getThumbnail("videoThumbnaildocId", 250, 250)).thenReturn(mock(FileItem.class));
+
+    documentFileService.createThumbnail("videoThumbnail", content, "user", 500, 99999);
+    documentFileService.createThumbnail("videoThumbnail", content, "user", 0, 0);
+
+    verify(imageThumbnailService, times(2)).getThumbnail("videoThumbnaildocId", 250, 250);
+    verify(imageThumbnailService, times(2)).deleteThumbnails("videoThumbnail", "docId");
+    verify(imageThumbnailService, times(2)).createThumbnail("videoThumbnaildocId", content, "user", 250, 250);
+    verify(imageThumbnailService, never()).getThumbnail(anyString(), intThat(width -> width != 250), anyInt());
+    verify(imageThumbnailService, never()).getThumbnail(anyString(), anyInt(), intThat(height -> height != 250));
+    verify(imageThumbnailService, never()).createThumbnail(anyString(),
+                                                           any(),
+                                                           anyString(),
+                                                           intThat(width -> width != 250),
+                                                           anyInt());
+    verify(imageThumbnailService, never()).createThumbnail(anyString(),
+                                                           any(),
+                                                           anyString(),
+                                                           anyInt(),
+                                                           intThat(height -> height != 250));
+  }
+
 }
