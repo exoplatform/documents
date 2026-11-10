@@ -66,4 +66,18 @@ public class PublicDocumentAccessStorageImplTest {
     publicDocumentAccessStorage.savePublicDocumentAccess(publicDocumentAccess, 1L);
     verify(publicDocumentAccessDAO, times(1)).update(any());
   }
+
+  /** The link's creator is stored and read back (EXO-91530). */
+  @Test
+  public void saveDocumentPublicAccessKeepsTheCreator() {
+    when(identityManager.getIdentity("5")).thenReturn(mock(Identity.class));
+    when(publicDocumentAccessDAO.update(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    PublicDocumentAccess publicDocumentAccess = new PublicDocumentAccess(1L, "123", null, null, null);
+    publicDocumentAccess.setCreatorId(5L);
+
+    PublicDocumentAccess saved = publicDocumentAccessStorage.savePublicDocumentAccess(publicDocumentAccess, 5L);
+
+    verify(publicDocumentAccessDAO).update(argThat(entity -> Long.valueOf(5L).equals(entity.getCreatorId())));
+    assertEquals(Long.valueOf(5L), saved.getCreatorId());
+  }
 }

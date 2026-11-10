@@ -1958,15 +1958,20 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
-  public void downloadFolder() throws RepositoryException {
-    Session session = getMockedSession(null);
+  public void downloadFolder() throws Exception {
+    org.exoplatform.services.security.Identity identity = new org.exoplatform.services.security.Identity("mary");
+    Session session = mock(Session.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.openUserSession(repositoryService, identity)).thenReturn(session);
     Node node = mock(Node.class);
     Node parentNode = mock(Node.class);
     when(parentNode.getPath()).thenReturn("parentPath");
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
     when(node.getParent()).thenReturn(parentNode);
-    String zipPath = jcrDocumentFileStorage.downloadFolder("123");
+    String zipPath = jcrDocumentFileStorage.downloadFolder("123", identity);
     assertNotNull(zipPath);
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.downloadFolder("456", identity));
+    verify(session, times(2)).logout();
+    assertThrows(IllegalArgumentException.class, () -> jcrDocumentFileStorage.downloadFolder("123", null));
   }
   @Test
   public void isDocumentSharedWithSamePermissionsTest() throws RepositoryException {

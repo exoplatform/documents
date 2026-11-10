@@ -1452,6 +1452,7 @@ public class DocumentFileRest implements ResourceContainer {
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
           @ApiResponse(responseCode = "400", description = "Invalid query input"),
           @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "Document not found, or folder not readable by the link's creator"),
           @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response downloadDocument(@Parameter(description = "public link node id", required = true)
                                    @QueryParam("nodeId") String nodeId,
@@ -1488,6 +1489,9 @@ public class DocumentFileRest implements ResourceContainer {
                                    + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8)
                                        .replace("+", "%20") + ".zip\"").build();
       }
+    } catch (ObjectNotFoundException e) {
+      LOG.debug("Public link of document {} cannot be downloaded", nodeId, e);
+      return Response.status(Status.NOT_FOUND).build();
     } catch (Exception e) {
       LOG.error("Error while downloading document", e);
       return Response.serverError().build();
