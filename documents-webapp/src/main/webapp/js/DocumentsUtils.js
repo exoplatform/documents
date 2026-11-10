@@ -125,7 +125,12 @@ export function getEditorUrl(file, mode) {
   if (mode) {
     url += `&mode=${mode}`;
   }
-  url += `&backTo=${getParentFolderUrl(file)}`;
+  if (eXo.env.portal.userName) {
+    // An anonymous visitor (public site viewer) has no document location to go
+    // back to, and the parent-folder URL would expose the space and the
+    // document's folder path in the browser URL
+    url += `&backTo=${getParentFolderUrl(file)}`;
+  }
   return url;
 }
 
