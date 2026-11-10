@@ -862,4 +862,19 @@ public class DocumentFileServiceTest {
     verify(imageThumbnailService).createThumbnail("videoThumbnaildocId", content, "user", 250, 250);
   }
 
+  @Test
+  public void testCreateDocumentFromTemplateDocumentDelegatesWithTheUserAcl() throws Exception {
+    FileNode created = new FileNode();
+    created.setId("new-1");
+    when(documentFileStorage.createDocumentFromTemplateDocument(eq(1L), eq("tpl"), eq("dest"), eq("Report"), any())).thenReturn(created);
+
+    AbstractNode result = documentFileService.createDocumentFromTemplateDocument(1L, "tpl", "dest", "Report", currentOwnerId);
+
+    assertEquals("new-1", result.getId());
+    verify(documentFileStorage).createDocumentFromTemplateDocument(eq(1L),
+                                                                   eq("tpl"),
+                                                                   eq("dest"),
+                                                                   eq("Report"),
+                                                                   argThat(acl -> userName.equals(acl.getUserId())));
+  }
 }

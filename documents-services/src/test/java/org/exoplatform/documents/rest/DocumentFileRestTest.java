@@ -2057,4 +2057,85 @@ public class DocumentFileRestTest {
     assertTrue(cacheControl.isNoStore());
     assertTrue(cacheControl.isPrivate());
   }
+
+  @Test
+  public void testCreateDocumentFromTemplateDocument() throws Exception {
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(2L);
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              publicDocumentAccessService,
+                                                              externalDownloadService,
+                                                              documentWebDavService);
+
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(),
+                 documentFileRest1.createDocumentFromTemplateDocument(1L, " ", "dest", "Report", null).getStatus());
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(),
+                 documentFileRest1.createDocumentFromTemplateDocument(null, "tpl", "", "Report", null).getStatus());
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(),
+                 documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", " ", null).getStatus());
+    verify(documentFileService1, never()).createDocumentFromTemplateDocument(anyLong(), anyString(), anyString(), anyString(), anyLong());
+
+    doThrow(new ObjectAlreadyExistsException("exists")).when(documentFileService1)
+                                                        .createDocumentFromTemplateDocument(1L, "tpl", "dest", "Taken", 2L);
+    assertEquals(Response.Status.CONFLICT.getStatusCode(),
+                 documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "Taken", null).getStatus());
+
+    doThrow(new IllegalAccessException("denied")).when(documentFileService1)
+                                                  .createDocumentFromTemplateDocument(1L, "tpl", "dest", "Denied", 2L);
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(),
+                 documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "Denied", null).getStatus());
+
+    doThrow(new ObjectNotFoundException("missing")).when(documentFileService1)
+                                                    .createDocumentFromTemplateDocument(1L, "tpl", "dest", "Missing", 2L);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(),
+                 documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "Missing", null).getStatus());
+
+    doThrow(new IllegalArgumentException("document title is not valid")).when(documentFileService1)
+                                                                        .createDocumentFromTemplateDocument(1L, "tpl", "dest", "a/b", 2L);
+    Response invalid = documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "a/b", null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), invalid.getStatus());
+    assertEquals("document title is not valid", invalid.getEntity());
+
+    doThrow(new IllegalStateException("boom")).when(documentFileService1)
+                                               .createDocumentFromTemplateDocument(1L, "tpl", "dest", "Broken", 2L);
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+                 documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "Broken", null).getStatus());
+
+    FileNode created = new FileNode();
+    created.setId("new-1");
+    created.setName("report.docx");
+    when(documentFileService1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "Report", 2L)).thenReturn(created);
+    FileNodeEntity entity = new FileNodeEntity();
+    entity.setId("new-1");
+    mockEntityBuilder().when(() -> EntityBuilder.toDocumentItemEntity(documentFileService1,
+                                                                      identityManager,
+                                                                      spaceService,
+                                                                      metadataService,
+                                                                      publicDocumentAccessService,
+                                                                      created,
+                                                                      null,
+                                                                      2L))
+                       .thenReturn(entity);
+    Response ok = documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "Report", null);
+    assertEquals(Response.Status.OK.getStatusCode(), ok.getStatus());
+    assertEquals("new-1", ((AbstractNodeEntity) ok.getEntity()).getId());
+
+    // No owner: the destination alone names the folder, and the service gets 0 as owner
+    when(documentFileService1.createDocumentFromTemplateDocument(0L, "tpl", "dest", "Report", 2L)).thenReturn(created);
+    mockEntityBuilder().when(() -> EntityBuilder.toDocumentItemEntity(documentFileService1,
+                                                                      identityManager,
+                                                                      spaceService,
+                                                                      metadataService,
+                                                                      publicDocumentAccessService,
+                                                                      created,
+                                                                      null,
+                                                                      2L))
+                       .thenReturn(entity);
+    assertEquals(Response.Status.OK.getStatusCode(),
+                 documentFileRest1.createDocumentFromTemplateDocument(null, "tpl", "dest", "Report", null).getStatus());
+  }
 }
