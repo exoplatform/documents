@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -85,6 +86,11 @@ class PublicLinkFolderDownloadTest {
                                                                          List.of(new MembershipEntry("/spaces/space1",
                                                                                                      "manager")));
 
+  /** A member of space2 only. */
+  private static final Identity         SPACE2_MEMBER     = new Identity("paul",
+                                                                         List.of(new MembershipEntry("/spaces/space2",
+                                                                                                     "member")));
+
   private static Session                systemSession;
 
   private static JCRDocumentFileStorage storage;
@@ -92,6 +98,8 @@ class PublicLinkFolderDownloadTest {
   private static String                 sharedFolderId;
 
   private static String                 restrictedFolderId;
+
+  private static String                 sharedWithMemberId;
 
   @BeforeAll
   static void setUpRepository() throws Exception {
@@ -124,12 +132,20 @@ class PublicLinkFolderDownloadTest {
     Node space2 = root.addNode("space2", "nt:folder");
     setPermissions(space2, Map.of("*:/spaces/space2", PermissionType.ALL));
     Node unreadableTarget = addFile(space2, "other-space.txt", "space2 members only");
+    // a space2 folder shared with mary by her name: she reads it, not its parent
+    Node sharedWithMember = space2.addNode("SharedWithMary", "nt:folder");
+    setPermissions(sharedWithMember, Map.of("*:/spaces/space2", PermissionType.ALL, "mary", PermissionType.ALL));
+    addFile(sharedWithMember, "for-mary.txt", "space2 members and mary");
+    Node sub = sharedWithMember.addNode("Sub", "nt:folder");
+    Node inner = addFile(sub, "inner.txt", "space2 members and mary");
     systemSession.save();
+    addShortcut(sharedWithMember, "inner-link.txt", inner);
     addShortcut(shared, "other-space.txt", unreadableTarget);
     addShortcut(shared, "readable-target.txt", readableTarget);
     systemSession.save();
     sharedFolderId = ((ExtendedNode) shared).getIdentifier();
     restrictedFolderId = ((ExtendedNode) restricted).getIdentifier();
+    sharedWithMemberId = ((ExtendedNode) sharedWithMember).getIdentifier();
 
     storage = new JCRDocumentFileStorage(null, repositoryService, null, null, null, null, null, null, null, null, null);
   }
@@ -178,9 +194,54 @@ class PublicLinkFolderDownloadTest {
                 "a shortcut target the host cannot read is left out: " + entries);
   }
 
+  /**
+   * The creator reads the folder and not its parent: the zip holds the same
+   * entries, laid out the same way, as for a user who reads the parent too.
+   */
+  @Test
+  void aFolderReadableUnderAnUnreadableParentKeepsTheZipLayout() throws Exception {
+    org.exoplatform.services.jcr.core.ExtendedSession memberSession = sessionOf(MEMBER);
+    try {
+      assertThrows(javax.jcr.AccessDeniedException.class,
+                   () -> memberSession.getNodeByIdentifier(sharedWithMemberId).getParent(),
+                   "the fixture: the member cannot read the folder's parent");
+    } finally {
+      memberSession.logout();
+    }
+
+    List<String> memberEntries = zipEntries(storage.downloadFolder(sharedWithMemberId, MEMBER));
+    List<String> space2MemberEntries = zipEntries(storage.downloadFolder(sharedWithMemberId, SPACE2_MEMBER));
+
+    assertEquals(List.of("SharedWithMary/Sub/inner.txt", "SharedWithMary/for-mary.txt", "SharedWithMary/inner-link.txt"),
+                 space2MemberEntries,
+                 "the layout when the parent is readable");
+    assertEquals(space2MemberEntries, memberEntries, "the same layout when the parent is not readable");
+  }
+
   @Test
   void aFolderTheCreatorCannotReadIsNotFound() {
     assertThrows(ObjectNotFoundException.class, () -> storage.downloadFolder(restrictedFolderId, MEMBER));
+  }
+
+  /**
+   * The single-file copy the bulk download uses still strips its parent's
+   * titles path, now handed to the walk as a string.
+   */
+  @Test
+  void aFileIsCopiedAtItsPathBelowItsParent() throws Exception {
+    File tempFolder = Files.createTempDirectory("public-link-file").toFile();
+    try {
+      Node file = systemSession.getRootNode().getNode("space1/Shared/public.txt");
+      org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.createFile(file, "", "", tempFolder.getPath(), file.getParent());
+      assertTrue(new File(tempFolder, "public.txt").isFile(), "the file is written at its name under the temp folder");
+    } finally {
+      org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanFiles(tempFolder);
+    }
+  }
+
+  private static org.exoplatform.services.jcr.core.ExtendedSession sessionOf(Identity identity) throws Exception {
+    return (org.exoplatform.services.jcr.core.ExtendedSession) org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.openUserSession(
+        StandaloneContainer.getInstance().getComponentInstanceOfType(RepositoryService.class), identity);
   }
 
   private static List<String> zipEntries(String zipPath) throws IOException {

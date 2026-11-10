@@ -3076,8 +3076,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         Path tempFolder = Files.createTempDirectory(TEMP_DOWNLOAD_FOLDER_PREFIX + System.nanoTime()); // NOSONAR
         tempFolder.toFile().deleteOnExit();
         String tempFolderPath = tempFolder.toString();
-        Node parentNode = node.getParent();
-        JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentNode);
+        String parentPath;
+        String walkFolderPath;
+        try {
+          parentPath = JCRDocumentsUtil.getPathWithTitles(node.getParent());
+          walkFolderPath = tempFolderPath;
+        } catch (AccessDeniedException e) {
+          // The user may read the folder and not its parent: the folder's titles
+          // path then starts at the folder itself, with no leading separator, so
+          // the walk strips nothing and the separator comes with the temp folder
+          parentPath = "";
+          walkFolderPath = tempFolderPath + "/";
+        }
+        JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", walkFolderPath, parentPath);
         String zipName = ZIP_PREFIX + folderId + ZIP_EXTENSION;
         String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
         zipFiles(zipPath, tempFolderPath);
