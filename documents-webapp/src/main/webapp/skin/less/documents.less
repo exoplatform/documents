@@ -206,16 +206,6 @@
         }
       }
     }
-    .documents-settings-button {
-      opacity: 0;
-      pointer-events: none;
-    }
-    &:hover .documents-settings-button,
-    .documents-settings-button:focus,
-    .documents-settings-button:focus-within {
-      opacity: 1;
-      pointer-events: auto;
-    }
     .documents-header-filter-container {
       padding-bottom: 2px !important;
       .filter-active-button{
@@ -303,40 +293,7 @@
       }
 
       .documents-table,.documents-folder-table {
-        .documents-sort-header-button {
-          background: none;
-          border: 0;
-          padding: 0;
-          font: inherit;
-          color: inherit;
-          cursor: pointer;
-          text-align: inherit;
-        }
-        .documents-checkbox-hidden {
-          opacity: 0;
-          pointer-events: none;
-        }
-        thead tr:focus-within .documents-checkbox-hidden,
-        .documents-checkbox-hidden:focus {
-          opacity: 1;
-          pointer-events: auto;
-        }
         tbody {
-          tr .documents-hover-reveal {
-            opacity: 0;
-            pointer-events: none;
-          }
-          tr:hover .documents-hover-reveal,
-          tr:focus-within .documents-hover-reveal,
-          tr .documents-hover-reveal:focus {
-            opacity: 1;
-            pointer-events: auto;
-          }
-          tr:focus-within .documents-checkbox-hidden {
-            opacity: 1;
-            pointer-events: auto;
-          }
-
           td {
             border-bottom: none !important;
 

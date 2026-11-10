@@ -7,7 +7,7 @@
         <v-btn
           v-on="on"
           :aria-label="$t('documents.label.show.details.of', {0: file.name})"
-          class="documents-hover-reveal"
+          class="hover-reveal"
           icon
           small
           @click="displayDetails">

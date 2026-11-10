@@ -66,21 +66,23 @@
                 open-on-hover
                 bottom>
                 <template #activator="{ on }">
-                  <v-simple-checkbox
-                    v-model="selectAll"
-                    v-on="on"
-                    :indeterminate="false"
-                    :aria-checked="selectAll ? 'true' : 'false'"
-                    :aria-label="$t('documents.multiSelection.selectAll.element.label')"
-                    :class="!$root.driveView && (showSelectAll || hoverTable) ? 'visible': 'documents-checkbox-hidden'"
-                    color="primary"
-                    class="mt-auto"
-                    role="checkbox"
-                    tabindex="0"
-                    @keydown.space.prevent="$event.currentTarget.click()"
-                    @mouseover="showSelectAllInputOnHover"
-                    @mouseleave="hideSelectAllInputOnHover"
-                    @click="selectAllDocuments" />
+                  <span class="hover-reveal-parent d-inline-block">
+                    <v-simple-checkbox
+                      v-model="selectAll"
+                      v-on="on"
+                      :indeterminate="false"
+                      :aria-checked="selectAll ? 'true' : 'false'"
+                      :aria-label="$t('documents.multiSelection.selectAll.element.label')"
+                      :class="!$root.driveView && (showSelectAll || hoverTable) ? 'visible': 'hover-reveal'"
+                      color="primary"
+                      class="mt-auto"
+                      role="checkbox"
+                      tabindex="0"
+                      @keydown.space.prevent="$event.currentTarget.click()"
+                      @mouseover="showSelectAllInputOnHover"
+                      @mouseleave="hideSelectAllInputOnHover"
+                      @click="selectAllDocuments" />
+                  </span>
                 </template>
                 {{ $t('documents.multiSelection.selectAll.element.tooltip.message') }}
               </v-tooltip>
@@ -93,7 +95,7 @@
                 :id="column.value === 'name' ? 'headerName' : null"
                 :key="column.value"
                 type="button"
-                class="documents-sort-header-button">
+                class="btn-reset">
                 {{ header.text }}
               </button>
               <span
@@ -112,6 +114,7 @@
                   v-slot="{ hover }"
                   :key="item.id">
                   <tr
+                    class="hover-reveal-parent"
                     :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
                     :data-fileId="item.id"
                     :data-isFolder="item.folder? 'true': 'false'"

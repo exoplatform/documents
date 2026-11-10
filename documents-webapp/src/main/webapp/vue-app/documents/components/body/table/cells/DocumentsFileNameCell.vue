@@ -269,7 +269,7 @@ export default {
       if (this.isMobile || this.menuDisplayed) {
         return '';
       }
-      return this.editNameMode ? 'invisible' : 'documents-hover-reveal';
+      return this.editNameMode ? 'invisible' : 'hover-reveal';
     },
     menuActionTooltip() {
       return this.$t('documents.label.menu.action.tooltip');

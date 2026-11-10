@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="hover-reveal-parent">
     <div v-if="!showFilter">
       <application-toolbar
         :center-button-toggle="centerBotton"
@@ -49,7 +49,7 @@
                 <v-btn
                   id="documentSettingsButton"
                   :aria-label="$t('documents.settings.button.tooltip')"
-                  class="documents-settings-button"
+                  class="hover-reveal"
                   small
                   icon
                   v-on="on"

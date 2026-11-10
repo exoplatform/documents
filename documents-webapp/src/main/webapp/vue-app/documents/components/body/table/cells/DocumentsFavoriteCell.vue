@@ -2,7 +2,7 @@
   <div
     v-show="display"
     :id="`favorite-cell-file-${fileId}`"
-    :class="isFavorite ? '' : 'documents-hover-reveal'"
+    :class="isFavorite ? '' : 'hover-reveal'"
     class="align-center">
     <documents-favorite-button
       :file="file"

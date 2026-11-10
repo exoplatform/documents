@@ -16,7 +16,7 @@
 -->
 <template>
   <v-app>
-    <div class="document-gadget-widget">
+    <div :class="displaySeeMore && 'hover-swap-parent' || 'hover-reveal-parent'">
       <widget-wrapper
         :loading="loading"
         :aria-label="headerTitle"
@@ -29,18 +29,16 @@
           </span>
         </template>
         <template #action>
-          <!-- the settings and link icons show on the card's hover and on the keyboard focus of one of them (global-documents.less):
-               when 'See all' is displayed, the text they replace is the mouse's and the keyboard reaches the same link among them -->
-          <div
-            :class="displaySeeMore && 'document-gadget-actions-with-text'"
-            class="document-gadget-actions">
+          <!-- the settings and link icons show on the card's hover and on the keyboard focus of one of them (platform-ui
+               hover-swap and hover-reveal helpers): when 'See all' is displayed, the text they replace is the mouse's and
+               the keyboard reaches the same link among them -->
+          <div class="position-relative d-flex">
             <v-btn
               v-if="displaySeeMore"
               :tabindex="filesCount ? '-1' : null"
               :aria-hidden="filesCount ? 'true' : null"
-              :class="filesCount && 'document-gadget-see-all-replaced'"
               color="primary"
-              class="document-gadget-see-all pa-0 text-font-size"
+              class="hover-swap-default pa-0 text-font-size"
               small
               text
               link
@@ -49,12 +47,13 @@
                 {{ $t('documents.documentGadget.seeMore') }}
               </span>
             </v-btn>
-            <div class="document-gadget-hover-actions">
+            <div :class="displaySeeMore && 'hover-swap-alt' || 'd-flex'">
               <v-btn
                 v-if="canEdit"
                 :title="$t('documents.documentGadget.editTooltip')"
                 :aria-label="$t('documents.documentGadget.editTooltip')"
-                class="document-gadget-settings-button text-font-size"
+                :class="!displaySeeMore && 'hover-reveal'"
+                class="text-font-size"
                 small
                 link
                 icon
