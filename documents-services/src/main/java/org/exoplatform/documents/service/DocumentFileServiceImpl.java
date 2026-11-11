@@ -22,6 +22,7 @@ import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -31,6 +32,7 @@ import javax.jcr.Session;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.cache.future.FutureCache;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.utils.DocumentUtils;
 import org.exoplatform.documents.webdav.model.OperationCancelledException;
@@ -81,6 +83,37 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   /** The one preview size the documents clients display, width and height. */
   private static final int      PREVIEW_SIZE         = 250;
+
+  /**
+   * Joins the reads of a document's preview that run at the same moment, so
+   * that one creates and stores the preview while the others wait for it:
+   * otherwise two first reads would each store a copy. Nothing is kept once
+   * the read is over: the stored preview is what later reads find.
+   */
+  private final FutureCache<String, FileItem, PreviewRead> previewReads = new FutureCache<>(
+      (previewRead, key) -> this.imageThumbnailService.getOrCreateThumbnail(previewRead.fileType(),
+                                                                       previewRead.documentId(),
+                                                                       previewRead.userName(),
+                                                                       PREVIEW_SIZE,
+                                                                       PREVIEW_SIZE)) {
+    @Override
+    protected FileItem get(String key) {
+      return null;
+    }
+
+    @Override
+    protected void put(String key, FileItem value) {
+      // Nothing kept: see previewReads
+    }
+
+    @Override
+    protected void putOnly(String key, FileItem value) {
+      // Nothing kept: see previewReads
+    }
+  };
+
+  private record PreviewRead(String fileType, String documentId, String userName) {
+  }
 
   private DocumentFileStorage   documentFileStorage;
 
@@ -819,7 +852,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (!canAccess(documentId, getViewerAclIdentity(userName))) {
       throw new IllegalAccessException("User " + userName + " can't access document " + documentId);
     }
-    FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType, documentId, userName, PREVIEW_SIZE, PREVIEW_SIZE);
+    FileItem image = readPreview(fileType, documentId, userName);
     if (image != null) {
       FileInfo imageInfo = image.getFileInfo();
       return new FileContent(String.valueOf(imageInfo.getId()),
@@ -829,6 +862,19 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                              imageInfo.getUpdatedDate());
     } else
       throw new ObjectNotFoundException("Image with id : " + documentId + " isn't found");
+  }
+
+  private FileItem readPreview(String fileType, String documentId, String userName) throws Exception {
+    try {
+      return previewReads.get(new PreviewRead(fileType, documentId, userName), fileType + "/" + documentId);
+    } catch (IllegalStateException e) {
+      // The read's own failure, unwrapped from the join
+      if (e.getCause() instanceof ExecutionException executionException
+          && executionException.getCause() instanceof Exception cause) {
+        throw cause;
+      }
+      throw e;
+    }
   }
 
   @Override
