@@ -16,7 +16,10 @@
  */
 package org.exoplatform.documents.filter;
 
+import java.io.IOException;
+
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,16 +36,25 @@ public class DocumentModeRedirectHandler implements Filter {
   @SneakyThrows
   @Override
   public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
-    DocumentFileService documentFileService = ExoContainerContext.getService(DocumentFileService.class);
-    IdentityManager identityManager = ExoContainerContext.getService(IdentityManager.class);
-    HttpServletResponse httpServletResponse = (HttpServletResponse) response;
-    HttpServletRequest httpServletRequest = (HttpServletRequest) request;
-    String documentPreviewId = httpServletRequest.getParameter("documentPreviewId");
-    String documentEditId = httpServletRequest.getParameter("docId");
+    redirectToViewModeWhenNotEditable((HttpServletRequest) request, (HttpServletResponse) response, chain);
+  }
+
+  void redirectToViewModeWhenNotEditable(HttpServletRequest httpServletRequest,
+                                         HttpServletResponse httpServletResponse,
+                                         FilterChain chain) throws IOException, ServletException, IllegalAccessException {
     String viewer = httpServletRequest.getRemoteUser();
     if (viewer == null) {
-      chain.doFilter(request, response);
+      // Not authenticated yet: the link goes on unchanged, so that a registered
+      // user keeps its mode through login; the editor page opens an anonymous
+      // visitor of a public site in view mode
+      chain.doFilter(httpServletRequest, httpServletResponse);
+      return;
     }
+    boolean modeRequested = httpServletRequest.getParameter("mode") != null;
+    DocumentFileService documentFileService = ExoContainerContext.getService(DocumentFileService.class);
+    IdentityManager identityManager = ExoContainerContext.getService(IdentityManager.class);
+    String documentPreviewId = httpServletRequest.getParameter("documentPreviewId");
+    String documentEditId = httpServletRequest.getParameter("docId");
 
     String documentId = documentPreviewId != null ? documentPreviewId : documentEditId;
 
@@ -50,17 +62,22 @@ public class DocumentModeRedirectHandler implements Filter {
     Identity authenticatedUserIdentity = identityManager.getOrCreateUserIdentity(viewer);
     boolean canEdit = documentFileService.hasEditPermissionOnDocument(documentId,
                                                                       Long.parseLong(authenticatedUserIdentity.getId()));
-    if (!canEdit && httpServletRequest.getParameter("mode") == null) {
-      StringBuilder redirectUrl = new StringBuilder(httpServletRequest.getRequestURL());
-      String query = httpServletRequest.getQueryString();
-      if (query != null && !query.isEmpty()) {
-        redirectUrl.append("?").append(query).append("&mode=view");
-      } else {
-        redirectUrl.append("?mode=view");
-      }
-      httpServletResponse.sendRedirect(redirectUrl.toString());
+    if (!canEdit && !modeRequested) {
+      redirectToViewMode(httpServletRequest, httpServletResponse);
       return;
     }
-    chain.doFilter(request, response);
+    chain.doFilter(httpServletRequest, httpServletResponse);
+  }
+
+  private void redirectToViewMode(HttpServletRequest httpServletRequest,
+                                  HttpServletResponse httpServletResponse) throws IOException {
+    StringBuilder redirectUrl = new StringBuilder(httpServletRequest.getRequestURL());
+    String query = httpServletRequest.getQueryString();
+    if (query != null && !query.isEmpty()) {
+      redirectUrl.append("?").append(query).append("&mode=view");
+    } else {
+      redirectUrl.append("?mode=view");
+    }
+    httpServletResponse.sendRedirect(redirectUrl.toString());
   }
 }
