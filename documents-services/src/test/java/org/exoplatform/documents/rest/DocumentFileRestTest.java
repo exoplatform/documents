@@ -2152,7 +2152,7 @@ public class DocumentFileRestTest {
                                                                .createDocumentFromTemplateDocument(1L, "tpl", "dest", "a/b", 2L);
     Response invalid = documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "a/b", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), invalid.getStatus());
-    // The body of a 400 is the message code, which the client shows through its label
+    // The body of a 400 is the refusal's message code
     assertEquals("title_is_not_valid", invalid.getEntity());
 
     doThrow(new IllegalStateException("boom")).when(documentFileService1)
