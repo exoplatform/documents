@@ -56,12 +56,13 @@ public class PublicDocumentAccessServiceImplTest {
   }
 
   /**
-   * The link records the user who creates it, and a user who replaces an
-   * existing link becomes its creator: a folder link is archived with that
-   * user's rights (EXO-91530).
+   * The link records the user who creates it, and another user who saves the
+   * link again leaves its creator unchanged: a folder link is archived with the
+   * creator's rights. A link that records no creator takes the user who saves
+   * it.
    */
   @Test
-  public void createDocumentPublicAccessRecordsTheLastWriterAsCreator() {
+  public void createDocumentPublicAccessKeepsTheFirstCreator() {
     ArgumentCaptor<PublicDocumentAccess> saved = ArgumentCaptor.forClass(PublicDocumentAccess.class);
     when(publicDocumentAccessStorage.savePublicDocumentAccess(saved.capture(), anyLong())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -75,8 +76,14 @@ public class PublicDocumentAccessServiceImplTest {
     when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(existing);
     publicDocumentAccessService.createPublicDocumentAccess(7L, "123", null, 0L, false);
     assertEquals(Long.valueOf(9L), saved.getValue().getId());
-    assertEquals(Long.valueOf(7L), saved.getValue().getCreatorId());
+    assertEquals(Long.valueOf(5L), saved.getValue().getCreatorId());
     verify(publicDocumentAccessStorage).savePublicDocumentAccess(saved.getValue(), 7L);
+
+    PublicDocumentAccess legacy = new PublicDocumentAccess(11L, "456", null, null, null);
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("456")).thenReturn(legacy);
+    publicDocumentAccessService.createPublicDocumentAccess(7L, "456", null, 0L, false);
+    assertEquals(Long.valueOf(11L), saved.getValue().getId());
+    assertEquals(Long.valueOf(7L), saved.getValue().getCreatorId());
   }
 
   @Test

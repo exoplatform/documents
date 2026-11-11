@@ -87,9 +87,12 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
         encodedPassword = publicDocumentAccess.getEncodedPassword();
       }
       PublicDocumentAccess documentAccessToSave = new PublicDocumentAccess(id, nodeId, hashKey, encodedPassword, expiration);
-      // The user creating or replacing the link: a folder link is archived with
-      // this user's rights
-      documentAccessToSave.setCreatorId(docOwnerId);
+      // The user who created the link: a folder link is archived with this
+      // user's rights, and an editor who saves the link again changes neither.
+      // A link that records no creator takes the user who saves it
+      Long creatorId = publicDocumentAccess != null && publicDocumentAccess.getCreatorId() != null ? publicDocumentAccess.getCreatorId()
+                                                                                                    : Long.valueOf(docOwnerId);
+      documentAccessToSave.setCreatorId(creatorId);
       publicDocumentAccess = publicDocumentAccessStorage.savePublicDocumentAccess(documentAccessToSave, docOwnerId);
       publicDocumentAccess.setDecodedPassword(password);
       return publicDocumentAccess;
