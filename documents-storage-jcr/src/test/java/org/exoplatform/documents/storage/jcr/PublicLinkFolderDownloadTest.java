@@ -182,6 +182,25 @@ class PublicLinkFolderDownloadTest {
                 "a shortcut target the member cannot read is left out: " + entries);
   }
 
+  /**
+   * Two downloads of the same folder build two zips of their own, and leave no
+   * temp folder behind.
+   */
+  @Test
+  void twoDownloadsOfTheSameFolderBuildTheirOwnZipsAndLeaveNoTempFolder() throws Exception {
+    java.util.Set<String> tempFoldersBefore = tempDownloadFolders();
+    String first = storage.downloadFolder(sharedFolderId, MEMBER);
+    String second = storage.downloadFolder(sharedFolderId, MEMBER);
+    try {
+      org.junit.jupiter.api.Assertions.assertNotEquals(first, second, "each download has a zip of its own");
+      assertTrue(new File(first).isFile() && new File(second).isFile(), "both zips are there until they are sent");
+    } finally {
+      Files.deleteIfExists(new File(first).toPath());
+      Files.deleteIfExists(new File(second).toPath());
+    }
+    assertEquals(tempFoldersBefore, tempDownloadFolders(), "no temp folder is left behind");
+  }
+
   @Test
   void aHostLinkKeepsTheSubFolderTheHostCanRead() throws Exception {
     List<String> entries = zipEntries(storage.downloadFolder(sharedFolderId, HOST));
@@ -242,6 +261,19 @@ class PublicLinkFolderDownloadTest {
   private static org.exoplatform.services.jcr.core.ExtendedSession sessionOf(Identity identity) throws Exception {
     return (org.exoplatform.services.jcr.core.ExtendedSession) org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.openUserSession(
         StandaloneContainer.getInstance().getComponentInstanceOfType(RepositoryService.class), identity);
+  }
+
+  /**
+   * The temp folders of downloads, in the folder the JVM creates temp files in,
+   * which a probe file locates: that folder is read once by the JVM, and the
+   * system property may have changed since.
+   */
+  private static java.util.Set<String> tempDownloadFolders() throws IOException {
+    java.nio.file.Path probe = Files.createTempFile("probe", null);
+    File tempDirectory = probe.getParent().toFile();
+    Files.delete(probe);
+    String[] names = tempDirectory.list((dir, name) -> name.startsWith(JCRDocumentFileStorage.TEMP_DOWNLOAD_FOLDER_PREFIX));
+    return names == null ? java.util.Set.of() : java.util.Set.of(names);
   }
 
   private static List<String> zipEntries(String zipPath) throws IOException {

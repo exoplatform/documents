@@ -1742,10 +1742,20 @@ public class DocumentFileRestTest {
 
     reset(externalDownloadService);
     when(externalDownloadService.getDocumentDownloadItem("456")).thenReturn(folderItem);
-    when(externalDownloadService.downloadZippedFolder("456")).thenReturn("zip".getBytes());
+    java.util.concurrent.atomic.AtomicBoolean zipClosed = new java.util.concurrent.atomic.AtomicBoolean();
+    when(externalDownloadService.downloadZippedFolder("456")).thenReturn(new java.io.ByteArrayInputStream("zip".getBytes()) {
+      @Override
+      public void close() {
+        zipClosed.set(true);
+      }
+    });
     response = documentFileRest.downloadDocument("456", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     assertEquals("application/zip", String.valueOf(response.getMetadata().getFirst("Content-Type")));
+    ByteArrayOutputStream zipSent = new ByteArrayOutputStream();
+    ((javax.ws.rs.core.StreamingOutput) response.getEntity()).write(zipSent);
+    assertEquals("zip", zipSent.toString());
+    assertTrue("the zip's stream, whose closing deletes the zip, is closed once sent", zipClosed.get());
 
     ByteArrayOutputStream content = new ByteArrayOutputStream();
     content.write(1);
