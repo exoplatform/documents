@@ -2036,7 +2036,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node newNode = destinationNode.addNode(name, templateNode.getPrimaryNodeType().getName());
       addProperties(templateNode, newNode, documentTitle);
       destinationNode.save();
-      VersionHistoryUtils.createVersion(newNode);
+      try {
+        VersionHistoryUtils.createVersion(newNode);
+      } catch (Exception e) {
+        // The document is saved: it exists without its first version, and its
+        // creation is still announced
+        LOG.warn("The first version of the document '{}' created from the template '{}' could not be created",
+                 newNode.getPath(),
+                 templateDocumentId,
+                 e);
+      }
       // One creation per document, whatever the name the user chose: the copy is
       // created under its final name, so no rename follows
       listenerService.broadcast(CREATE_DOCUMENT_EVENT, username, newNode);

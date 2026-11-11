@@ -24,6 +24,7 @@ import javax.jcr.version.VersionIterator;
 
 import org.junit.*;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -4538,11 +4539,42 @@ public class JCRDocumentFileStorageTest {
     // and the extension is not doubled
     verify(destination).addNode("modele-test.docx", "nt:file");
     verify(newNode).setProperty(NodeTypeConstants.EXO_TITLE, "modele-test.docx");
-    verify(destination).save();
-    VERSION_HISTORY_UTILS.verify(() -> VersionHistoryUtils.createVersion(newNode));
-    verify(listenerService).broadcast(JCRDocumentFileStorage.CREATE_DOCUMENT_EVENT, "john", newNode);
+    // The creation is announced once the document is saved and versioned
+    InOrder order = inOrder(destination, VersionHistoryUtils.class, listenerService);
+    order.verify(destination).save();
+    order.verify(VERSION_HISTORY_UTILS, () -> VersionHistoryUtils.createVersion(newNode));
+    order.verify(listenerService).broadcast(JCRDocumentFileStorage.CREATE_DOCUMENT_EVENT, "john", newNode);
     verify(listenerService, times(1)).broadcast(anyString(), any(), any());
     verify(sessionProvider).close();
+  }
+
+  /**
+   * A first version that cannot be created does not undo a saved document: it
+   * is returned, and its creation is announced once.
+   */
+  @Test
+  public void createDocumentFromTemplateDocumentRecordsTheCreationWhenTheFirstVersionFails() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
+    Node template = mockTemplateFile("modele-test.docx");
+    ExtendedNode destination = mockDestinationFolder();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
+    Node newNode = mock(Node.class);
+    when(destination.addNode("modele-test.docx", "nt:file")).thenReturn(newNode);
+    VERSION_HISTORY_UTILS.when(() -> VersionHistoryUtils.createVersion(newNode)).thenThrow(new RepositoryException("no version"));
+    FileNode expected = new FileNode();
+    expected.setId("new-2");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(identityManager, aclIdentity, newNode, "", spaceService))
+                      .thenReturn(expected);
+
+    AbstractNode result = jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "modele-test.docx", aclIdentity);
+
+    assertEquals("new-2", result.getId());
+    verify(destination).save();
+    verify(listenerService).broadcast(JCRDocumentFileStorage.CREATE_DOCUMENT_EVENT, "john", newNode);
+    verify(listenerService, times(1)).broadcast(anyString(), any(), any());
   }
 
   @Test
