@@ -262,6 +262,43 @@ public class WebdavWriteCommandHandlerTargetPathTest {
   }
 
   /**
+   * A folder created over WebDAV with a name holding a ':' is stored under that
+   * name with the ':' encoded, and keeps the name as its visible name.
+   */
+  @Test
+  public void testCreateFolderWithANameHoldingAColonStoresItEncoded() throws Exception {
+    NodeImpl created = node(DRIVE_ROOT_JCR_PATH + "/a%3Ab", "created");
+    nodes.remove(DRIVE_ROOT_JCR_PATH + "/a%3Ab");
+    when(nodes.get(DRIVE_ROOT_JCR_PATH).addNode("a%3Ab", "nt:folder")).thenReturn(created);
+
+    handler.createFolder(session, DRIVE + "/a:b", null);
+
+    verify(nodes.get(DRIVE_ROOT_JCR_PATH)).addNode("a%3Ab", "nt:folder");
+    verify(created).setProperty("exo:title", "a:b");
+    assertMappingSaved("a:b", DRIVE_ROOT_JCR_PATH + "/a%3Ab");
+  }
+
+  /**
+   * A document put over WebDAV under a new name holding a ':' is stored under
+   * that name with the ':' encoded, and keeps the name as its visible name.
+   */
+  @Test
+  public void testSaveFileWithANewNameHoldingAColonStoresItEncoded() throws Exception {
+    NodeImpl created = node(DRIVE_ROOT_JCR_PATH + "/a%3Ab", "created");
+    nodes.remove(DRIVE_ROOT_JCR_PATH + "/a%3Ab");
+    when(nodes.get(DRIVE_ROOT_JCR_PATH).addNode("a%3Ab", "nt:file")).thenReturn(created);
+    Node content = mock(Node.class);
+    when(created.addNode("jcr:content", "nt:resource")).thenReturn(content);
+    when(created.getNode("jcr:content")).thenReturn(content);
+
+    handler.saveFile(session, DRIVE + "/a:b", "text/plain", null, new java.io.ByteArrayInputStream(new byte[] { 1 }));
+
+    verify(nodes.get(DRIVE_ROOT_JCR_PATH)).addNode("a%3Ab", "nt:file");
+    verify(created).setProperty("exo:title", "a:b");
+    assertMappingSaved("a:b", DRIVE_ROOT_JCR_PATH + "/a%3Ab");
+  }
+
+  /**
    * The copy counterpart of {@link #testMoveOntoAnExistingNameHoldingAColonReplacesIt()}.
    */
   @Test
