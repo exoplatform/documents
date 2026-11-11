@@ -348,12 +348,16 @@ public class EntityBuilder {
     Identity identity = getOwnerIdentityFromNodePath(path, identityManager, spaceService);
     Map<String, PermissionEntryEntity> map = new HashMap<>();
     List<PermissionEntry> permissions = nodePermission.getPermissions();
+    // JCRDocumentFileStorage#updatePermissions writes the owner (exo:owner, the creator) with
+    // PermissionType.ALL on every save, which the JCR stores as one entry per permission type
+    // (read, add_node, set_property, remove). A creator entry granting edit is that default
+    // and is hidden; a creator holding only "read" was saved as a read collaborator, and is listed.
+    String creatorId = String.valueOf(node.getCreatorId());
+    boolean creatorCanEdit = permissions.stream()
+                                        .anyMatch(permissionEntry -> permissionEntry.getIdentity().getId().equals(creatorId)
+                                            && isEditPermission(permissionEntry.getPermission()));
     for(PermissionEntry permissionEntry : permissions){
-      // the creator always implicitly gets full access on its own node, so hide that
-      // default grant from the collaborators list. Only when it was narrowed down to
-      // "read" is it the result of the creator being explicitly added as a collaborator.
-      if(permissionEntry.getIdentity().getId().equals(String.valueOf(node.getCreatorId()))
-          && isEditPermission(permissionEntry.getPermission())){
+      if (creatorCanEdit && permissionEntry.getIdentity().getId().equals(creatorId)) {
         continue;
       }
       if(identity != null && permissionEntry.getIdentity().getId().equals(identity.getId())){
