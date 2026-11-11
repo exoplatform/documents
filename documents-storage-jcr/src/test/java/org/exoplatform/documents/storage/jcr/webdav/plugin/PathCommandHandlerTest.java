@@ -337,6 +337,38 @@ public class PathCommandHandlerTest {
 
     assertEquals(USER_BASE_JCR_PATH + "/a%3Ab", path);
   }
+  /**
+   * A node an older WebDAV create stored under a name whose prefix is a
+   * registered namespace, kept with its ':', is still found by that name.
+   */
+  @Test
+  @SneakyThrows
+  public void testResolveToJcrPathWithLegacyFallbackStillFindsANameStoredWithItsColon() {
+    mockUserIdentity(123L);
+    Identity userIdentity = mock(Identity.class);
+    when(identityManager.getOrCreateUserIdentity(USER1)).thenReturn(userIdentity);
+    when(userIdentity.getIdentityId()).thenReturn(123L);
+    when(session.getUserID()).thenReturn(USER1);
+
+    NodeImpl legacyNode = mock(NodeImpl.class);
+    when(legacyNode.getPath()).thenReturn(USER_BASE_JCR_PATH + "/exo:b");
+    when(legacyNode.getName()).thenReturn("exo:b");
+    when(legacyNode.getIdentifier()).thenReturn("prefixed-node-id");
+    when(legacyNode.getSession()).thenReturn(session);
+    when(legacyNode.getParent()).thenReturn(identityRootNode);
+
+    when(webDavPathMappingStorage.findJcrPath(eq(USER_BASE_JCR_PATH), anyString())).thenReturn(null);
+    when(webDavPathMappingStorage.findByNodeIdentifier(anyString())).thenReturn(Optional.empty());
+    when(webDavPathMappingStorage.findByJcrPath(anyString())).thenReturn(Optional.empty());
+    when(webDavPathMappingStorage.findByParentJcrPathAndNormalizedVisibleName(anyString(),
+                                                                              anyString())).thenReturn(Optional.empty());
+    when(session.itemExists(USER_BASE_JCR_PATH + "/exo:b")).thenReturn(true);
+    when(session.getItem(USER_BASE_JCR_PATH + "/exo:b")).thenReturn(legacyNode);
+
+    String path = handler.resolveToJcrPath(session, "/John Doe (123)/exo:b");
+
+    assertEquals(USER_BASE_JCR_PATH + "/exo:b", path);
+  }
 
   @Test
   public void testToTechnicalNameEncodesAColon() {
