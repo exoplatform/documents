@@ -1737,19 +1737,33 @@ public class DocumentFileRestTest {
   }
 
   /**
-   * A HEAD on a link answers its access status and neither reads the document
-   * nor builds a folder's zip.
+   * A HEAD on a link answers the status the download would answer and neither
+   * reads the document nor builds a folder's zip. The method is reached only
+   * through its {@code @HEAD} annotation: without it, the engine answers a
+   * HEAD by running the download, whose zip is then built for nothing.
    */
   @Test
-  public void checkDocumentDownloadAnswersTheAccessStatusWithoutBuildingTheZip() throws Exception {
+  public void checkDocumentDownloadAnswersTheDownloadStatusWithoutBuildingTheZip() throws Exception {
+    java.lang.reflect.Method head = DocumentFileRest.class.getMethod("checkDocumentDownload", String.class, String.class);
+    assertTrue(head.isAnnotationPresent(javax.ws.rs.HEAD.class));
+    assertEquals("/download", head.getAnnotation(javax.ws.rs.Path.class).value());
+
     when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
     Response response = documentFileRest.checkDocumentDownload("456", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     assertNull(response.getEntity());
+    assertNoStore(response);
+    verify(externalDownloadService).checkDocumentDownload("456");
+
+    doThrow(ObjectNotFoundException.class).when(externalDownloadService).checkDocumentDownload("456");
+    response = documentFileRest.checkDocumentDownload("456", null);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNoStore(response);
 
     when(publicDocumentAccessService.isPublicDocumentAccessExpired("789")).thenReturn(true);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), documentFileRest.checkDocumentDownload("789", null).getStatus());
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), documentFileRest.checkDocumentDownload("", null).getStatus());
+    verify(externalDownloadService, never()).checkDocumentDownload("789");
     verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
     verify(externalDownloadService, never()).downloadZippedFolder(anyString());
   }

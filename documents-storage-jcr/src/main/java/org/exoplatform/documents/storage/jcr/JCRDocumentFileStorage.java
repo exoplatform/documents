@@ -3089,6 +3089,29 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void checkFolderReadable(String folderId, Identity aclIdentity) throws ObjectNotFoundException {
+    if (aclIdentity == null) {
+      throw new IllegalArgumentException("the identity whose rights apply is mandatory");
+    }
+    Session userSession = null;
+    try {
+      userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
+      if (getNodeByIdentifier(userSession, folderId) == null) {
+        throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
+      }
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Folder " + folderId + " cannot be checked", e);
+    } finally {
+      if (userSession != null) {
+        userSession.logout();
+      }
+    }
+  }
+
+  /**
    * Copies a folder's tree into a temp folder of its own and zips it into a
    * file of its own, so that two downloads of the same folder at once never
    * share either. The temp folder is deleted whatever happens, and so is the

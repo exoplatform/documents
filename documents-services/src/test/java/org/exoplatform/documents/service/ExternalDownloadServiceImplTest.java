@@ -1,6 +1,7 @@
 package org.exoplatform.documents.service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.PublicDocumentAccessStorage;
@@ -137,6 +138,47 @@ public class ExternalDownloadServiceImplTest {
     when(documentFileStorage.downloadFolder(any(), any())).thenReturn(null);
 
     assertThrows(IOException.class, () -> externalDownloadService.downloadZippedFolder(FOLDER_ID));
+  }
+
+  /**
+   * The download check reads no content and builds no zip: a file needs only
+   * to exist; a folder needs, like its zip, an active creator who can read it.
+   */
+  @Test
+  public void checkDocumentDownloadOfAFileNeedsOnlyTheFile() throws Exception {
+    when(documentFileStorage.getDocumentDownloadInfo("file")).thenReturn(new DownloadItem("file", "a.pdf", null, "application/pdf"));
+
+    externalDownloadService.checkDocumentDownload("file");
+    verify(publicDocumentAccessStorage, never()).getPublicDocumentAccessByNodeId(anyString());
+    verify(documentFileStorage, never()).checkFolderReadable(anyString(), any());
+    verify(documentFileStorage, never()).getDocumentDownloadItem(anyString());
+  }
+
+  @Test
+  public void checkDocumentDownloadOfAMissingDocumentIsNotFound() {
+    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.checkDocumentDownload("missing"));
+  }
+
+  @Test
+  public void checkDocumentDownloadOfAFolderChecksItWithTheCreatorRights() throws Exception {
+    when(documentFileStorage.getDocumentDownloadInfo(FOLDER_ID)).thenReturn(new DownloadItem(FOLDER_ID, "folder", null, null));
+    org.exoplatform.services.security.Identity creatorAclIdentity = mockLinkCreator(true, false);
+
+    externalDownloadService.checkDocumentDownload(FOLDER_ID);
+    verify(documentFileStorage).checkFolderReadable(FOLDER_ID, creatorAclIdentity);
+    verify(documentFileStorage, never()).downloadFolder(anyString(), any());
+
+    doThrow(ObjectNotFoundException.class).when(documentFileStorage).checkFolderReadable(FOLDER_ID, creatorAclIdentity);
+    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.checkDocumentDownload(FOLDER_ID));
+  }
+
+  @Test
+  public void checkDocumentDownloadOfAFolderWhoseCreatorIsDisabledIsNotFound() throws Exception {
+    when(documentFileStorage.getDocumentDownloadInfo(FOLDER_ID)).thenReturn(new DownloadItem(FOLDER_ID, "folder", null, null));
+    mockLinkCreator(false, false);
+
+    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.checkDocumentDownload(FOLDER_ID));
+    verify(documentFileStorage, never()).checkFolderReadable(anyString(), any());
   }
 
   private org.exoplatform.services.security.Identity mockLinkCreator(boolean enabled, boolean deleted) throws Exception {

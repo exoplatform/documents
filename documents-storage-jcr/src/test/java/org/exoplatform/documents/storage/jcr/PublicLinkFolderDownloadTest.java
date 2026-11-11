@@ -243,6 +243,20 @@ class PublicLinkFolderDownloadTest {
   }
 
   /**
+   * The download check reads the folder with the same rights as the download,
+   * and builds nothing.
+   */
+  @Test
+  void theFolderCheckAppliesTheCreatorRightsAndBuildsNothing() throws Exception {
+    java.util.Set<String> tempFoldersBefore = tempDownloadFolders();
+    storage.checkFolderReadable(sharedFolderId, MEMBER);
+    storage.checkFolderReadable(sharedWithMemberId, MEMBER);
+    storage.checkFolderReadable(restrictedFolderId, HOST);
+    assertThrows(ObjectNotFoundException.class, () -> storage.checkFolderReadable(restrictedFolderId, MEMBER));
+    assertEquals(tempFoldersBefore, tempDownloadFolders(), "the check copies nothing");
+  }
+
+  /**
    * The single-file copy the bulk download uses still strips its parent's
    * titles path, now handed to the walk as a string.
    */
