@@ -46,6 +46,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.StreamingOutput;
 import javax.ws.rs.core.UriInfo;
 
 import org.apache.commons.lang3.StringUtils;
@@ -1481,8 +1482,15 @@ public class DocumentFileRest implements ResourceContainer {
                                 + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8)
                                 .replace("+", "%20") + "\"").build();
       } else {
-        byte[] filesBytes = externalDownloadService.downloadZippedFolder(downloadItem.getItemId());
-        return Response.ok(filesBytes)
+        InputStream zipStream = externalDownloadService.downloadZippedFolder(downloadItem.getItemId());
+        // Streamed from its file, which closing the stream deletes, rather
+        // than read whole into memory
+        StreamingOutput zipBody = output -> {
+          try (InputStream input = zipStream) {
+            input.transferTo(output);
+          }
+        };
+        return Response.ok(zipBody)
                        .type("application/zip")
                        .header("Content-Disposition",
                                "attachment; filename=\""

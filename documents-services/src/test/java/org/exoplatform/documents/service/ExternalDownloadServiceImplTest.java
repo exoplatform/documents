@@ -62,14 +62,16 @@ public class ExternalDownloadServiceImplTest {
   @Test
   public void downloadZippedFolderWalksWithTheCreatorRights() throws Exception {
     org.exoplatform.services.security.Identity creatorAclIdentity = mockLinkCreator(true, false);
-    String path = Files.createTempFile("test", "test.txt").toString();
-    when(documentFileStorage.downloadFolder(FOLDER_ID, creatorAclIdentity)).thenReturn(path);
+    java.nio.file.Path zip = Files.createTempFile("test", "test.zip");
+    Files.write(zip, new byte[] { 1, 2, 3 });
+    when(documentFileStorage.downloadFolder(FOLDER_ID, creatorAclIdentity)).thenReturn(zip.toString());
 
-    byte[] folderBytes = externalDownloadService.downloadZippedFolder(FOLDER_ID);
-
-    assertNotNull(folderBytes);
+    try (java.io.InputStream folderStream = externalDownloadService.downloadZippedFolder(FOLDER_ID)) {
+      assertArrayEquals(new byte[] { 1, 2, 3 }, folderStream.readAllBytes());
+      assertTrue("the zip is read from its file while it is sent", Files.exists(zip));
+    }
     verify(documentFileStorage).downloadFolder(FOLDER_ID, creatorAclIdentity);
-    assertFalse("the zip is deleted once read", Files.exists(java.nio.file.Path.of(path)));
+    assertFalse("the zip is deleted once its stream is closed", Files.exists(zip));
   }
 
   @Test

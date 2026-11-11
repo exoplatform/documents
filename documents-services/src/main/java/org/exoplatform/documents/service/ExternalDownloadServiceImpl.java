@@ -16,7 +16,6 @@
  */
 package org.exoplatform.documents.service;
 
-import org.apache.commons.io.FileUtils;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
@@ -25,8 +24,9 @@ import org.exoplatform.documents.storage.PublicDocumentAccessStorage;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 
-import java.io.File;
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -65,7 +65,7 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
    * {@inheritDoc}
    */
   @Override
-  public byte[] downloadZippedFolder(String folderId) throws IOException, ObjectNotFoundException {
+  public InputStream downloadZippedFolder(String folderId) throws IOException, ObjectNotFoundException {
     if (folderId == null) {
       throw new IllegalArgumentException("folder id is mandatory");
     }
@@ -74,15 +74,27 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
     if (downloadPath == null) {
       throw new IOException("The zip of folder " + folderId + " could not be built");
     }
-    File zipped = new File(downloadPath);
-    byte[] filesBytes = FileUtils.readFileToByteArray(zipped);
-    Files.delete(Path.of(downloadPath));
-    return filesBytes;
+    Path zip = Path.of(downloadPath);
+    try {
+      return new FilterInputStream(Files.newInputStream(zip)) {
+        @Override
+        public void close() throws IOException {
+          try {
+            super.close();
+          } finally {
+            Files.deleteIfExists(zip);
+          }
+        }
+      };
+    } catch (IOException e) {
+      Files.deleteIfExists(zip);
+      throw e;
+    }
   }
 
   /**
    * The rights a folder link is archived with are those of the user who created
-   * or last replaced the link, read now: a link that records no such user, or
+   * the link, read now: a link that records no such user, or
    * whose user is gone or disabled, archives nothing.
    */
   private org.exoplatform.services.security.Identity getLinkCreatorAclIdentity(String folderId) throws ObjectNotFoundException {
