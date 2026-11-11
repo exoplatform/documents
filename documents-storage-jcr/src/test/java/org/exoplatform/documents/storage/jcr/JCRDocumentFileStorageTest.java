@@ -4673,8 +4673,14 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "file")).thenReturn(file);
 
-    assertThrows(IllegalArgumentException.class,
-                 () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "file", "modele-test.docx", aclIdentity));
+    IllegalArgumentException refusal =
+                                     assertThrows(IllegalArgumentException.class,
+                                                  () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L,
+                                                                                                                  "tpl",
+                                                                                                                  "file",
+                                                                                                                  "modele-test.docx",
+                                                                                                                  aclIdentity));
+    assertEquals("destination_is_not_a_folder", refusal.getMessage());
 
     verify(file, never()).addNode(anyString(), anyString());
     verify(session, never()).checkPermission(anyString(), anyString());
@@ -4817,10 +4823,15 @@ public class JCRDocumentFileStorageTest {
     org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle(anyString())).thenCallRealMethod();
 
-    assertThrows(IllegalArgumentException.class,
-                 () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "a/b", aclIdentity));
-    assertThrows(IllegalArgumentException.class,
-                 () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, " ", "dest", "Report", aclIdentity));
+    // Each refusal carries the message code the resource answers as the 400's body
+    assertEquals("title_is_not_valid",
+                 assertThrows(IllegalArgumentException.class,
+                              () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "a/b", aclIdentity))
+                                                                                                                                     .getMessage());
+    assertEquals("templateId_is_mandatory",
+                 assertThrows(IllegalArgumentException.class,
+                              () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, " ", "dest", "Report", aclIdentity))
+                                                                                                                                      .getMessage());
 
     verify(listenerService, never()).broadcast(anyString(), any(), any());
   }

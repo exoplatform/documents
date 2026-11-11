@@ -649,8 +649,8 @@ public class DocumentFileRest implements ResourceContainer {
   @Operation(summary = "Creates a document from a template document", method = "POST",
              description = "Copies the template document into the destination folder under the given title, in one call, and records one document creation")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-                          @ApiResponse(responseCode = "400", description = "Invalid query input"),
-                          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+                          @ApiResponse(responseCode = "400", description = "Invalid query input, the body is its message code"),
+                          @ApiResponse(responseCode = "403", description = "The user has no right to add a document in the destination folder"),
                           @ApiResponse(responseCode = "404", description = "Not found"),
                           @ApiResponse(responseCode = "409", description = "A document with the same name already exists in the destination folder"),
                           @ApiResponse(responseCode = "500", description = "Internal server error"), })
@@ -698,7 +698,7 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (IllegalArgumentException e) {
       return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).build();
     } catch (IllegalAccessException e) {
-      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
+      return Response.status(Status.FORBIDDEN).entity(e.getMessage()).build();
     } catch (ObjectNotFoundException e) {
       return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
     } catch (ObjectAlreadyExistsException e) {

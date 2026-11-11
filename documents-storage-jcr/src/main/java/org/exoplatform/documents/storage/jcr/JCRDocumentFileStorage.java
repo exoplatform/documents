@@ -1980,10 +1980,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                ObjectNotFoundException,
                                                                                ObjectAlreadyExistsException {
     if (StringUtils.isBlank(templateDocumentId)) {
-      throw new IllegalArgumentException("template document id is mandatory");
+      throw new IllegalArgumentException("templateId_is_mandatory");
     }
     if (!isValidDocumentTitle(title)) {
-      throw new IllegalArgumentException("document title is not valid");
+      throw new IllegalArgumentException("title_is_not_valid");
     }
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
@@ -2010,7 +2010,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         // A folder shortcut is followed to its target and a node that is not a
         // folder is refused, before the right is checked and the document added
-        destinationNode = getUploadFolder(session, destinationFolderId);
+        try {
+          destinationNode = getUploadFolder(session, destinationFolderId);
+        } catch (IllegalArgumentException e) {
+          throw new IllegalArgumentException("destination_is_not_a_folder", e);
+        }
       }
       // The repository's own rule, the one it applies again at save: the
       // folder's owner holds every right, and add_node is the right an added

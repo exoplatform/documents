@@ -2140,7 +2140,7 @@ public class DocumentFileRestTest {
 
     doThrow(new IllegalAccessException("denied")).when(documentFileService1)
                                                   .createDocumentFromTemplateDocument(1L, "tpl", "dest", "Denied", 2L);
-    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(),
+    assertEquals(Response.Status.FORBIDDEN.getStatusCode(),
                  documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "Denied", null).getStatus());
 
     doThrow(new ObjectNotFoundException("missing")).when(documentFileService1)
@@ -2148,11 +2148,12 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(),
                  documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "Missing", null).getStatus());
 
-    doThrow(new IllegalArgumentException("document title is not valid")).when(documentFileService1)
-                                                                        .createDocumentFromTemplateDocument(1L, "tpl", "dest", "a/b", 2L);
+    doThrow(new IllegalArgumentException("title_is_not_valid")).when(documentFileService1)
+                                                               .createDocumentFromTemplateDocument(1L, "tpl", "dest", "a/b", 2L);
     Response invalid = documentFileRest1.createDocumentFromTemplateDocument(1L, "tpl", "dest", "a/b", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), invalid.getStatus());
-    assertEquals("document title is not valid", invalid.getEntity());
+    // The body of a 400 is the message code, which the client shows through its label
+    assertEquals("title_is_not_valid", invalid.getEntity());
 
     doThrow(new IllegalStateException("boom")).when(documentFileService1)
                                                .createDocumentFromTemplateDocument(1L, "tpl", "dest", "Broken", 2L);
