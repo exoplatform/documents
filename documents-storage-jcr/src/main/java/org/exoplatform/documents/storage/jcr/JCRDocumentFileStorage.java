@@ -23,6 +23,7 @@ import static org.gatein.common.net.URLTools.SLASH;
 
 import java.io.*;
 import java.net.URLDecoder;
+import java.security.AccessControlException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -2003,17 +2004,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (StringUtils.isBlank(destinationFolderId) && ownerId > 0) {
         org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
         destinationNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        if (destinationNode == null) {
+          throw new ObjectNotFoundException("Drive root of identity '" + ownerId + "' not found");
+        }
       } else {
-        destinationNode = getNodeByIdentifier(session, destinationFolderId);
+        // A folder shortcut is followed to its target and a node that is not a
+        // folder is refused, before the right is checked and the document added
+        destinationNode = getUploadFolder(session, destinationFolderId);
       }
-      if (destinationNode == null) {
-        throw new ObjectNotFoundException("Destination folder with id '" + destinationFolderId + "' not found");
-      }
-      Map<String, Boolean> nodeAccessList = countNodeAccessList(destinationNode, aclIdentity);
-      String canEdit = "canEdit";
-      if (nodeAccessList.containsKey(canEdit) && !nodeAccessList.get(canEdit).booleanValue()) {
-        throw new IllegalAccessException("Permission to add document is missing");
-      }
+      // The repository's own rule, the one it applies again at save: the
+      // folder's owner holds every right, and add_node is the right an added
+      // node needs
+      session.checkPermission(destinationNode.getPath(), PermissionType.ADD_NODE);
       // The drawer shows the template's extension apart from the name field, so
       // a title typed without one takes the template's
       String documentTitle = title.trim();
@@ -2035,11 +2037,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       // created under its final name, so no rename follows
       listenerService.broadcast(CREATE_DOCUMENT_EVENT, username, newNode);
       return toFileNode(identityManager, aclIdentity, newNode, "", spaceService);
-    } catch (IllegalAccessException | ObjectNotFoundException | ObjectAlreadyExistsException e) {
+    } catch (IllegalArgumentException | IllegalAccessException | ObjectNotFoundException | ObjectAlreadyExistsException e) {
       throw e;
-    } catch (AccessDeniedException e) {
-      // The ACL grants the edit right through set_property alone: the repository
-      // refuses the save of the added node, which is the same missing right
+    } catch (AccessControlException | AccessDeniedException e) {
+      // The right is refused by the check before the copy, or by the repository
+      // at the save of the added node: the same missing right
       throw new IllegalAccessException("Permission to add document is missing");
     } catch (Exception e) {
       throw new IllegalStateException("Error creating document from template '" + templateDocumentId + "'", e);

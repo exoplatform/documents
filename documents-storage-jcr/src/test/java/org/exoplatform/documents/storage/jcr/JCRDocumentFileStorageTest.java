@@ -10,6 +10,7 @@ import static org.mockito.Mockito.*;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.InputStream;
+import java.security.AccessControlException;
 import java.util.*;
 
 import javax.jcr.*;
@@ -4519,7 +4520,7 @@ public class JCRDocumentFileStorageTest {
     SessionProvider sessionProvider = mock(SessionProvider.class);
     Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
     Node template = mockTemplateFile("modele-test.docx");
-    ExtendedNode destination = mockDestinationFolder("john", true);
+    ExtendedNode destination = mockDestinationFolder();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
     Node newNode = mock(Node.class);
@@ -4550,7 +4551,7 @@ public class JCRDocumentFileStorageTest {
     SessionProvider sessionProvider = mock(SessionProvider.class);
     Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
     Node template = mockTemplateFile("modele-test.docx");
-    ExtendedNode destination = mockDestinationFolder("john", true);
+    ExtendedNode destination = mockDestinationFolder();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
     Node newNode = mock(Node.class);
@@ -4577,7 +4578,7 @@ public class JCRDocumentFileStorageTest {
     SessionProvider sessionProvider = mock(SessionProvider.class);
     Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
     Node template = mockTemplateFile("modele-test.docx");
-    ExtendedNode destination = mockDestinationFolder("john", true);
+    ExtendedNode destination = mockDestinationFolder();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
     Node newNode = mock(Node.class);
@@ -4596,7 +4597,7 @@ public class JCRDocumentFileStorageTest {
     SessionProvider sessionProvider = mock(SessionProvider.class);
     Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
     Node template = mockTemplateFile("modele-test.docx");
-    ExtendedNode destination = mockDestinationFolder("john", true);
+    ExtendedNode destination = mockDestinationFolder();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
     // The existing node has the lowercased node name: the probe must run on that
@@ -4612,20 +4613,105 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
-  public void createDocumentFromTemplateDocumentNeedsTheEditRightOnTheDestination() throws Exception {
+  public void createDocumentFromTemplateDocumentNeedsTheAddRightOnTheDestination() throws Exception {
     org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
     SessionProvider sessionProvider = mock(SessionProvider.class);
     Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
     Node template = mockTemplateFile("modele-test.docx");
-    ExtendedNode destination = mockDestinationFolder("john", false);
+    ExtendedNode destination = mockDestinationFolder();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
+    doThrow(new AccessControlException("denied")).when(session).checkPermission(DESTINATION_PATH, PermissionType.ADD_NODE);
 
     assertThrows(IllegalAccessException.class,
                  () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "modele-test", aclIdentity));
 
     verify(destination, never()).addNode(anyString(), anyString());
     verify(listenerService, never()).broadcast(anyString(), any(), any());
+    verify(sessionProvider).close();
+  }
+
+  /**
+   * The right is the repository's own answer on the destination, which counts
+   * the folder's owner: a folder whose entries grant its owner no write is
+   * still writable by that owner, and the entries are not read to decide.
+   */
+  @Test
+  public void createDocumentFromTemplateDocumentLetsTheOwnerOfTheDestinationCreate() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
+    Node template = mockTemplateFile("modele-test.docx");
+    ExtendedNode destination = mockDestinationFolder();
+    // Owned by john, with a read entry only
+    AccessControlEntry entry = new AccessControlEntry("john", PermissionType.READ);
+    when(destination.getACL()).thenReturn(new AccessControlList("john", Arrays.asList(entry)));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
+    Node newNode = mock(Node.class);
+    when(destination.addNode("modele-test.docx", "nt:file")).thenReturn(newNode);
+
+    jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "modele-test.docx", aclIdentity);
+
+    verify(session).checkPermission(DESTINATION_PATH, PermissionType.ADD_NODE);
+    verify(destination).addNode("modele-test.docx", "nt:file");
+    verify(listenerService).broadcast(JCRDocumentFileStorage.CREATE_DOCUMENT_EVENT, "john", newNode);
+  }
+
+  /**
+   * A file's id sent as the destination is refused before anything is added:
+   * a document is created in a folder.
+   */
+  @Test
+  public void createDocumentFromTemplateDocumentRefusesAFileAsTheDestination() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
+    Node template = mockTemplateFile("modele-test.docx");
+    ExtendedNode file = mock(ExtendedNode.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(file)).thenReturn(false);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "file")).thenReturn(file);
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "file", "modele-test.docx", aclIdentity));
+
+    verify(file, never()).addNode(anyString(), anyString());
+    verify(session, never()).checkPermission(anyString(), anyString());
+    verify(listenerService, never()).broadcast(anyString(), any(), any());
+    verify(sessionProvider).close();
+  }
+
+  /**
+   * A folder shortcut's id sent as the destination is followed: the right is
+   * checked on the target folder and the document is added there, never under
+   * the shortcut.
+   */
+  @Test
+  public void createDocumentFromTemplateDocumentWritesInTheTargetOfAShortcutDestination() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
+    Node template = mockTemplateFile("modele-test.docx");
+    ExtendedNode shortcut = mock(ExtendedNode.class);
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property uuid = mock(Property.class);
+    when(uuid.getString()).thenReturn("target-folder");
+    when(shortcut.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(uuid);
+    ExtendedNode target = mockDestinationFolder();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "link")).thenReturn(shortcut);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "target-folder")).thenReturn(target);
+    Node newNode = mock(Node.class);
+    when(target.addNode("modele-test.docx", "nt:file")).thenReturn(newNode);
+
+    jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "link", "modele-test.docx", aclIdentity);
+
+    verify(session).checkPermission(DESTINATION_PATH, PermissionType.ADD_NODE);
+    verify(target).addNode("modele-test.docx", "nt:file");
+    verify(target).save();
+    verify(shortcut, never()).addNode(anyString(), anyString());
+    verify(listenerService).broadcast(JCRDocumentFileStorage.CREATE_DOCUMENT_EVENT, "john", newNode);
   }
 
   @Test
@@ -4634,11 +4720,10 @@ public class JCRDocumentFileStorageTest {
     SessionProvider sessionProvider = mock(SessionProvider.class);
     Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
     Node template = mockTemplateFile("modele-test.docx");
-    // set_property alone makes canEdit true; eXo JCR checks add_node at save time
-    // (SessionDataManager.validateAccessPermissions), so the refusal comes from save()
-    ExtendedNode destination = mock(ExtendedNode.class);
-    AccessControlEntry entry = new AccessControlEntry("john", PermissionType.SET_PROPERTY);
-    when(destination.getACL()).thenReturn(new AccessControlList("john", Arrays.asList(entry)));
+    // eXo JCR checks add_node again at save time
+    // (SessionDataManager.validateAccessPermissions): a right withdrawn after
+    // the check is refused by save()
+    ExtendedNode destination = mockDestinationFolder();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
     when(destination.addNode("modele-test.docx", "nt:file")).thenReturn(mock(Node.class));
@@ -4662,7 +4747,7 @@ public class JCRDocumentFileStorageTest {
     when(uuid.getString()).thenReturn("target");
     when(shortcut.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(uuid);
     Node target = mockTemplateFile("budget-model.xlsx");
-    ExtendedNode destination = mockDestinationFolder("john", true);
+    ExtendedNode destination = mockDestinationFolder();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "link")).thenReturn(shortcut);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "target")).thenReturn(target);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
@@ -4682,7 +4767,7 @@ public class JCRDocumentFileStorageTest {
     org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
     SessionProvider sessionProvider = mock(SessionProvider.class);
     Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
-    ExtendedNode destination = mockDestinationFolder("john", true);
+    ExtendedNode destination = mockDestinationFolder();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "missing")).thenReturn(null);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
     // A template the user cannot read resolves to null, like a missing one
@@ -4715,7 +4800,7 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
     Identity ownerIdentity = mock(Identity.class);
     when(identityManager.getIdentity("7")).thenReturn(ownerIdentity);
-    ExtendedNode driveRoot = mockDestinationFolder("john", true);
+    ExtendedNode driveRoot = mockDestinationFolder();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService, nodeHierarchyCreator, "john", ownerIdentity, sessionProvider))
                       .thenReturn(driveRoot);
     Node newNode = mock(Node.class);
@@ -4749,6 +4834,8 @@ public class JCRDocumentFileStorageTest {
     assertEquals(DocumentServiceImpl.CREATE_DOC_NEW_APP, JCRDocumentFileStorage.CREATE_DOCUMENT_EVENT);
   }
 
+  private static final String DESTINATION_PATH = "/Groups/spaces/space_one/Documents/Reports";
+
   private Session mockTemplateCopySession(org.exoplatform.services.security.Identity aclIdentity,
                                           SessionProvider sessionProvider) throws Exception {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
@@ -4776,10 +4863,10 @@ public class JCRDocumentFileStorageTest {
     return template;
   }
 
-  private ExtendedNode mockDestinationFolder(String user, boolean editRight) throws Exception {
+  private ExtendedNode mockDestinationFolder() throws Exception {
     ExtendedNode destination = mock(ExtendedNode.class);
-    AccessControlEntry entry = new AccessControlEntry(user, editRight ? PermissionType.ADD_NODE : PermissionType.READ);
-    when(destination.getACL()).thenReturn(new AccessControlList(user, Arrays.asList(entry)));
+    when(destination.getPath()).thenReturn(DESTINATION_PATH);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(destination)).thenReturn(true);
     return destination;
   }
 }
