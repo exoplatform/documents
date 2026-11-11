@@ -4754,6 +4754,44 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * A shortcut to a file sent as the destination is followed, then refused as
+   * a file is: the folder test runs on the shortcut's target.
+   */
+  @Test
+  public void createDocumentFromTemplateDocumentRefusesAShortcutToAFileAsTheDestination() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
+    Node template = mockTemplateFile("modele-test.docx");
+    ExtendedNode shortcut = mock(ExtendedNode.class);
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    // The shortcut itself would pass the folder test: only its target decides
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(shortcut)).thenReturn(true);
+    Property uuid = mock(Property.class);
+    when(uuid.getString()).thenReturn("target-file");
+    when(shortcut.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(uuid);
+    ExtendedNode targetFile = mock(ExtendedNode.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(targetFile)).thenReturn(false);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "link")).thenReturn(shortcut);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "target-file")).thenReturn(targetFile);
+
+    IllegalArgumentException refusal =
+                                     assertThrows(IllegalArgumentException.class,
+                                                  () -> jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L,
+                                                                                                                  "tpl",
+                                                                                                                  "link",
+                                                                                                                  "modele-test.docx",
+                                                                                                                  aclIdentity));
+    assertEquals("destination_is_not_a_folder", refusal.getMessage());
+
+    verify(shortcut, never()).addNode(anyString(), anyString());
+    verify(targetFile, never()).addNode(anyString(), anyString());
+    verify(session, never()).checkPermission(anyString(), anyString());
+    verify(listenerService, never()).broadcast(anyString(), any(), any());
+  }
+
+  /**
    * A folder shortcut's id sent as the destination is followed: the right is
    * checked on the target folder and the document is added there, never under
    * the shortcut.
