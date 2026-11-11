@@ -1730,6 +1730,24 @@ public class DocumentFileRestTest {
    * creator gone or disabled, folder unreadable by the creator) answers 404; a
    * file link never asks for the creator (EXO-91530).
    */
+  /**
+   * A HEAD on a link answers its access status and neither reads the document
+   * nor builds a folder's zip.
+   */
+  @Test
+  public void checkDocumentDownloadAnswersTheAccessStatusWithoutBuildingTheZip() throws Exception {
+    when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
+    Response response = documentFileRest.checkDocumentDownload("456", null);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertNull(response.getEntity());
+
+    when(publicDocumentAccessService.isPublicDocumentAccessExpired("789")).thenReturn(true);
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), documentFileRest.checkDocumentDownload("789", null).getStatus());
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), documentFileRest.checkDocumentDownload("", null).getStatus());
+    verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
+    verify(externalDownloadService, never()).downloadZippedFolder(anyString());
+  }
+
   @Test
   public void downloadFolderOfAPublicLinkTheCreatorCannotArchiveIsNotFound() throws Exception {
     DownloadItem folderItem = new DownloadItem("456", "folder", null, null);
@@ -1756,6 +1774,7 @@ public class DocumentFileRestTest {
     ((javax.ws.rs.core.StreamingOutput) response.getEntity()).write(zipSent);
     assertEquals("zip", zipSent.toString());
     assertTrue("the zip's stream, whose closing deletes the zip, is closed once sent", zipClosed.get());
+    assertTrue("a zip is never kept by a cache", String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
 
     ByteArrayOutputStream content = new ByteArrayOutputStream();
     content.write(1);
