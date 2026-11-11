@@ -34,6 +34,7 @@ import javax.jcr.AccessDeniedException;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
+import javax.ws.rs.HEAD;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -1444,6 +1445,40 @@ public class DocumentFileRest implements ResourceContainer {
     return Response.ok(response.toString()).cacheControl(NO_STORE_CACHE_CONTROL).build();
   }
 
+  /**
+   * Answers a HEAD on the download with the status of the link's access, 400,
+   * 401 or 200, without reading the document or building a folder's zip:
+   * without this method, a HEAD runs the download and drops its body unsent.
+   */
+  @HEAD
+  @Produces
+  @Path("/download")
+  @Operation(summary = "Check whether a given document can be downloaded",
+          method = "HEAD",
+          description = "Answers the status of the link's access, with no content")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+          @ApiResponse(responseCode = "400", description = "Invalid query input"),
+          @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response checkDocumentDownload(@Parameter(description = "public link node id", required = true)
+                                        @QueryParam("nodeId") String nodeId,
+                                        @Parameter(description = "public access password")
+                                        @QueryParam("password") String password) {
+    if (StringUtils.isBlank(nodeId)) {
+      return Response.status(Status.BAD_REQUEST).cacheControl(NO_STORE_CACHE_CONTROL).build();
+    }
+    try {
+      if (publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId)
+          || !publicDocumentAccessService.isDocumentPublicAccessValid(nodeId, password)) {
+        return Response.status(Status.UNAUTHORIZED).cacheControl(NO_STORE_CACHE_CONTROL).build();
+      }
+      return Response.ok().cacheControl(NO_STORE_CACHE_CONTROL).build();
+    } catch (Exception e) {
+      LOG.error("Error while checking the download of document {}", nodeId, e);
+      return Response.serverError().cacheControl(NO_STORE_CACHE_CONTROL).build();
+    }
+  }
+
   @GET
   @Produces
   @Path("/download")
@@ -1477,6 +1512,7 @@ public class DocumentFileRest implements ResourceContainer {
       if(downloadItem.getMimeType() != null) {
         return Response.ok(downloadItem.getItemContent().toByteArray())
                 .type(downloadItem.getMimeType())
+                .cacheControl(NO_STORE_CACHE_CONTROL)
                 .header("Content-Disposition",
                         "attachment;filename=\""
                                 + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8)
@@ -1492,6 +1528,7 @@ public class DocumentFileRest implements ResourceContainer {
         };
         return Response.ok(zipBody)
                        .type("application/zip")
+                       .cacheControl(NO_STORE_CACHE_CONTROL)
                        .header("Content-Disposition",
                                "attachment; filename=\""
                                    + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8)
