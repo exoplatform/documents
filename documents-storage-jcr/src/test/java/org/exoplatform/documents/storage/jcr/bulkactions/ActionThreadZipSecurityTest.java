@@ -26,11 +26,13 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -144,6 +146,164 @@ class ActionThreadZipSecurityTest {
 
     assertThrows(SecurityException.class, () -> ActionThread.fixAndExtractZip(zip.toFile(), outputDir.toFile()));
     assertEquals("existing", Files.readString(outputDir.resolve("file.txt"), StandardCharsets.UTF_8));
+  }
+
+  @Test
+  void fixAndExtractZipSkipsMacOsMetadata() throws Exception {
+    Path zip = tempDir.resolve("finder.zip");
+    Path outputDir = tempDir.resolve("output");
+    createFinderZip(zip);
+
+    ActionThread.fixAndExtractZip(zip.toFile(), outputDir.toFile());
+
+    assertOnlyUserFilesExtracted(outputDir);
+  }
+
+  /**
+   * The first extraction pass of the import, before any encoding fix.
+   */
+  @Test
+  void safeExtractZipSkipsMacOsMetadata() throws Exception {
+    Path zip = tempDir.resolve("finder.zip");
+    Path outputDir = tempDir.resolve("output");
+    createFinderZip(zip);
+
+    invokeSafeExtractZip(zip.toFile(), outputDir.toFile());
+
+    assertOnlyUserFilesExtracted(outputDir);
+  }
+
+  /**
+   * AppleDouble {@code ._<name>} files placed next to the files they describe,
+   * outside any {@code __MACOSX} folder.
+   */
+  @Test
+  void fixAndExtractZipSkipsAppleDoubleFilesOutsideMacOsMetadataFolder() throws Exception {
+    Path zip = tempDir.resolve("appledouble.zip");
+    Path outputDir = tempDir.resolve("output");
+
+    createZip(zip,
+              new ZipItem("folderX/doc.txt", "hello"),
+              new ZipItem("folderX/._doc.txt", "AppleDouble"),
+              new ZipItem("folderX/sub/note.txt", "world"),
+              new ZipItem("folderX/sub/._note.txt", "AppleDouble"));
+
+    ActionThread.fixAndExtractZip(zip.toFile(), outputDir.toFile());
+
+    assertOnlyUserFilesExtracted(outputDir);
+  }
+
+  @Test
+  void fixAndExtractZipSkipsMacOsMetadataFolderBelowTheArchiveRoot() throws Exception {
+    Path zip = tempDir.resolve("nested-macosx.zip");
+    Path outputDir = tempDir.resolve("output");
+
+    createZip(zip,
+              new ZipItem("folderX/doc.txt", "hello"),
+              new ZipItem("folderX/__MACOSX/", ""),
+              new ZipItem("folderX/__MACOSX/info.txt", "metadata"),
+              new ZipItem("folderX/sub/note.txt", "world"),
+              new ZipItem("folderX/sub/__MACOSX/readme.txt", "metadata"));
+
+    ActionThread.fixAndExtractZip(zip.toFile(), outputDir.toFile());
+
+    assertOnlyUserFilesExtracted(outputDir);
+    assertFalse(Files.exists(outputDir.resolve("folderX/__MACOSX"), LinkOption.NOFOLLOW_LINKS));
+  }
+
+  /**
+   * Entry names separated by backslashes, which the extraction treats as path
+   * separators.
+   */
+  @Test
+  void fixAndExtractZipSkipsMacOsMetadataInBackslashSeparatedEntries() throws Exception {
+    Path zip = tempDir.resolve("backslash.zip");
+    Path outputDir = tempDir.resolve("output");
+
+    createZip(zip,
+              new ZipItem("folderX\\doc.txt", "hello"),
+              new ZipItem("folderX\\.DS_Store", "Bud1"),
+              new ZipItem("folderX\\sub\\note.txt", "world"),
+              new ZipItem("folderX\\sub\\__MACOSX\\info.txt", "metadata"),
+              new ZipItem("__MACOSX\\folderX\\._doc.txt", "AppleDouble"));
+
+    ActionThread.fixAndExtractZip(zip.toFile(), outputDir.toFile());
+
+    assertOnlyUserFilesExtracted(outputDir);
+  }
+
+  @Test
+  void fixAndExtractZipKeepsNamesThatOnlyResembleMacOsMetadata() throws Exception {
+    Path zip = tempDir.resolve("lookalikes.zip");
+    Path outputDir = tempDir.resolve("output");
+
+    createZip(zip,
+              new ZipItem("folderX/a._b.txt", "1"),
+              new ZipItem("folderX/my__MACOSX.txt", "2"),
+              new ZipItem("folderX/__MACOSX_notes/c.txt", "3"),
+              new ZipItem("folderX/.DS_Store.txt", "4"),
+              new ZipItem("folderX/.gitignore", "5"));
+
+    ActionThread.fixAndExtractZip(zip.toFile(), outputDir.toFile());
+
+    assertEquals("1", Files.readString(outputDir.resolve("folderX/a._b.txt"), StandardCharsets.UTF_8));
+    assertEquals("2", Files.readString(outputDir.resolve("folderX/my__MACOSX.txt"), StandardCharsets.UTF_8));
+    assertEquals("3", Files.readString(outputDir.resolve("folderX/__MACOSX_notes/c.txt"), StandardCharsets.UTF_8));
+    assertEquals("4", Files.readString(outputDir.resolve("folderX/.DS_Store.txt"), StandardCharsets.UTF_8));
+    assertEquals("5", Files.readString(outputDir.resolve("folderX/.gitignore"), StandardCharsets.UTF_8));
+  }
+
+  @Test
+  void fixAndExtractZipStillRejectsTraversalUnderMacOsMetadataFolder() throws Exception {
+    Path zip = tempDir.resolve("macos-traversal.zip");
+    Path outputDir = tempDir.resolve("output");
+
+    createZip(zip, new ZipItem("__MACOSX/../../evil.txt", "owned"));
+    File zipFile = zip.toFile();
+    File outDir = outputDir.toFile();
+
+    assertThrows(SecurityException.class, () -> ActionThread.fixAndExtractZip(zipFile, outDir));
+    assertFalse(Files.exists(tempDir.resolve("evil.txt")));
+  }
+
+  /**
+   * Builds a zip holding the user's folder with a {@code .DS_Store} file in it,
+   * next to a {@code __MACOSX} folder mirroring it with AppleDouble
+   * {@code ._<name>} files.
+   */
+  private static void createFinderZip(Path zipPath) throws IOException {
+    createZip(zipPath,
+              new ZipItem("folderX/", ""),
+              new ZipItem("folderX/.DS_Store", "Bud1"),
+              new ZipItem("folderX/doc.txt", "hello"),
+              new ZipItem("folderX/sub/", ""),
+              new ZipItem("folderX/sub/note.txt", "world"),
+              new ZipItem("__MACOSX/", ""),
+              new ZipItem("__MACOSX/folderX/", ""),
+              new ZipItem("__MACOSX/folderX/._.DS_Store", "AppleDouble"),
+              new ZipItem("__MACOSX/folderX/._doc.txt", "AppleDouble"),
+              new ZipItem("__MACOSX/folderX/sub/", ""),
+              new ZipItem("__MACOSX/folderX/sub/._note.txt", "AppleDouble"));
+  }
+
+  private static void assertOnlyUserFilesExtracted(Path outputDir) throws IOException {
+    assertEquals("hello", Files.readString(outputDir.resolve("folderX/doc.txt"), StandardCharsets.UTF_8));
+    assertEquals("world", Files.readString(outputDir.resolve("folderX/sub/note.txt"), StandardCharsets.UTF_8));
+    assertFalse(Files.exists(outputDir.resolve("__MACOSX"), LinkOption.NOFOLLOW_LINKS));
+    assertFalse(Files.exists(outputDir.resolve("folderX/.DS_Store"), LinkOption.NOFOLLOW_LINKS));
+    try (var paths = Files.walk(outputDir)) {
+      assertEquals(List.of("folderX/doc.txt", "folderX/sub/note.txt"),
+                   paths.filter(Files::isRegularFile)
+                        .map(path -> outputDir.relativize(path).toString().replace('\\', '/'))
+                        .sorted()
+                        .toList());
+    }
+  }
+
+  private static void invokeSafeExtractZip(File zipFile, File outputDir) throws Exception {
+    Method method = ActionThread.class.getDeclaredMethod("safeExtractZip", File.class, File.class, Charset.class);
+    method.setAccessible(true);
+    invoke(method, null, zipFile, outputDir, StandardCharsets.UTF_8);
   }
 
   private static void createZip(Path zipPath, ZipItem... items) throws IOException {
