@@ -1496,18 +1496,18 @@ public class DocumentFileRest implements ResourceContainer {
                                    @QueryParam("password") String password) {
 
     if (StringUtils.isBlank(nodeId)) {
-      return Response.status(Status.BAD_REQUEST).entity("nodeId id is mandatory").build();
+      return Response.status(Status.BAD_REQUEST).entity("nodeId id is mandatory").cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
     try {
       if (publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId)) {
-        return Response.status(Status.UNAUTHORIZED).entity("access expired").build();
+        return Response.status(Status.UNAUTHORIZED).entity("access expired").cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
       if (!publicDocumentAccessService.isDocumentPublicAccessValid(nodeId, password)) {
-        return Response.status(Status.UNAUTHORIZED).entity("access is not valid").build();
+        return Response.status(Status.UNAUTHORIZED).entity("access is not valid").cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
       DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
       if (downloadItem == null) {
-        return Response.status(Status.NOT_FOUND).build();
+        return Response.status(Status.NOT_FOUND).cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
       if(downloadItem.getMimeType() != null) {
         return Response.ok(downloadItem.getItemContent().toByteArray())
@@ -1536,10 +1536,10 @@ public class DocumentFileRest implements ResourceContainer {
       }
     } catch (ObjectNotFoundException e) {
       LOG.debug("Public link of document {} cannot be downloaded", nodeId, e);
-      return Response.status(Status.NOT_FOUND).build();
+      return Response.status(Status.NOT_FOUND).cacheControl(NO_STORE_CACHE_CONTROL).build();
     } catch (Exception e) {
       LOG.error("Error while downloading document", e);
-      return Response.serverError().build();
+      return Response.serverError().cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
   }
 

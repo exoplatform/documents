@@ -1708,28 +1708,34 @@ public class DocumentFileRestTest {
     downloadItem.setMimeType("application/pdf");
     Response response = documentFileRest.downloadDocument(null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     when(publicDocumentAccessService.isPublicDocumentAccessExpired("123")).thenReturn(true, false);
     when(publicDocumentAccessService.isDocumentPublicAccessValid("123", null)).thenReturn(false, true);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     when(externalDownloadService.getDocumentDownloadItem("123")).thenReturn(null, downloadItem);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     when(externalDownloadService.getDocumentDownloadItem("123")).thenThrow(RuntimeException.class);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+    assertNoStore(response);
 
   }
 
-  /**
-   * A folder link the creator's rights cannot archive (no creator recorded,
-   * creator gone or disabled, folder unreadable by the creator) answers 404; a
-   * file link never asks for the creator (EXO-91530).
-   */
+  private static void assertNoStore(Response response) {
+    assertTrue("a download's answer, whatever its status, is never kept by a cache",
+               String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
+  }
+
   /**
    * A HEAD on a link answers its access status and neither reads the document
    * nor builds a folder's zip.
@@ -1748,6 +1754,11 @@ public class DocumentFileRestTest {
     verify(externalDownloadService, never()).downloadZippedFolder(anyString());
   }
 
+  /**
+   * A folder link the creator's rights cannot archive (no creator recorded,
+   * creator gone or disabled, folder unreadable by the creator) answers 404; a
+   * file link never asks for the creator (EXO-91530).
+   */
   @Test
   public void downloadFolderOfAPublicLinkTheCreatorCannotArchiveIsNotFound() throws Exception {
     DownloadItem folderItem = new DownloadItem("456", "folder", null, null);
@@ -1757,6 +1768,7 @@ public class DocumentFileRestTest {
 
     Response response = documentFileRest.downloadDocument("456", null);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNoStore(response);
 
     reset(externalDownloadService);
     when(externalDownloadService.getDocumentDownloadItem("456")).thenReturn(folderItem);
