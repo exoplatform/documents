@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.exoplatform.documents.model.FileNode;
@@ -157,13 +158,58 @@ public class EntityBuilderTest {
         NodePermissionEntity readResult = invokeToNodePermissionEntity(node);
         assertEquals(1, readResult.getCollaborators().size());
         assertEquals("wilhelmine", readResult.getCollaborators().get(0).getIdentity().getRemoteId());
-
-        // Creator's implicit full-access owner grant must stay hidden from the collaborators list.
-        PermissionEntry editEntry = new PermissionEntry(creatorIdentity, "add_node,set_property,remove,read", PermissionRole.ALL.name());
-        node.setAcl(new NodePermission(true, true, false, false, List.of(editEntry), null, null, null));
-        NodePermissionEntity editResult = invokeToNodePermissionEntity(node);
-        assertEquals(0, editResult.getCollaborators().size());
+        assertEquals("read", readResult.getCollaborators().get(0).getPermission());
     }
+
+    /**
+     * The creator's default full access is stored by the JCR as one entry per permission type
+     * ({@code NodeImpl#setPermissions}), {@code read} included: none of these entries may list
+     * the creator as a collaborator, while another user holding the same entries stays listed.
+     */
+    @Test
+    public void toNodePermissionEntityHidesCreatorDefaultFullAccessStoredAsOneEntryPerPermission() throws Exception {
+        Space space = new Space();
+        space.setPrettyName("testspace");
+        when(spaceService.getSpaceByGroupId("/spaces/testspace")).thenReturn(space);
+
+        Identity spaceIdentity = mock(Identity.class);
+        when(spaceIdentity.getId()).thenReturn("999");
+        when(spaceIdentity.isSpace()).thenReturn(true);
+        when(identityManager.getOrCreateSpaceIdentity("testspace")).thenReturn(spaceIdentity);
+
+        Identity creatorIdentity = mockUserIdentity("42", "wilhelmine", "Wilhelmine Abden");
+        Identity collaboratorIdentity = mockUserIdentity("43", "raul", "Raul Collab");
+
+        FileNode node = new FileNode();
+        node.setId("fileId");
+        node.setPath("/Groups/spaces/testspace");
+        node.setCreatorId(42);
+        when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(false);
+
+        List<PermissionEntry> entries = new ArrayList<>();
+        for (Identity userIdentity : List.of(creatorIdentity, collaboratorIdentity)) {
+          for (String permissionType : List.of("read", "add_node", "set_property", "remove")) {
+            entries.add(new PermissionEntry(userIdentity, permissionType, PermissionRole.ALL.name()));
+          }
+        }
+        node.setAcl(new NodePermission(true, true, false, false, entries, null, null, null));
+
+        NodePermissionEntity result = invokeToNodePermissionEntity(node);
+        assertEquals(1, result.getCollaborators().size());
+        assertEquals("raul", result.getCollaborators().get(0).getIdentity().getRemoteId());
+        assertEquals("edit", result.getCollaborators().get(0).getPermission());
+    }
+
+  private Identity mockUserIdentity(String id, String remoteId, String fullName) {
+    Identity userIdentity = mock(Identity.class);
+    when(userIdentity.getId()).thenReturn(id);
+    when(userIdentity.getRemoteId()).thenReturn(remoteId);
+    when(userIdentity.isUser()).thenReturn(true);
+    Profile profile = mock(Profile.class);
+    when(profile.getFullName()).thenReturn(fullName);
+    when(userIdentity.getProfile()).thenReturn(profile);
+    return userIdentity;
+  }
 
   @Test
   public void encodeNamePreservesPlusSign() throws Exception {

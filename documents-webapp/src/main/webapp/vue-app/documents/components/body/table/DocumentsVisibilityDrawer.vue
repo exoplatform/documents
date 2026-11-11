@@ -439,9 +439,12 @@ export default {
       }
       this.users = [];
       for (const collaborator of file.acl.collaborators) {
-        const user = collaborator.identity;
-        user.permission = collaborator.permission;
-        this.users.push(user);
+        // A copy holding the permission from the start, so that its change is reactive:
+        // the identity is already observed through the file, and a property added to it later is not.
+        this.users.push({
+          ...collaborator.identity,
+          permission: collaborator.permission,
+        });
       }
       this.getDocumentPublicAccessInfo();
     },
