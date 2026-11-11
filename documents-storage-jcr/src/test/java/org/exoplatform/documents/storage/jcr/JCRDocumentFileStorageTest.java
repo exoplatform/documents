@@ -9,6 +9,7 @@ import static org.mockito.Mockito.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 
@@ -1973,6 +1974,40 @@ public class JCRDocumentFileStorageTest {
     verify(session, times(2)).logout();
     assertThrows(IllegalArgumentException.class, () -> jcrDocumentFileStorage.downloadFolder("123", null));
   }
+  /**
+   * A zip that cannot be built leaves nothing behind: the temp copy is cleaned
+   * and the zip file deleted, whether the copy or the zipping fails.
+   */
+  @Test
+  public void downloadFolderThatFailsLeavesNoTempCopyNorZip() throws Exception {
+    org.exoplatform.services.security.Identity identity = new org.exoplatform.services.security.Identity("mary");
+    Session session = mock(Session.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.openUserSession(repositoryService, identity)).thenReturn(session);
+    Node node = mock(Node.class);
+    when(node.getParent()).thenReturn(mock(Node.class));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "failing")).thenReturn(node);
+    String[] zipPath = new String[1];
+    try {
+      JCR_DOCUMENTS_UTIL.clearInvocations();
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.zipFiles(anyString(), anyString())).thenAnswer(invocation -> {
+        zipPath[0] = invocation.getArgument(0);
+        throw new IOException("no space left");
+      });
+      assertNull(jcrDocumentFileStorage.downloadFolder("failing", identity));
+      assertNotNull(zipPath[0]);
+      assertFalse("a zip that was not built is deleted", new File(zipPath[0]).exists());
+      JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.cleanFiles(any(File.class)));
+
+      JCR_DOCUMENTS_UTIL.clearInvocations();
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.createTempFilesAndFolders(eq(node), anyString(), anyString(), anyString(), anyString()))
+                        .thenThrow(new RepositoryException("unreadable child"));
+      assertNull(jcrDocumentFileStorage.downloadFolder("failing", identity));
+      JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.cleanFiles(any(File.class)));
+    } finally {
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.zipFiles(anyString(), anyString())).thenAnswer(invocation -> null);
+    }
+  }
+
   @Test
   public void isDocumentSharedWithSamePermissionsTest() throws RepositoryException {
     ExtendedNode currentNode = mock(ExtendedNode.class);
