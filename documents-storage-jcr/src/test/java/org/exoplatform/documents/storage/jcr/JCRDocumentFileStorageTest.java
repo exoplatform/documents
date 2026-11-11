@@ -4623,6 +4623,39 @@ public class JCRDocumentFileStorageTest {
     verify(newNode).setProperty(NodeTypeConstants.EXO_TITLE, "50% plan.docx");
   }
 
+  /**
+   * A plus sign and an accent get the node name renameDocument computes: the
+   * URL decoding of the shared helper turns each plus into a space, and the
+   * accents are removed from the node name; the title keeps what the user
+   * typed. The existence probe runs on that same node name.
+   */
+  @Test
+  public void createDocumentFromTemplateDocumentNamesAPlusAndAnAccentAsRenameDoes() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    Session session = mockTemplateCopySession(aclIdentity, sessionProvider);
+    Node template = mockTemplateFile("modele-test.docx");
+    ExtendedNode destination = mockDestinationFolder();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "tpl")).thenReturn(template);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "dest")).thenReturn(destination);
+    Node plusNode = mock(Node.class);
+    when(destination.addNode("c   plan.docx", "nt:file")).thenReturn(plusNode);
+    Node accentNode = mock(Node.class);
+    when(destination.addNode("resume ete.docx", "nt:file")).thenReturn(accentNode);
+
+    jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "C++ plan.docx", aclIdentity);
+
+    verify(destination).hasNode("c   plan.docx");
+    verify(destination).addNode("c   plan.docx", "nt:file");
+    verify(plusNode).setProperty(NodeTypeConstants.EXO_TITLE, "C++ plan.docx");
+
+    jcrDocumentFileStorage.createDocumentFromTemplateDocument(0L, "tpl", "dest", "R\u00e9sum\u00e9 \u00e9t\u00e9.docx", aclIdentity);
+
+    verify(destination).hasNode("resume ete.docx");
+    verify(destination).addNode("resume ete.docx", "nt:file");
+    verify(accentNode).setProperty(NodeTypeConstants.EXO_TITLE, "R\u00e9sum\u00e9 \u00e9t\u00e9.docx");
+  }
+
   @Test
   public void createDocumentFromTemplateDocumentRefusesANameAlreadyTaken() throws Exception {
     org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
