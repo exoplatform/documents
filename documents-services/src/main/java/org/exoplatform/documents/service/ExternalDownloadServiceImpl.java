@@ -93,6 +93,23 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
   }
 
   /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void checkDocumentDownload(String documentId) throws ObjectNotFoundException {
+    if (documentId == null) {
+      throw new IllegalArgumentException("document id is mandatory");
+    }
+    DownloadItem downloadInfo = documentFileStorage.getDocumentDownloadInfo(documentId);
+    if (downloadInfo == null) {
+      throw new ObjectNotFoundException("No document has id " + documentId);
+    }
+    if (downloadInfo.getMimeType() == null) {
+      documentFileStorage.checkFolderReadable(documentId, getLinkCreatorAclIdentity(documentId));
+    }
+  }
+
+  /**
    * The rights a folder link is archived with are those of the user who created
    * the link, read now: a link that records no such user, or
    * whose user is gone or disabled, archives nothing.

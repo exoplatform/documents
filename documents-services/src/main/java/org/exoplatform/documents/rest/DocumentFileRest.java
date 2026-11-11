@@ -1446,19 +1446,21 @@ public class DocumentFileRest implements ResourceContainer {
   }
 
   /**
-   * Answers a HEAD on the download with the status of the link's access, 400,
-   * 401 or 200, without reading the document or building a folder's zip:
-   * without this method, a HEAD runs the download and drops its body unsent.
+   * Answers a HEAD on the download with the status the download would answer,
+   * 400, 401, 404 or 200, without reading the document or building a folder's
+   * zip: without this method, a HEAD runs the download and drops its body
+   * unsent.
    */
   @HEAD
   @Produces
   @Path("/download")
   @Operation(summary = "Check whether a given document can be downloaded",
           method = "HEAD",
-          description = "Answers the status of the link's access, with no content")
+          description = "Answers the status the download would answer, with no content")
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
           @ApiResponse(responseCode = "400", description = "Invalid query input"),
           @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "Document not found, or folder not readable by the link's creator"),
           @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response checkDocumentDownload(@Parameter(description = "public link node id", required = true)
                                         @QueryParam("nodeId") String nodeId,
@@ -1472,7 +1474,11 @@ public class DocumentFileRest implements ResourceContainer {
           || !publicDocumentAccessService.isDocumentPublicAccessValid(nodeId, password)) {
         return Response.status(Status.UNAUTHORIZED).cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
+      externalDownloadService.checkDocumentDownload(nodeId);
       return Response.ok().cacheControl(NO_STORE_CACHE_CONTROL).build();
+    } catch (ObjectNotFoundException e) {
+      LOG.debug("Public link of document {} cannot be downloaded", nodeId, e);
+      return Response.status(Status.NOT_FOUND).cacheControl(NO_STORE_CACHE_CONTROL).build();
     } catch (Exception e) {
       LOG.error("Error while checking the download of document {}", nodeId, e);
       return Response.serverError().cacheControl(NO_STORE_CACHE_CONTROL).build();
@@ -1518,6 +1524,8 @@ public class DocumentFileRest implements ResourceContainer {
                                 + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8)
                                 .replace("+", "%20") + "\"").build();
       } else {
+        String contentDisposition = "attachment; filename=\""
+            + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8).replace("+", "%20") + ".zip\"";
         InputStream zipStream = externalDownloadService.downloadZippedFolder(downloadItem.getItemId());
         // Streamed from its file, which closing the stream deletes, rather
         // than read whole into memory
@@ -1529,10 +1537,8 @@ public class DocumentFileRest implements ResourceContainer {
         return Response.ok(zipBody)
                        .type("application/zip")
                        .cacheControl(NO_STORE_CACHE_CONTROL)
-                       .header("Content-Disposition",
-                               "attachment; filename=\""
-                                   + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8)
-                                       .replace("+", "%20") + ".zip\"").build();
+                       .header("Content-Disposition", contentDisposition)
+                       .build();
       }
     } catch (ObjectNotFoundException e) {
       LOG.debug("Public link of document {} cannot be downloaded", nodeId, e);

@@ -47,4 +47,17 @@ public interface ExternalDownloadService {
    * @throws IOException when the zip cannot be built or read
    */
   InputStream downloadZippedFolder(String folderId) throws IOException, ObjectNotFoundException;
+
+  /**
+   * Checks that the document of a public link can be downloaded as
+   * {@link #getDocumentDownloadItem(String)} and
+   * {@link #downloadZippedFolder(String)} would serve it, without reading the
+   * document or building a folder's zip
+   *
+   * @param documentId the link's document id
+   * @throws ObjectNotFoundException when no document has this id, or, for a
+   *           folder, when its link records no active creator or the creator
+   *           cannot read it
+   */
+  void checkDocumentDownload(String documentId) throws ObjectNotFoundException;
 }
