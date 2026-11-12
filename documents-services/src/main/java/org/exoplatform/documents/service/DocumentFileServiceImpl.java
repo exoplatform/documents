@@ -23,6 +23,7 @@ import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -88,14 +89,15 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    * Joins the reads of a document's preview that run at the same moment, so
    * that one creates and stores the preview while the others wait for it:
    * otherwise two first reads would each store a copy. Nothing is kept once
-   * the read is over: the stored preview is what later reads find.
+   * the read is over: the stored preview is what later reads find. A read
+   * joined to another one that failed runs its own read: see
+   * {@link #readPreview(String, String, String)}.
    */
   private final FutureCache<String, FileItem, PreviewRead> previewReads = new FutureCache<>(
-      (previewRead, key) -> this.imageThumbnailService.getOrCreateThumbnail(previewRead.fileType(),
-                                                                       previewRead.documentId(),
-                                                                       previewRead.userName(),
-                                                                       PREVIEW_SIZE,
-                                                                       PREVIEW_SIZE)) {
+      (previewRead, key) -> {
+        previewRead.ranTheRead().set(true);
+        return this.createPreview(previewRead);
+      }) {
     @Override
     protected FileItem get(String key) {
       return null;
@@ -112,7 +114,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
   };
 
-  private record PreviewRead(String fileType, String documentId, String userName) {
+  /**
+   * @param ranTheRead set when this read is the one that ran the preview's
+   *          creation, false when it was joined to another read
+   */
+  private record PreviewRead(String fileType, String documentId, String userName, AtomicBoolean ranTheRead) {
   }
 
   private DocumentFileStorage   documentFileStorage;
@@ -864,10 +870,20 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       throw new ObjectNotFoundException("Image with id : " + documentId + " isn't found");
   }
 
+  /**
+   * Reads the preview through {@link #previewReads}. A read joined to another
+   * user's read that failed does not take that read's failure: it runs its own
+   * read, so that its outcome is its own.
+   */
   private FileItem readPreview(String fileType, String documentId, String userName) throws Exception {
+    PreviewRead previewRead = new PreviewRead(fileType, documentId, userName, new AtomicBoolean());
+    FileItem image;
     try {
-      return previewReads.get(new PreviewRead(fileType, documentId, userName), fileType + "/" + documentId);
+      image = previewReads.get(previewRead, fileType + "/" + documentId);
     } catch (IllegalStateException e) {
+      if (!previewRead.ranTheRead().get()) {
+        return createPreview(previewRead);
+      }
       // The read's own failure, unwrapped from the join
       if (e.getCause() instanceof ExecutionException executionException
           && executionException.getCause() instanceof Exception cause) {
@@ -875,6 +891,18 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       }
       throw e;
     }
+    if (image == null && Thread.currentThread().isInterrupted()) {
+      throw new InterruptedException("Preview read of document " + documentId + " interrupted");
+    }
+    return image;
+  }
+
+  private FileItem createPreview(PreviewRead previewRead) throws Exception {
+    return imageThumbnailService.getOrCreateThumbnail(previewRead.fileType(),
+                                                      previewRead.documentId(),
+                                                      previewRead.userName(),
+                                                      PREVIEW_SIZE,
+                                                      PREVIEW_SIZE);
   }
 
   @Override

@@ -1838,7 +1838,7 @@ public class DocumentFileRest implements ResourceContainer {
                                        @Parameter(description = "Document type for created thumb")
                                        @PathParam("fileType")
                                        String fileType,
-                                       @Parameter(description = "Thumbnail size asked, which does not size the thumbnail: it is always stored at 250x250. A value whose parts around its x are not integers is refused.")
+                                       @Parameter(description = "Thumbnail size asked, as WxH; it does not size the thumbnail, which is always stored at 250x250. A value that cannot be parsed is refused.")
                                        @DefaultValue("250x250")
                                        @QueryParam("size")
                                        String size,
