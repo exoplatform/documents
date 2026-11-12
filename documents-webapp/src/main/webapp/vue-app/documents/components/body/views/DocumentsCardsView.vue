@@ -41,17 +41,23 @@
             </v-list-item>
           </v-list>
         </v-menu>
-        <v-btn icon @click="updatedSortDirection">
+        <v-btn
+          :aria-label="$t('documents.sort.tooltip')"
+          icon
+          @click="updatedSortDirection">
           <v-icon class="ms-1" size="16">{{ sortDirectionIcon }}</v-icon>
         </v-btn>
       </div>
       <v-card
+        :aria-label="$t('documents.cards.label', {0: filesCount})"
         class="d-flex flex-wrap border-box-sizing"
+        role="list"
         flat>
         <div
           v-for="(file, index) in filesToDisplay"
           :key="file.id"
-          class="flex-shrink-0 mb-3 me-3 pa-0">
+          class="flex-shrink-0 mb-3 me-3 pa-0"
+          role="listitem">
           <documents-item-card
             :index="index"
             :count="filesCount"

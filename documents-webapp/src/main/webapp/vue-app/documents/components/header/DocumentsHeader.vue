@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="hover-reveal-parent">
     <div v-if="!showFilter">
       <application-toolbar
         :center-button-toggle="centerBotton"
@@ -42,15 +42,16 @@
         <template #right>
           <div v-if="!filterDispalyed" class="d-flex ms-auto">
             <v-tooltip
-              v-if="$root.canEdit && $root.hover"
+              v-if="$root.canEdit"
               max-width="300"
               bottom>
-              <template #activator="{ on, attrs }">
+              <template #activator="{ on }">
                 <v-btn
                   id="documentSettingsButton"
+                  :aria-label="$t('documents.settings.button.tooltip')"
+                  class="hover-reveal"
                   small
                   icon
-                  v-bind="attrs"
                   v-on="on"
                   @click="$root.$emit('open-document-settings')">
                   <v-icon size="20">fa-cog</v-icon>
@@ -78,6 +79,7 @@
               <template #activator="{ on, attrs }">
                 <v-btn
                   id="documentSettingsView"
+                  :aria-label="$t('documents.label.viewType.button', {0: selectedViewType && selectedViewType.label || ''})"
                   small
                   elevation="0"
                   class="px-0"
@@ -95,13 +97,15 @@
                 <v-list-item
                   v-for="item in viewItemsTypes"
                   :key="item.value"
+                  :aria-checked="item.value === viewType ? 'true' : 'false'"
+                  role="menuitemradio"
                   @click="setViewType(item)">
                   <v-list-item-icon class="me-2 my-0 align-self-center">
                     <v-icon
                       :class="[item.icon, item.value === viewType ? 'primary--text' : 'icon-default-color']"
                       size="20" />
                   </v-list-item-icon>
-                  <div :class="item.value === viewType && 'primary--text'">{{ item.label }}</div>
+                  <div :class="item.value === viewType && 'primary--text font-weight-bold'">{{ item.label }}</div>
                 </v-list-item>
               </v-list>
             </v-menu>
