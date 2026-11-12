@@ -90,8 +90,10 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    * that one creates and stores the preview while the others wait for it:
    * otherwise two first reads would each store a copy. Nothing is kept once
    * the read is over: the stored preview is what later reads find. A read
-   * joined to another one that failed runs its own read: see
-   * {@link #readPreview(String, String, String)}.
+   * joined to another one that failed runs its own read, outside the join: see
+   * {@link #readPreview(String, String, String)}. So when the first of several
+   * joined reads fails, each of the others runs its own read and may store its
+   * own copy, once per document.
    */
   private final FutureCache<String, FileItem, PreviewRead> previewReads = new FutureCache<>(
       (previewRead, key) -> {
