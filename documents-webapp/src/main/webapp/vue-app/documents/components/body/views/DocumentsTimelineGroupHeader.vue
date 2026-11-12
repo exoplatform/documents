@@ -3,11 +3,15 @@
     :colspan="colspan"
     class="transparent ps-1">
     <v-btn
+      :aria-expanded="open ? 'true' : 'false'"
       class="transparent no-border no-box-shadow ps-3"
       text
       @click="toggleFunction">
-      <v-icon>{{ icon }}</v-icon>
-      <v-divider vertical class="mx-2" />
+      <v-icon aria-hidden="true">{{ icon }}</v-icon>
+      <v-divider
+        class="mx-2"
+        aria-hidden="true"
+        vertical />
       {{ label }}
     </v-btn>
   </td>
