@@ -61,8 +61,6 @@
   </div>
 </template>
 <script>
-import {createTimeline} from '../js/ChangesTimeline.js';
-
 /** The changes given out per scroll, and asked of each source per read. */
 const PAGE_SIZE = 20;
 /** The extension point under which another add-on feeds the changes. */
@@ -308,7 +306,7 @@ export default {
       const file = this.file;
       const documentId = this.documentId;
       this.generation++;
-      this.timeline = createTimeline(chosen.map(source => ({
+      this.timeline = this.$changesTimeline.createTimeline(chosen.map(source => ({
         id: source.id,
         rank: Number(source.rank || 0),
         load: ({before, limit}) => source.load({file, documentId, before, limit}),
