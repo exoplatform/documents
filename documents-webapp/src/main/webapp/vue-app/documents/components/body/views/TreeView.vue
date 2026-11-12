@@ -18,64 +18,75 @@
 -->
 
 <template>
-  <v-treeview
-    :open.sync="openNodes"
-    :active.sync="activeNodes"
-    :items="items"
-    :search="search"
-    :load-children="fetchChildren"
-    class="treeView-item my-2"
-    item-key="id"
-    hoverable
-    activatable
-    open-on-click
-    transition>
-    <template #label="{ item }">
-      <div class="d-flex clickable" v-if="item.isLoadMore">
-        <v-btn
-          class="white mx-auto no-border primary--text no-box-shadow"
-          @click="loadMoreDrives(item.query,item.offset,item.limit)">
-          {{ $t('documents.loadMore') }}
-        </v-btn>
-      </div>
-      <div
-        v-else
-        class="d-flex clickable"
-        @click="openFolder(item)">
-        <v-list-item-avatar
-          v-if="item.avatarUrl"
-          size="24"
-          class="mx-0"
-          :class="item.spaceId && 'spaceAvatar' || 'userAvatar'"
-          tile>
-          <v-avatar :size="24">
-            <img
-              :src="item.avatarUrl"
-              alt=""
-              class="rounded"
-              width="24"
-              height="24">
-          </v-avatar>
-        </v-list-item-avatar>
-        <v-icon
+  <nav :aria-label="$t('documents.tree.title')">
+    <v-treeview
+      :open.sync="openNodes"
+      :active.sync="activeNodes"
+      :items="items"
+      :search="search"
+      :load-children="fetchChildren"
+      class="treeView-item my-2"
+      item-key="id"
+      role="list"
+      hoverable
+      activatable
+      open-on-click
+      transition>
+      <template #label="{ item }">
+        <div
+          v-if="item.isLoadMore"
+          v-tree-node
+          class="d-flex clickable">
+          <v-btn
+            class="white mx-auto no-border primary--text no-box-shadow"
+            @click="loadMoreDrives(item.query,item.offset,item.limit)">
+            {{ $t('documents.loadMore') }}
+          </v-btn>
+        </div>
+        <div
           v-else
-          size="24"
-          :class="item.icon? '' : 'primary--text'">
-          {{ item.icon ? item.icon : 'fas fa-folder' }}
-        </v-icon>
-        <v-list-item-title
-          class="body-1 mx-2 mt-1"
-          :class="idItemActive === item.id ? 'primary--text font-weight-bold' : item.hidden ? 'text-light-color' : ''">
-          {{ displayName(item.name) }}
+          v-tree-node="$t('documents.tree.subFoldersOf', {0: displayName(item.name)})"
+          :aria-current="idItemActive === item.id ? 'page' : null"
+          class="d-flex clickable"
+          role="link"
+          tabindex="0"
+          @click="openFolder(item)"
+          @keydown.enter="openFolder(item)">
+          <v-list-item-avatar
+            v-if="item.avatarUrl"
+            size="24"
+            class="mx-0"
+            :class="item.spaceId && 'spaceAvatar' || 'userAvatar'"
+            tile>
+            <v-avatar :size="24">
+              <img
+                :src="item.avatarUrl"
+                alt=""
+                class="rounded"
+                width="24"
+                height="24">
+            </v-avatar>
+          </v-list-item-avatar>
           <v-icon
-            v-if="item.hidden"
-            size="13">
-            fas fa-eye-slash
+            v-else
+            size="24"
+            :class="item.icon? '' : 'primary--text'">
+            {{ item.icon ? item.icon : 'fas fa-folder' }}
           </v-icon>
-        </v-list-item-title>
-      </div>
-    </template>
-  </v-treeview>
+          <v-list-item-title
+            class="body-1 mx-2 mt-1"
+            :class="idItemActive === item.id ? 'primary--text font-weight-bold' : item.hidden ? 'text-light-color' : ''">
+            {{ displayName(item.name) }}
+            <v-icon
+              v-if="item.hidden"
+              size="13">
+              fas fa-eye-slash
+            </v-icon>
+          </v-list-item-title>
+        </div>
+      </template>
+    </v-treeview>
+  </nav>
 </template>
 <script>
 

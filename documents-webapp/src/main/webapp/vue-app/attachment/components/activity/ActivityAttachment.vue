@@ -45,7 +45,11 @@
           class="d-flex flex-column transition-fast-in-fast-out light-grey-background-opacity-3 v-card--reveal"
           elevation="0"
           style="height: 100%;"
-          @click="playMedia($event)">
+          role="button"
+          tabindex="0"
+          :aria-label="$t('attachment.play.media', {0: attachment.name})"
+          @click="playMedia($event)"
+          @keydown.enter.space.prevent="playMedia($event)">
           <v-card-text class="pb-0 d-flex flex-row">
             <div class="absolute-all-center align-center">
               <v-icon class="playIcon" size="60px">far fa-play-circle</v-icon>
@@ -321,6 +325,7 @@ export default {
         event.stopPropagation();
       }
       this.showPlayer = true;
+      this.$nextTick(() => this.$el.querySelector('video')?.focus());
     },
     playError(event){
       const video = event.target;

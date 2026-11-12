@@ -24,11 +24,11 @@
       content-class="documentActionMenu application-menu layout-drawer"
       offset-x
       close-on-click>
-      <template #activator="{ on, attrs }">
+      <template #activator="{ on }">
         <document-action-item
-          v-bind="attrs"
           v-on="on"
           :icon="icon"
+          :expanded="menuDisplayed"
           :label=" $t(labelKey)"
           is-group
           @click="menuDisplayed = true" />

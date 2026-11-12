@@ -22,12 +22,17 @@
       :ripple="!editNameMode"
       width="215px"
       height="85px"
-      @click="openFolder">
+      @focusin="focused = true"
+      @focusout="focused = $event.currentTarget.contains($event.relatedTarget)">
       <div class="d-flex flex-no-wrap justify-space-between">
         <v-card
           class="d-flex flex-no-wrap"
-          :width="!isDrive && !editNameMode && (hover || selectedDocuments.length) ? '58%' : '100%'"
-          flat>
+          :width="!isDrive && !editNameMode && (hover || focused || selectedDocuments.length) ? '58%' : '100%'"
+          :aria-label="editNameMode ? null : name"
+          :role="editNameMode ? null : 'link'"
+          flat
+          @keydown.enter.self="openFolder"
+          @click="openFolder">
           <v-avatar
             :class="editNameMode ? 'me-1 ma-3' : 'ma-3'"
             size="60"
@@ -55,15 +60,21 @@
             card-view="true" />
           <div v-else class="align-self-center text-subtitle-2 text-truncate">{{ name }}</div>
         </v-card>
-        <v-card-actions v-show="!isDrive && (hover || selectedDocuments.length) && !editNameMode">
+        <v-card-actions v-show="!isDrive && (hover || focused || selectedDocuments.length) && !editNameMode">
           <v-simple-checkbox
             v-model="checked"
+            :aria-checked="checked ? 'true' : 'false'"
+            :aria-label="$t('documents.multiSelection.select.element.label', {0: name})"
+            role="checkbox"
+            tabindex="0"
+            @keydown.space.prevent="$event.currentTarget.click()"
             @click="selectDocument($event)"
             @mouseover="checkRangeSelect"
             @mouseleave="resetRangeSelect" />
           <v-btn
             id="attachment-info"
             :title="$t('attachments.label.details')"
+            :aria-label="$t('documents.label.show.details.of', {0: name})"
             small
             icon
             class="my-auto mx-0"
@@ -77,6 +88,7 @@
             <template #activator="{ on, attrs }">
               <v-btn
                 :title="$t('documents.label.menu.action.tooltip')"
+                :aria-label="$t('documents.label.menu.action.of', {0: name})"
                 small
                 icon
                 class="my-auto mx-0"
@@ -86,6 +98,7 @@
               </v-btn>
             </template>
             <documents-actions-menu
+              :active="menuDisplayed"
               :file="folder"
               :current-view="currentView"
               :is-search-result="isSearchResult"
@@ -127,6 +140,7 @@ export default {
   },
   data: () => ({
     checked: false,
+    focused: false,
     show: false,
     canSelectRange: false,
     rangeSelectTimer: null,

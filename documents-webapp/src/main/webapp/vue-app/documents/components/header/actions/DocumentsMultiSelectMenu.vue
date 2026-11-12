@@ -26,6 +26,7 @@
       offset-y>
       <template #activator="{ on, attrs }">
         <v-btn
+          :aria-label="`${selectionsLength} ${$t('document.multiSelection.selected.elements.label')}`"
           class="btn btn-primary primary"
           v-bind="attrs"
           v-on="!isMobile && on"
@@ -33,6 +34,7 @@
           <v-icon
             class="me-1 dark-grey-color"
             size="13"
+            aria-hidden="true"
             dark>
             fas fa-ellipsis-v
           </v-icon>
