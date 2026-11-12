@@ -23,6 +23,7 @@
     class="elevation-2 documentActionMenu layout-drawer">
     <documents-actions-menu
       v-if="show"
+      standalone
       :file="file"
       :current-view="currentView"
       :is-search-result="isSearchResult"

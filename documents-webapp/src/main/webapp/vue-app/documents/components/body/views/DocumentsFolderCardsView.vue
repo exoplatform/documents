@@ -50,14 +50,19 @@
             </v-list-item>
           </v-list>
         </v-menu>
-        <v-btn icon @click="updatedSortDirection">
+        <v-btn
+          :aria-label="$t('documents.sort.tooltip')"
+          icon
+          @click="updatedSortDirection">
           <v-icon class="ms-1" size="16">{{ sortDirectionIcon }}</v-icon>
         </v-btn>
       </div>
       <div id="cardsView">
         <v-card
+          :aria-label="$t('documents.cards.folders.label', {0: folderToDisplay.length})"
           :class="treeViewExpended && 'ms-2'"
           class="d-flex flex-wrap border-box-sizing"
+          role="list"
           flat>
           <div
             v-for="folder in folderToDisplay"
@@ -66,7 +71,8 @@
             :data-fileId="folder.id"
             data-isFolder="true"
             :data-canEdit="canEditFile(folder)? 'true': 'false'"
-            class="card-item flex-shrink-0 mb-3 me-3 pa-0">
+            class="card-item flex-shrink-0 mb-3 me-3 pa-0"
+            role="listitem">
             <documents-folder-card
               :folder="folder"
               :files="folderToDisplay"
@@ -78,8 +84,10 @@
           </div>
         </v-card>
         <v-card
+          :aria-label="$t('documents.cards.label', {0: filesCount})"
           :class="treeViewExpended && 'ms-2'"
           class="d-flex flex-wrap border-box-sizing"
+          role="list"
           flat>
           <div
             v-for="(file, index) in filesToDisplay"
@@ -88,7 +96,8 @@
             data-isFolder="false"
             :data-canEdit="canEditFile(file)? 'true': 'false'"
             draggable="true"
-            class="card-item flex-shrink-0 mb-3 me-3 pa-0">
+            class="card-item flex-shrink-0 mb-3 me-3 pa-0"
+            role="listitem">
             <documents-item-card            
               :index="index"
               :count="filesCount"
