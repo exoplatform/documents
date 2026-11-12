@@ -1761,9 +1761,21 @@ public class DocumentFileRestTest {
     assertNoStore(response);
 
     when(publicDocumentAccessService.isPublicDocumentAccessExpired("789")).thenReturn(true);
-    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), documentFileRest.checkDocumentDownload("789", null).getStatus());
-    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), documentFileRest.checkDocumentDownload("", null).getStatus());
+    response = documentFileRest.checkDocumentDownload("789", null);
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     verify(externalDownloadService, never()).checkDocumentDownload("789");
+
+    // A valid, unexpired link asked with a wrong password
+    when(publicDocumentAccessService.isDocumentPublicAccessValid("321", "wrong")).thenReturn(false);
+    response = documentFileRest.checkDocumentDownload("321", "wrong");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertNoStore(response);
+    verify(externalDownloadService, never()).checkDocumentDownload("321");
+
+    response = documentFileRest.checkDocumentDownload("", null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
     verify(externalDownloadService, never()).downloadZippedFolder(anyString());
   }
