@@ -34,6 +34,7 @@
           size="20"
           class="pa-1 my-auto"
           v-show="isMobile && showFilter"
+          :aria-label="$t('documents.label.button.back')"
           @click="$root.$emit('mobile-filter')">
           fas fa-arrow-left
         </v-icon>
