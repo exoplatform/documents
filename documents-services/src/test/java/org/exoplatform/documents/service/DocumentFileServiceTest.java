@@ -839,11 +839,6 @@ public class DocumentFileServiceTest {
   }
 
   /**
-   * 250x250 is the size every documents client asks for a preview
-   * (DocumentsUtils.getThumbnailUrl callers): any other size asked is served
-   * and stored at that one size, so a read never stores a preview at a new size.
-   */
-  /**
    * Two first reads of a preview at the same moment create and store it once:
    * the second waits for the first.
    */
@@ -885,7 +880,97 @@ public class DocumentFileServiceTest {
   }
 
   /**
-   * A preview read that fails throws its own exception, as without the join.
+   * A read joined to another user's read that fails runs its own read: it gets
+   * its own preview, never the other user's failure.
+   */
+  @Test
+  public void testGetImageThumbnailContentJoinedToAFailedReadRunsItsOwnRead() throws Exception {
+    for (String user : new String[] { "first", "second" }) {
+      org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity(user);
+      when(identityRegistry.getIdentity(user)).thenReturn(aclIdentity);
+      when(documentFileStorage.canAccess("docId", aclIdentity)).thenReturn(true);
+    }
+    FileItem fileItem = mock(FileItem.class);
+    when(fileItem.getFileInfo()).thenReturn(new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "second", null, false));
+    java.util.concurrent.CountDownLatch firstReadRunning = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+    when(imageThumbnailService.getOrCreateThumbnail(eq("imageThumbnail"), eq("docId"), eq("first"), anyInt(), anyInt())).thenAnswer(invocation -> {
+      firstReadRunning.countDown();
+      release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+      throw new IllegalAccessException("first may not read it");
+    });
+    when(imageThumbnailService.getOrCreateThumbnail(eq("imageThumbnail"), eq("docId"), eq("second"), anyInt(), anyInt())).thenReturn(fileItem);
+
+    java.util.concurrent.ExecutorService readers = java.util.concurrent.Executors.newFixedThreadPool(2);
+    try {
+      java.util.concurrent.Future<FileContent> first = readers.submit(() -> documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "first", 250, 250));
+      assertTrue(firstReadRunning.await(10, java.util.concurrent.TimeUnit.SECONDS));
+      Thread[] secondThread = new Thread[1];
+      java.util.concurrent.Future<FileContent> second = readers.submit(() -> {
+        secondThread[0] = Thread.currentThread();
+        return documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "second", 250, 250);
+      });
+      awaitWaiting(secondThread);
+      release.countDown();
+      java.util.concurrent.ExecutionException firstFailure = assertThrows(java.util.concurrent.ExecutionException.class,
+                                                                          () -> first.get(10, java.util.concurrent.TimeUnit.SECONDS));
+      assertTrue(firstFailure.getCause() instanceof IllegalAccessException);
+      assertNotNull(second.get(10, java.util.concurrent.TimeUnit.SECONDS));
+    } finally {
+      readers.shutdownNow();
+    }
+    verify(imageThumbnailService, times(1)).getOrCreateThumbnail("imageThumbnail", "docId", "second", 250, 250);
+  }
+
+  /**
+   * A joined read interrupted while it waits reports the interruption, not a
+   * missing preview.
+   */
+  @Test
+  public void testGetImageThumbnailContentInterruptedWhileJoinedReportsTheInterruption() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+    when(documentFileStorage.canAccess("docId", aclIdentity)).thenReturn(true);
+    FileItem fileItem = mock(FileItem.class);
+    when(fileItem.getFileInfo()).thenReturn(new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "user", null, false));
+    java.util.concurrent.CountDownLatch firstReadRunning = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+    when(imageThumbnailService.getOrCreateThumbnail(anyString(), anyString(), anyString(), anyInt(), anyInt())).thenAnswer(invocation -> {
+      firstReadRunning.countDown();
+      release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+      return fileItem;
+    });
+
+    java.util.concurrent.ExecutorService readers = java.util.concurrent.Executors.newFixedThreadPool(2);
+    try {
+      java.util.concurrent.Future<FileContent> first = readers.submit(() -> documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250));
+      assertTrue(firstReadRunning.await(10, java.util.concurrent.TimeUnit.SECONDS));
+      Thread[] secondThread = new Thread[1];
+      java.util.concurrent.Future<FileContent> second = readers.submit(() -> {
+        secondThread[0] = Thread.currentThread();
+        return documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250);
+      });
+      awaitWaiting(secondThread);
+      secondThread[0].interrupt();
+      java.util.concurrent.ExecutionException secondFailure = assertThrows(java.util.concurrent.ExecutionException.class,
+                                                                           () -> second.get(10, java.util.concurrent.TimeUnit.SECONDS));
+      assertTrue(secondFailure.getCause() instanceof InterruptedException);
+      release.countDown();
+      assertNotNull(first.get(10, java.util.concurrent.TimeUnit.SECONDS));
+    } finally {
+      readers.shutdownNow();
+    }
+  }
+
+  private static void awaitWaiting(Thread[] thread) throws InterruptedException {
+    long deadline = System.currentTimeMillis() + 10_000;
+    while ((thread[0] == null || thread[0].getState() != Thread.State.WAITING) && System.currentTimeMillis() < deadline) {
+      Thread.sleep(10); // NOSONAR
+    }
+  }
+
+  /**
+   * A preview read that fails throws its own exception, and is not run twice.
    */
   @Test
   public void testGetImageThumbnailContentThrowsTheReadOwnFailure() throws Exception {
@@ -896,8 +981,14 @@ public class DocumentFileServiceTest {
 
     assertThrows(IllegalArgumentException.class,
                  () -> documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250));
+    verify(imageThumbnailService, times(1)).getOrCreateThumbnail("imageThumbnail", "docId", "user", 250, 250);
   }
 
+  /**
+   * 250x250 is the size every documents client asks for a preview
+   * (DocumentsUtils.getThumbnailUrl callers): any other size asked is served
+   * and stored at that one size, so a read never stores a preview at a new size.
+   */
   @Test
   public void testGetImageThumbnailContentStoresOnlyThePreviewSize() throws Exception {
     org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
