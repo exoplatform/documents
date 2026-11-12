@@ -53,8 +53,10 @@
             <span>{{ $t('OfflineApp.pwa.documents.accessedWhileOffline') }}</span>
           </v-tooltip>
           <documents-offline-info-button
-            v-else-if="!reverseInfoPosition && infoIcon && hover"
-            :file-id="file.id" />
+            v-else-if="!reverseInfoPosition && infoIcon"
+            :file-id="file.id"
+            :file-name="file.name"
+            :hidden="!hover" />
         </div>
       </td>
       <td

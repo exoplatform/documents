@@ -104,9 +104,12 @@
                 <v-card
                   :loading="loading"
                   :title="$t('documents.drawer.details.clickToOpen')"
+                  :aria-label="$t('documents.drawer.details.open', {0: file.name})"
                   class="documentInfoPreview overflow-hidden d-flex mb-2"
+                  role="button"
                   outlined
-                  @click="openPreview">
+                  @click="openPreview"
+                  @keydown.enter.space.prevent="openPreview">
                   <document-media-thumbnail
                     v-if="mediaKind"
                     :src="downloadUrl"
@@ -127,9 +130,12 @@
               <v-card
                 v-else
                 :title="$t('documents.drawer.details.clickToOpen')"
+                :aria-label="$t('documents.drawer.details.open', {0: file.name})"
                 class="documentInfoCompactHeader d-flex align-center pa-3 mb-2"
+                role="button"
                 outlined
-                @click="openPreview">
+                @click="openPreview"
+                @keydown.enter.space.prevent="openPreview">
                 <v-avatar
                   size="52"
                   class="flex-shrink-0 light-grey-background-color"
@@ -179,7 +185,10 @@
               <a
                 v-if="file.acl.canEdit"
                 class="font-weight-bold ps-4 clickable py-auto documentDescription"
-                @click="openEditor">
+                role="button"
+                tabindex="0"
+                @click="openEditor"
+                @keydown.enter.space.prevent="openEditor">
                 <span>{{ $t('documents.message.addYourDescription') }}</span>
               </a>
             </div>
@@ -198,11 +207,12 @@
                   </v-col>
                   <v-col class="col-1 px-0 py-0">
                     <v-tooltip :disabled="isMobile" bottom>
-                      <template #activator="{ on, attrs }">
+                      <template #activator="{ on }">
                         <v-icon
-                          v-show="showDescription && (hover || isMobile)"
-                          v-bind="attrs"
+                          v-show="showDescription"
                           v-on="on"
+                          :class="{'d-sr-only-focusable': !(hover || isMobile)}"
+                          :aria-label="$t('documents.drawer.details.description.edit')"
                           class="primary--text"
                           size="20"
                           @click="openEditor">

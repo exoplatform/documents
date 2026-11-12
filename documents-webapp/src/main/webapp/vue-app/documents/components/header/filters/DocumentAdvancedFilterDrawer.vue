@@ -34,6 +34,7 @@
                 dense
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
+                :aria-label="$t('documents.file.type.document')"
                 value="documents" />
             </v-list-item-action>
             <v-list-item-content>
@@ -55,6 +56,7 @@
                 dense
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
+                :aria-label="$t('documents.file.type.sheet')"
                 value="sheets" />
             </v-list-item-action>
             <v-list-item-content>
@@ -75,6 +77,7 @@
                 dense
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
+                :aria-label="$t('documents.file.type.presentation')"
                 value="presentations" />
             </v-list-item-action>
             <v-list-item-content>
@@ -95,6 +98,7 @@
                 dense
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
+                :aria-label="$t('documents.file.type.pdf')"
                 value="pdfs" />
             </v-list-item-action>
             <v-list-item-content>
@@ -115,6 +119,7 @@
                 dense
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
+                :aria-label="$t('documents.file.type.image')"
                 value="images" />
             </v-list-item-action>
             <v-list-item-content>
@@ -135,6 +140,7 @@
                 dense
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
+                :aria-label="$t('documents.file.type.video')"
                 value="videos" />
             </v-list-item-action>
             <v-list-item-content>
@@ -174,6 +180,7 @@
           <div class="text-header pt-4 pe-2">{{ $t('documents.advanced.filter.drawer.min') }}</div>
           <v-text-field
             v-model="tempAdvancedFilter.minSize"
+            :aria-label="$t('documents.advanced.filter.drawer.min')"
             class="py-2"
             :suffix="$t('documents.label.mega')"
             outlined
@@ -184,6 +191,7 @@
           <div class="text-header pt-4 pe-2 ps-8">{{ $t('documents.advanced.filter.drawer.max') }}</div>
           <v-text-field
             v-model="tempAdvancedFilter.maxSize"
+            :aria-label="$t('documents.advanced.filter.drawer.max')"
             class="py-2"
             :suffix="$t('documents.label.mega')"
             outlined
@@ -201,6 +209,7 @@
                 ripple="false"
                 dense
                 v-model="tempAdvancedFilter.showHidden"
+                :aria-label="$t('documents.advanced.filter.drawer.show.hidden')"
                 class="ma-auto typeCheckbox" />
             </v-list-item-action>
             <v-list-item-content>

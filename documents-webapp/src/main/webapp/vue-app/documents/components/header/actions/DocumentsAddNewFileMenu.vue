@@ -25,14 +25,15 @@
       down>
       <template #activator="{ on, attrs }">
         <v-tooltip bottom>
-          <template #activator="{ on: tooltipOn, attrs: tooltipAttrs }">
-            <span v-bind="tooltipAttrs" v-on="disableButton ? tooltipOn : {}">
+          <template #activator="{ on: tooltipOn }">
+            <span v-on="disableButton ? tooltipOn : {}">
               <v-btn
                 :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
                 class="btn btn-primary"
                 :key="postKey"
                 :disabled="disableButton"
                 :small="isMobile"
+                :aria-label="$t('documents.button.addNew')"
                 v-bind="attrs"
                 v-on="!isMobile && on"
                 @click="openAddItemMenu()">
@@ -51,6 +52,7 @@
       <v-list class="pa-0" dense>
         <v-list-item
           v-if="isFolderView"
+          :aria-label="$t('documents.button.addNewFolder')"
           class="text-body menu-text-color"
           @click="addFolder()">
           <v-list-item-icon class="me-1">
@@ -66,6 +68,7 @@
           </v-list-item-title>
         </v-list-item>
         <v-list-item
+          :aria-label="$t('documents.button.addNewFile')"
           class="text-body menu-text-color"
           @click="openCreateDocumentDrawer()">
           <v-list-item-icon class="me-1">
@@ -77,6 +80,7 @@
           </v-list-item-title>
         </v-list-item>
         <v-list-item
+          :aria-label="$t('documents.button.upload')"
           class="text-body menu-text-color"
           @click="uploadFromDevice()">
           <v-list-item-icon class="me-1">
@@ -90,6 +94,7 @@
         <v-list-item
           v-on="on"
           :disabled="!importEnabled"
+          :aria-label="$t('documents.label.zip.upload')"
           class="text-body menu-text-color"
           @click="openImportDrawer()">
           <v-list-item-icon class="me-1">

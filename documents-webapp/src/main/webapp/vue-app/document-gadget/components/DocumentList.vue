@@ -16,10 +16,12 @@
 -->
 <template>
   <v-app>
-    <v-hover v-model="hover">
+    <div :class="displaySeeMore && 'hover-swap-parent' || 'hover-reveal-parent'">
       <widget-wrapper
         :loading="loading"
-        extra-class="application-body">
+        :aria-label="headerTitle"
+        extra-class="application-body"
+        role="region">
         <template #title>
           <span
             class="text-header">
@@ -27,22 +29,30 @@
           </span>
         </template>
         <template #action>
-          <div>
+          <!-- the settings and link icons show on the card's hover and on the keyboard focus of one of them (platform-ui
+               hover-swap and hover-reveal helpers): when 'See all' is displayed, the text they replace is the mouse's and
+               the keyboard reaches the same link among them -->
+          <div class="position-relative d-flex">
             <v-btn
-              v-if="!hover && displaySeeMore"
+              v-if="displaySeeMore"
+              :tabindex="filesCount ? '-1' : null"
+              :aria-hidden="filesCount ? 'true' : null"
               color="primary"
-              class="pa-0 text-font-size"
+              class="hover-swap-default pa-0 text-font-size"
               small
               text
-              link>
+              link
+              @click="$refs.listDrawer.open()">
               <span class="primary--text text-none">
                 {{ $t('documents.documentGadget.seeMore') }}
               </span>
             </v-btn>
-            <div v-else>
+            <div :class="displaySeeMore && 'hover-swap-alt' || 'd-flex'">
               <v-btn
-                v-if="hoverEdit"
+                v-if="canEdit"
                 :title="$t('documents.documentGadget.editTooltip')"
+                :aria-label="$t('documents.documentGadget.editTooltip')"
+                :class="!displaySeeMore && 'hover-reveal'"
                 class="text-font-size"
                 small
                 link
@@ -56,6 +66,7 @@
               <v-btn
                 v-if="filesCount"
                 :title="$t('documents.documentGadget.seeMore')"
+                :aria-label="$t('documents.documentGadget.seeMore')"
                 color="primary"
                 class="text-font-size"
                 small
@@ -71,7 +82,10 @@
           </div>
         </template>
         <div v-if="filesCount">
-          <v-list :class="!isCardsView && !!filesToDisplay && 'pb-4'" class="pa-0">
+          <v-list
+            :aria-label="listLabel"
+            :class="!isCardsView && !!filesToDisplay && 'pb-4'"
+            class="pa-0">
             <template v-if="isCardsView">
               <card-carousel parent-class="activity-files-parent px-4">
                 <document-list-widget-item-card
@@ -103,7 +117,7 @@
             :title="$t('documents.documentGadget.placeholder')" />
         </v-card>
       </widget-wrapper>
-    </v-hover>
+    </div>
     <document-list-settings-drawer v-if="canEdit" @settings-updated="settingsUpdated" />
     <document-list-drawer ref="listDrawer" />
   </v-app>
@@ -111,7 +125,6 @@
 <script>
 export default {
   data: () => ({
-    hover: false,
     loading: false,
     applicationMounted: false,
     files: [],
@@ -123,8 +136,8 @@ export default {
     canEdit() {
       return this.settings?.canEdit;
     },
-    hoverEdit() {
-      return this.hover && this.canEdit;
+    listLabel() {
+      return `${this.headerTitle} (${this.filesCount})`;
     },
     filesCount() {
       return this.files.length;

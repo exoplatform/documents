@@ -1,5 +1,9 @@
 <template>
-  <div v-if="documentsBreadcrumbList.length" class="documents-breadcrumb-wrapper">
+  <div
+    v-if="documentsBreadcrumbList.length"
+    :aria-label="$t('documents.breadcrumb.label')"
+    class="documents-breadcrumb-wrapper"
+    role="navigation">
     <div class="documents-tree-items d-flex align-center">
       <v-btn
         v-if="showIcon && (!treeViewExpended || isMobile)"
@@ -21,23 +25,28 @@
         data-isfolder="true"
         :data-fileId="documentsBreadcrumbToDisplay[0].id"
         :data-canEdit="canEditFile(documentsBreadcrumbToDisplay[0])? 'true': 'false'"
-        class="d-flex align-center width-full pa-1 mb-1 ps-0">
+        class="d-flex align-center width-full pa-1 mb-1 ps-0"
+        role="list">
         <template v-for="(document, index) in documentsBreadcrumbList">
           <div
             v-if="document.isBreadcrumbItem && !document.isEllipsis"
             :key="index"
             :data-fileId="document.id"
             :class="document.class"
-            class="document-breadcrumb-item">
+            class="document-breadcrumb-item"
+            role="listitem">
             <v-tooltip max-width="300" bottom>
-              <template #activator="{ on, attrs }">
+              <template #activator="{ on }">
                 <a
                   :id="document.isLast && 'lastBreadcrumbItem'"
                   :ref="document.id"
                   :class="document.classLink"
-                  v-bind="attrs"
+                  :aria-current="document.isLast ? 'page' : null"
+                  :role="document.isLast ? null : 'link'"
+                  :tabindex="document.isLast ? null : 0"
                   v-on="on"
-                  @click="!document.isLast && openFolder(documentsBreadcrumb[document.index])">{{ getName(document.name) }}</a>
+                  @click="!document.isLast && openFolder(documentsBreadcrumb[document.index])"
+                  @keydown.enter="!document.isLast && openFolder(documentsBreadcrumb[document.index])">{{ getName(document.name) }}</a>
               </template>
               <span class="caption breadcrumbName">
                 {{ getName(document.name) }}
@@ -53,20 +62,22 @@
               v-if="document.isIcon"
               class="flex-grow-1 icon-default-color flex-shrink-0"
               :class="index === 0 && documentsEllipsisList.length > 0 ? 'ms-2' : 'mx-2'"
-              size="14">
+              size="14"
+              aria-hidden="true">
               fa-chevron-right
             </v-icon>
           </div>
           <div
             v-if="document.isEllipsis"
             :key="index"
-            class="min-width-content long-path-second-item d-flex">
+            class="min-width-content long-path-second-item d-flex"
+            role="listitem">
             <v-tooltip :key="tooltipKey" bottom>
-              <template #activator="{ on, attrs }">
+              <template #activator="{ on }">
                 <v-icon
                   v-show="documentsEllipsisList.length > 0"
-                  v-bind="attrs"
                   v-on="on"
+                  :aria-label="ellipsisLabel"
                   class="text-sub-title"
                   size="18"
                   @click="openFolder(documentsBreadcrumb[documentsEllipsisList[documentsEllipsisList.length-1].index])">
@@ -88,7 +99,12 @@
                 </span>
               </p>
             </v-tooltip>
-            <v-icon class="clickable me-2" size="18">fas fa-chevron-right</v-icon>
+            <v-icon
+              class="clickable me-2"
+              size="18"
+              aria-hidden="true">
+              fas fa-chevron-right
+            </v-icon>
           </div>
         </template>
       </div>
@@ -102,11 +118,14 @@
           v-if="documentsBreadcrumb && documentsBreadcrumb.length > 1"
           icon
           small
+          :aria-label="$t('documents.breadcrumb.back')"
           class="ms-n1 me-1 flex-shrink-0"
           @click.stop.prevent="openParentFolder()">
-          <v-icon size="18">fas fa-angle-left</v-icon>
+          <v-icon size="18" aria-hidden="true">fas fa-angle-left</v-icon>
         </v-btn>
-        <span class="text-truncate text-header breadcrumb-current-name">{{ mobileCurrentName }}</span>
+        <span
+          class="text-truncate text-header breadcrumb-current-name"
+          aria-current="page">{{ mobileCurrentName }}</span>
       </div>
     </div>
   </div>
@@ -166,6 +185,10 @@ export default {
         });
         return documentsBreadcrumbToDisplay;
       }
+    },
+    ellipsisLabel() {
+      const hiddenFolder = this.documentsEllipsisList[this.documentsEllipsisList.length - 1];
+      return this.$t('documents.breadcrumb.ellipsis.label', {0: hiddenFolder?.name || ''});
     },
     // Mobile branch label: at a drive root show the drive/home name (via getName);
     // below the root show the current folder's own name (a real subfolder may be
