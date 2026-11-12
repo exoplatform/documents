@@ -83,7 +83,6 @@ export async function init(appId, canEdit,  settings, settingsSaveUrl) {
       canEdit,
       settings,
       settingsSaveUrl,
-      hover: false,
       selectedCategoryId: null,
       selectedCategoryIds: null,
       settingsSubcategoryIds,

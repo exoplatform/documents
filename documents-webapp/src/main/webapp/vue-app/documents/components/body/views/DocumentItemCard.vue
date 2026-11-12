@@ -18,6 +18,8 @@
   <v-hover v-slot="{hover}" :class="extraMargin && marginClass">
     <v-card
       :elevation="hover ? 4 : 0"
+      @focusin="focused = true"
+      @focusout="focused = $event.currentTarget.contains($event.relatedTarget)"
       :class="{ 'border-color': !hover }"
       :loading="loading"
       :height="height"
@@ -28,7 +30,11 @@
       <v-card-text
         class="activity-attachment-thumbnail d-flex flex-grow-1 pa-0"
         :class="isMediaFile && 'black'"
-        @click="openPreview">
+        :aria-label="showPlayer ? null : fileName"
+        :role="showPlayer ? null : 'link'"
+        :tabindex="showPlayer ? null : '0'"
+        @click="openPreview"
+        @keydown.enter="!showPlayer && openPreview()">
         <video
           v-if="showPlayer"
           :src="`${downloadUrl}#t=0.001`"
@@ -60,7 +66,11 @@
           class="d-flex flex-column transition-fast-in-fast-out light-grey-background-opacity-3 v-card--reveal"
           elevation="0"
           height="100%"
-          @click="playMedia($event)">
+          role="button"
+          tabindex="0"
+          :aria-label="$t('documents.label.play.media', {0: fileName})"
+          @click="playMedia($event)"
+          @keydown.enter.space.prevent="playMedia($event)">
           <v-card-text class="pb-0 d-flex flex-row">
             <div class="absolute-all-center align-center">
               <v-icon class="playIcon" size="60px">far fa-play-circle</v-icon>
@@ -70,7 +80,7 @@
       </v-expand-transition>
       <v-expand-transition>
         <v-card
-          v-if="(hover || isMobile || showDetails) && !loading && !invalid && !showPlayer"
+          v-if="(hover || focused || isMobile || showDetails) && !loading && !invalid && !showPlayer"
           class="d-flex flex-column transition-fast-in-fast-out mask-color v-card--reveal no-border-radius my-auto"
           elevation="0"
           :height="editNameMode ? '40px' : '36px'">
@@ -82,7 +92,7 @@
               <v-icon size="12" :color="fileIconColor"> {{ fileIconClass }} </v-icon>
             </v-avatar>
             <v-card
-              :max-width="(hover || selectedDocuments.length) && showDetails && !editNameMode ? '50%' : showDetails ? '90%': '80%'"
+              :max-width="(hover || focused || selectedDocuments.length) && showDetails && !editNameMode ? '50%' : showDetails ? '90%': '80%'"
               class="d-flex  px-1 my-auto  no-border elevation-0">
               <documents-file-edit-name-cell
                 class="white"
@@ -103,23 +113,29 @@
             <v-spacer />
             <div class="d-flex">
               <v-simple-checkbox
-                v-show="(hover || selectedDocuments.length) && showDetails && !editNameMode"
+                v-show="(hover || focused || selectedDocuments.length) && showDetails && !editNameMode"
                 v-model="checked"
+                :aria-checked="checked ? 'true' : 'false'"
+                :aria-label="$t('documents.multiSelection.select.element.label', {0: fileName})"
                 color="white"
+                role="checkbox"
+                tabindex="0"
+                @keydown.space.prevent="$event.currentTarget.click()"
                 @click="selectDocument($event)"
                 @mouseover="checkRangeSelect"
                 @mouseleave="resetRangeSelect" />
               <v-btn
                 id="attachment-info"
-                v-show="hover && !editNameMode"
+                v-show="(hover || focused) && !editNameMode"
                 @click="showInfo()"
                 :title="$t('attachments.label.details')"
+                :aria-label="$t('documents.label.show.details.of', {0: fileName})"
                 small
                 icon
                 class="white--text my-auto mx-0">
                 <v-icon size="20">fa-info-circle</v-icon>
               </v-btn>  
-              <div v-show="hover && showDetails && !editNameMode">
+              <div v-show="(hover || focused) && showDetails && !editNameMode">
                 <v-menu
                   v-model="menuDisplayed"
                   content-class="application-menu layout-drawer"
@@ -127,6 +143,7 @@
                   <template #activator="{ on, attrs }">
                     <v-btn
                       :title="$t('documents.label.menu.action.tooltip')"
+                      :aria-label="$t('documents.label.menu.action.of', {0: fileName})"
                       small
                       icon
                       class="white--text my-auto mx-0"
@@ -136,6 +153,7 @@
                     </v-btn>
                   </template>
                   <documents-actions-menu
+                    :active="menuDisplayed"
                     :file="file"
                     :current-view="currentView"
                     :is-search-result="isSearchResult"
@@ -248,6 +266,7 @@ export default {
     playErrorLabel: '',
     playErrorDescription: '',
     checked: false,
+    focused: false,
     show: false,
     canSelectRange: false,
     rangeSelectTimer: null,
@@ -406,6 +425,7 @@ export default {
         event.stopPropagation();
       }
       this.showPlayer = true;
+      this.$nextTick(() => this.$el.querySelector('video')?.focus());
     },
     playError(event) {
       const video = event.target;
