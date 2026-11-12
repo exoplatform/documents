@@ -93,7 +93,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    * joined to another one that failed runs its own read, outside the join: see
    * {@link #readPreview(String, String, String)}. So when the first of several
    * joined reads fails, each of the others runs its own read and may store its
-   * own copy, once per document.
+   * own copy.
    */
   private final FutureCache<String, FileItem, PreviewRead> previewReads = new FutureCache<>(
       (previewRead, key) -> {
