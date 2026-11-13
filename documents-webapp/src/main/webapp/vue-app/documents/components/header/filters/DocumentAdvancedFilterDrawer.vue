@@ -35,7 +35,8 @@
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 :aria-label="$t('documents.file.type.document')"
-                value="documents" />
+                value="documents"
+                @keydown.native.space.prevent="toggleFileType('documents')" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto pa-0">
@@ -57,7 +58,8 @@
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 :aria-label="$t('documents.file.type.sheet')"
-                value="sheets" />
+                value="sheets"
+                @keydown.native.space.prevent="toggleFileType('sheets')" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto pa-0">
@@ -78,7 +80,8 @@
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 :aria-label="$t('documents.file.type.presentation')"
-                value="presentations" />
+                value="presentations"
+                @keydown.native.space.prevent="toggleFileType('presentations')" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto pa-0">
@@ -99,7 +102,8 @@
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 :aria-label="$t('documents.file.type.pdf')"
-                value="pdfs" />
+                value="pdfs"
+                @keydown.native.space.prevent="toggleFileType('pdfs')" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto pa-0">
@@ -120,7 +124,8 @@
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 :aria-label="$t('documents.file.type.image')"
-                value="images" />
+                value="images"
+                @keydown.native.space.prevent="toggleFileType('images')" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto pa-0">
@@ -141,7 +146,8 @@
                 v-model="tempAdvancedFilter.fileType"
                 class="ma-auto typeCheckbox"
                 :aria-label="$t('documents.file.type.video')"
-                value="videos" />
+                value="videos"
+                @keydown.native.space.prevent="toggleFileType('videos')" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto pa-0">
@@ -210,7 +216,8 @@
                 dense
                 v-model="tempAdvancedFilter.showHidden"
                 :aria-label="$t('documents.advanced.filter.drawer.show.hidden')"
-                class="ma-auto typeCheckbox" />
+                class="ma-auto typeCheckbox"
+                @keydown.native.space.prevent="tempAdvancedFilter.showHidden = !tempAdvancedFilter.showHidden" />
             </v-list-item-action>
             <v-list-item-content>
               <v-row class="ma-auto pa-0">
@@ -279,6 +286,12 @@ export default {
     this.getTypeIcons();
   },
   methods: {
+    // Space on a Vuetify 2.3 checkbox fires a native click that Vuetify cancels after the model has turned it on: the
+    // browser then unchecks the input and a screen reader announces it unchecked. The type is toggled here instead
+    toggleFileType(type) {
+      const types = this.tempAdvancedFilter.fileType || [];
+      this.tempAdvancedFilter.fileType = types.includes(type) ? types.filter(selected => selected !== type) : [...types, type];
+    },
     open() {
       this.$refs.DocumentAdvancedFilterDrawer.open();
       this.tempAdvancedFilter = JSON.parse(JSON.stringify(this.advancedFilter));
