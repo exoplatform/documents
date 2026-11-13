@@ -19,6 +19,7 @@
   <div>
     <v-menu
       v-model="addMenu"
+      role="none"
       transition="scroll-y-transition"
       class="add-menu-btn width-full"
       offset-y

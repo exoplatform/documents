@@ -84,6 +84,7 @@ export default {
   }),
 
   created() {
+    this.$root.$on('documents-close-action-menus', this.closeActionMenu);
     $(document).on('mousedown', () => {
       if (this.addMenu || this.selectionsMenu) {
         window.setTimeout(() => {
@@ -108,6 +109,7 @@ export default {
     });
   },
   beforeDestroy() {
+    this.$root.$off('documents-close-action-menus', this.closeActionMenu);
     this.$root.$off('reset-selections', this.handleResetSelections);
     this.$root.$off('set-action-loading', this.setActionLoading);
   },
@@ -115,6 +117,10 @@ export default {
     document.removeEventListener('entity-attachments-updated', this.refreshFilesList);
   },
   methods: {
+    // sent by an actions menu entry activated with Enter, which fires no DOM click to close this menu
+    closeActionMenu() {
+      this.selectionsMenu = false;
+    },
     setActionLoading(status, action) {
       this.actionLoading = status;
       this.actionLoadingMessage = this.$t(`document.multiple.${action}.action.message`);
