@@ -19,8 +19,8 @@ package org.exoplatform.documents.storage.jcr;
 import java.security.AccessControlException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -65,6 +65,9 @@ import org.exoplatform.documents.storage.jcr.JCRDocumentFileStorage;
 public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable {
 
   private static final Log LOG = ExoLogger.getLogger(JCRDeleteFileStorageImpl.class.getName());
+
+  /** Seconds a stop waits for a deletion running at that moment */
+  private static final long STOP_TIMEOUT = 10;
 
   private RepositoryService repositoryService;
 
@@ -117,13 +120,24 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
 
   @Override
   public void start() {
-    scheduledExecutor = Executors.newScheduledThreadPool(1);
+    ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+    // The deletions still waiting for their delay at stop are run by stop
+    executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+    scheduledExecutor = executor;
   }
 
   @Override
   public void stop() {
     if (scheduledExecutor != null) {
-      scheduledExecutor.shutdownNow();
+      // A deletion running now ends: interrupted, it would be lost
+      scheduledExecutor.shutdown();
+      try {
+        if (!scheduledExecutor.awaitTermination(STOP_TIMEOUT, TimeUnit.SECONDS)) {
+          LOG.warn("A document deletion did not end within {} seconds of the stop", STOP_TIMEOUT);
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
     }
     // A deletion still waiting for its delay would be lost with this node: it
     // runs now, its undo no longer possible
@@ -144,13 +158,6 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
         pendingDeletions.remove(documentId);
       }
     }
-  }
-  private void deletePendingDocument(String documentId) {
-    Runnable deletion = pendingDeletions.remove(documentId);
-    if (documentsToDeleteQueue.remove(documentId) != null && deletion != null) {
-      deletion.run();
-    }
-    // Otherwise undone, or deleted already
   }
 
   @Override
@@ -335,6 +342,14 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                                                null,
                                                null,
                                                0);
+  }
+
+  private void deletePendingDocument(String documentId) {
+    Runnable deletion = pendingDeletions.remove(documentId);
+    if (documentsToDeleteQueue.remove(documentId) != null && deletion != null) {
+      deletion.run();
+    }
+    // Otherwise undone, or deleted already
   }
 
   private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {
