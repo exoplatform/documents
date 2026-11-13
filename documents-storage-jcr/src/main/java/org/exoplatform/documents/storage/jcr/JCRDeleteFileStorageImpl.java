@@ -18,8 +18,9 @@ package org.exoplatform.documents.storage.jcr;
 
 import java.security.AccessControlException;
 import java.util.*;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -65,6 +66,9 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
 
   private static final Log LOG = ExoLogger.getLogger(JCRDeleteFileStorageImpl.class.getName());
 
+  /** Seconds a stop waits for a deletion running at that moment */
+  private static final long STOP_TIMEOUT = 10;
+
   private RepositoryService repositoryService;
 
   private IdentityManager identityManager;
@@ -83,7 +87,18 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
 
   private final BulkStorageActionService  bulkStorageActionService;
 
-  public static final  Map<String, String> documentsToDeleteQueue = new HashMap<>();
+  /**
+   * The documents deleted with a delay, not yet deleted, by id, with the
+   * identity id of the user who deleted each. Written by the request threads
+   * and by the delayed deletion: whichever removes an entry first owns it.
+   */
+  public static final  Map<String, String> documentsToDeleteQueue = new ConcurrentHashMap<>();
+
+  /**
+   * The deletions waiting in {@link #documentsToDeleteQueue}, by document id;
+   * package-private for the tests
+   */
+  final Map<String, Runnable> pendingDeletions = new ConcurrentHashMap<>();
 
   public JCRDeleteFileStorageImpl(RepositoryService repositoryService,
                                   IdentityManager identityManager,
@@ -105,27 +120,46 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
 
   @Override
   public void start() {
-    scheduledExecutor = Executors.newScheduledThreadPool(1);
+    ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+    // The deletions still waiting for their delay at stop are run by stop
+    executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+    scheduledExecutor = executor;
   }
 
   @Override
   public void stop() {
     if (scheduledExecutor != null) {
+      // A deletion running now ends: interrupted, it would be lost
       scheduledExecutor.shutdown();
+      try {
+        if (!scheduledExecutor.awaitTermination(STOP_TIMEOUT, TimeUnit.SECONDS)) {
+          LOG.warn("A document deletion did not end within {} seconds of the stop", STOP_TIMEOUT);
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
     }
+    // A deletion still waiting for its delay would be lost with this node: it
+    // runs now, its undo no longer possible
+    new ArrayList<>(pendingDeletions.keySet()).forEach(this::deletePendingDocument);
   }
 
   @Override
   public void undoDelete(String documentId, long userIdentityId) {
-    if (documentsToDeleteQueue.containsKey(documentId)) {
-      String originalModifierUser = documentsToDeleteQueue.get(documentId);
+    String originalModifierUser = documentsToDeleteQueue.get(documentId);
+    if (originalModifierUser != null) {
       if (!originalModifierUser.equals(String.valueOf(userIdentityId))) {
         LOG.warn("User {} attempts to cancel deletion of a document deleted by user {}", userIdentityId, originalModifierUser);
         return;
       }
-      documentsToDeleteQueue.remove(documentId);
+      // Removed here, the delayed deletion finds nothing to delete; removed
+      // there first, the document is deleted already
+      if (documentsToDeleteQueue.remove(documentId, originalModifierUser)) {
+        pendingDeletions.remove(documentId);
+      }
     }
   }
+
   @Override
   public Map<String, String> getDocumentsToDelete(){
     return documentsToDeleteQueue;
@@ -165,22 +199,20 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       folderPath = nodeToDelete.getPath();
     }
     if (delay > 0) {
-      documentsToDeleteQueue.put(documentId, String.valueOf(userIdentityId));
       String finalFolderPath = folderPath;
-      scheduledExecutor.schedule(() -> {
-        if (documentsToDeleteQueue.containsKey(documentId)) {
-          ExoContainerContext.setCurrentContainer(container);
-          RequestLifeCycle.begin(container);
-          try {
-            documentsToDeleteQueue.remove(documentId);
-            moveToTrash(finalFolderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
-          } catch (Exception e) {
-            LOG.error("Error when deleting the document with path" + finalFolderPath, e);
-          } finally {
-            RequestLifeCycle.end();
-          }
+      pendingDeletions.put(documentId, () -> {
+        ExoContainerContext.setCurrentContainer(container);
+        RequestLifeCycle.begin(container);
+        try {
+          moveToTrash(finalFolderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
+        } catch (Exception e) {
+          LOG.error("Error when deleting the document with path" + finalFolderPath, e);
+        } finally {
+          RequestLifeCycle.end();
         }
-      }, delay, TimeUnit.SECONDS);
+      });
+      documentsToDeleteQueue.put(documentId, String.valueOf(userIdentityId));
+      scheduledExecutor.schedule(() -> deletePendingDocument(documentId), delay, TimeUnit.SECONDS);
     } else {
       moveToTrash(folderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
     }
@@ -310,6 +342,14 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                                                null,
                                                null,
                                                0);
+  }
+
+  private void deletePendingDocument(String documentId) {
+    Runnable deletion = pendingDeletions.remove(documentId);
+    if (documentsToDeleteQueue.remove(documentId) != null && deletion != null) {
+      deletion.run();
+    }
+    // Otherwise undone, or deleted already
   }
 
   private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {
