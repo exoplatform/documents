@@ -138,6 +138,36 @@ public class JCRDeleteFileStorageTest {
 
 
   @Test
+  public void testADocumentDeletedWithADelayIsDeletedWhenTheNodeStops() throws Exception {
+    javax.jcr.Session pendingSession = mock(javax.jcr.Session.class);
+    jcrDeleteFileStorage.start();
+    jcrDeleteFileStorage.deleteDocument(pendingSession, "/document/pending", "pending1", false, true, 3600,
+                                        new org.exoplatform.services.security.Identity("testuser"), 2);
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByPath(pendingSession, "/document/pending"), never());
+
+    jcrDeleteFileStorage.stop();
+
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByPath(pendingSession, "/document/pending"));
+    assertFalse(JCRDeleteFileStorageImpl.documentsToDeleteQueue.containsKey("pending1"));
+  }
+
+  @Test
+  public void testADocumentWhoseDeletionIsUndoneIsNotDeletedWhenTheNodeStops() throws Exception {
+    javax.jcr.Session pendingSession = mock(javax.jcr.Session.class);
+    jcrDeleteFileStorage.start();
+    jcrDeleteFileStorage.deleteDocument(pendingSession, "/document/undone", "pending2", false, true, 3600,
+                                        new org.exoplatform.services.security.Identity("testuser"), 2);
+
+    jcrDeleteFileStorage.undoDelete("pending2", 2);
+    // Undone: nothing is left to run
+    assertTrue(jcrDeleteFileStorage.pendingDeletions.isEmpty());
+    jcrDeleteFileStorage.stop();
+
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByPath(pendingSession, "/document/undone"), never());
+    assertFalse(JCRDeleteFileStorageImpl.documentsToDeleteQueue.containsKey("pending2"));
+  }
+
+  @Test
   public void testDeleteDocument() throws Exception {
     String username = "testuser";
     String currentRepository = "collaboration";
