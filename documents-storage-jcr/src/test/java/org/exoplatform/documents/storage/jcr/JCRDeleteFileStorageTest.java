@@ -53,6 +53,9 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.security.AccessControlException;
 import javax.jcr.AccessDeniedException;
 import javax.jcr.Node;
@@ -136,6 +139,59 @@ public class JCRDeleteFileStorageTest {
     assertEquals(0, JCRDeleteFileStorageImpl.documentsToDeleteQueue.size());
   }
 
+
+  @Test
+  public void testADocumentDeletedWithADelayIsDeletedWhenTheNodeStops() throws Exception {
+    javax.jcr.Session pendingSession = mock(javax.jcr.Session.class);
+    jcrDeleteFileStorage.start();
+    jcrDeleteFileStorage.deleteDocument(pendingSession, "/document/pending", "pending1", false, true, 3600,
+                                        new org.exoplatform.services.security.Identity("testuser"), 2);
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByPath(pendingSession, "/document/pending"), never());
+
+    jcrDeleteFileStorage.stop();
+
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByPath(pendingSession, "/document/pending"));
+    assertFalse(JCRDeleteFileStorageImpl.documentsToDeleteQueue.containsKey("pending1"));
+  }
+
+  @Test
+  public void testADocumentWhoseDeletionIsUndoneIsNotDeletedWhenTheNodeStops() throws Exception {
+    javax.jcr.Session pendingSession = mock(javax.jcr.Session.class);
+    jcrDeleteFileStorage.start();
+    jcrDeleteFileStorage.deleteDocument(pendingSession, "/document/undone", "pending2", false, true, 3600,
+                                        new org.exoplatform.services.security.Identity("testuser"), 2);
+
+    jcrDeleteFileStorage.undoDelete("pending2", 2);
+    // Undone: nothing is left to run
+    assertTrue(jcrDeleteFileStorage.pendingDeletions.isEmpty());
+    jcrDeleteFileStorage.stop();
+
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByPath(pendingSession, "/document/undone"), never());
+    assertFalse(JCRDeleteFileStorageImpl.documentsToDeleteQueue.containsKey("pending2"));
+  }
+
+  @Test
+  public void testADocumentDeletionRunningWhenTheNodeStopsEnds() throws Exception {
+    javax.jcr.Session runningSession = mock(javax.jcr.Session.class);
+    CountDownLatch started = new CountDownLatch(1);
+    AtomicBoolean ended = new AtomicBoolean();
+    // The delayed deletion runs on the executor's thread, out of reach of the
+    // static mock: the session it reads is the hook
+    when(runningSession.itemExists("/document/running")).thenAnswer(invocation -> {
+      started.countDown();
+      Thread.sleep(500);
+      ended.set(true);
+      return false;
+    });
+    jcrDeleteFileStorage.start();
+    jcrDeleteFileStorage.deleteDocument(runningSession, "/document/running", "running1", false, true, 1,
+                                        new org.exoplatform.services.security.Identity("testuser"), 2);
+    assertTrue(started.await(10, TimeUnit.SECONDS));
+
+    jcrDeleteFileStorage.stop();
+
+    assertTrue(ended.get());
+  }
 
   @Test
   public void testDeleteDocument() throws Exception {
