@@ -19,7 +19,7 @@
     <v-card
       :elevation="hover ? 4 : 0"
       @focusin="focused = true"
-      @focusout="focused = $event.currentTarget.contains($event.relatedTarget)"
+      @focusout="updateFocused"
       :class="{ 'border-color': !hover }"
       :loading="loading"
       :height="height"
@@ -346,6 +346,7 @@ export default {
     },
   },
   created() {
+    this.$root.$on('documents-close-action-menus', this.closeActionMenu);
     this.$root.$on('update-selection-documents-list', this.handleUpdateSelectionList);
     this.$root.$on('show-selection-input', this.handleShowSelectionInput);
     this.$root.$on('hide-selection-input', this.handleHideSelectionInput);
@@ -358,6 +359,7 @@ export default {
     this.initSelected();
   },
   beforeDestroy() {
+    this.$root.$off('documents-close-action-menus', this.closeActionMenu);
     this.$root.$off('update-selection-documents-list', this.handleUpdateSelectionList);
     this.$root.$off('show-selection-input', this.handleShowSelectionInput);
     this.$root.$off('hide-selection-input', this.handleHideSelectionInput);
@@ -377,6 +379,15 @@ export default {
     });
   },
   methods: {
+    // sent by an actions menu entry activated with Enter, which fires no DOM click to close this menu
+    closeActionMenu() {
+      this.menuDisplayed = false;
+    },
+    // the card's buttons stay shown while the focus is in a drawer, which gives it back to the button that opened it
+    // when it closes: a hidden button cannot take it
+    updateFocused(event) {
+      this.focused = event.currentTarget.contains(event.relatedTarget) || !!event.relatedTarget?.closest?.('.v-navigation-drawer');
+    },
     displayActionMenu() {
       if (this.isMobile){
         this.$root.$emit('open-file-action-menu', this.file);
