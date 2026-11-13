@@ -29,6 +29,7 @@
             <span v-on="disableButton ? tooltipOn : {}">
               <v-btn
                 :id="isMobile ? 'addItemMenu mobile' : 'addItemMenu'"
+                ref="addMenuButton"
                 class="btn btn-primary"
                 :key="postKey"
                 :disabled="disableButton"
@@ -49,10 +50,18 @@
           <span>{{ disableButton ? $t('documents.tooltip.selectDrive') : '' }}</span>
         </v-tooltip>
       </template>
-      <v-list class="pa-0" dense>
+      <v-list
+        ref="addMenuList"
+        :aria-label="$t('documents.button.addNew')"
+        role="menu"
+        class="pa-0"
+        dense
+        @keydown.native.capture="onAddMenuEntryActivation"
+        @keydown.native="onAddMenuKeydown">
         <v-list-item
           v-if="isFolderView"
           :aria-label="$t('documents.button.addNewFolder')"
+          role="menuitem"
           class="text-body menu-text-color"
           @click="addFolder()">
           <v-list-item-icon class="me-1">
@@ -69,6 +78,7 @@
         </v-list-item>
         <v-list-item
           :aria-label="$t('documents.button.addNewFile')"
+          role="menuitem"
           class="text-body menu-text-color"
           @click="openCreateDocumentDrawer()">
           <v-list-item-icon class="me-1">
@@ -81,6 +91,7 @@
         </v-list-item>
         <v-list-item
           :aria-label="$t('documents.button.upload')"
+          role="menuitem"
           class="text-body menu-text-color"
           @click="uploadFromDevice()">
           <v-list-item-icon class="me-1">
@@ -92,9 +103,9 @@
           </v-list-item-title>
         </v-list-item>
         <v-list-item
-          v-on="on"
           :disabled="!importEnabled"
           :aria-label="$t('documents.label.zip.upload')"
+          role="menuitem"
           class="text-body menu-text-color"
           @click="openImportDrawer()">
           <v-list-item-icon class="me-1">
@@ -142,6 +153,14 @@ export default {
     progress: '',
     importEnabled: true,
   }),
+  watch: {
+    addMenu(opened) {
+      if (opened && !this.isMobile) {
+        // Vuetify's menu keeps the focus on its button and only highlights an entry
+        this.$nextTick(() => window.setTimeout(() => this.addMenuEntries()[0]?.focus(), 100));
+      }
+    },
+  },
   computed: {
     isFolderView() {
       return this.selectedView === 'folder';
@@ -196,6 +215,48 @@ export default {
       } else {
         this.addMenu = !this.addMenu;
       }
+    },
+    addMenuEntries() {
+      const list = this.$refs.addMenuList?.$el;
+      return [...(list?.querySelectorAll('[role="menuitem"]') || [])]
+        .filter(entry => entry.getClientRects().length && entry.getAttribute('aria-disabled') !== 'true');
+    },
+    // An entry opens a drawer or the file picker: the menu closes first and gives the focus back to its button,
+    // which the drawer then returns the focus to when it closes. A list item handles Enter itself, so this
+    // runs before it, in the capture phase
+    onAddMenuEntryActivation(event) {
+      if (event.key === 'Enter' && event.target.closest('[role="menuitem"]')) {
+        // cancelled, else the keypress that follows would press the button and open the menu again
+        event.preventDefault();
+        this.addMenu = false;
+        this.$refs.addMenuButton?.$el?.focus();
+      }
+    },
+    onAddMenuKeydown(event) {
+      const entries = this.addMenuEntries();
+      const index = entries.indexOf(document.activeElement);
+      let next = null;
+      if (event.key === 'ArrowDown') {
+        next = entries[(index + 1) % entries.length];
+      } else if (event.key === 'ArrowUp') {
+        next = entries[(index - 1 + entries.length) % entries.length];
+      } else if (event.key === 'Home') {
+        next = entries[0];
+      } else if (event.key === 'End') {
+        next = entries[entries.length - 1];
+      } else if (event.key === 'Escape' || event.key === 'Tab') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.addMenu = false;
+        this.$nextTick(() => this.$refs.addMenuButton?.$el?.focus());
+        return;
+      } else {
+        return;
+      }
+      // stopped here, else Vuetify's own handler would also move its highlight
+      event.preventDefault();
+      event.stopPropagation();
+      next?.focus();
     },
     openCreateDocumentDrawer() {
       this.$root.$emit('documents-open-create-document-drawer');

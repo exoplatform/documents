@@ -94,6 +94,7 @@
                 v-if="header.sortable && header.text && !isMobile"
                 :id="column.value === 'name' ? 'headerName' : null"
                 :key="column.value"
+                :aria-label="sortLabel(header)"
                 type="button"
                 class="btn-reset">
                 {{ header.text }}
@@ -444,6 +445,18 @@ export default {
     },
     hideSelectionInput(file) {
       this.$root.$emit('hide-selection-input', file);
+    },
+    // The header cell gets the click but no focus in this Vuetify version: the button inside it, which takes the
+    // focus, is named as Vuetify names the cell, with the sort state and what Enter does, in the user's language
+    sortLabel(header) {
+      const text = key => this.$vuetify.lang.t(`$vuetify.dataTable.ariaLabel.${key}`);
+      const index = (this.options?.sortBy || []).indexOf(header.value);
+      if (index < 0) {
+        return `${header.text}: ${text('sortNone')} ${text('activateAscending')}`;
+      }
+      return this.options.sortDesc?.[index]
+        ? `${header.text}: ${text('sortDescending')} ${text('activateNone')}`
+        : `${header.text}: ${text('sortAscending')} ${text('activateDescending')}`;
     },
     customSort: function (items, sortBy, isDesc) {
       if (this.$root.driveView) {
