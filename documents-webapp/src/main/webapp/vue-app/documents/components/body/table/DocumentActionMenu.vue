@@ -5,6 +5,7 @@
     data-documents-action-menu
     dense
     @click.native.capture="handleItemActivation"
+    @keydown.native.capture="handleKeyActivation"
     @keydown.native="handleKeydown">
     <v-list-item
       v-for="(extension, i) in menuExtensions"
@@ -124,8 +125,35 @@ export default {
         this.opener.focus();
       }
     },
+    // A sub-menu's opener is an entry of the menu above it, which closes with it: the focus goes back to the
+    // button that opened the first menu, which a drawer the entry opens then returns the focus to when it closes
+    rootOpener() {
+      for (let vm = this.$parent; vm; vm = vm.$parent) {
+        if (vm.$el?.hasAttribute?.('data-documents-action-menu') && vm.rootOpener) {
+          return vm.rootOpener();
+        }
+      }
+      return this.opener;
+    },
+    // A list item handles Enter itself and fires no DOM click: the same focus move, before the item acts. The
+    // default action is cancelled, else the keypress that follows would press the button the focus moved to
+    handleKeyActivation(event) {
+      if (event.key === 'Enter' && !this.isMobile && !event.target.closest('[aria-haspopup]')) {
+        event.preventDefault();
+        this.handleItemActivation(event);
+        // the menus close once the entry has acted, as a mouse click closes them: in the next task, since a microtask
+        // would run between this listener and the entry's own
+        window.setTimeout(() => this.$root.$emit('documents-close-action-menus'));
+      }
+    },
     handleItemActivation(event) {
-      if (!this.isMobile && !event.target.closest('[aria-haspopup]')) {
+      if (this.isMobile || event.target.closest('[aria-haspopup]')) {
+        return;
+      }
+      const opener = this.rootOpener();
+      if (opener !== this.opener && opener && document.body.contains(opener)) {
+        opener.focus();
+      } else {
         this.restoreFocus();
       }
     },
