@@ -290,14 +290,23 @@ export default {
     this.$root.$on('update-file-name', this.editFileName);
     this.$root.$on('cancel-edit-mode', this.cancelEditMode);
     this.$root.$on('document-set-icon-loading', this.setIconLoading);
+    this.$root.$on('documents-close-action-menus', this.closeActionMenu);
     this.getFileIcon();
   },
   beforeDestroy() {
+    this.$root.$off('documents-close-action-menus', this.closeActionMenu);
     this.$root.$off('update-file-name', this.editFileName);
     this.$root.$off('cancel-edit-mode', this.cancelEditMode);
     this.$root.$off('document-set-icon-loading', this.setIconLoading);
   },
   methods: {
+    // the keyboard's counterpart of the mousedown that closes the actions menu, sent by an entry activated with Enter
+    closeActionMenu() {
+      if (this.menuDisplayed) {
+        $(`#document-action-menu-cel-${this.file.id}`).parent().parent().parent().parent().removeAttr('style');
+        this.menuDisplayed = false;
+      }
+    },
     setIconLoading(fileId,status) {
       this.loading = this.file.id === fileId && status;
     },

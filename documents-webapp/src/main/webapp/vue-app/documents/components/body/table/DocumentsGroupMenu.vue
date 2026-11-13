@@ -101,8 +101,15 @@ export default {
         }, this.waitTimeUntilCloseMenu);
       }
     });
+    this.$root.$on('documents-close-action-menus', this.closeMenu);
+  },
+  beforeDestroy() {
+    this.$root.$off('documents-close-action-menus', this.closeMenu);
   },
   methods: {
+    closeMenu() {
+      this.menuDisplayed = false;
+    },
     disableLeftClick(event) {
       if (event.button === 2) {
         event.preventDefault();
