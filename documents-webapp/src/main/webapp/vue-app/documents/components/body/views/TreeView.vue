@@ -75,7 +75,7 @@
           </v-icon>
           <v-list-item-title
             class="body-1 mx-2 mt-1"
-            :class="idItemActive === item.id ? 'primary--text font-weight-bold' : item.hidden ? 'text-light-color' : ''">
+            :class="idItemActive === item.id ? 'primary--text font-weight-bold text-decoration-underline' : item.hidden ? 'text-light-color' : ''">
             {{ displayName(item.name) }}
             <v-icon
               v-if="item.hidden"
