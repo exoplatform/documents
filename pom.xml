@@ -27,6 +27,8 @@
     <tag>HEAD</tag>
   </scm>
   <properties>
+    <!-- Lombok 1.18.40 or later runs on JDK 25: the delombok of the API module needs it -->
+    <org.lombok.version>1.18.46</org.lombok.version>
     <!-- 3rd party libraries versions -->
     <addon.exo.jcr.version>7.3.x-maintenance-SNAPSHOT</addon.exo.jcr.version>
     <addon.meeds.mcp-server.version>7.3.x-maintenance-SNAPSHOT</addon.meeds.mcp-server.version>
@@ -116,6 +118,20 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <configuration>
+            <!-- Since JDK 23, javac runs an annotation processor found on the class path, such as Lombok, only when asked to -->
+            <proc>full</proc>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
   <profiles>
     <!-- Specific behavior while releasing -->
     <profile>
