@@ -48,6 +48,13 @@ public class PublicDocumentAccess {
 
   private Date   expirationDate;
 
+  /**
+   * Social identity id of the user who created or last replaced the link, whose
+   * rights a folder download applies; null for a link created before it was
+   * recorded
+   */
+  private Long   creatorId;
+
   public PublicDocumentAccess(Long id, String nodeId, String passwordHashKey, String encodedPassword, Date expirationDate) {
     this.id = id;
     this.nodeId = nodeId;

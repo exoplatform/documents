@@ -504,12 +504,31 @@ public interface DocumentFileStorage {
   DownloadItem getDocumentDownloadInfo(String documentId);
 
   /**
-   * Download a zipped folder
+   * Download a zipped folder, walked with the rights of the given user: the
+   * children and the shortcut targets this user cannot read are left out of
+   * the zip
    *
-   * @param folderId  folder node id
-   * @return downloaded zip path
+   * @param folderId folder node id
+   * @param aclIdentity the user whose rights the walk applies
+   * @return downloaded zip path, or null when the zip cannot be built
+   * @throws ObjectNotFoundException when the user cannot read the folder or no
+   *           node has this id
    */
-  String downloadFolder(String folderId);
+  String downloadFolder(String folderId, Identity aclIdentity) throws ObjectNotFoundException;
+
+  /**
+   * Checks that the given user can read a given folder, as
+   * {@link #downloadFolder(String, Identity)} reads it, without walking or
+   * zipping it
+   *
+   * @param folderId folder node id
+   * @param aclIdentity the user whose rights apply
+   * @throws ObjectNotFoundException when the user cannot read the folder or no
+   *           node has this id
+   * @throws IllegalStateException when the folder cannot be read for another
+   *           reason
+   */
+  void checkFolderReadable(String folderId, Identity aclIdentity) throws ObjectNotFoundException;
 
   /**
    * Returns a document file content as Text

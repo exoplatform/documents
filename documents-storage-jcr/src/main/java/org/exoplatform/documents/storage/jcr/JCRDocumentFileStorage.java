@@ -3062,35 +3062,92 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
-  public String downloadFolder(String folderId) {
-    SessionProvider sessionProvider = null;
+  public String downloadFolder(String folderId, Identity aclIdentity) throws ObjectNotFoundException {
+    if (aclIdentity == null) {
+      throw new IllegalArgumentException("the identity whose rights apply is mandatory");
+    }
+    Session userSession = null;
     try {
-      sessionProvider = SessionProvider.createSystemProvider();
-      ManageableRepository repository = repositoryService.getCurrentRepository();
-      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-      Node node = getNodeByIdentifier(systemSession, folderId);
+      // Not a getUserSessionProvider session: the visitor's request carries no
+      // identity of aclIdentity's user
+      userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
+      Node node = getNodeByIdentifier(userSession, folderId);
       if (node != null) {
-        Path tempFolder = Files.createTempDirectory(TEMP_DOWNLOAD_FOLDER_PREFIX + System.nanoTime()); // NOSONAR
-        tempFolder.toFile().deleteOnExit();
-        String tempFolderPath = tempFolder.toString();
-        Node parentNode = node.getParent();
-        JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentNode);
-        String zipName = ZIP_PREFIX + folderId + ZIP_EXTENSION;
-        String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
-        zipFiles(zipPath, tempFolderPath);
-        File zipped = new File(zipPath);
-        File folder = new File(tempFolderPath);
-        JCRDocumentsUtil.cleanFiles(folder);
-        return zipped.getPath();
+        return zipFolder(node);
       }
+      throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       LOG.error("Error while getting folder: {}", folderId, e);
     } finally {
-      if (sessionProvider != null) {
-        sessionProvider.close();
+      if (userSession != null) {
+        userSession.logout();
       }
     }
     return null;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void checkFolderReadable(String folderId, Identity aclIdentity) throws ObjectNotFoundException {
+    if (aclIdentity == null) {
+      throw new IllegalArgumentException("the identity whose rights apply is mandatory");
+    }
+    Session userSession = null;
+    try {
+      userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
+      if (getNodeByIdentifier(userSession, folderId) == null) {
+        throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
+      }
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Folder " + folderId + " cannot be checked", e);
+    } finally {
+      if (userSession != null) {
+        userSession.logout();
+      }
+    }
+  }
+
+  /**
+   * Copies a folder's tree into a temp folder of its own and zips it into a
+   * file of its own, so that two downloads of the same folder at once never
+   * share either. The temp folder is deleted whatever happens, and so is the
+   * zip when it is not built.
+   *
+   * @return the zip's path, for the caller to delete once it is sent
+   */
+  private String zipFolder(Node node) throws Exception {
+    Path tempFolder = Files.createTempDirectory(TEMP_DOWNLOAD_FOLDER_PREFIX); // NOSONAR
+    Path zip = null;
+    boolean built = false;
+    try {
+      String tempFolderPath = tempFolder.toString();
+      String parentPath;
+      String walkFolderPath;
+      try {
+        parentPath = JCRDocumentsUtil.getPathWithTitles(node.getParent());
+        walkFolderPath = tempFolderPath;
+      } catch (AccessDeniedException e) {
+        // The user may read the folder and not its parent: the folder's titles
+        // path then starts at the folder itself, with no leading separator, so
+        // the walk strips nothing and the separator comes with the temp folder
+        parentPath = "";
+        walkFolderPath = tempFolderPath + "/";
+      }
+      JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", walkFolderPath, parentPath);
+      zip = Files.createTempFile(ZIP_PREFIX, ZIP_EXTENSION); // NOSONAR
+      zipFiles(zip.toString(), tempFolderPath);
+      built = true;
+      return zip.toString();
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+      if (!built && zip != null) {
+        Files.deleteIfExists(zip);
+      }
+    }
   }
 
   /**

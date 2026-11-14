@@ -1,0 +1,46 @@
+<repository-service default-repository="repository">
+  <repositories>
+    <repository name="repository" system-workspace="collaboration" default-workspace="collaboration">
+      <security-domain>exo-domain</security-domain>
+      <access-control>optional</access-control>
+      <authentication-policy>org.exoplatform.services.jcr.impl.core.access.JAASAuthenticator</authentication-policy>
+      <workspaces>
+        <workspace name="collaboration">
+          <container class="org.exoplatform.services.jcr.impl.storage.jdbc.optimisation.CQJDBCWorkspaceDataContainer">
+            <properties>
+              <property name="source-name" value="jdbcjcracl"/>
+              <property name="dialect" value="hsqldb"/>
+              <property name="db-structure-type" value="single"/>
+              <property name="max-buffer-size" value="200k"/>
+              <property name="swap-directory" value="target/jcr-acl/swap"/>
+            </properties>
+          </container>
+          <initializer class="org.exoplatform.services.jcr.impl.core.ScratchWorkspaceInitializer">
+            <properties>
+              <property name="root-nodetype" value="nt:unstructured"/>
+            </properties>
+          </initializer>
+          <cache enabled="true" class="org.exoplatform.services.jcr.impl.dataflow.persistent.infinispan.ISPNCacheWorkspaceStorageCache">
+            <properties>
+              <property name="infinispan-configuration" value="jar:/jcr-acl/infinispan-config.xml"/>
+            </properties>
+          </cache>
+          <lock-manager class="org.exoplatform.services.jcr.impl.core.lock.infinispan.ISPNCacheableLockManagerImpl">
+            <properties>
+              <property name="time-out" value="15m"/>
+              <property name="infinispan-configuration" value="jar:/jcr-acl/infinispan-lock.xml"/>
+              <property name="infinispan-cl-cache.jdbc.table.name" value="lk"/>
+              <property name="infinispan-cl-cache.jdbc.table.create" value="true"/>
+              <property name="infinispan-cl-cache.jdbc.table.drop" value="false"/>
+              <property name="infinispan-cl-cache.jdbc.id.column" value="id"/>
+              <property name="infinispan-cl-cache.jdbc.data.column" value="data"/>
+              <property name="infinispan-cl-cache.jdbc.timestamp.column" value="timestamp"/>
+              <property name="infinispan-cl-cache.jdbc.datasource" value="jdbcjcracl"/>
+              <property name="infinispan-cl-cache.jdbc.connectionFactory" value="org.exoplatform.services.jcr.infinispan.ManagedConnectionFactory"/>
+            </properties>
+          </lock-manager>
+        </workspace>
+      </workspaces>
+    </repository>
+  </repositories>
+</repository-service>

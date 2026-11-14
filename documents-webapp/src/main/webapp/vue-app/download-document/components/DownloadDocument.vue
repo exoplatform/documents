@@ -158,6 +158,8 @@ export default {
       }).catch((error) => {
         if (error.status === 401) {
           this.$root.$emit('alert-message', this.$t('documents.public.access.password.wrong'), 'error');
+        } else if (error.status === 404) {
+          this.$root.$emit('alert-message', this.$t('download.public.link.notAvailable.message'), 'error');
         }
       }).finally(() => {
         this.isDownloading = false;

@@ -53,4 +53,7 @@ public class PublicDocumentAccessEntity implements Serializable {
   @Column(name = "EXPIRATION_DATE")
   private Date    expirationDate;
 
+  @Column(name = "CREATOR_ID")
+  private Long    creatorId;
+
 }

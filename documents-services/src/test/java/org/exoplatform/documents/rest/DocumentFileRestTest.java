@@ -1708,21 +1708,127 @@ public class DocumentFileRestTest {
     downloadItem.setMimeType("application/pdf");
     Response response = documentFileRest.downloadDocument(null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     when(publicDocumentAccessService.isPublicDocumentAccessExpired("123")).thenReturn(true, false);
     when(publicDocumentAccessService.isDocumentPublicAccessValid("123", null)).thenReturn(false, true);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     when(externalDownloadService.getDocumentDownloadItem("123")).thenReturn(null, downloadItem);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertNoStore(response);
     when(externalDownloadService.getDocumentDownloadItem("123")).thenThrow(RuntimeException.class);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+    assertNoStore(response);
 
+  }
+
+  private static void assertNoStore(Response response) {
+    assertTrue("a download's answer, whatever its status, is never kept by a cache",
+               String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
+  }
+
+  /**
+   * A HEAD on a link answers the status the download would answer and neither
+   * reads the document nor builds a folder's zip. The method is reached only
+   * through its {@code @HEAD} annotation: without it, the engine answers a
+   * HEAD by running the download, whose zip is then built for nothing.
+   */
+  @Test
+  public void checkDocumentDownloadAnswersTheDownloadStatusWithoutBuildingTheZip() throws Exception {
+    java.lang.reflect.Method head = DocumentFileRest.class.getMethod("checkDocumentDownload", String.class, String.class);
+    assertTrue(head.isAnnotationPresent(javax.ws.rs.HEAD.class));
+    assertEquals("/download", head.getAnnotation(javax.ws.rs.Path.class).value());
+
+    when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
+    Response response = documentFileRest.checkDocumentDownload("456", null);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertNull(response.getEntity());
+    assertNoStore(response);
+    verify(externalDownloadService).checkDocumentDownload("456");
+
+    doThrow(ObjectNotFoundException.class).when(externalDownloadService).checkDocumentDownload("456");
+    response = documentFileRest.checkDocumentDownload("456", null);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNoStore(response);
+
+    when(publicDocumentAccessService.isPublicDocumentAccessExpired("789")).thenReturn(true);
+    response = documentFileRest.checkDocumentDownload("789", null);
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertNoStore(response);
+    verify(externalDownloadService, never()).checkDocumentDownload("789");
+
+    // A password-protected link: the HEAD passes the caller's password on
+    when(publicDocumentAccessService.isDocumentPublicAccessValid("321", "right")).thenReturn(true);
+    response = documentFileRest.checkDocumentDownload("321", "right");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertNoStore(response);
+    verify(externalDownloadService).checkDocumentDownload("321");
+
+    // The same link asked with a wrong password
+    when(publicDocumentAccessService.isDocumentPublicAccessValid("321", "wrong")).thenReturn(false);
+    response = documentFileRest.checkDocumentDownload("321", "wrong");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertNoStore(response);
+    verify(externalDownloadService, times(1)).checkDocumentDownload("321");
+
+    response = documentFileRest.checkDocumentDownload("", null);
+    assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertNoStore(response);
+    verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
+    verify(externalDownloadService, never()).downloadZippedFolder(anyString());
+  }
+
+  /**
+   * A folder link the creator's rights cannot archive (no creator recorded,
+   * creator gone or disabled, folder unreadable by the creator) answers 404; a
+   * file link never asks for the creator (EXO-91530).
+   */
+  @Test
+  public void downloadFolderOfAPublicLinkTheCreatorCannotArchiveIsNotFound() throws Exception {
+    DownloadItem folderItem = new DownloadItem("456", "folder", null, null);
+    when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
+    when(externalDownloadService.getDocumentDownloadItem("456")).thenReturn(folderItem);
+    when(externalDownloadService.downloadZippedFolder("456")).thenThrow(ObjectNotFoundException.class);
+
+    Response response = documentFileRest.downloadDocument("456", null);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNoStore(response);
+
+    reset(externalDownloadService);
+    when(externalDownloadService.getDocumentDownloadItem("456")).thenReturn(folderItem);
+    java.util.concurrent.atomic.AtomicBoolean zipClosed = new java.util.concurrent.atomic.AtomicBoolean();
+    when(externalDownloadService.downloadZippedFolder("456")).thenReturn(new java.io.ByteArrayInputStream("zip".getBytes()) {
+      @Override
+      public void close() {
+        zipClosed.set(true);
+      }
+    });
+    response = documentFileRest.downloadDocument("456", null);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertEquals("application/zip", String.valueOf(response.getMetadata().getFirst("Content-Type")));
+    ByteArrayOutputStream zipSent = new ByteArrayOutputStream();
+    ((javax.ws.rs.core.StreamingOutput) response.getEntity()).write(zipSent);
+    assertEquals("zip", zipSent.toString());
+    assertTrue("the zip's stream, whose closing deletes the zip, is closed once sent", zipClosed.get());
+    assertTrue("a zip is never kept by a cache", String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
+
+    ByteArrayOutputStream content = new ByteArrayOutputStream();
+    content.write(1);
+    DownloadItem fileItem = new DownloadItem("789", "file.txt", content, "text/plain");
+    when(publicDocumentAccessService.isDocumentPublicAccessValid("789", null)).thenReturn(true);
+    when(externalDownloadService.getDocumentDownloadItem("789")).thenReturn(fileItem);
+    response = documentFileRest.downloadDocument("789", null);
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    verify(externalDownloadService, never()).downloadZippedFolder("789");
   }
 
   @Test
