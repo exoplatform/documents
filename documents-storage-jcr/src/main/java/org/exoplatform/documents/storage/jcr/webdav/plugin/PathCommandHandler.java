@@ -22,8 +22,10 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -284,23 +286,13 @@ public class PathCommandHandler {
         continue;
       }
 
-      String legacyChildJcrPath = String.format(PATHS_CONCAT_FORMAT,
-                                                currentParentJcrPath,
-                                                Utils.encodeNodeName(visibleSegment));
-      if (session.itemExists(legacyChildJcrPath)) {
-        Item existingItem = session.getItem(legacyChildJcrPath);
-        if (existingItem instanceof Node existingNode) {
-          // Compare the identity-relative parts only: the drive segment is
-          // addressed by its id, so a client may legitimately hold an older
-          // spelling of the drive name in the path it sends
-          String existingRelativePath = getIdentityRelativeDecodedWebDavPath(getOrCreateWebDavPath(existingNode));
-          if (StringUtils.isBlank(existingRelativePath)
-              || StringUtils.equals(identityRelativeWebDavPath, existingRelativePath)
-              || StringUtils.startsWith(identityRelativeWebDavPath, existingRelativePath + "/")) {
-            currentParentJcrPath = legacyChildJcrPath;
-            continue;
-          }
-        }
+      String legacyChildJcrPath = findLegacyChildJcrPath(session,
+                                                         currentParentJcrPath,
+                                                         visibleSegment,
+                                                         identityRelativeWebDavPath);
+      if (legacyChildJcrPath != null) {
+        currentParentJcrPath = legacyChildJcrPath;
+        continue;
       }
 
       throw new WebDavException(HttpStatus.SC_NOT_FOUND,
@@ -416,18 +408,62 @@ public class PathCommandHandler {
     }
   }
 
+  /**
+   * Finds the child a segment names when it has no mapping under its parent,
+   * by the node name a WebDAV create gives it ({@link #toTechnicalName}), then
+   * by the name older WebDAV creates gave it, which keeps a ':' and differs only
+   * then.
+   */
+  private String findLegacyChildJcrPath(Session session,
+                                        String parentJcrPath,
+                                        String visibleSegment,
+                                        String identityRelativeWebDavPath) throws RepositoryException {
+    Set<String> candidateNames = new LinkedHashSet<>();
+    candidateNames.add(toTechnicalName(visibleSegment));
+    candidateNames.add(Utils.encodeNodeName(visibleSegment));
+    for (String candidateName : candidateNames) {
+      String legacyChildJcrPath = String.format(PATHS_CONCAT_FORMAT, parentJcrPath, candidateName);
+      if (session.itemExists(legacyChildJcrPath) && session.getItem(legacyChildJcrPath) instanceof Node existingNode) {
+        // Compare the identity-relative parts only: the drive segment is
+        // addressed by its id, so a client may legitimately hold an older
+        // spelling of the drive name in the path it sends
+        String existingRelativePath = getIdentityRelativeDecodedWebDavPath(getOrCreateWebDavPath(existingNode));
+        if (StringUtils.isBlank(existingRelativePath)
+            || StringUtils.equals(identityRelativeWebDavPath, existingRelativePath)
+            || StringUtils.startsWith(identityRelativeWebDavPath, existingRelativePath + "/")) {
+          return legacyChildJcrPath;
+        }
+      }
+    }
+    return null;
+  }
+
   @SneakyThrows
   public String allocateTechnicalName(Session session, String parentJcrPath, String visibleName) {
     String candidateVisibleName = visibleName;
     int counter = 1;
     while (true) {
-      String technicalName = Utils.encodeNodeName(candidateVisibleName);
+      String technicalName = toTechnicalName(candidateVisibleName);
       String candidateJcrPath = appendJcrPath(parentJcrPath, technicalName);
       if (!session.itemExists(candidateJcrPath)) {
         return technicalName;
       }
       candidateVisibleName = addSuffix(visibleName, counter++);
     }
+  }
+
+  /**
+   * The node name a new node takes for a visible name, before any suffix that
+   * makes it free. On top of {@link Utils#encodeNodeName}, a ':' is encoded:
+   * the repository reads the part of a name before a ':' as a namespace prefix,
+   * and refuses the name when no namespace has that prefix. The visible name
+   * itself stays in the node's title and its WebDAV mapping.
+   *
+   * @param visibleName the name the WebDAV client gave
+   * @return the node name, with no suffix
+   */
+  public String toTechnicalName(String visibleName) {
+    return StringUtils.replace(Utils.encodeNodeName(visibleName), ":", "%3A");
   }
 
   @SneakyThrows

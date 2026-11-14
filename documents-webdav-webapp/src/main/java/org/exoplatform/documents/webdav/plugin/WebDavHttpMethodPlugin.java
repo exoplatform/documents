@@ -223,8 +223,12 @@ public abstract class WebDavHttpMethodPlugin {
     return StringUtils.isBlank(resourcePath) ? "/" : resourcePath;
   }
 
+  /**
+   * @return false only when the request says "Overwrite: F"; an absent header
+   *         means "T" (RFC 4918, section 10.6)
+   */
   protected boolean getOverwriteParameter(HttpServletRequest httpRequest) {
-    return Strings.CI.equals("f", httpRequest.getHeader(ExtHttpHeaders.OVERWRITE));
+    return !Strings.CI.equals("f", httpRequest.getHeader(ExtHttpHeaders.OVERWRITE));
   }
 
   protected boolean getRemoveDestinationParameter(HttpServletRequest httpRequest) {

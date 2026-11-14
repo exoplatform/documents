@@ -284,7 +284,7 @@ public class WebdavWriteCommandHandler {
                                new SessionProvider(((SessionImpl) session).getUserState()));
       pathCommandHandler.deleteMapping(jcrPath);
     } else {
-      throw new WebDavException(HttpStatus.SC_FORBIDDEN, String.format("Resource with path '%s' can't be removed", jcrPath));
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN, String.format("Resource with path '%s' can't be removed", webDavPath));
     }
     session.save();
   }
@@ -299,19 +299,12 @@ public class WebdavWriteCommandHandler {
     String sourceJcrPath = pathCommandHandler.resolveToJcrPath(session, webDavSourcePath);
     String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
+    checkResourceExists(session, sourceJcrPath);
+    checkCanWriteTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, true);
+    checkTargetNameIsStorable(session, targetVisibleName, webDavTargetPath);
+    boolean itemExists = removeExistingTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, overwrite);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
-    checkResourceExists(session, sourceJcrPath);
-    boolean itemExists = session.itemExists(targetJcrPath);
-    if (itemExists) {
-      if (overwrite) {
-        Node targetNodeToremove = (Node) session.getItem(targetJcrPath);
-        targetNodeToremove.remove();
-        session.save();
-      } else {
-        throw new WebDavException(HttpStatus.SC_CONFLICT, String.format("Resource with path '%s' already exists", targetJcrPath));
-      }
-    }
     forceUnlock((Node) session.getItem(sourceJcrPath));
     session.move(sourceJcrPath, targetJcrPath);
     session.save();
@@ -337,17 +330,12 @@ public class WebdavWriteCommandHandler {
     String sourceJcrPath = pathCommandHandler.resolveToJcrPath(session, webDavSourcePath);
     String targetParentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavTargetPath));
     String targetVisibleName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
+    checkResourceExists(session, sourceJcrPath);
+    checkCanWriteTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, false);
+    checkTargetNameIsStorable(session, targetVisibleName, webDavTargetPath);
+    removeExistingTarget(session, sourceJcrPath, targetParentJcrPath, webDavTargetPath, overwrite || removeDestination);
     String targetTechnicalName = pathCommandHandler.allocateTechnicalName(session, targetParentJcrPath, targetVisibleName);
     String targetJcrPath = String.format(PATH_AND_NAME_PATTERN, targetParentJcrPath, targetTechnicalName);
-    checkResourceExists(session, sourceJcrPath);
-    boolean itemExists = session.itemExists(targetJcrPath);
-    if (itemExists && removeDestination) {
-      Item destItem = session.getItem(targetJcrPath);
-      destItem.remove();
-      session.save();
-    } else if (itemExists && !overwrite) {
-      throw new WebDavException(HttpStatus.SC_CONFLICT, String.format("Resource with path '%s' already exists", targetJcrPath));
-    }
     Workspace workspace = session.getWorkspace();
     workspace.copy(sourceJcrPath, targetJcrPath);
     Node targetNode = (Node) session.getItem(targetJcrPath);
@@ -751,6 +739,114 @@ public class WebdavWriteCommandHandler {
     String normalizedPath = StringUtils.removeEnd(webDavPath, "/");
     int index = normalizedPath.lastIndexOf('/');
     return index <= 0 ? "/" : normalizedPath.substring(0, index);
+  }
+
+  /**
+   * Frees the WebDAV path a MOVE or a COPY writes to. The path is resolved the
+   * way every other request resolves it, so that the document it currently
+   * names is found whatever its technical node name. That document is replaced
+   * only when overwriting is allowed and the user may delete it, through the
+   * same steps as a WebDAV DELETE; otherwise the request is refused, and the
+   * path keeps naming that document.
+   *
+   * @return true when the path named a document, which was moved to the trash
+   */
+  private boolean removeExistingTarget(Session session,
+                                       String sourceJcrPath,
+                                       String targetParentJcrPath,
+                                       String webDavTargetPath,
+                                       boolean overwrite) throws RepositoryException, WebDavException {
+    // The new node's name mapping is keyed by the path the repository reports
+    // for its parent and by the target name: a parent path spelled otherwise
+    // ('.', '..'), or a target name the repository reads as a path, would let
+    // the lookup below miss a document that mapping key already names
+    String targetName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
+    if (StringUtils.equalsAny(targetName, ".", "..")
+        || StringUtils.contains(targetName, '/')
+        || !StringUtils.equals(((Node) session.getItem(targetParentJcrPath)).getPath(), targetParentJcrPath)) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' can't be written", webDavTargetPath));
+    }
+    String targetJcrPath;
+    try {
+      targetJcrPath = pathCommandHandler.resolveToJcrPath(session, webDavTargetPath);
+    } catch (WebDavException e) {
+      if (e.getHttpError() == HttpStatus.SC_NOT_FOUND) {
+        return false;
+      }
+      throw e;
+    }
+    if (!session.itemExists(targetJcrPath)) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' can't be replaced", webDavTargetPath));
+    }
+    // Compare the paths the repository reports for the nodes: a resolved path
+    // may still carry segments the repository normalises, such as '.' or '..'
+    String targetPath = ((Node) session.getItem(targetJcrPath)).getPath();
+    String sourcePath = ((Node) session.getItem(sourceJcrPath)).getPath();
+    if (!StringUtils.equals(StringUtils.substringBeforeLast(targetPath, "/"), targetParentJcrPath)
+        || !isInsideTargetDrive(targetPath, webDavTargetPath)) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' can't be replaced", webDavTargetPath));
+    }
+    if (StringUtils.equals(targetPath, sourcePath)
+        || StringUtils.startsWith(sourcePath, targetPath + "/")
+        || StringUtils.startsWith(targetPath, sourcePath + "/")) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' overlaps the source resource", webDavTargetPath));
+    }
+    if (!overwrite) {
+      throw new WebDavException(HttpStatus.SC_CONFLICT,
+                                String.format("Resource with path '%s' already exists", webDavTargetPath));
+    }
+    delete(session, webDavTargetPath);
+    return true;
+  }
+
+  /**
+   * Refuses a MOVE or a COPY that the repository would refuse on its own
+   * permission checks, before an existing target is sent to the trash: the
+   * repository runs those checks only when the operation itself starts. A move
+   * needs ADD_NODE on the target parent and REMOVE on the source
+   * (<code>SessionImpl#move</code>), a copy needs ADD_NODE on the target parent
+   * (<code>WorkspaceImpl#copy</code>).
+   */
+  private void checkCanWriteTarget(Session session,
+                                   String sourceJcrPath,
+                                   String targetParentJcrPath,
+                                   String webDavTargetPath,
+                                   boolean removesSource) throws RepositoryException, WebDavException {
+    if (!checkPermission((Node) session.getItem(targetParentJcrPath), PermissionType.ADD_NODE)
+        || (removesSource && !checkPermission((Node) session.getItem(sourceJcrPath), PermissionType.REMOVE))) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' can't be written", webDavTargetPath));
+    }
+  }
+
+  /**
+   * Refuses a MOVE or a COPY whose target the repository cannot store under
+   * the node name the target gets, before an existing target is sent to the
+   * trash: the repository parses the destination path only when the operation
+   * itself starts (<code>LocationFactory#parseAbsPath</code>, the first step of
+   * <code>SessionImpl#move</code> and <code>WorkspaceImpl#copy</code>), with
+   * the same rule for each name as the one checked here. A name starting or
+   * ending with a blank, or holding a tab or a line break, is such a name.
+   */
+  private void checkTargetNameIsStorable(Session session,
+                                         String targetVisibleName,
+                                         String webDavTargetPath) throws WebDavException {
+    try {
+      ((SessionImpl) session).getLocationFactory().parseRelPath(pathCommandHandler.toTechnicalName(targetVisibleName));
+    } catch (RepositoryException e) {
+      LOG.debug("WebDAV target name refused by the repository", e);
+      throw new WebDavException(HttpStatus.SC_BAD_REQUEST,
+                                String.format("Resource with path '%s' has a name that can't be stored", webDavTargetPath));
+    }
+  }
+
+  private boolean isInsideTargetDrive(String targetPath, String webDavTargetPath) {
+    String driveRootPath = pathCommandHandler.getIdentityBaseJcrPath(webDavTargetPath);
+    return StringUtils.startsWith(targetPath, driveRootPath + "/");
   }
 
   @SneakyThrows
