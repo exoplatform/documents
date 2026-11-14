@@ -834,8 +834,191 @@ public class DocumentFileServiceTest {
     FileItem fileItem = mock(FileItem.class);
     FileInfo fileInfo = new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "user", null, false);
     when(fileItem.getFileInfo()).thenReturn(fileInfo);
-    when(imageThumbnailService.getOrCreateThumbnail("imageThumbnail", "docId", IdentityConstants.ANONIM, 0, 0)).thenReturn(fileItem);
-    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", IdentityConstants.ANONIM, 0, 0));
+    when(imageThumbnailService.getOrCreateThumbnail("imageThumbnail", "docId", IdentityConstants.ANONIM, 250, 250)).thenReturn(fileItem);
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", IdentityConstants.ANONIM, 250, 250));
+  }
+
+  /**
+   * Two first reads of a preview at the same moment create and store it once:
+   * the second waits for the first.
+   */
+  @Test
+  public void testGetImageThumbnailContentJoinsReadsRunningAtTheSameMoment() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+    when(documentFileStorage.canAccess("docId", aclIdentity)).thenReturn(true);
+    FileItem fileItem = mock(FileItem.class);
+    when(fileItem.getFileInfo()).thenReturn(new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "user", null, false));
+    java.util.concurrent.CountDownLatch firstReadRunning = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+    when(imageThumbnailService.getOrCreateThumbnail(anyString(), anyString(), anyString(), anyInt(), anyInt())).thenAnswer(invocation -> {
+      firstReadRunning.countDown();
+      release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+      return fileItem;
+    });
+
+    java.util.concurrent.ExecutorService readers = java.util.concurrent.Executors.newFixedThreadPool(2);
+    try {
+      java.util.concurrent.Future<FileContent> first = readers.submit(() -> documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250));
+      assertTrue(firstReadRunning.await(10, java.util.concurrent.TimeUnit.SECONDS));
+      Thread[] secondThread = new Thread[1];
+      java.util.concurrent.Future<FileContent> second = readers.submit(() -> {
+        secondThread[0] = Thread.currentThread();
+        return documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250);
+      });
+      long deadline = System.currentTimeMillis() + 10_000;
+      while ((secondThread[0] == null || secondThread[0].getState() != Thread.State.WAITING) && System.currentTimeMillis() < deadline) {
+        Thread.sleep(10); // NOSONAR
+      }
+      release.countDown();
+      assertNotNull(first.get(10, java.util.concurrent.TimeUnit.SECONDS));
+      assertNotNull(second.get(10, java.util.concurrent.TimeUnit.SECONDS));
+    } finally {
+      readers.shutdownNow();
+    }
+    verify(imageThumbnailService, times(1)).getOrCreateThumbnail("imageThumbnail", "docId", "user", 250, 250);
+  }
+
+  /**
+   * A read joined to another user's read that fails runs its own read: it gets
+   * its own preview, never the other user's failure.
+   */
+  @Test
+  public void testGetImageThumbnailContentJoinedToAFailedReadRunsItsOwnRead() throws Exception {
+    for (String user : new String[] { "first", "second" }) {
+      org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity(user);
+      when(identityRegistry.getIdentity(user)).thenReturn(aclIdentity);
+      when(documentFileStorage.canAccess("docId", aclIdentity)).thenReturn(true);
+    }
+    FileItem fileItem = mock(FileItem.class);
+    when(fileItem.getFileInfo()).thenReturn(new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "second", null, false));
+    java.util.concurrent.CountDownLatch firstReadRunning = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+    when(imageThumbnailService.getOrCreateThumbnail(eq("imageThumbnail"), eq("docId"), eq("first"), anyInt(), anyInt())).thenAnswer(invocation -> {
+      firstReadRunning.countDown();
+      release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+      throw new IllegalAccessException("first may not read it");
+    });
+    when(imageThumbnailService.getOrCreateThumbnail(eq("imageThumbnail"), eq("docId"), eq("second"), anyInt(), anyInt())).thenReturn(fileItem);
+
+    java.util.concurrent.ExecutorService readers = java.util.concurrent.Executors.newFixedThreadPool(2);
+    try {
+      java.util.concurrent.Future<FileContent> first = readers.submit(() -> documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "first", 250, 250));
+      assertTrue(firstReadRunning.await(10, java.util.concurrent.TimeUnit.SECONDS));
+      Thread[] secondThread = new Thread[1];
+      java.util.concurrent.Future<FileContent> second = readers.submit(() -> {
+        secondThread[0] = Thread.currentThread();
+        return documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "second", 250, 250);
+      });
+      awaitWaiting(secondThread);
+      release.countDown();
+      java.util.concurrent.ExecutionException firstFailure = assertThrows(java.util.concurrent.ExecutionException.class,
+                                                                          () -> first.get(10, java.util.concurrent.TimeUnit.SECONDS));
+      assertTrue(firstFailure.getCause() instanceof IllegalAccessException);
+      assertNotNull(second.get(10, java.util.concurrent.TimeUnit.SECONDS));
+    } finally {
+      readers.shutdownNow();
+    }
+    verify(imageThumbnailService, times(1)).getOrCreateThumbnail("imageThumbnail", "docId", "second", 250, 250);
+  }
+
+  /**
+   * A joined read interrupted while it waits reports the interruption, not a
+   * missing preview.
+   */
+  @Test
+  public void testGetImageThumbnailContentInterruptedWhileJoinedReportsTheInterruption() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+    when(documentFileStorage.canAccess("docId", aclIdentity)).thenReturn(true);
+    FileItem fileItem = mock(FileItem.class);
+    when(fileItem.getFileInfo()).thenReturn(new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "user", null, false));
+    java.util.concurrent.CountDownLatch firstReadRunning = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+    when(imageThumbnailService.getOrCreateThumbnail(anyString(), anyString(), anyString(), anyInt(), anyInt())).thenAnswer(invocation -> {
+      firstReadRunning.countDown();
+      release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+      return fileItem;
+    });
+
+    java.util.concurrent.ExecutorService readers = java.util.concurrent.Executors.newFixedThreadPool(2);
+    try {
+      java.util.concurrent.Future<FileContent> first = readers.submit(() -> documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250));
+      assertTrue(firstReadRunning.await(10, java.util.concurrent.TimeUnit.SECONDS));
+      Thread[] secondThread = new Thread[1];
+      java.util.concurrent.Future<FileContent> second = readers.submit(() -> {
+        secondThread[0] = Thread.currentThread();
+        return documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250);
+      });
+      awaitWaiting(secondThread);
+      secondThread[0].interrupt();
+      java.util.concurrent.ExecutionException secondFailure = assertThrows(java.util.concurrent.ExecutionException.class,
+                                                                           () -> second.get(10, java.util.concurrent.TimeUnit.SECONDS));
+      assertTrue(secondFailure.getCause() instanceof InterruptedException);
+      release.countDown();
+      assertNotNull(first.get(10, java.util.concurrent.TimeUnit.SECONDS));
+    } finally {
+      readers.shutdownNow();
+    }
+  }
+
+  private static void awaitWaiting(Thread[] thread) throws InterruptedException {
+    long deadline = System.currentTimeMillis() + 10_000;
+    while ((thread[0] == null || thread[0].getState() != Thread.State.WAITING) && System.currentTimeMillis() < deadline) {
+      Thread.sleep(10); // NOSONAR
+    }
+  }
+
+  /**
+   * A preview read that fails throws its own exception, and is not run twice.
+   */
+  @Test
+  public void testGetImageThumbnailContentThrowsTheReadOwnFailure() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+    when(documentFileStorage.canAccess("docId", aclIdentity)).thenReturn(true);
+    when(imageThumbnailService.getOrCreateThumbnail(anyString(), anyString(), anyString(), anyInt(), anyInt())).thenThrow(new IllegalArgumentException("no access"));
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250));
+    verify(imageThumbnailService, times(1)).getOrCreateThumbnail("imageThumbnail", "docId", "user", 250, 250);
+  }
+
+  /**
+   * 250x250 is the size every documents client asks for a preview
+   * (DocumentsUtils.getThumbnailUrl callers): any other size asked is served
+   * and stored at that one size, so a read never stores a preview at a new size.
+   */
+  @Test
+  public void testGetImageThumbnailContentStoresOnlyThePreviewSize() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+    when(documentFileStorage.canAccess("docId", aclIdentity)).thenReturn(true);
+    FileItem fileItem = mock(FileItem.class);
+    FileInfo fileInfo = new FileInfo(3L, "image.png", "image/png", "documents", 10, new Date(), "user", null, false);
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    when(imageThumbnailService.getOrCreateThumbnail(anyString(), anyString(), anyString(), anyInt(), anyInt())).thenReturn(fileItem);
+
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 250));
+    verify(imageThumbnailService, times(1)).getOrCreateThumbnail("imageThumbnail", "docId", "user", 250, 250);
+
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 500, 500));
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 0, 0));
+    assertNotNull(documentFileService.getImageThumbnailContent("imageThumbnail", "docId", "user", 250, 99999));
+    assertNotNull(documentFileService.getImageThumbnailContent("officeThumbnail", "docId", "user", 1, 1));
+
+    verify(imageThumbnailService, times(4)).getOrCreateThumbnail("imageThumbnail", "docId", "user", 250, 250);
+    verify(imageThumbnailService, times(1)).getOrCreateThumbnail("officeThumbnail", "docId", "user", 250, 250);
+    verify(imageThumbnailService, never()).getOrCreateThumbnail(anyString(),
+                                                                anyString(),
+                                                                anyString(),
+                                                                intThat(width -> width != 250),
+                                                                anyInt());
+    verify(imageThumbnailService, never()).getOrCreateThumbnail(anyString(),
+                                                                anyString(),
+                                                                anyString(),
+                                                                anyInt(),
+                                                                intThat(height -> height != 250));
   }
 
   @Test
@@ -860,6 +1043,39 @@ public class DocumentFileServiceTest {
     when(documentFileStorage.hasEditPermissions("docId", aclIdentity)).thenReturn(true);
     documentFileService.createThumbnail("videoThumbnail", content, "user", 250, 250);
     verify(imageThumbnailService).createThumbnail("videoThumbnaildocId", content, "user", 250, 250);
+  }
+
+  /**
+   * POST /{fileType}/{documentId} takes its size from the query: whatever is
+   * asked, the thumbnail is looked up, replaced and stored at the 250x250
+   * preview size the read serves, so a new size never adds a stored copy.
+   */
+  @Test
+  public void testCreateThumbnailStoresOnlyThePreviewSize() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
+    when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
+    when(documentFileStorage.hasEditPermissions("docId", aclIdentity)).thenReturn(true);
+    FileContent content = new FileContent("docId", "docId", "image/jpeg", new ByteArrayInputStream(new byte[] { 1 }));
+    when(imageThumbnailService.getThumbnail("videoThumbnaildocId", 250, 250)).thenReturn(mock(FileItem.class));
+
+    documentFileService.createThumbnail("videoThumbnail", content, "user", 500, 99999);
+    documentFileService.createThumbnail("videoThumbnail", content, "user", 0, 0);
+
+    verify(imageThumbnailService, times(2)).getThumbnail("videoThumbnaildocId", 250, 250);
+    verify(imageThumbnailService, times(2)).deleteThumbnails("videoThumbnail", "docId");
+    verify(imageThumbnailService, times(2)).createThumbnail("videoThumbnaildocId", content, "user", 250, 250);
+    verify(imageThumbnailService, never()).getThumbnail(anyString(), intThat(width -> width != 250), anyInt());
+    verify(imageThumbnailService, never()).getThumbnail(anyString(), anyInt(), intThat(height -> height != 250));
+    verify(imageThumbnailService, never()).createThumbnail(anyString(),
+                                                           any(),
+                                                           anyString(),
+                                                           intThat(width -> width != 250),
+                                                           anyInt());
+    verify(imageThumbnailService, never()).createThumbnail(anyString(),
+                                                           any(),
+                                                           anyString(),
+                                                           anyInt(),
+                                                           intThat(height -> height != 250));
   }
 
 }

@@ -22,6 +22,8 @@ import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -31,6 +33,7 @@ import javax.jcr.Session;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.cache.future.FutureCache;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.utils.DocumentUtils;
 import org.exoplatform.documents.webdav.model.OperationCancelledException;
@@ -78,6 +81,47 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   private static final String   RENAME_FILE_EVENT = "rename_file_event";
 
   private static final String   VIDEO_THUMBNAIL_TYPE = "videoThumbnail";
+
+  /** The one preview size the documents clients display, width and height. */
+  private static final int      PREVIEW_SIZE         = 250;
+
+  /**
+   * Joins the reads of a document's preview that run at the same moment, so
+   * that one creates and stores the preview while the others wait for it:
+   * otherwise two first reads would each store a copy. Nothing is kept once
+   * the read is over: the stored preview is what later reads find. A read
+   * joined to another one that failed runs its own read, outside the join: see
+   * {@link #readPreview(String, String, String)}. So when the first of several
+   * joined reads fails, each of the others runs its own read and may store its
+   * own copy.
+   */
+  private final FutureCache<String, FileItem, PreviewRead> previewReads = new FutureCache<>(
+      (previewRead, key) -> {
+        previewRead.ranTheRead().set(true);
+        return this.createPreview(previewRead);
+      }) {
+    @Override
+    protected FileItem get(String key) {
+      return null;
+    }
+
+    @Override
+    protected void put(String key, FileItem value) {
+      // Nothing kept: see previewReads
+    }
+
+    @Override
+    protected void putOnly(String key, FileItem value) {
+      // Nothing kept: see previewReads
+    }
+  };
+
+  /**
+   * @param ranTheRead set when this read is the one that ran the preview's
+   *          creation, false when it was joined to another read
+   */
+  private record PreviewRead(String fileType, String documentId, String userName, AtomicBoolean ranTheRead) {
+  }
 
   private DocumentFileStorage   documentFileStorage;
 
@@ -816,7 +860,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (!canAccess(documentId, getViewerAclIdentity(userName))) {
       throw new IllegalAccessException("User " + userName + " can't access document " + documentId);
     }
-    FileItem image = imageThumbnailService.getOrCreateThumbnail(fileType, documentId, userName, width, height);
+    FileItem image = readPreview(fileType, documentId, userName);
     if (image != null) {
       FileInfo imageInfo = image.getFileInfo();
       return new FileContent(String.valueOf(imageInfo.getId()),
@@ -828,6 +872,41 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       throw new ObjectNotFoundException("Image with id : " + documentId + " isn't found");
   }
 
+  /**
+   * Reads the preview through {@link #previewReads}. A read joined to another
+   * user's read that failed does not take that read's failure: it runs its own
+   * read, so that its outcome is its own.
+   */
+  private FileItem readPreview(String fileType, String documentId, String userName) throws Exception {
+    PreviewRead previewRead = new PreviewRead(fileType, documentId, userName, new AtomicBoolean());
+    FileItem image;
+    try {
+      image = previewReads.get(previewRead, fileType + "/" + documentId);
+    } catch (IllegalStateException e) {
+      if (!previewRead.ranTheRead().get()) {
+        return createPreview(previewRead);
+      }
+      // The read's own failure, unwrapped from the join
+      if (e.getCause() instanceof ExecutionException executionException
+          && executionException.getCause() instanceof Exception cause) {
+        throw cause;
+      }
+      throw e;
+    }
+    if (image == null && Thread.currentThread().isInterrupted()) {
+      throw new InterruptedException("Preview read of document " + documentId + " interrupted");
+    }
+    return image;
+  }
+
+  private FileItem createPreview(PreviewRead previewRead) throws Exception {
+    return imageThumbnailService.getOrCreateThumbnail(previewRead.fileType(),
+                                                      previewRead.documentId(),
+                                                      previewRead.userName(),
+                                                      PREVIEW_SIZE,
+                                                      PREVIEW_SIZE);
+  }
+
   @Override
   public FileItem createThumbnail(String fileType, FileContent file, String userName, int width, int height) throws Exception {
     if (!VIDEO_THUMBNAIL_TYPE.equals(fileType)) {
@@ -836,11 +915,11 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (!hasEditPermissionOnDocument(file.getId(), getAclUserIdentity(userName))) {
       throw new IllegalAccessException("User " + userName + " can't edit document " + file.getId());
     }
-    FileItem image = imageThumbnailService.getThumbnail(fileType + file.getId(), width, height);
+    FileItem image = imageThumbnailService.getThumbnail(fileType + file.getId(), PREVIEW_SIZE, PREVIEW_SIZE);
     if (image != null) {
       imageThumbnailService.deleteThumbnails(fileType, file.getId());
     }
-    return imageThumbnailService.createThumbnail(fileType + file.getId(), file, userName, width, height);
+    return imageThumbnailService.createThumbnail(fileType + file.getId(), file, userName, PREVIEW_SIZE, PREVIEW_SIZE);
   }
 
   public AbstractNode getDocumentById(String documentId) {
