@@ -1530,6 +1530,33 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  /**
+   * Reads the folder an upload is filed into, in the user's session: a
+   * shortcut to a folder is the folder it targets, as the Documents app shows
+   * it.
+   *
+   * @param session the user's session
+   * @param folderId the folder's id, or a shortcut's
+   * @return the folder
+   * @throws ObjectNotFoundException when no node has that id, or a shortcut's
+   *           target is gone
+   * @throws IllegalArgumentException when the node is not a folder
+   * @throws RepositoryException when the node can't be read
+   */
+  private Node getUploadFolder(Session session, String folderId) throws ObjectNotFoundException, RepositoryException {
+    Node folder = getNodeByIdentifier(session, folderId);
+    if (folder != null && folder.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      folder = getNodeByIdentifier(session, folder.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+    }
+    if (folder == null) {
+      throw new ObjectNotFoundException("The folder " + folderId + " doesn't exist");
+    }
+    if (!JCRDocumentsUtil.isFolder(folder)) {
+      throw new IllegalArgumentException("The document " + folderId + " is not a folder: a file is filed into a folder");
+    }
+    return folder;
+  }
+
   @Override
   public AbstractNode copyDocument(String nodeId, String destintionNodeId, Identity aclIdentity) throws ObjectNotFoundException {
     SessionProvider sessionProvider = null;
