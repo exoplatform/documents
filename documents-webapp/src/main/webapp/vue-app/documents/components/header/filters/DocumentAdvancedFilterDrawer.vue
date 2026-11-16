@@ -33,7 +33,7 @@
                 ripple="false"
                 dense
                 v-model="tempAdvancedFilter.fileType"
-                class="ma-auto typeCheckbox"
+                class="ma-auto typeCheckbox fileTypeCheckbox"
                 :aria-label="$t('documents.file.type.document')"
                 value="documents"
                 @keydown.native.space.prevent="toggleFileType('documents')" />
@@ -56,7 +56,7 @@
                 ripple="false"
                 dense
                 v-model="tempAdvancedFilter.fileType"
-                class="ma-auto typeCheckbox"
+                class="ma-auto typeCheckbox fileTypeCheckbox"
                 :aria-label="$t('documents.file.type.sheet')"
                 value="sheets"
                 @keydown.native.space.prevent="toggleFileType('sheets')" />
@@ -78,7 +78,7 @@
                 ripple="false"
                 dense
                 v-model="tempAdvancedFilter.fileType"
-                class="ma-auto typeCheckbox"
+                class="ma-auto typeCheckbox fileTypeCheckbox"
                 :aria-label="$t('documents.file.type.presentation')"
                 value="presentations"
                 @keydown.native.space.prevent="toggleFileType('presentations')" />
@@ -100,7 +100,7 @@
                 ripple="false"
                 dense
                 v-model="tempAdvancedFilter.fileType"
-                class="ma-auto typeCheckbox"
+                class="ma-auto typeCheckbox fileTypeCheckbox"
                 :aria-label="$t('documents.file.type.pdf')"
                 value="pdfs"
                 @keydown.native.space.prevent="toggleFileType('pdfs')" />
@@ -122,7 +122,7 @@
                 ripple="false"
                 dense
                 v-model="tempAdvancedFilter.fileType"
-                class="ma-auto typeCheckbox"
+                class="ma-auto typeCheckbox fileTypeCheckbox"
                 :aria-label="$t('documents.file.type.image')"
                 value="images"
                 @keydown.native.space.prevent="toggleFileType('images')" />
@@ -144,7 +144,7 @@
                 ripple="false"
                 dense
                 v-model="tempAdvancedFilter.fileType"
-                class="ma-auto typeCheckbox"
+                class="ma-auto typeCheckbox fileTypeCheckbox"
                 :aria-label="$t('documents.file.type.video')"
                 value="videos"
                 @keydown.native.space.prevent="toggleFileType('videos')" />
@@ -216,7 +216,7 @@
                 dense
                 v-model="tempAdvancedFilter.showHidden"
                 :aria-label="$t('documents.advanced.filter.drawer.show.hidden')"
-                class="ma-auto typeCheckbox"
+                class="ma-auto typeCheckbox showHiddenCheckbox"
                 @keydown.native.space.prevent="tempAdvancedFilter.showHidden = !tempAdvancedFilter.showHidden" />
             </v-list-item-action>
             <v-list-item-content>
@@ -280,6 +280,10 @@ export default {
   ),
 
 
+  watch: {
+    'tempAdvancedFilter.fileType': 'syncCheckboxesState',
+    'tempAdvancedFilter.showHidden': 'syncCheckboxesState',
+  },
   created() {
     this.$root.$on('open-advanced-filter-drawer', this.open);
     this.$root.$on('close-advanced-filter-drawer', this.close);
@@ -291,6 +295,20 @@ export default {
     toggleFileType(type) {
       const types = this.tempAdvancedFilter.fileType || [];
       this.tempAdvancedFilter.fileType = types.includes(type) ? types.filter(selected => selected !== type) : [...types, type];
+    },
+    // A click on a Vuetify 2.3 checkbox is cancelled on its input after the model has followed it: the browser then
+    // restores the input's previous state, which a screen reader announces. The inputs are set from the model once
+    // the click is over: synchronously or on the next tick, the browser's restore would undo it
+    syncCheckboxesState() {
+      window.setTimeout(() => {
+        const drawer = this.$refs.DocumentAdvancedFilterDrawer?.$el;
+        const fileTypes = this.tempAdvancedFilter.fileType || [];
+        drawer?.querySelectorAll?.('.fileTypeCheckbox input').forEach(input => input.checked = fileTypes.includes(input.value));
+        const showHidden = drawer?.querySelector?.('.showHiddenCheckbox input');
+        if (showHidden) {
+          showHidden.checked = !!this.tempAdvancedFilter.showHidden;
+        }
+      });
     },
     open() {
       this.$refs.DocumentAdvancedFilterDrawer.open();
