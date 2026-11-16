@@ -17,4 +17,98 @@
       </propertyDefinition>
     </propertyDefinitions>
   </nodeType>
+  <nodeType
+    name="exo:recycleBinItem"
+    isMixin="true"
+    hasOrderableChildNodes="false"
+    primaryItemName="">
+    <propertyDefinitions>
+      <propertyDefinition
+        name="exo:recycleBinOwner"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:restoreParentId"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:deletedBy"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:deletedDate"
+        requiredType="Date"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:recycleBinSize"
+        requiredType="Long"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:recycleBinName"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:recycleBinOf"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="false">
+        <valueConstraints />
+      </propertyDefinition>
+      <propertyDefinition
+        name="exo:recycleBinPermissions"
+        requiredType="String"
+        autoCreated="false"
+        mandatory="false"
+        onParentVersion="IGNORE"
+        protected="false"
+        multiple="true">
+        <valueConstraints />
+      </propertyDefinition>
+    </propertyDefinitions>
+  </nodeType>
+  <nodeType
+    name="exo:recycleBinFolder"
+    isMixin="true"
+    hasOrderableChildNodes="false"
+    primaryItemName="">
+  </nodeType>
 </nodeTypes>
