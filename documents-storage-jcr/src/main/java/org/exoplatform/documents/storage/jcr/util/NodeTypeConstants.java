@@ -138,6 +138,26 @@ public class NodeTypeConstants {
 
   public static final String TRASH_ID                  = "exo:trashId";
 
+  public static final String EXO_RECYCLE_BIN_ITEM      = "exo:recycleBinItem";
+
+  public static final String EXO_RECYCLE_BIN_FOLDER    = "exo:recycleBinFolder";
+
+  public static final String RECYCLE_BIN_OWNER         = "exo:recycleBinOwner";
+
+  public static final String RESTORE_PARENT_ID         = "exo:restoreParentId";
+
+  public static final String DELETED_BY                = "exo:deletedBy";
+
+  public static final String DELETED_DATE              = "exo:deletedDate";
+
+  public static final String RECYCLE_BIN_SIZE          = "exo:recycleBinSize";
+
+  public static final String RECYCLE_BIN_NAME          = "exo:recycleBinName";
+
+  public static final String RECYCLE_BIN_OF            = "exo:recycleBinOf";
+
+  public static final String RECYCLE_BIN_PERMISSIONS   = "exo:recycleBinPermissions";
+
   public static final String EXO_PRIMARY_TYPE          = "exo:primaryType";
 
   public static final String MIX_LOCKABLE              = "mix:lockable";
