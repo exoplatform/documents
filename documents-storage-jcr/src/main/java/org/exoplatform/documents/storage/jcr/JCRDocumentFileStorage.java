@@ -23,6 +23,7 @@ import static org.gatein.common.net.URLTools.SLASH;
 
 import java.io.*;
 import java.net.URLDecoder;
+import java.security.AccessControlException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -209,6 +210,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public static final String                        TEMP_DOWNLOAD_FOLDER_PREFIX = "temp_download";
 
   public static final String                        TEMP_IMPORT_FOLDER_PREFIX   = "temp_import";
+
+  /**
+   * The event ecms broadcasts when a blank document is created from the
+   * platform's templates (ecms {@code DocumentServiceImpl.CREATE_DOC_NEW_APP}),
+   * registered on ecms-social-integration's {@code AnalyticsDocumentsListener},
+   * which records it as the {@code documentCreated} operation. Broadcast here
+   * for a document created from a template document, so both creation paths
+   * record one creation.
+   */
+  public static final String                        CREATE_DOCUMENT_EVENT       = "exo.create.doc.newApp";
 
   private static final String                       ZIP_EXTENSION               = ".zip";
 
@@ -1249,10 +1260,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       } else {
         node = getNodeByIdentifier(session, documentID);
       }
-      String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), node.getPrimaryNodeType().getName()));
-      name = cleanNameWithAccents(name, node.getPrimaryNodeType().getName());
-      // clean node name
-      name = URLDecoder.decode(name, "UTF-8");
+      String name = cleanedNodeName(title, node.getPrimaryNodeType().getName());
       if (name.indexOf('.') == -1) {
         String oldName = node.getName().indexOf('.') == -1 && node.isNodeType(NodeTypeConstants.NT_FILE)
                          && node.hasProperty(NodeTypeConstants.EXO_TITLE) ?
@@ -1426,6 +1434,127 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
     }
+  }
+
+  @Override
+  public AbstractNode createDocumentFromTemplateDocument(long ownerId,
+                                                         String templateDocumentId,
+                                                         String destinationFolderId,
+                                                         String title,
+                                                         Identity aclIdentity) throws IllegalAccessException,
+                                                                               ObjectNotFoundException,
+                                                                               ObjectAlreadyExistsException {
+    if (StringUtils.isBlank(templateDocumentId)) {
+      throw new IllegalArgumentException("templateId_is_mandatory");
+    }
+    if (!isValidDocumentTitle(title)) {
+      throw new IllegalArgumentException("title_is_not_valid");
+    }
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      Node templateNode = getNodeByIdentifier(session, templateDocumentId);
+      if (templateNode != null && templateNode.isNodeType(EXO_SYMLINK)) {
+        // A shortcut template copies its target, so the new document holds the
+        // content, not a link
+        templateNode = getNodeByIdentifier(session, templateNode.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+      }
+      if (templateNode == null || !templateNode.isNodeType(NodeTypeConstants.NT_FILE)) {
+        throw new ObjectNotFoundException("Template document with id '" + templateDocumentId + "' not found");
+      }
+      Node destinationNode;
+      if (StringUtils.isBlank(destinationFolderId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        destinationNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        if (destinationNode == null) {
+          throw new ObjectNotFoundException("Drive root of identity '" + ownerId + "' not found");
+        }
+      } else {
+        // A folder shortcut is followed to its target and a node that is not a
+        // folder is refused, before the right is checked and the document added
+        try {
+          destinationNode = getUploadFolder(session, destinationFolderId);
+        } catch (IllegalArgumentException e) {
+          throw new IllegalArgumentException("destination_is_not_a_folder", e);
+        }
+      }
+      // The repository's own rule, the one it applies again at save: the
+      // folder's owner holds every right, and add_node is the right an added
+      // node needs
+      session.checkPermission(destinationNode.getPath(), PermissionType.ADD_NODE);
+      // The drawer shows the template's extension apart from the name field, so
+      // a title typed without one takes the template's
+      String documentTitle = title.trim();
+      String templateName = templateNode.getName();
+      if (documentTitle.lastIndexOf('.') <= 0 && templateName.lastIndexOf('.') > 0) {
+        documentTitle = documentTitle.concat(templateName.substring(templateName.lastIndexOf('.')));
+      }
+      // The node name and exo:title come from the same string, through the
+      // helper renameDocument uses, so a clash with a renamed document is seen
+      String name = cleanedNodeName(documentTitle, NodeTypeConstants.NT_FILE);
+      if (destinationNode.hasNode(name)) {
+        throw new ObjectAlreadyExistsException("A document named '" + documentTitle + "' already exists in the target folder");
+      }
+      Node newNode = destinationNode.addNode(name, templateNode.getPrimaryNodeType().getName());
+      addProperties(templateNode, newNode, documentTitle);
+      destinationNode.save();
+      try {
+        VersionHistoryUtils.createVersion(newNode);
+      } catch (Exception e) {
+        // The document is saved: it exists without its first version, and its
+        // creation is still announced
+        LOG.warn("The first version of the document '{}' created from the template '{}' could not be created",
+                 newNode.getPath(),
+                 templateDocumentId,
+                 e);
+      }
+      // One creation per document, whatever the name the user chose: the copy is
+      // created under its final name, so no rename follows
+      listenerService.broadcast(CREATE_DOCUMENT_EVENT, username, newNode);
+      return toFileNode(identityManager, aclIdentity, newNode, "", spaceService);
+    } catch (IllegalArgumentException | IllegalAccessException | ObjectNotFoundException | ObjectAlreadyExistsException e) {
+      throw e;
+    } catch (AccessControlException | AccessDeniedException e) {
+      // The right is refused by the check before the copy, or by the repository
+      // at the save of the added node: the same missing right
+      throw new IllegalAccessException("Permission to add document is missing");
+    } catch (Exception e) {
+      throw new IllegalStateException("Error creating document from template '" + templateDocumentId + "'", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * Reads the folder an upload is filed into, in the user's session: a
+   * shortcut to a folder is the folder it targets, as the Documents app shows
+   * it.
+   *
+   * @param session the user's session
+   * @param folderId the folder's id, or a shortcut's
+   * @return the folder
+   * @throws ObjectNotFoundException when no node has that id, or a shortcut's
+   *           target is gone
+   * @throws IllegalArgumentException when the node is not a folder
+   * @throws RepositoryException when the node can't be read
+   */
+  private Node getUploadFolder(Session session, String folderId) throws ObjectNotFoundException, RepositoryException {
+    Node folder = getNodeByIdentifier(session, folderId);
+    if (folder != null && folder.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      folder = getNodeByIdentifier(session, folder.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString());
+    }
+    if (folder == null) {
+      throw new ObjectNotFoundException("The folder " + folderId + " doesn't exist");
+    }
+    if (!JCRDocumentsUtil.isFolder(folder)) {
+      throw new IllegalArgumentException("The document " + folderId + " is not a folder: a file is filed into a folder");
+    }
+    return folder;
   }
 
   @Override
@@ -1704,6 +1833,25 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       addProperties(oldNode, newNode, title);
     }
     return newNode;
+  }
+
+  /**
+   * The node name a title gets, shared by the rename of a file or a folder and by
+   * the creation from a template document: the special characters replaced, the
+   * accents removed, the JCR-illegal characters escaped, then one URL-decoding,
+   * which undoes the second escaping of {@code %} (and turns a {@code +} into a
+   * space, as the rename always did). createFolder and getNewName compute a
+   * folder's name apart.
+   *
+   * @param title the title the user gave
+   * @param nodeType the node type, which decides whether an extension is kept apart
+   * @return the node name
+   * @throws UnsupportedEncodingException never, UTF-8 being always supported
+   */
+  private String cleanedNodeName(String title, String nodeType) throws UnsupportedEncodingException {
+    String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), nodeType));
+    name = cleanNameWithAccents(name, nodeType);
+    return URLDecoder.decode(name, "UTF-8");
   }
 
   private void addProperties(Node oldNode, Node newNode, String title) throws RepositoryException {

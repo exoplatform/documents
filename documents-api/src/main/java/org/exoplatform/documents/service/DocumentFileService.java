@@ -265,6 +265,34 @@ public interface DocumentFileService {
   AbstractNode copyDocument(String nodeId, String destintionNodeId, long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException;
 
   /**
+   * Creates a document from a template document, in one call: the copy is
+   * created under the given title in the destination folder and one document
+   * creation is recorded, whether the user kept the proposed name or changed
+   * it. The Documents app's Duplicate and copy-paste keep
+   * {@link #copyDocument} and record nothing.
+   *
+   * @param ownerId owner identity id, used when destinationFolderId is blank
+   * @param templateDocumentId identifier of the template document node
+   * @param destinationFolderId identifier of the destination folder node
+   * @param title title the user gave, with or without the template's extension
+   * @param authenticatedUserId identity id of the user creating the document
+   * @return the created {@link AbstractNode}, the copy itself
+   * @throws IllegalAccessException when the user may not add a document to the
+   *           destination folder
+   * @throws ObjectNotFoundException when the template document or the
+   *           destination folder doesn't exist
+   * @throws ObjectAlreadyExistsException when the destination folder already
+   *           holds a node of the computed name
+   */
+  AbstractNode createDocumentFromTemplateDocument(long ownerId,
+                                                  String templateDocumentId,
+                                                  String destinationFolderId,
+                                                  String title,
+                                                  long authenticatedUserId) throws IllegalAccessException,
+                                                                            ObjectNotFoundException,
+                                                                            ObjectAlreadyExistsException;
+
+  /**
    * Move the given node.
    *
    * @param fileId Id of the given file
