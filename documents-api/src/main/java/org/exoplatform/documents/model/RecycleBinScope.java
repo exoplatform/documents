@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.model;
 
+import org.exoplatform.documents.constant.RecycleBinScopeType;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
@@ -30,35 +32,26 @@ import lombok.ToString;
 @ToString
 public final class RecycleBinScope {
 
-  public enum Type {
-    /** The bin of the caller's personal drive. */
-    USER,
-    /** The bin of a space, named by the id of the space. */
-    SPACE,
-    /** The bin of any drive, named by the identity id of its owner. */
-    DRIVE
-  }
-
-  private final Type type;
+  private final RecycleBinScopeType type;
 
   /** Id of the space, or identity id of the drive's owner; 0 for the caller's own bin. */
   private final long id;
 
-  private RecycleBinScope(Type type, long id) {
+  private RecycleBinScope(RecycleBinScopeType type, long id) {
     this.type = type;
     this.id = id;
   }
 
   public static RecycleBinScope user() {
-    return new RecycleBinScope(Type.USER, 0);
+    return new RecycleBinScope(RecycleBinScopeType.USER, 0);
   }
 
   public static RecycleBinScope space(long spaceId) {
-    return new RecycleBinScope(Type.SPACE, spaceId);
+    return new RecycleBinScope(RecycleBinScopeType.SPACE, spaceId);
   }
 
   public static RecycleBinScope drive(long ownerIdentityId) {
-    return new RecycleBinScope(Type.DRIVE, ownerIdentityId);
+    return new RecycleBinScope(RecycleBinScopeType.DRIVE, ownerIdentityId);
   }
 
 }
