@@ -76,7 +76,8 @@ import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinScope;
-import org.exoplatform.documents.model.RecycleBinSortField;
+import org.exoplatform.documents.constant.RecycleBinScopeType;
+import org.exoplatform.documents.constant.RecycleBinSortField;
 import org.exoplatform.documents.model.PublicDocumentInfo;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
@@ -143,9 +144,6 @@ public class DocumentFileRest implements ResourceContainer {
 
   /** The page of a listing of the Recycle Bin that names no size. */
   private static final int                  RECYCLE_BIN_PAGE_SIZE  = 20;
-
-  /** What the message codes of the Recycle Bin start with. */
-  private static final String               RECYCLE_BIN_CODE_PREFIX = "recycleBin.";
 
   private static final int                  CACHE_IN_SECONDS       = 7 * 86400;
 
@@ -1721,7 +1719,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                      filter.getOffset(),
                                                                                      filter.getLimit(),
                                                                                      size);
-      return Response.ok(collectionEntity).build();
+      return Response.ok(collectionEntity).cacheControl(NO_STORE_CACHE_CONTROL).build();
     } catch (Exception ex) {
       LOG.error("Error while fetching trash documents", ex);
       return Response.serverError().build();
@@ -2057,7 +2055,7 @@ public class DocumentFileRest implements ResourceContainer {
                                                      offset,
                                                      pageSize);
       // The items of the bin of a drive an administrator acts on are not opened.
-      boolean viewable = bin.getType() != RecycleBinScope.Type.DRIVE;
+      boolean viewable = bin.getType() != RecycleBinScopeType.DRIVE;
       List<RecycleBinItemEntity> entities = service.getItems(bin, filter, username)
                                                    .stream()
                                                    .map(item -> RecycleBinEntityBuilder.toItemEntity(item, viewable, identityManager))
@@ -2232,12 +2230,6 @@ public class DocumentFileRest implements ResourceContainer {
     });
   }
 
-  /** What an entry of the Recycle Bin asks the service, for the user of the request. */
-  @FunctionalInterface
-  private interface RecycleBinCall {
-    Response.ResponseBuilder apply(RecycleBinService service, String username) throws ObjectNotFoundException, IllegalAccessException;
-  }
-
   /**
    * Answers an entry of the Recycle Bin: what the service refuses becomes the
    * status of its kind, with the message code a screen has a label for and
@@ -2262,7 +2254,7 @@ public class DocumentFileRest implements ResourceContainer {
     LOG.debug("A request on a Recycle Bin is refused with the status {}", status, refusal);
     Response.ResponseBuilder builder = Response.status(status).cacheControl(NO_STORE_CACHE_CONTROL);
     String message = refusal.getMessage();
-    if (message != null && message.startsWith(RECYCLE_BIN_CODE_PREFIX)) {
+    if (message != null && message.startsWith(RecycleBinError.CODE_PREFIX)) {
       builder.entity(message).type(MediaType.TEXT_PLAIN);
     }
     return builder.build();
@@ -2289,16 +2281,16 @@ public class DocumentFileRest implements ResourceContainer {
       return RecycleBinScope.user();
     case "SPACE":
       if (spaceId == null) {
-        throw new IllegalArgumentException("The id of the space is mandatory");
+        throw new IllegalArgumentException(RecycleBinError.SCOPE_INVALID);
       }
       return RecycleBinScope.space(spaceId);
     case "DRIVE":
       if (ownerIdentityId == null) {
-        throw new IllegalArgumentException("The identity id of the owner of the drive is mandatory");
+        throw new IllegalArgumentException(RecycleBinError.SCOPE_INVALID);
       }
       return RecycleBinScope.drive(ownerIdentityId);
     default:
-      throw new IllegalArgumentException("The Recycle Bin is the one of the user, of a space or of a drive");
+      throw new IllegalArgumentException(RecycleBinError.SCOPE_INVALID);
     }
   }
 
@@ -2317,7 +2309,7 @@ public class DocumentFileRest implements ResourceContainer {
 
   private static void checkPage(int offset, int limit) {
     if (offset < 0 || limit < 0) {
-      throw new IllegalArgumentException("The offset and the limit of a page cannot be negative");
+      throw new IllegalArgumentException(RecycleBinError.PAGE_INVALID);
     }
   }
 

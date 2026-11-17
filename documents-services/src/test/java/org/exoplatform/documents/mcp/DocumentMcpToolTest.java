@@ -1057,7 +1057,13 @@ public class DocumentMcpToolTest {
     IllegalStateException missing = assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
     assertTrue(missing.getMessage(), missing.getMessage().contains("the folder it was deleted from no longer exists"));
 
-    IllegalAccessException forbidden = new IllegalAccessException("recycleBin.restore.targetForbidden");
+    org.mockito.Mockito.doThrow(new IllegalAccessException("recycleBin.restore.targetForbidden"))
+                       .when(recycleBinService)
+                       .undoDelete(DOCUMENT_ID, USERNAME);
+    IllegalAccessException noTarget = assertThrows(IllegalAccessException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    assertTrue(noTarget.getMessage(), noTarget.getMessage().contains("you can no longer add content to the folder it was deleted from"));
+
+    IllegalAccessException forbidden = new IllegalAccessException("User john may not restore the deleted document");
     org.mockito.Mockito.doThrow(forbidden).when(recycleBinService).undoDelete(DOCUMENT_ID, USERNAME);
     assertSame(forbidden, assertThrows(IllegalAccessException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID)));
 

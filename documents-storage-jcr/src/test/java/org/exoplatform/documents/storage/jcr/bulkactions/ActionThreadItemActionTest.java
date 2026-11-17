@@ -17,9 +17,11 @@
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -34,6 +36,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.storage.BulkItemAction;
 import org.exoplatform.services.listener.ListenerService;
@@ -71,6 +74,44 @@ class ActionThreadItemActionTest {
   @AfterEach
   void tearDown() {
     ConversationState.setCurrent(null);
+  }
+
+  @Test
+  void onlyWhatAnswersTheUserIsToldApartFromADefect() {
+    assertTrue(ActionThread.isRefusal(new IllegalAccessException("The user may not act on the item")));
+    assertTrue(ActionThread.isRefusal(new ObjectNotFoundException("The space is not found")));
+    assertTrue(ActionThread.isRefusal(new IllegalArgumentException("recycleBin.restore.locationMissing")));
+    // An argument error with no code of the Recycle Bin is a defect, and so is anything else.
+    assertFalse(ActionThread.isRefusal(new NumberFormatException("For input string: \"x\"")));
+    assertFalse(ActionThread.isRefusal(new IllegalArgumentException()));
+    assertFalse(ActionThread.isRefusal(new IllegalArgumentException("The recycleBin. code comes later")));
+    assertFalse(ActionThread.isRefusal(new IllegalStateException("recycleBin.restore.locationMissing")));
+  }
+
+  @Test
+  void eachItemIsTreatedInARequestOfItsOwnThatEndsWhateverHappensToIt() throws Exception {
+    List<String> seen = new ArrayList<>();
+    BulkItemAction action = itemId -> {
+      seen.add(itemId);
+      if ("broken".equals(itemId)) {
+        throw new IllegalStateException("The item cannot be treated");
+      }
+      return !"gone".equals(itemId);
+    };
+
+    new ActionThread(service, listener, actionData, List.of("a", "gone", "broken", "c"), action) {
+      @Override
+      void beginItem() {
+        seen.add("begin");
+      }
+
+      @Override
+      void endItem() {
+        seen.add("end");
+      }
+    }.processAction();
+
+    assertEquals(List.of("begin", "a", "end", "begin", "gone", "end", "begin", "broken", "end", "begin", "c", "end"), seen);
   }
 
   @Test
