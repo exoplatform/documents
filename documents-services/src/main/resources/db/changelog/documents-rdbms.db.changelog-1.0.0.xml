@@ -51,4 +51,11 @@
         <createSequence sequenceName="SEQ_DOCUMENT_PUBLIC_ACCESS_ID" startValue="1"/>
     </changeSet>
 
+    <!-- The social identity id of the user who created or last replaced the link: a folder link is archived with that user's rights. -->
+    <changeSet author="documents" id="1.0.0-exo-91530-01">
+        <addColumn tableName="DOCUMENTS_PUBLIC_ACCESS">
+            <column name="CREATOR_ID" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>

@@ -12,11 +12,13 @@ public class EntityMapper {
     if (publicDocumentAccessEntity == null) {
       return null;
     }
-    return new PublicDocumentAccess(publicDocumentAccessEntity.getId(),
-                                    publicDocumentAccessEntity.getNodeId(),
-                                    publicDocumentAccessEntity.getPasswordHashKey(),
-                                    publicDocumentAccessEntity.getEncodedPassword(),
-                                    publicDocumentAccessEntity.getExpirationDate());
+    PublicDocumentAccess publicDocumentAccess = new PublicDocumentAccess(publicDocumentAccessEntity.getId(),
+                                                                         publicDocumentAccessEntity.getNodeId(),
+                                                                         publicDocumentAccessEntity.getPasswordHashKey(),
+                                                                         publicDocumentAccessEntity.getEncodedPassword(),
+                                                                         publicDocumentAccessEntity.getExpirationDate());
+    publicDocumentAccess.setCreatorId(publicDocumentAccessEntity.getCreatorId());
+    return publicDocumentAccess;
   }
 
   public static PublicDocumentAccessEntity toPublicDocumentAccessEntity(PublicDocumentAccess publicDocumentAccess) {
@@ -26,6 +28,7 @@ public class EntityMapper {
     publicDocumentAccessEntity.setPasswordHashKey(publicDocumentAccess.getPasswordHashKey());
     publicDocumentAccessEntity.setExpirationDate(publicDocumentAccess.getExpirationDate());
     publicDocumentAccessEntity.setEncodedPassword(publicDocumentAccess.getEncodedPassword());
+    publicDocumentAccessEntity.setCreatorId(publicDocumentAccess.getCreatorId());
     return publicDocumentAccessEntity;
   }
 }
