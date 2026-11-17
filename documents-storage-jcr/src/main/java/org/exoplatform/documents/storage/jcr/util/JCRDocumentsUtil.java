@@ -103,6 +103,10 @@ public class JCRDocumentsUtil {
 
   private static final String                          SPACE_PATH_PREFIX = "/Groups/spaces/";
 
+  private static final String                          SPACES_GROUP_PREFIX = "/spaces/";
+
+  private static final Object                          RECYCLE_BIN_FOLDER_LOCK = new Object();
+
   public static final String MIX_VERSIONABLE  = "mix:versionable";
 
 
@@ -1329,6 +1333,198 @@ public class JCRDocumentsUtil {
       return node.getName();
     } else {
       return title;
+    }
+  }
+
+  /**
+   * Resolves the drive a path belongs to, as the Recycle Bin understands it:
+   * the personal drive of a user (the Private and Public folders of the user's
+   * home) or the Documents folder of a space. A drive's path is matched
+   * followed by a slash, so john's drive does not hold johnny's documents.
+   *
+   * @param path absolute path of a node
+   * @param nodeHierarchyCreator used to read the users and groups home paths
+   *          and a user's home
+   * @param identityManager used to resolve the identity of the drive's owner
+   * @param spaceService used to resolve a space from its group
+   * @param systemProvider system session provider used to read a user's home
+   * @return the identity id of the drive's owner, or null when the path is in
+   *         no personal or space drive or when its owner no longer exists
+   * @throws RepositoryException when the home of an existing user cannot be read
+   */
+  public static String resolveRecycleBinOwner(String path,
+                                              NodeHierarchyCreator nodeHierarchyCreator,
+                                              IdentityManager identityManager,
+                                              SpaceService spaceService,
+                                              SessionProvider systemProvider) throws RepositoryException {
+    if (StringUtils.isBlank(path)) {
+      return null;
+    }
+    String usersHomePath = getUsersPath();
+    if (path.startsWith(usersHomePath + "/")) {
+      String username = getPersonalDriveCandidate(path, usersHomePath);
+      if (username == null) {
+        return null;
+      }
+      // The identity is resolved before the home is read: reading the home of
+      // a user who does not exist would create it.
+      org.exoplatform.social.core.identity.model.Identity identity = identityManager.getOrCreateUserIdentity(username);
+      if (identity == null || identity.isDeleted()) {
+        return null;
+      }
+      String userHomePath = getUserHomePath(nodeHierarchyCreator, systemProvider, username);
+      boolean inDrive = path.startsWith(userHomePath + "/" + USER_PRIVATE_ROOT_NODE + "/")
+          || path.startsWith(userHomePath + "/" + USER_PUBLIC_ROOT_NODE + "/");
+      return inDrive ? identity.getId() : null;
+    }
+    String spacesHomePath = getGroupsPath(nodeHierarchyCreator) + SPACES_GROUP_PREFIX;
+    if (path.startsWith(spacesHomePath)) {
+      int groupNameEnd = path.indexOf('/', spacesHomePath.length());
+      if (groupNameEnd <= spacesHomePath.length()) {
+        return null;
+      }
+      String groupName = path.substring(spacesHomePath.length(), groupNameEnd);
+      if (!path.startsWith(spacesHomePath + groupName + "/" + DOCUMENTS_NODE + "/")) {
+        return null;
+      }
+      Space space = spaceService.getSpaceByGroupId(SPACES_GROUP_PREFIX + groupName);
+      if (space == null) {
+        return null;
+      }
+      org.exoplatform.social.core.identity.model.Identity identity =
+                                                                   identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
+      return identity == null || identity.isDeleted() ? null : identity.getId();
+    }
+    return null;
+  }
+
+  /**
+   * Returns the bin folder of a drive: the folder under the trash home, at the
+   * home path of the drive's owner, where the items deleted from that drive
+   * are stored. Each level carries the exo:recycleBinFolder marker and is
+   * recognised by it, never by its name: a deleted folder that happens to be
+   * named like a level is left aside. The first level is readable by the
+   * system only, and the levels below inherit from it.
+   *
+   * @param ownerIdentity identity of the drive's owner, a user or a space
+   * @param systemSession system session on the trash workspace; a level this
+   *          method creates is saved through it at once
+   * @param trashHomePath path of the trash home
+   * @param nodeHierarchyCreator used to read the owner's home path
+   * @param spaceService used to resolve a space's group
+   * @param systemProvider system session provider used to read a user's home
+   * @param create whether to create the levels that do not exist yet
+   * @return the bin folder, or null when it does not exist and create is
+   *         false, or when the owner is a space that no longer exists
+   * @throws RepositoryException when a level cannot be read or created
+   */
+  public static Node getRecycleBinFolder(org.exoplatform.social.core.identity.model.Identity ownerIdentity, // NOSONAR
+                                         Session systemSession,
+                                         String trashHomePath,
+                                         NodeHierarchyCreator nodeHierarchyCreator,
+                                         SpaceService spaceService,
+                                         SessionProvider systemProvider,
+                                         boolean create) throws RepositoryException {
+    String ownerHomePath;
+    if (ownerIdentity.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+      if (space == null) {
+        return null;
+      }
+      ownerHomePath = getGroupsPath(nodeHierarchyCreator) + space.getGroupId();
+    } else {
+      ownerHomePath = getUserHomePath(nodeHierarchyCreator, systemProvider, ownerIdentity.getRemoteId());
+    }
+    synchronized (RECYCLE_BIN_FOLDER_LOCK) {
+      Node level = (Node) systemSession.getItem(trashHomePath);
+      String levelNodeType = level.getPrimaryNodeType().getName();
+      boolean firstLevel = true;
+      for (String levelName : ownerHomePath.split("/")) {
+        if (levelName.isEmpty()) {
+          continue;
+        }
+        Node nextLevel = findRecycleBinFolderLevel(level, levelName);
+        if (nextLevel == null) {
+          if (!create) {
+            return null;
+          }
+          nextLevel = createRecycleBinFolderLevel(systemSession, level, levelName, levelNodeType, firstLevel);
+        }
+        level = nextLevel;
+        firstLevel = false;
+      }
+      return level;
+    }
+  }
+
+  private static Node findRecycleBinFolderLevel(Node parent, String levelName) throws RepositoryException {
+    NodeIterator sameNameNodes = parent.getNodes(levelName);
+    while (sameNameNodes.hasNext()) {
+      Node sameNameNode = sameNameNodes.nextNode();
+      if (sameNameNode.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_FOLDER)) {
+        return sameNameNode;
+      }
+    }
+    return null;
+  }
+
+  private static Node createRecycleBinFolderLevel(Session systemSession,
+                                                  Node parent,
+                                                  String levelName,
+                                                  String levelNodeType,
+                                                  boolean firstLevel) throws RepositoryException {
+    try {
+      Node level = parent.addNode(levelName, levelNodeType);
+      level.addMixin(NodeTypeConstants.EXO_RECYCLE_BIN_FOLDER);
+      if (firstLevel) {
+        // Adding the mixin copies the parent's entries, which setPermissions
+        // then replaces: a permission map cannot be empty.
+        level.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+        Map<String, String[]> systemOnly = new HashMap<>();
+        systemOnly.put(IdentityConstants.SYSTEM, PermissionType.ALL);
+        ((ExtendedNode) level).setPermissions(systemOnly);
+      }
+      systemSession.save();
+      // A node added under the trash home may be marked as a deleted item by
+      // an action of the repository: a bin folder is never one.
+      if (level.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION)) {
+        level.removeMixin(NodeTypeConstants.EXO_RESTORE_LOCATION);
+        systemSession.save();
+      }
+      return level;
+    } catch (RepositoryException | RuntimeException e) {
+      systemSession.refresh(false);
+      throw e;
+    }
+  }
+
+  private static String getPersonalDriveCandidate(String path, String usersHomePath) {
+    int privateIndex = path.indexOf("/" + USER_PRIVATE_ROOT_NODE + "/", usersHomePath.length());
+    int publicIndex = path.indexOf("/" + USER_PUBLIC_ROOT_NODE + "/", usersHomePath.length());
+    int driveIndex;
+    if (privateIndex < 0) {
+      driveIndex = publicIndex;
+    } else if (publicIndex < 0) {
+      driveIndex = privateIndex;
+    } else {
+      driveIndex = Math.min(privateIndex, publicIndex);
+    }
+    if (driveIndex <= usersHomePath.length()) {
+      return null;
+    }
+    String userHomePath = path.substring(0, driveIndex);
+    return userHomePath.substring(userHomePath.lastIndexOf('/') + 1);
+  }
+
+  private static String getUserHomePath(NodeHierarchyCreator nodeHierarchyCreator,
+                                        SessionProvider systemProvider,
+                                        String username) throws RepositoryException {
+    try {
+      return nodeHierarchyCreator.getUserNode(systemProvider, username).getPath();
+    } catch (RepositoryException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new RepositoryException("Can't read the home of user " + username, e);
     }
   }
 
