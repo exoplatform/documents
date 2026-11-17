@@ -65,7 +65,9 @@ import org.exoplatform.documents.model.NodePermission;
 import org.exoplatform.documents.model.PermissionEntry;
 import org.exoplatform.documents.model.PermissionRole;
 import org.exoplatform.documents.model.PublicDocumentAccess;
+import org.exoplatform.documents.constant.RecycleBinError;
 import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.documents.service.RecycleBinService;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
@@ -191,6 +193,8 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private final FavoriteService     favoriteService;
 
+  private final RecycleBinService   recycleBinService;
+
   public DocumentMcpTool(DocumentFileService documentFileService,
                          AttachmentService attachmentService,
                          org.exoplatform.social.attachment.AttachmentService socialAttachmentService,
@@ -203,7 +207,9 @@ public class DocumentMcpTool implements McpToolPlugin {
                          UserPortalConfigService portalConfigService,
                          UploadService uploadService,
                          PublicDocumentAccessService publicDocumentAccessService,
-                         FavoriteService favoriteService) {
+                         FavoriteService favoriteService,
+                         RecycleBinService recycleBinService) {
+    this.recycleBinService = recycleBinService;
     this.documentFileService = documentFileService;
     this.attachmentService = attachmentService;
     this.socialAttachmentService = socialAttachmentService;
@@ -787,21 +793,20 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   public void undoDeleteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
-    // Resolve the trashed node through the SYSTEM-session overload: all trash
-    // access in storage uses a system session, and a regular user session cannot
-    // read a node once it has been moved to trash. Using the user-session overload
-    // here would return null even though the node still exists, yielding a
-    // misleading "permanently deleted" error.
-    AbstractNode trashedNode = documentFileService.getDocumentById(documentId);
-    if (trashedNode == null) {
-      throw new IllegalStateException(("Document %s can no longer be found (it may have been permanently deleted from the trash), "
-          + "so it cannot be restored.").formatted(documentId));
-    }
+    // The Recycle Bin service decides who may bring the document back: the one
+    // who deleted it, or a holder of the bin it is in, where they can add
+    // content. It reads the trash with the rights of the system, which a
+    // session of the user cannot read.
     try {
-      documentFileService.restoreDocumentFromTrash(trashedNode.getPath());
-    } catch (RepositoryException e) {
-      throw new IllegalStateException(("Could not restore document %s from trash: %s. It may not be in the trash "
-          + "(only documents deleted via delete_document can be restored this way).").formatted(documentId, e.getMessage()));
+      recycleBinService.undoDelete(documentId, getCurrentUserName());
+    } catch (ObjectNotFoundException e) {
+      throw new IllegalStateException(("Document %s can no longer be found in the trash (it may have been restored or permanently deleted), "
+          + "so it cannot be restored.").formatted(documentId));
+    } catch (IllegalArgumentException e) {
+      if (RecycleBinError.RESTORE_LOCATION_MISSING.equals(e.getMessage())) {
+        throw new IllegalStateException(("Document %s cannot be restored: the folder it was deleted from no longer exists.").formatted(documentId));
+      }
+      throw e;
     }
   }
 
