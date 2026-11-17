@@ -195,6 +195,44 @@ class RecycleBinDriveStorageTest {
     assertEquals(List.of(new RecycleBinDrive(7, 0, 1)), storage.getDrives(0, 10));
   }
 
+  /**
+   * The transactional methods are not run here. What makes each write one
+   * transaction is their annotation, read on the method: a write of several
+   * statements depends on it.
+   */
+  @Test
+  void eachWriteIsDeclaredAsOneTransaction() throws Exception {
+    for (java.lang.reflect.Method method : List.of(RecycleBinDriveStorage.class.getMethod("add", long.class, long.class),
+                                                   RecycleBinDriveStorage.class.getMethod("create", long.class, long.class),
+                                                   RecycleBinDriveStorage.class.getMethod("remove", long.class, long.class),
+                                                   RecycleBinDriveStorage.class.getMethod("move", long.class, long.class, long.class))) {
+      io.meeds.common.ContainerTransactional transactional = method.getAnnotation(io.meeds.common.ContainerTransactional.class);
+      assertNotNull(transactional, method.getName());
+      assertTrue(transactional.atomic(), method.getName());
+    }
+  }
+
+  @Test
+  void aMoveThatFailsOnTheDriveTheItemJoinsLeavesTheOneItLeavesAsItWas() {
+    inTransaction(() -> storage.doCreate(7, 10));
+    inTransaction(() -> storage.doAdd(7, 5));
+    RecycleBinDriveStorage failing = new RecycleBinDriveStorage(new JpaRepositoryFactory(entityManager).getRepository(RecycleBinDriveRepository.class)) {
+      @Override
+      boolean doAdd(long ownerId, long size) {
+        throw new IllegalStateException("The database refuses the statement");
+      }
+    };
+
+    entityManager.getTransaction().begin();
+    try {
+      assertThrows(IllegalStateException.class, () -> failing.doMove(7, 8, 5));
+    } finally {
+      entityManager.getTransaction().rollback();
+    }
+
+    assertEquals(List.of(new RecycleBinDrive(7, 15, 2)), storage.getDrives(0, 10));
+  }
+
   private RecycleBinDriveStorage storage(EntityManager manager) {
     return new RecycleBinDriveStorage(new JpaRepositoryFactory(manager).getRepository(RecycleBinDriveRepository.class));
   }
