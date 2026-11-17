@@ -340,13 +340,36 @@ class JCRRecycleBinStorageTest {
   }
 
   @Test
+  void theItemsOfABinThatLeaveWithAnotherAreToldToTheCaller() throws Exception {
+    Item file = item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
+    // A shortcut to the document that another user deleted: an item of that user's bin.
+    Item theirs = shortcut("/Trash/Groups/spaces/marketing/mine-link", file.getId(), ID_2, null);
+    theirs.set("exo:recycleBinOwner", "9").set("exo:recycleBinSize", 0L);
+    // Trashed with the document: in no bin.
+    shortcut(JOHN_BIN + "/mine-link", file.getId(), ID_3, ID_1);
+    // Back in a drive with the marks of an earlier stay in a bin: in no bin either.
+    Item restored = shortcut("/Groups/spaces/marketing/Documents/mine-link", file.getId(), ID_4, null);
+    restored.set("exo:recycleBinOwner", "9");
+    jcr.commit();
+
+    List<RecycleBinItem> removedWithIt = storage.removeItem(ID_1);
+
+    assertEquals(List.of(ID_2), ids(removedWithIt));
+    assertEquals(9L, removedWithIt.get(0).getOwnerId());
+    assertTrue(removedWithIt.get(0).isShortcut());
+    assertNull(jcr.find(theirs.getId()));
+    assertNull(jcr.find(restored.getId()));
+    assertEquals(1, jcr.getSaves());
+  }
+
+  @Test
   void aShortcutIsRemovedWithoutLookingForShortcutsToIt() throws Exception {
     Item own = shortcut(JOHN_BIN + "/own-link", "a-document", ID_4, null);
     own.set("exo:recycleBinOwner", "7");
     Item cascade = shortcut(JOHN_BIN + "/link", "a-document", ID_3, ID_1);
     jcr.commit();
 
-    storage.removeItem(ID_4);
+    assertTrue(storage.removeItem(ID_4).isEmpty());
     // A shortcut trashed with a document can be removed by its id too.
     storage.removeItem(ID_3);
 

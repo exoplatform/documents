@@ -265,8 +265,9 @@ class RecycleBinLocationTest {
 
   @Test
   void aLevelMarkedAsADeletedItemByTheRepositoryLosesThatMark() throws Exception {
-    // The repository's own action marks every node added right under the trash home.
-    jcr.setAddNodeAction(added -> {
+    // The repository's own action marks every node added right under the trash
+    // home, in a session of its own, once the save that adds it is done.
+    jcr.setSavedNodeAction(added -> {
       if ("/Trash/Users".equals(jcr.pathOf(added))) {
         added.mixin(NodeTypeConstants.EXO_RESTORE_LOCATION).set(NodeTypeConstants.RESTORE_PATH, "/Users");
       }
@@ -296,6 +297,45 @@ class RecycleBinLocationTest {
   @Test
   void aSpaceThatNoLongerExistsHasNoBinFolder() throws Exception {
     assertNull(binFolder(identity("space", "gone", "40"), true));
+  }
+
+  /**
+   * The first deletion is held while it creates its first level, not marked
+   * yet: a second one that was not made to wait would find no bin folder and
+   * create another.
+   */
+  @Test
+  void twoFirstDeletionsAtTheSameTimeCreateOneBinFolder() throws Exception {
+    Identity owner = identity("organization", "john", "7");
+    Thread[] second = new Thread[1];
+    Throwable[] failure = new Throwable[1];
+    jcr.setAddNodeAction(added -> {
+      if (second[0] == null) {
+        second[0] = new Thread(() -> {
+          try {
+            binFolder(owner, true);
+          } catch (Throwable e) {
+            failure[0] = e;
+          }
+        });
+        second[0].start();
+        try {
+          second[0].join(500);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    });
+
+    Node first = binFolder(owner, true);
+    second[0].join(10000);
+
+    assertNull(failure[0]);
+    Item level = jcr.at("/Trash");
+    for (String name : first.getPath().substring("/Trash/".length()).split("/")) {
+      assertEquals(1, level.getChildren().size(), name);
+      level = level.getChildren().get(0);
+    }
   }
 
   private String owner(String path) throws RepositoryException {
