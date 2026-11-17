@@ -162,6 +162,8 @@ public class FakeJcr {
   private java.util.function.Consumer<Item>           addNodeAction    = added -> {
                                                                        };
 
+  private Runnable                                    refreshAction;
+
   private final Map<Session, Map<String, Node>>       nodes            = new HashMap<>();
 
   public FakeJcr(String workspaceName) {
@@ -278,6 +280,14 @@ public class FakeJcr {
     this.addNodeAction = addNodeAction;
   }
 
+  /**
+   * What another session saved meanwhile: applied to the saved state the next
+   * time a session discards its pending changes.
+   */
+  public void onNextRefresh(Runnable refreshAction) {
+    this.refreshAction = refreshAction;
+  }
+
   /** A mocked session on this workspace, acting as the given user. */
   public SessionImpl session(String userId) {
     SessionImpl session = mock(SessionImpl.class, invocation -> answerSession(invocation, userId));
@@ -329,6 +339,12 @@ public class FakeJcr {
       refreshes++;
       if (!Boolean.TRUE.equals(invocation.getArgument(0))) {
         root = copy(savedRoot, null);
+        if (refreshAction != null) {
+          Runnable action = refreshAction;
+          refreshAction = null;
+          action.run();
+          savedRoot = copy(root, null);
+        }
       }
       return null;
     case "getWorkspace":
