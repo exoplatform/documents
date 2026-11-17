@@ -61,8 +61,10 @@ import org.exoplatform.commons.api.settings.SettingValue;
 import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.DocumentSortField;
+import org.exoplatform.documents.constant.RecycleBinError;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.DocumentFavoriteFilter;
@@ -72,6 +74,9 @@ import org.exoplatform.documents.model.DocumentNodeFilter;
 import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
+import org.exoplatform.documents.model.RecycleBinFilter;
+import org.exoplatform.documents.model.RecycleBinScope;
+import org.exoplatform.documents.model.RecycleBinSortField;
 import org.exoplatform.documents.model.PublicDocumentInfo;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
@@ -80,13 +85,18 @@ import org.exoplatform.documents.rest.model.DocumentsUserSettings;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
 import org.exoplatform.documents.rest.model.NodePermissionEntity;
 import org.exoplatform.documents.rest.model.PublicDocumentAccessOptionsEntity;
+import org.exoplatform.documents.rest.model.RecycleBinDriveEntity;
+import org.exoplatform.documents.rest.model.RecycleBinItemEntity;
+import org.exoplatform.documents.rest.model.RecycleBinSettingsEntity;
 import org.exoplatform.documents.rest.model.TrashElementEntity;
 
 import org.exoplatform.documents.rest.util.EntityBuilder;
+import org.exoplatform.documents.rest.util.RecycleBinEntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.service.ExternalDownloadService;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
+import org.exoplatform.documents.service.RecycleBinService;
 import org.exoplatform.documents.webdav.service.DocumentWebDavService;
 import org.exoplatform.portal.rest.CollectionEntity;
 import org.exoplatform.portal.rest.UserFieldValidator;
@@ -130,6 +140,12 @@ public class DocumentFileRest implements ResourceContainer {
     NO_STORE_CACHE_CONTROL.setPrivate(true);
     NO_STORE_CACHE_CONTROL.setNoStore(true);
   }
+
+  /** The page of a listing of the Recycle Bin that names no size. */
+  private static final int                  RECYCLE_BIN_PAGE_SIZE  = 20;
+
+  /** What the message codes of the Recycle Bin start with. */
+  private static final String               RECYCLE_BIN_CODE_PREFIX = "recycleBin.";
 
   private static final int                  CACHE_IN_SECONDS       = 7 * 86400;
 
@@ -2011,4 +2027,298 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
     }
   }
+
+  @GET
+  @Path("/recycle-bin/items")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Operation(summary = "Lists the items of a Recycle Bin", method = "GET",
+             description = "Lists a page of the items of the Recycle Bin of the user, of a space or, for an administrator, of a drive")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "403", description = "The user does not hold the bin"),
+      @ApiResponse(responseCode = "404", description = "The drive does not exist"), })
+  public Response getRecycleBinItems(@Parameter(description = "The bin: USER, SPACE or DRIVE") @QueryParam("scope") String scope,
+                                     @Parameter(description = "Id of the space, for a SPACE bin") @QueryParam("spaceId") Long spaceId,
+                                     @Parameter(description = "Identity id of the owner of the drive, for a DRIVE bin") @QueryParam("ownerIdentityId") Long ownerIdentityId,
+                                     @Parameter(description = "Term the names contain") @QueryParam("name") String name,
+                                     @Parameter(description = "name, originalLocation, deletedDate, deletedBy or size") @QueryParam("sortField") String sortField,
+                                     @Parameter(description = "asc or desc") @QueryParam("sortDirection") String sortDirection,
+                                     @Parameter(description = "Offset of results to return") @QueryParam("offset") int offset,
+                                     @Parameter(description = "Limit of results to return") @Schema(defaultValue = "20") @QueryParam("limit") int limit) {
+    return answerRecycleBin((service, username) -> {
+      checkPage(offset, limit);
+      RecycleBinScope bin = toRecycleBinScope(scope, spaceId, ownerIdentityId);
+      int pageSize = limit == 0 ? RECYCLE_BIN_PAGE_SIZE : limit;
+      RecycleBinFilter filter = new RecycleBinFilter(0,
+                                                     name,
+                                                     toRecycleBinSortField(sortField),
+                                                     "asc".equalsIgnoreCase(sortDirection),
+                                                     offset,
+                                                     pageSize);
+      // The items of the bin of a drive an administrator acts on are not opened.
+      boolean viewable = bin.getType() != RecycleBinScope.Type.DRIVE;
+      List<RecycleBinItemEntity> entities = service.getItems(bin, filter, username)
+                                                   .stream()
+                                                   .map(item -> RecycleBinEntityBuilder.toItemEntity(item, viewable, identityManager))
+                                                   .toList();
+      return Response.ok(new CollectionEntity<>(entities, offset, pageSize, service.countItems(bin, filter, username)));
+    });
+  }
+
+  @PUT
+  @Path("/recycle-bin/items/{id}/restore")
+  @RolesAllowed("users")
+  @Operation(summary = "Restores an item of a Recycle Bin", method = "PUT", description = "Restores an item of a Recycle Bin")
+  @ApiResponses(value = { @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "No location to restore the item to exists any more"),
+      @ApiResponse(responseCode = "403", description = "The user does not hold the bin or can add content to no target"),
+      @ApiResponse(responseCode = "404", description = "The item is no longer in the bin"), })
+  public Response restoreRecycleBinItem(@Parameter(description = "Id of the item in the bin", required = true) @PathParam("id") String id,
+                                        @QueryParam("scope") String scope,
+                                        @QueryParam("spaceId") Long spaceId,
+                                        @QueryParam("ownerIdentityId") Long ownerIdentityId) {
+    return answerRecycleBin((service, username) -> {
+      service.restoreItem(id, toRecycleBinScope(scope, spaceId, ownerIdentityId), username);
+      return Response.noContent();
+    });
+  }
+
+  @DELETE
+  @Path("/recycle-bin/items/{id}")
+  @RolesAllowed("users")
+  @Operation(summary = "Removes an item of a Recycle Bin for good", method = "DELETE", description = "Removes an item of a Recycle Bin for good")
+  @ApiResponses(value = { @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "403", description = "The user does not hold the bin"),
+      @ApiResponse(responseCode = "404", description = "The item is no longer in the bin"), })
+  public Response deleteRecycleBinItem(@Parameter(description = "Id of the item in the bin", required = true) @PathParam("id") String id,
+                                       @QueryParam("scope") String scope,
+                                       @QueryParam("spaceId") Long spaceId,
+                                       @QueryParam("ownerIdentityId") Long ownerIdentityId) {
+    return answerRecycleBin((service, username) -> {
+      service.deleteItem(id, toRecycleBinScope(scope, spaceId, ownerIdentityId), username);
+      return Response.noContent();
+    });
+  }
+
+  @PUT
+  @Path("/recycle-bin/bulk/restore/{actionId}")
+  @RolesAllowed("users")
+  @Operation(summary = "Restores several items of a Recycle Bin", method = "PUT",
+             description = "Starts a bulk action that restores the items given, each checked again at its turn")
+  @ApiResponses(value = { @ApiResponse(responseCode = "204", description = "Bulk action started"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "403", description = "The user does not hold the bin"),
+      @ApiResponse(responseCode = "404", description = "The drive does not exist"), })
+  public Response restoreRecycleBinItems(@Parameter(description = "Id of the bulk action", required = true) @PathParam("actionId") String actionId,
+                                         @QueryParam("scope") String scope,
+                                         @QueryParam("spaceId") Long spaceId,
+                                         @QueryParam("ownerIdentityId") Long ownerIdentityId,
+                                         @RequestBody(description = "Ids of the items in the bin", required = true) List<String> itemIds) {
+    return answerRecycleBin((service, username) -> {
+      service.restoreItems(actionId, itemIds, toRecycleBinScope(scope, spaceId, ownerIdentityId), username);
+      return Response.noContent();
+    });
+  }
+
+  @DELETE
+  @Path("/recycle-bin/bulk/delete/{actionId}")
+  @RolesAllowed("users")
+  @Operation(summary = "Removes several items of a Recycle Bin for good", method = "DELETE",
+             description = "Starts a bulk action that removes the items given for good, each checked again at its turn")
+  @ApiResponses(value = { @ApiResponse(responseCode = "204", description = "Bulk action started"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "403", description = "The user does not hold the bin"),
+      @ApiResponse(responseCode = "404", description = "The drive does not exist"), })
+  public Response deleteRecycleBinItems(@Parameter(description = "Id of the bulk action", required = true) @PathParam("actionId") String actionId,
+                                        @QueryParam("scope") String scope,
+                                        @QueryParam("spaceId") Long spaceId,
+                                        @QueryParam("ownerIdentityId") Long ownerIdentityId,
+                                        @RequestBody(description = "Ids of the items in the bin", required = true) List<String> itemIds) {
+    return answerRecycleBin((service, username) -> {
+      service.deleteItems(actionId, itemIds, toRecycleBinScope(scope, spaceId, ownerIdentityId), username);
+      return Response.noContent();
+    });
+  }
+
+  @DELETE
+  @Path("/recycle-bin/{actionId}")
+  @RolesAllowed("users")
+  @Operation(summary = "Empties a Recycle Bin", method = "DELETE",
+             description = "Starts a bulk action that removes for good the items the bin holds")
+  @ApiResponses(value = { @ApiResponse(responseCode = "204", description = "Bulk action started"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "403", description = "The user does not hold the bin"),
+      @ApiResponse(responseCode = "404", description = "The drive does not exist"), })
+  public Response emptyRecycleBin(@Parameter(description = "Id of the bulk action", required = true) @PathParam("actionId") String actionId,
+                                  @QueryParam("scope") String scope,
+                                  @QueryParam("spaceId") Long spaceId,
+                                  @QueryParam("ownerIdentityId") Long ownerIdentityId) {
+    return answerRecycleBin((service, username) -> {
+      service.emptyBin(actionId, toRecycleBinScope(scope, spaceId, ownerIdentityId), username);
+      return Response.noContent();
+    });
+  }
+
+  @GET
+  @Path("/recycle-bin/items/{id}/content")
+  @RolesAllowed("users")
+  @Operation(summary = "Reads the content of a deleted document", method = "GET",
+             description = "Reads the content of an item of the Recycle Bin of the user or of a space they manage or publish in")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "403", description = "The user does not hold the bin of the item"),
+      @ApiResponse(responseCode = "404", description = "The item is no longer in the bin, or has no content"), })
+  public Response getRecycleBinItemContent(@Parameter(description = "Id of the item in the bin", required = true) @PathParam("id") String id) {
+    return answerRecycleBin((service, username) -> {
+      FileContent file = service.getItemContent(id, username);
+      String mimeType = StringUtils.isBlank(file.getMimeType()) ? MediaType.APPLICATION_OCTET_STREAM : file.getMimeType();
+      String fileName = URLEncoder.encode(StringUtils.defaultString(file.getName()), StandardCharsets.UTF_8).replace("+", "%20");
+      return Response.ok(file.getContent())
+                     .type(mimeType)
+                     .header("Content-Disposition", "filename=\"" + fileName + "\"; filename*=UTF-8''" + fileName)
+                     .header("X-Content-Type-Options", "nosniff");
+    });
+  }
+
+  @GET
+  @Path("/recycle-bin/drives")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("administrators")
+  @Operation(summary = "Lists the drives whose Recycle Bin holds items", method = "GET",
+             description = "Lists a page of the drives whose Recycle Bin holds items, largest first, and tells whether administrators may act on them")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid query input"),
+      @ApiResponse(responseCode = "403", description = "The user is no administrator of the platform"), })
+  public Response getRecycleBinDrives(@Parameter(description = "Offset of results to return") @QueryParam("offset") int offset,
+                                      @Parameter(description = "Limit of results to return") @Schema(defaultValue = "20") @QueryParam("limit") int limit) {
+    return answerRecycleBin((service, username) -> {
+      checkPage(offset, limit);
+      int pageSize = limit == 0 ? RECYCLE_BIN_PAGE_SIZE : limit;
+      List<RecycleBinDriveEntity> entities = service.getDrives(offset, pageSize, username)
+                                                    .stream()
+                                                    .map(drive -> RecycleBinEntityBuilder.toDriveEntity(drive, identityManager, spaceService))
+                                                    .toList();
+      CollectionEntity<RecycleBinDriveEntity> drives = new CollectionEntity<>(entities, offset, pageSize, (int) service.countDrives(username));
+      drives.put("administratorAccessEnabled", service.isAdministratorAccessEnabled());
+      return Response.ok(drives);
+    });
+  }
+
+  @GET
+  @Path("/recycle-bin/settings")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Operation(summary = "Reads the settings of the Recycle Bins", method = "GET", description = "Reads the retention period of the Recycle Bins")
+  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"), })
+  public Response getRecycleBinSettings() {
+    return answerRecycleBin((service, username) -> Response.ok(new RecycleBinSettingsEntity(service.getRetentionDays())));
+  }
+
+  @PUT
+  @Path("/recycle-bin/settings")
+  @RolesAllowed("administrators")
+  @Operation(summary = "Changes the settings of the Recycle Bins", method = "PUT",
+             description = "Changes the retention period of the Recycle Bins; a shorter period removes at once the items it makes due")
+  @ApiResponses(value = { @ApiResponse(responseCode = "204", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "The period is outside its bounds"),
+      @ApiResponse(responseCode = "403", description = "The user is no administrator of the platform"), })
+  public Response updateRecycleBinSettings(@RequestBody(description = "The settings", required = true) RecycleBinSettingsEntity settings) {
+    return answerRecycleBin((service, username) -> {
+      if (settings == null || settings.getRetentionDays() == null) {
+        throw new IllegalArgumentException(RecycleBinError.RETENTION_INVALID);
+      }
+      service.setRetentionDays(settings.getRetentionDays(), username);
+      return Response.noContent();
+    });
+  }
+
+  /** What an entry of the Recycle Bin asks the service, for the user of the request. */
+  @FunctionalInterface
+  private interface RecycleBinCall {
+    Response.ResponseBuilder apply(RecycleBinService service, String username) throws ObjectNotFoundException, IllegalAccessException;
+  }
+
+  /**
+   * Answers an entry of the Recycle Bin: what the service refuses becomes the
+   * status of its kind, with the message code a screen has a label for and
+   * nothing else, and no answer is kept by a cache.
+   */
+  private Response answerRecycleBin(RecycleBinCall call) {
+    try {
+      return call.apply(getRecycleBinService(), getRecycleBinCaller()).cacheControl(NO_STORE_CACHE_CONTROL).build();
+    } catch (ObjectNotFoundException e) {
+      return refuseRecycleBin(Status.NOT_FOUND, e);
+    } catch (IllegalAccessException e) {
+      return refuseRecycleBin(Status.FORBIDDEN, e);
+    } catch (IllegalArgumentException e) {
+      return refuseRecycleBin(Status.BAD_REQUEST, e);
+    } catch (Exception e) {
+      LOG.error("Error while serving a request on a Recycle Bin", e);
+      return Response.serverError().cacheControl(NO_STORE_CACHE_CONTROL).build();
+    }
+  }
+
+  private static Response refuseRecycleBin(Status status, Exception refusal) {
+    LOG.debug("A request on a Recycle Bin is refused with the status {}", status, refusal);
+    Response.ResponseBuilder builder = Response.status(status).cacheControl(NO_STORE_CACHE_CONTROL);
+    String message = refusal.getMessage();
+    if (message != null && message.startsWith(RECYCLE_BIN_CODE_PREFIX)) {
+      builder.entity(message).type(MediaType.TEXT_PLAIN);
+    }
+    return builder.build();
+  }
+
+  /**
+   * The Recycle Bin service is looked for when it is needed and never kept:
+   * it lives in a container that starts after this component.
+   */
+  RecycleBinService getRecycleBinService() {
+    return ExoContainerContext.getService(RecycleBinService.class);
+  }
+
+  /** The user of the request, null when there is none: the service refuses it. */
+  private static String getRecycleBinCaller() {
+    ConversationState state = ConversationState.getCurrent();
+    return state == null || state.getIdentity() == null ? null : state.getIdentity().getUserId();
+  }
+
+  private static RecycleBinScope toRecycleBinScope(String scope, Long spaceId, Long ownerIdentityId) {
+    String type = StringUtils.isBlank(scope) ? "USER" : scope.trim().toUpperCase(Locale.ROOT);
+    switch (type) {
+    case "USER":
+      return RecycleBinScope.user();
+    case "SPACE":
+      if (spaceId == null) {
+        throw new IllegalArgumentException("The id of the space is mandatory");
+      }
+      return RecycleBinScope.space(spaceId);
+    case "DRIVE":
+      if (ownerIdentityId == null) {
+        throw new IllegalArgumentException("The identity id of the owner of the drive is mandatory");
+      }
+      return RecycleBinScope.drive(ownerIdentityId);
+    default:
+      throw new IllegalArgumentException("The Recycle Bin is the one of the user, of a space or of a drive");
+    }
+  }
+
+  private static RecycleBinSortField toRecycleBinSortField(String sortField) {
+    if (StringUtils.isBlank(sortField)) {
+      return RecycleBinSortField.DELETED_DATE;
+    }
+    return switch (sortField.trim()) {
+    case "name" -> RecycleBinSortField.NAME;
+    case "originalLocation" -> RecycleBinSortField.ORIGINAL_LOCATION;
+    case "deletedBy" -> RecycleBinSortField.DELETED_BY;
+    case "size" -> RecycleBinSortField.SIZE;
+    default -> RecycleBinSortField.DELETED_DATE;
+    };
+  }
+
+  private static void checkPage(int offset, int limit) {
+    if (offset < 0 || limit < 0) {
+      throw new IllegalArgumentException("The offset and the limit of a page cannot be negative");
+    }
+  }
+
 }
