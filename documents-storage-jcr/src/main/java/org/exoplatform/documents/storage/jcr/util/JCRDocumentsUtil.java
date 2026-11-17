@@ -64,6 +64,7 @@ import org.exoplatform.services.jcr.impl.WorkspaceContainer;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.util.Text;
+import org.exoplatform.services.cms.documents.security.DocumentSpaceGuard;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.organization.Group;
@@ -79,9 +80,15 @@ import org.exoplatform.social.core.service.LinkProvider;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
+import io.meeds.social.space.security.model.SpaceSecuritySettings;
+import io.meeds.social.space.security.service.SpaceSecurityService;
+
 import lombok.SneakyThrows;
 
 public class JCRDocumentsUtil {
+  /** The decisions of the listing the thread runs, by space and user */
+  private static final ThreadLocal<Map<String, Boolean>> ACCESS_DECISIONS = new ThreadLocal<>();
+
   private static final Log                              LOG                           =
                                                             ExoLogger.getLogger(JCRDocumentsUtil.class);
 
@@ -170,6 +177,52 @@ public class JCRDocumentsUtil {
                                            Session session,
                                            SpaceService spaceService,
                                            boolean includeHiddenFiles) throws RepositoryException {
+    try (AccessDecisionScope decisions = openAccessDecisions()) {
+      return listFileNodes(identityManager, nodeIterator, aclIdentity, session, spaceService, includeHiddenFiles);
+    }
+  }
+
+  /**
+   * Converts search results to file nodes, in one listing scope
+   *
+   * @return the file nodes of the results whose node is found, in their order
+   */
+  public static List<FileNode> toSearchedFileNodes(IdentityManager identityManager,
+                                                   Session session,
+                                                   Identity aclIdentity,
+                                                   Collection<? extends SearchResult> searchResults,
+                                                   SpaceService spaceService) {
+    try (AccessDecisionScope decisions = openAccessDecisions()) {
+      return searchResults.stream()
+                          .map(result -> toFileNode(identityManager, session, aclIdentity, result, spaceService))
+                          .filter(Objects::nonNull)
+                          .collect(Collectors.toList());
+    }
+  }
+
+  /**
+   * Opens the scope of a listing, whose documents decide whether their space
+   * lets the user manage their access once per space and user rather than once
+   * per document; a scope opened inside another shares its decisions.
+   *
+   * @return the scope, to close in a try-with-resources statement
+   */
+  public static AccessDecisionScope openAccessDecisions() {
+    if (ACCESS_DECISIONS.get() != null) {
+      return () -> {
+        // the enclosing scope closes the decisions
+      };
+    }
+    ACCESS_DECISIONS.set(new HashMap<>());
+    return ACCESS_DECISIONS::remove;
+  }
+
+  private static List<FileNode> listFileNodes(IdentityManager identityManager,
+                                              NodeIterator nodeIterator,
+                                              Identity aclIdentity,
+                                              Session session,
+                                              SpaceService spaceService,
+                                              boolean includeHiddenFiles) throws RepositoryException {
     List<FileNode> fileNodes = new ArrayList<>();
     JCRDeleteFileStorage jCRDeleteFileStorage =  CommonsUtils.getService(JCRDeleteFileStorage.class);
     Map<String, String> documetsToDelete = jCRDeleteFileStorage.getDocumentsToDelete();
@@ -233,31 +286,33 @@ public class JCRDocumentsUtil {
                                            boolean includeHiddenFiles,
                                            DocumentFolderFilter filter) {
     List<AbstractNode> fileNodes = new ArrayList<>();
-    while (nodeIterator.hasNext()) {
-      Node node = nodeIterator.nextNode();
-      String sourceID = "";
-      Node sourceNode = node;
-      try {
-        if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-          sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-          sourceNode = getNodeByIdentifier(session, sourceID);
-          if (sourceNode == null) {
-            continue;
+    try (AccessDecisionScope decisions = openAccessDecisions()) {
+      while (nodeIterator.hasNext()) {
+        Node node = nodeIterator.nextNode();
+        String sourceID = "";
+        Node sourceNode = node;
+        try {
+          if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+            sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+            sourceNode = getNodeByIdentifier(session, sourceID);
+            if (sourceNode == null) {
+              continue;
+            }
           }
+          if ((sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED))
+              && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
+            FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
+            fileNodes.add(folderNode);
+          }
+          if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE))
+              && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
+            FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
+            fileNode.setMimeType(getMimeType(sourceNode));
+            fileNodes.add(fileNode);
+          }
+        } catch (RepositoryException e) {
+          LOG.warn("Error getting Folder Node for search result with path {}", node, e);
         }
-        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER) || sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED))
-            && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
-          FolderNode folderNode = toFolderNode(identityManager, aclIdentity, node, sourceID, spaceService);
-          fileNodes.add(folderNode);
-        }
-        if ((sourceNode.isNodeType(NodeTypeConstants.NT_FILE))
-            && (!node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE) || includeHiddenFiles)) {
-          FileNode fileNode = toFileNode(identityManager, aclIdentity, node, sourceID, spaceService);
-          fileNode.setMimeType(getMimeType(sourceNode));
-          fileNodes.add(fileNode);
-        }
-      } catch (RepositoryException e) {
-        LOG.warn("Error getting Folder Node for search result with path {}", node, e);
       }
     }
 
@@ -660,7 +715,38 @@ public class JCRDocumentsUtil {
     // Owning the containing space outranks a node's own ACL for delete purposes — see
     // isInUserPrivateSpace.
     canDelete = canDelete || isInUserPrivateSpace(node, userId);
-    documentNode.setAcl(new NodePermission(true, canEdit, canDelete, isPublic, permissions,null, null,null));
+    NodePermission nodePermission = new NodePermission(true, canEdit, canDelete, isPublic, permissions, null, null, null);
+    nodePermission.setCanManageAccess(canEdit && canManageAccess(node, userId));
+    documentNode.setAcl(nodePermission);
+  }
+
+  /**
+   * Whether the space holding the node lets the user change its access list,
+   * decided for display on the space's cached settings: a refusal of the
+   * change itself reads the committed ones.
+   */
+  private static boolean canManageAccess(Node node, String username) {
+    try {
+      Space space = DocumentSpaceGuard.getInstance().getDocumentSpace(node);
+      if (space == null) {
+        return true;
+      }
+      Map<String, Boolean> decisions = ACCESS_DECISIONS.get();
+      String decisionKey = space.getId() + "/" + username;
+      Boolean decision = decisions == null ? null : decisions.get(decisionKey);
+      if (decision == null) {
+        SpaceSecurityService spaceSecurityService = CommonsUtils.getService(SpaceSecurityService.class);
+        SpaceSecuritySettings settings = spaceSecurityService.getDisplaySettings(space);
+        decision = spaceSecurityService.canManageDocumentsAccess(space, settings, username);
+        if (decisions != null) {
+          decisions.put(decisionKey, decision);
+        }
+      }
+      return decision;
+    } catch (Exception e) {
+      LOG.debug("Access management of node {} could not be decided: shown as refused", node, e);
+      return false;
+    }
   }
 
   private static String getPermissionRole (String membershipType){

@@ -42,4 +42,22 @@ public class NodePermission {
 
   private Map<Long,String> toUnShare;
 
+  /**
+   * Whether the document's space lets the user change its access list: false
+   * when its "Limit Access Management" setting refuses the user, or when the
+   * user cannot edit the document.
+   */
+  private boolean canManageAccess = true;
+
+  public NodePermission(boolean canAccess,
+                        boolean canEdit,
+                        boolean canDelete,
+                        boolean isPublic,
+                        List<PermissionEntry> permissions,
+                        Map<Long, String> toShare,
+                        Map<Long, String> toNotify,
+                        Map<Long, String> toUnShare) {
+    this(canAccess, canEdit, canDelete, isPublic, permissions, toShare, toNotify, toUnShare, true);
+  }
+
 }

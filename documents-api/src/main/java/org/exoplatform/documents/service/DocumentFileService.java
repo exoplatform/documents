@@ -26,6 +26,7 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.social.core.identity.model.Identity;
@@ -384,6 +385,28 @@ public interface DocumentFileService {
   void renameDocument(long ownerId, String documentID, String name, long authenticatedUserId) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException;
 
   boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity);
+
+  /**
+   * Refuses a change of the document's access, its public link included, that
+   * its space's "Limit Access Management" setting forbids to the user. The
+   * decision reads the space's committed settings and roles.
+   *
+   * @param documentId the document's identifier
+   * @param userIdentityId the social identity id of the user changing it
+   * @param action the change, one of the
+   *          {@link DocumentSharingRefusedException} actions
+   * @throws DocumentSharingRefusedException when the space refuses the change
+   * @throws IllegalAccessException when the user is unknown
+   */
+  void checkCanManageAccess(String documentId, long userIdentityId, String action) throws IllegalAccessException;
+
+  /**
+   * @param documentId the document's identifier
+   * @param userIdentityId the social identity id of the user
+   * @return whether the document's space lets the user change its access, on
+   *         the space's committed settings and roles
+   */
+  boolean canManageAccess(String documentId, long userIdentityId);
 
   org.exoplatform.services.security.Identity getAclUserIdentity(String userName) throws IllegalAccessException;
   
