@@ -68,4 +68,22 @@ public class MoveNodeListenerTest {
         verify(trashStorage, times(1))
                 .updateRestorePath(oldPath, newPath);
     }
+
+    @Test
+    public void testOnEventFollowsEveryFolderTypeAndNoOtherNode() throws Exception {
+        Map<String, String> source = Map.of("srcPath", "/old/folder", "destPath", "/new/folder");
+        @SuppressWarnings("unchecked")
+        Event<Map<String, String>, String> event = mock(Event.class);
+        when(event.getSource()).thenReturn(source);
+
+        when(event.getData()).thenReturn("nt:file");
+        moveNodeListener.onEvent(event);
+        when(event.getData()).thenReturn(null);
+        moveNodeListener.onEvent(event);
+        verify(trashStorage, org.mockito.Mockito.never()).updateRestorePath("/old/folder", "/new/folder");
+
+        when(event.getData()).thenReturn("nt:unstructured");
+        moveNodeListener.onEvent(event);
+        verify(trashStorage, times(1)).updateRestorePath("/old/folder", "/new/folder");
+    }
 }
