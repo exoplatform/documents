@@ -1,0 +1,140 @@
+/*
+ * Copyright (C) 2026 eXo Platform SAS.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.exoplatform.documents.rest.util;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.commons.lang3.StringUtils;
+
+import org.exoplatform.documents.model.RecycleBinDrive;
+import org.exoplatform.documents.model.RecycleBinItem;
+import org.exoplatform.documents.rest.model.RecycleBinDriveEntity;
+import org.exoplatform.documents.rest.model.RecycleBinItemEntity;
+import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.space.model.Space;
+import org.exoplatform.social.core.space.spi.SpaceService;
+
+/**
+ * Builds what the screens of the Recycle Bin read from what the service
+ * returns.
+ */
+public final class RecycleBinEntityBuilder {
+
+  /** The folders of a personal drive, under the home of its user. */
+  private static final Pattern USER_DRIVE  = Pattern.compile("^/Users/(?:[^/]+/){3}[^/]+/Private(/.*)?$");
+
+  /** The folders of the drive of a space. */
+  private static final Pattern SPACE_DRIVE = Pattern.compile("^/Groups/spaces/[^/]+/Documents(/.*)?$");
+
+  private RecycleBinEntityBuilder() {
+  }
+
+  /**
+   * @param item an item of a bin
+   * @param viewable whether the bin is one its items are opened from: the
+   *          caller's own or a space's, never the bin of a drive an
+   *          administrator acts on
+   * @param identityManager reads the name of who deleted the item
+   * @return the item as a screen lists it
+   */
+  public static RecycleBinItemEntity toItemEntity(RecycleBinItem item, boolean viewable, IdentityManager identityManager) {
+    RecycleBinItemEntity entity = new RecycleBinItemEntity();
+    entity.setId(item.getId());
+    entity.setName(item.getName());
+    entity.setFolder(item.isFolder());
+    entity.setMimeType(item.getMimeType());
+    entity.setSize(item.getSize());
+    entity.setDeletedDate(item.getDeletedDate());
+    entity.setDeletedBy(toUser(item.getDeletedBy(), identityManager));
+    String location = toOriginalLocation(item.getRestorePath());
+    entity.setOriginalLocation(location == null ? null : new RecycleBinItemEntity.Location(location));
+    // A folder and a shortcut have no content of their own to open.
+    entity.setCanView(viewable && !item.isFolder() && !item.isShortcut());
+    entity.setDocumentId(entity.isCanView() ? item.getDocumentId() : null);
+    return entity;
+  }
+
+  /**
+   * @param restorePath the path an item was deleted from
+   * @return the folder it was in, from the root of its drive, "/" for the
+   *         root itself; the whole path of the folder when it is in no
+   *         drive; null when no path was recorded
+   */
+  public static String toOriginalLocation(String restorePath) {
+    if (StringUtils.isBlank(restorePath)) {
+      return null;
+    }
+    int nameIndex = restorePath.lastIndexOf('/');
+    String folder = nameIndex <= 0 ? "/" : restorePath.substring(0, nameIndex);
+    for (Pattern drive : new Pattern[] { USER_DRIVE, SPACE_DRIVE }) {
+      Matcher matcher = drive.matcher(folder);
+      if (matcher.matches()) {
+        return matcher.group(1) == null ? "/" : matcher.group(1);
+      }
+    }
+    return folder;
+  }
+
+  /**
+   * @param drive the totals of the bin of a drive
+   * @return the drive as the Bin Overview lists it, with what is known of
+   *         its owner
+   */
+  public static RecycleBinDriveEntity toDriveEntity(RecycleBinDrive drive, IdentityManager identityManager, SpaceService spaceService) {
+    RecycleBinDriveEntity entity = new RecycleBinDriveEntity();
+    entity.setOwnerIdentityId(drive.getOwnerId());
+    entity.setSize(drive.getItemsSize());
+    entity.setItemsCount(drive.getItemsCount());
+    Identity owner = identityManager.getIdentity(String.valueOf(drive.getOwnerId()));
+    if (owner == null) {
+      entity.setDeleted(true);
+      return entity;
+    }
+    entity.setDeleted(owner.isDeleted());
+    if (owner.isSpace()) {
+      entity.setType("SPACE");
+      Space space = spaceService.getSpaceByPrettyName(owner.getRemoteId());
+      if (space == null) {
+        entity.setDeleted(true);
+        entity.setName(getFullName(owner, owner.getRemoteId()));
+      } else {
+        entity.setName(space.getDisplayName());
+        entity.setAvatarUrl(space.getAvatarUrl());
+      }
+    } else {
+      entity.setType("USER");
+      entity.setName(getFullName(owner, owner.getRemoteId()));
+      entity.setAvatarUrl(owner.getProfile() == null ? null : owner.getProfile().getAvatarUrl());
+    }
+    return entity;
+  }
+
+  private static RecycleBinItemEntity.User toUser(String username, IdentityManager identityManager) {
+    if (StringUtils.isBlank(username)) {
+      return null;
+    }
+    return new RecycleBinItemEntity.User(username, getFullName(identityManager.getOrCreateUserIdentity(username), username));
+  }
+
+  private static String getFullName(Identity identity, String fallback) {
+    String fullName = identity == null || identity.getProfile() == null ? null : identity.getProfile().getFullName();
+    return StringUtils.isBlank(fullName) ? fallback : fullName;
+  }
+
+}
