@@ -20,6 +20,7 @@ import org.exoplatform.container.ExoContainer;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
+import org.exoplatform.documents.service.RecycleBinService;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
@@ -284,6 +285,7 @@ public class TrashStorageImpl implements TrashStorage {
         }
       }
       trashSession.save();
+      reportItemTrashed(ownerId, size);
     } catch (RepositoryException | RuntimeException e) {
       trashSession.refresh(false);
       throw e;
@@ -352,6 +354,7 @@ public class TrashStorageImpl implements TrashStorage {
         trashed.getProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS).remove();
       }
       trashSession.save();
+      reportItemTrashed(ownerId, size);
     } catch (RepositoryException | RuntimeException e) {
       trashSession.refresh(false);
       throw e;
@@ -366,6 +369,36 @@ public class TrashStorageImpl implements TrashStorage {
       }
     }
     return trashId;
+  }
+
+  /**
+   * Tells the Recycle Bin service that an item joined the bin of a drive, for
+   * it to count it. The item is in the trash whatever happens here: a service
+   * that is not there, as in a container that does not hold it, or that
+   * fails, is reported and the count is corrected by the daily run.
+   */
+  private void reportItemTrashed(String ownerId, long size) {
+    if (ownerId == null) {
+      return;
+    }
+    try {
+      RecycleBinService recycleBinService = getRecycleBinService();
+      if (recycleBinService == null) {
+        LOG.warn("The Recycle Bin service is not available: an item deleted from the drive {} is not counted in its bin", ownerId);
+      } else {
+        recycleBinService.itemTrashed(Long.parseLong(ownerId), size);
+      }
+    } catch (Exception e) {
+      LOG.warn("An item deleted from the drive {} could not be counted in its bin", ownerId, e);
+    }
+  }
+
+  /**
+   * The service is looked for when it is needed and never kept: it lives in a
+   * container that starts after this component.
+   */
+  RecycleBinService getRecycleBinService() {
+    return ExoContainerContext.getService(RecycleBinService.class);
   }
 
   private void checkRemovePermission(Node node, Session nodeSession) throws RepositoryException {
