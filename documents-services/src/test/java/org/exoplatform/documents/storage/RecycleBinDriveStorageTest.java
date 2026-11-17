@@ -158,19 +158,6 @@ class RecycleBinDriveStorageTest {
   }
 
   @Test
-  void anItemChangingDriveIsCountedInTheOtherOneWhetherItHasARowOrNot() {
-    inTransaction(() -> storage.doCreate(7, 10));
-    inTransaction(() -> storage.doAdd(7, 5));
-    inTransaction(() -> storage.doCreate(8, 1));
-
-    inTransaction(() -> storage.doMove(7, 8, 5));
-    assertEquals(List.of(new RecycleBinDrive(7, 10, 1), new RecycleBinDrive(8, 6, 2)), storage.getDrives(0, 10));
-
-    inTransaction(() -> storage.doMove(7, 9, 10));
-    assertEquals(List.of(new RecycleBinDrive(9, 10, 1), new RecycleBinDrive(8, 6, 2)), storage.getDrives(0, 10));
-  }
-
-  @Test
   void theDrivesAreListedLargestFirstThenByOwnerFromAnyOffset() {
     inTransaction(() -> storage.doCreate(5, 10));
     inTransaction(() -> storage.doCreate(3, 30));
@@ -205,33 +192,11 @@ class RecycleBinDriveStorageTest {
     for (java.lang.reflect.Method method : List.of(RecycleBinDriveStorage.class.getMethod("add", long.class, long.class),
                                                    RecycleBinDriveStorage.class.getMethod("create", long.class, long.class),
                                                    RecycleBinDriveStorage.class.getMethod("remove", long.class, long.class),
-                                                   RecycleBinDriveStorage.class.getMethod("move", long.class, long.class, long.class),
                                                    RecycleBinDriveStorage.class.getMethod("replaceAll", List.class))) {
       io.meeds.common.ContainerTransactional transactional = method.getAnnotation(io.meeds.common.ContainerTransactional.class);
       assertNotNull(transactional, method.getName());
       assertTrue(transactional.atomic(), method.getName());
     }
-  }
-
-  @Test
-  void aMoveThatFailsOnTheDriveTheItemJoinsLeavesTheOneItLeavesAsItWas() {
-    inTransaction(() -> storage.doCreate(7, 10));
-    inTransaction(() -> storage.doAdd(7, 5));
-    RecycleBinDriveStorage failing = new RecycleBinDriveStorage(new JpaRepositoryFactory(entityManager).getRepository(RecycleBinDriveRepository.class)) {
-      @Override
-      boolean doAdd(long ownerId, long size) {
-        throw new IllegalStateException("The database refuses the statement");
-      }
-    };
-
-    entityManager.getTransaction().begin();
-    try {
-      assertThrows(IllegalStateException.class, () -> failing.doMove(7, 8, 5));
-    } finally {
-      entityManager.getTransaction().rollback();
-    }
-
-    assertEquals(List.of(new RecycleBinDrive(7, 15, 2)), storage.getDrives(0, 10));
   }
 
   @Test

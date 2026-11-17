@@ -14,11 +14,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package org.exoplatform.documents.model;
+package org.exoplatform.documents.rest;
 
-/**
- * What the items of a Recycle Bin can be sorted by.
- */
-public enum RecycleBinSortField {
-  NAME, ORIGINAL_LOCATION, DELETED_DATE, DELETED_BY, SIZE
+import javax.ws.rs.core.Response;
+
+import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.service.RecycleBinService;
+
+/** What an entry of the Recycle Bin asks the service, for the user of the request. */
+@FunctionalInterface
+interface RecycleBinCall {
+
+  Response.ResponseBuilder apply(RecycleBinService service, String username) throws ObjectNotFoundException, IllegalAccessException;
+
 }

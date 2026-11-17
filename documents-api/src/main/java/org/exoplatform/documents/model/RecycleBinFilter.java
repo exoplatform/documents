@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.model;
 
+import org.exoplatform.documents.constant.RecycleBinSortField;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
