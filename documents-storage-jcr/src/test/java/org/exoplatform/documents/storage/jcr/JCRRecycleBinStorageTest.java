@@ -102,7 +102,7 @@ class JCRRecycleBinStorageTest {
     TrashStorage trashStorage = mock(TrashStorage.class);
     lenient().when(trashStorage.getTrashHomeNode()).thenAnswer(invocation -> jcr.node(systemSession, jcr.at("/Trash")));
 
-    storage = new JCRRecycleBinStorage(repositoryService, trashStorage) {
+    storage = new JCRRecycleBinStorage(repositoryService, trashStorage, null, null, null) {
       @Override
       SessionProvider createSystemProvider() {
         return systemProvider;

@@ -1436,7 +1436,8 @@ public class JCRDocumentsUtil {
     return userHomePath.substring(userHomePath.lastIndexOf('/') + 1);
   }
 
-  private static String getUserHomePath(NodeHierarchyCreator nodeHierarchyCreator,
+  /** The path of the home of a user, read with the system provider given. */
+  public static String getUserHomePath(NodeHierarchyCreator nodeHierarchyCreator,
                                         SessionProvider systemProvider,
                                         String username) throws RepositoryException {
     try {
