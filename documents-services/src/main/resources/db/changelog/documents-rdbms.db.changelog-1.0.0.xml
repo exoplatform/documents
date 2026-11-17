@@ -51,4 +51,28 @@
         <createSequence sequenceName="SEQ_DOCUMENT_PUBLIC_ACCESS_ID" startValue="1"/>
     </changeSet>
 
+    <!-- What each drive's Recycle Bin holds: one row per drive owner, read
+         largest first. The index carries the directions of that read. -->
+    <changeSet author="documents" id="1.0.0-exip-7.3.0.42-01" dbms="hsqldb,mysql,postgresql">
+        <createTable tableName="DOCUMENTS_RECYCLE_BIN_DRIVE">
+            <column name="OWNER_ID" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="PK_DOCUMENTS_RECYCLE_BIN_DRIVE"/>
+            </column>
+            <column name="ITEMS_SIZE" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ITEMS_COUNT" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="UPDATED_DATE" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="DOCUMENTS_RECYCLE_BIN_DRIVE" indexName="IDX_DOCUMENTS_RECYCLE_BIN_DRIVE_01">
+            <column name="ITEMS_SIZE" descending="true"/>
+            <column name="OWNER_ID"/>
+        </createIndex>
+        <rollback>
+            <dropTable tableName="DOCUMENTS_RECYCLE_BIN_DRIVE"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>
