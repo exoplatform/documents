@@ -2179,6 +2179,11 @@ public class DocumentMcpTool implements McpToolPlugin {
     } catch (ObjectNotFoundException e) {
       throw new IllegalStateException(("Document %s can no longer be found in the trash (it may have been restored or permanently deleted), "
           + "so it cannot be restored.").formatted(documentId));
+    } catch (IllegalAccessException e) {
+      if (RecycleBinError.RESTORE_TARGET_FORBIDDEN.equals(e.getMessage())) {
+        throw new IllegalAccessException("Document %s cannot be restored: you can no longer add content to the folder it was deleted from.".formatted(documentId));
+      }
+      throw e;
     } catch (IllegalArgumentException e) {
       if (RecycleBinError.RESTORE_LOCATION_MISSING.equals(e.getMessage())) {
         throw new IllegalStateException(("Document %s cannot be restored: the folder it was deleted from no longer exists.").formatted(documentId));

@@ -53,6 +53,7 @@ import org.exoplatform.commons.utils.HTMLSanitizer;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.constant.RecycleBinSortField;
 import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.plugin.DocumentCategoryPlugin;
@@ -1038,7 +1039,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public List<TrashElementNode> getDeletedDocuments(TrashElementNodeFilter filter) throws RepositoryException {
     String username = getRecycleBinCaller();
     RecycleBinSortField sortField = filter != null && filter.getSortField() == DocumentSortField.NAME ? RecycleBinSortField.NAME
@@ -1056,7 +1057,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public int countDeletedDocuments() {
     try {
       return getRecycleBinService().countItems(RecycleBinScope.user(), null, getRecycleBinCaller());
@@ -1066,7 +1067,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public void restoreDocumentFromTrash(String trashNodePath) throws RepositoryException {
     String username = getRecycleBinCaller();
     RecycleBinItem item = getRecycleBinStorage().getItemAt(trashNodePath);
@@ -1083,7 +1084,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public void deleteDocumentPermanently(String documentPath) throws ObjectNotFoundException, RepositoryException {
     String username = getRecycleBinCaller();
     RecycleBinItem item = getRecycleBinStorage().getItemAt(documentPath);
@@ -1153,13 +1154,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException {
     startTrashBulkAction(actionId, ActionType.PERMANENTLY_DELETE, trashElementNodes, userIdentityId);
   }
 
   @Override
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException {
     startTrashBulkAction(actionId, ActionType.RESTORE, trashElementNodes, userIdentityId);
   }

@@ -17,12 +17,19 @@
 package org.exoplatform.documents.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
+import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * When the daily run of the Recycle Bins starts, and that it does nothing
@@ -31,6 +38,20 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 class RecycleBinPurgeTaskTest {
 
   private final RecycleBinService recycleBinService = mock(RecycleBinService.class);
+
+  /**
+   * Nothing here starts the platform: what makes it find the service, its
+   * setting and the schedule, and stop the purge with it, is read on the
+   * classes.
+   */
+  @Test
+  void thePlatformFindsTheScheduleTheServiceAndItsSettingAndStopsThePurgeWithIt() throws Exception {
+    assertNotNull(RecycleBinPurgeTask.class.getAnnotation(Configuration.class));
+    assertNotNull(RecycleBinPurgeTask.class.getAnnotation(EnableScheduling.class));
+    assertNotNull(RecycleBinServiceImpl.class.getAnnotation(Service.class));
+    assertNotNull(RecycleBinRetentionSetting.class.getAnnotation(Component.class));
+    assertNotNull(RecycleBinServiceImpl.class.getDeclaredMethod("stopPurge").getAnnotation(PreDestroy.class));
+  }
 
   @Test
   void theDailyRunStartsAtTwoWhenNoScheduleIsConfigured() {
