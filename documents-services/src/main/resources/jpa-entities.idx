@@ -1,1 +1,2 @@
 org.exoplatform.documents.entity.PublicDocumentAccessEntity
+org.exoplatform.documents.entity.RecycleBinDriveEntity
