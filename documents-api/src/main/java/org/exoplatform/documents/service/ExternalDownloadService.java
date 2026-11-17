@@ -16,9 +16,11 @@
  */
 package org.exoplatform.documents.service;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.DownloadItem;
 
 import java.io.IOException;
+import java.io.InputStream;
 
 public interface ExternalDownloadService {
 
@@ -31,11 +33,31 @@ public interface ExternalDownloadService {
   DownloadItem getDocumentDownloadItem(String documentId);
 
   /**
-   * Download a zipped folder
-   * 
-   * @param folderId folder id
-   * @return byte array of the zipped folder
-   * @throws IOException
+   * Download a zipped folder shared by a public link, with the rights of the
+   * user who created the link, evaluated when this method runs: what that user
+   * cannot read, a sub-folder, a document or a shortcut target, is left out of
+   * the zip.
+   *
+   * @param folderId id of the folder holding the public link
+   * @return the zipped folder, read from a file of its own that closing the
+   *         stream deletes: the caller closes it
+   * @throws ObjectNotFoundException when the folder has no public link, the
+   *           link records no creator, the creator is unknown, deleted or
+   *           disabled, or the creator cannot read the folder
+   * @throws IOException when the zip cannot be built or read
    */
-  byte[] downloadZippedFolder(String folderId) throws IOException;
+  InputStream downloadZippedFolder(String folderId) throws IOException, ObjectNotFoundException;
+
+  /**
+   * Checks that the document of a public link can be downloaded as
+   * {@link #getDocumentDownloadItem(String)} and
+   * {@link #downloadZippedFolder(String)} would serve it, without reading the
+   * document or building a folder's zip
+   *
+   * @param documentId the link's document id
+   * @throws ObjectNotFoundException when no document has this id, or, for a
+   *           folder, when its link records no active creator or the creator
+   *           cannot read it
+   */
+  void checkDocumentDownload(String documentId) throws ObjectNotFoundException;
 }
