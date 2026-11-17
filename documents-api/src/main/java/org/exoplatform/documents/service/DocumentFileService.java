@@ -655,21 +655,34 @@ public interface DocumentFileService {
   void deleteDocumentPermanently(String documentPath) throws ObjectNotFoundException, RepositoryException;
 
   /**
-   * Delete a list of documents from the trash.
+   * Removes for good, as a bulk action, items of the Recycle Bins the user
+   * holds: their own, or the one of a space they manage or publish in. Each
+   * item is looked for at its turn: a path that is no longer the one of an
+   * item is left out, and an item of a bin the user does not hold is a
+   * failure of that item. The bin of another drive is never reached this
+   * way, whoever the user is.
    *
-   * @param actionId the delete permanently action identifier
-   * @param trashElementNodes the list of the trash nodes to delete
-   * @param userIdentityId the user identity identifier
+   * @param actionId the id of the bulk action
+   * @param trashElementNodes the items, each named by its path in the trash
+   * @param userIdentityId the identity id of the user
+   * @throws IllegalAccessException when the user is not found
+   * @deprecated use {@link RecycleBinService#deleteItems}, which names the bin
    */
+  @Deprecated(forRemoval = false)
   void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException;
 
   /**
-   * Restore a list of documents from the trash.
+   * Restores, as a bulk action, items of the Recycle Bins the user holds, as
+   * {@link #deleteDocumentsPermanently(int, List, long)} removes them: each
+   * goes where {@link RecycleBinService#restoreItem} says.
    *
-   * @param actionId the restore action identifier
-   * @param trashElementNodes the list of the trash nodes to restore
-   * @param userIdentityId the user identity identifier
+   * @param actionId the id of the bulk action
+   * @param trashElementNodes the items, each named by its path in the trash
+   * @param userIdentityId the identity id of the user
+   * @throws IllegalAccessException when the user is not found
+   * @deprecated use {@link RecycleBinService#restoreItems}, which names the bin
    */
+  @Deprecated(forRemoval = false)
   void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException;
 
 
