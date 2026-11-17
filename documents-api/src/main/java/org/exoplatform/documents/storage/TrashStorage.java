@@ -65,16 +65,22 @@ public interface TrashStorage {
    * drive goes to that drive's bin folder, any other one under the trash home.
    * The shortcuts pointing at the node or at one of its descendants are moved
    * with it. The move, the recorded facts and the shortcuts are saved together
-   * or not at all.
+   * or not at all. Two things are done before that save and stay when it
+   * fails: the repository's removal actions on the node have run, and the bin
+   * folder of the drive, when it did not exist, has been created. A node of
+   * another workspace than the trash is copied to the trash and then removed
+   * from its workspace, which is not one save: its shortcuts are not moved.
    *
    * @param node node to move, read in the session of the user deleting it
    * @param sessionProvider session provider of the caller
    * @param deletedBy username of the user deleting the node. When null, the
    *          user of the node's session is recorded, unless it is the system
    *          or the anonymous one
-   * @return the trash id of the node, null when it was already in the trash
-   * @throws RepositoryException when the node cannot be moved; nothing is
-   *           changed then
+   * @return the trash id of the node, null when the node is itself a deleted
+   *         item of the trash. A node a deleted folder holds is not one: it is
+   *         moved as an item of its own
+   * @throws RepositoryException when the node cannot be moved; a node of the
+   *           trash workspace is then left where it was, with its shortcuts
    */
   public String moveToTrash(Node node, SessionProvider sessionProvider, String deletedBy) throws RepositoryException;
 
@@ -87,7 +93,8 @@ public interface TrashStorage {
    * @param sessionProvider session provider of the caller
    * @param deletedBy username of the user deleting the node, may be null
    * @param deep depth of the call
-   * @return the trash id of the node, null when it was already in the trash
+   * @return the trash id of the node, null when the node is itself a deleted
+   *         item of the trash
    * @throws RepositoryException when the node cannot be moved
    */
   public String moveToTrash(Node node, SessionProvider sessionProvider, String deletedBy, int deep) throws RepositoryException;

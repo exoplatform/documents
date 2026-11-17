@@ -137,6 +137,8 @@ public class FakeJcr {
 
   private static final Pattern                        SEGMENT          = Pattern.compile("^(.*?)(?:\\[(\\d+)\\])?$");
 
+  private static final Set<String>                    WRITES           = Set.of("addMixin", "removeMixin", "setProperty", "addNode", "remove", "setPermissions");
+
   private static final Pattern                        LINK_TARGET      = Pattern.compile("exo:uuid='([^']*)'");
 
   private final String                                workspaceName;
@@ -163,6 +165,17 @@ public class FakeJcr {
                                                                        };
 
   private Runnable                                    refreshAction;
+
+  private java.util.function.Consumer<Item>           savedNodeAction;
+
+  private final List<String>                          addedSinceSave   = new ArrayList<>();
+
+  /** The mixins a node read before another session changed it still shows, by session then node id. */
+  private final Map<Session, Map<String, Set<String>>> staleMixins     = new HashMap<>();
+
+  private final Set<String>                           writers          = new LinkedHashSet<>();
+
+  private final Map<Session, String>                  users            = new HashMap<>();
 
   private final Map<Session, Map<String, Node>>       nodes            = new HashMap<>();
 
@@ -267,12 +280,27 @@ public class FakeJcr {
     return moves;
   }
 
+  /** The users of the sessions that changed a node or moved one. */
+  public Set<String> getWriters() {
+    return writers;
+  }
+
   public void failNextSave(RepositoryException failure) {
     this.saveFailure = failure;
   }
 
   public void setQueryHandler(Function<String, List<Item>> queryHandler) {
     this.queryHandler = queryHandler;
+  }
+
+  /**
+   * What an action of the repository does, in a session of its own, to a node
+   * once the save that adds it is done. A node a session had read before that
+   * save keeps answering with the mixins it had, until the session reads it
+   * again by its path or its id, as the repository's sessions do.
+   */
+  public void setSavedNodeAction(java.util.function.Consumer<Item> savedNodeAction) {
+    this.savedNodeAction = savedNodeAction;
   }
 
   /** What the repository's own actions do to a node a session adds. */
@@ -291,6 +319,7 @@ public class FakeJcr {
   /** A mocked session on this workspace, acting as the given user. */
   public SessionImpl session(String userId) {
     SessionImpl session = mock(SessionImpl.class, invocation -> answerSession(invocation, userId));
+    users.put(session, userId);
     nodes.put(session, new HashMap<>());
     return session;
   }
@@ -315,6 +344,7 @@ public class FakeJcr {
       if (item == null) {
         throw new PathNotFoundException((String) invocation.getArgument(0));
       }
+      staleMixins.computeIfAbsent(session, key -> new HashMap<>()).remove(item.id);
       return node(session, item);
     }
     case "itemExists":
@@ -327,9 +357,11 @@ public class FakeJcr {
       if (item == null) {
         throw new ItemNotFoundException((String) invocation.getArgument(0));
       }
+      staleMixins.computeIfAbsent(session, key -> new HashMap<>()).remove(item.id);
       return node(session, item);
     }
     case "move":
+      writers.add(userId);
       move(invocation.getArgument(0), invocation.getArgument(1));
       return null;
     case "save":
@@ -373,12 +405,46 @@ public class FakeJcr {
         QueryManager queryManager = mock(QueryManager.class);
         lenient().when(workspace.getName()).thenReturn(workspaceName);
         lenient().when(workspace.getQueryManager()).thenReturn(queryManager);
+        lenient().doAnswer(invocation -> {
+          cloneFrom(invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2));
+          return null;
+        }).when(workspace).clone(anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyBoolean());
         lenient().when(queryManager.createQuery(anyString(), anyString())).thenAnswer(invocation -> query(session, invocation.getArgument(0)));
         return workspace;
       } catch (RepositoryException e) {
         throw new IllegalStateException(e);
       }
     });
+  }
+
+  private final Map<String, FakeJcr> otherWorkspaces = new HashMap<>();
+
+  /** Makes another workspace known to this one, for a clone from it. */
+  public void linkWorkspace(FakeJcr other) {
+    otherWorkspaces.put(other.workspaceName, other);
+  }
+
+  /**
+   * A clone keeps the id of the node it copies, and is persisted at once: it
+   * does not wait for the save of the session.
+   */
+  private void cloneFrom(String sourceWorkspace, String sourcePath, String destinationPath) throws RepositoryException {
+    FakeJcr other = otherWorkspaces.get(sourceWorkspace);
+    Item source = other == null ? null : other.at(sourcePath);
+    int slash = destinationPath.lastIndexOf('/');
+    Item destinationParent = slash == 0 ? root : at(destinationPath.substring(0, slash));
+    if (source == null || destinationParent == null) {
+      throw new PathNotFoundException(source == null ? sourcePath : destinationPath);
+    }
+    Item copy = copy(source, destinationParent);
+    copy.name = destinationPath.substring(slash + 1);
+    destinationParent.children.add(copy);
+    Item savedParent = find(savedRoot, destinationParent.id);
+    if (savedParent != null) {
+      Item savedCopy = copy(source, savedParent);
+      savedCopy.name = copy.name;
+      savedParent.children.add(savedCopy);
+    }
   }
 
   private Query query(Session session, String statement) throws RepositoryException {
@@ -446,6 +512,24 @@ public class FakeJcr {
       throw failure;
     }
     saves++;
+    List<String> added = new ArrayList<>(addedSinceSave);
+    addedSinceSave.clear();
+    if (savedNodeAction != null) {
+      for (String id : added) {
+        Item item = find(id);
+        if (item != null) {
+          Set<String> before = new LinkedHashSet<>(item.mixins);
+          savedNodeAction.accept(item);
+          if (!before.equals(item.mixins)) {
+            nodes.forEach((session, read) -> {
+              if (read.containsKey(id)) {
+                staleMixins.computeIfAbsent(session, key -> new HashMap<>()).put(id, before);
+              }
+            });
+          }
+        }
+      }
+    }
     savedRoot = copy(root, null);
   }
 
@@ -467,6 +551,9 @@ public class FakeJcr {
     if (item == null) {
       throw new InvalidItemStateException("Node " + id + " no longer exists");
     }
+    if (WRITES.contains(method)) {
+      writers.add(users.get(session));
+    }
     switch (method) {
     case "getPath":
       return item.parent == null ? "/" : pathOf(item);
@@ -482,8 +569,11 @@ public class FakeJcr {
       return item.id;
     case "isRoot":
       return item.parent == null;
-    case "isNodeType":
-      return item.has(invocation.getArgument(0));
+    case "isNodeType": {
+      Set<String> stale = staleMixins.getOrDefault(session, Map.of()).get(id);
+      String type = invocation.getArgument(0);
+      return stale == null ? item.has(type) : type.equals(item.primaryType) || stale.contains(type);
+    }
     case "getPrimaryNodeType": {
       NodeType nodeType = mock(NodeType.class);
       lenient().when(nodeType.getName()).thenReturn(item.primaryType);
@@ -534,6 +624,7 @@ public class FakeJcr {
       child.primaryType = invocation.getArguments().length > 1 ? invocation.getArgument(1) : "nt:unstructured";
       child.parent = item;
       item.children.add(child);
+      addedSinceSave.add(child.id);
       addNodeAction.accept(child);
       return node(session, child);
     }
