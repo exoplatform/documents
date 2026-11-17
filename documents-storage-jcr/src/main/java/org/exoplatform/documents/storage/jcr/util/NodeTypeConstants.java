@@ -144,6 +144,8 @@ public class NodeTypeConstants {
 
   public static final String JCR_FROZEN_NODE           = "jcr:frozenNode";
 
+  public static final String NT_VERSION                = "nt:version";
+
   public static final String DOCUMENTS_VIEW_MIXIN      = "mix:documentsView";
 
   public static final String DOCUMENT_VIEWS_PROPERTY   = "exo:documentViews";

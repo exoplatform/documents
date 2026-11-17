@@ -391,7 +391,13 @@ public class EntityBuilder {
     } else {
       visibilityChoice = Visibility.SPECIFIC_COLLABORATOR.name();
     }
-    return new NodePermissionEntity(nodePermission.isCanAccess(),nodePermission.isCanEdit(),nodePermission.isCanDelete(), allCanEdit, visibilityChoice, new ArrayList<>(map.values()));
+    return new NodePermissionEntity(nodePermission.isCanAccess(),
+                                    nodePermission.isCanEdit(),
+                                    nodePermission.isCanDelete(),
+                                    allCanEdit,
+                                    visibilityChoice,
+                                    new ArrayList<>(map.values()),
+                                    nodePermission.isCanManageAccess());
   }
   private static PermissionEntryEntity toPermissionEntryEntity(PermissionEntry permissionEntry, SpaceService spaceService){
     if(permissionEntry == null) return null;

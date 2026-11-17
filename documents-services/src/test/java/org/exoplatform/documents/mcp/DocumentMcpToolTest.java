@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,10 +43,12 @@ import java.util.Locale;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
@@ -80,6 +83,7 @@ import org.exoplatform.social.metadata.favorite.FavoriteService;
 import org.exoplatform.social.metadata.favorite.model.Favorite;
 import org.exoplatform.upload.UploadService;
 
+import io.meeds.social.space.security.SpaceSecurityAudit;
 import io.meeds.social.translation.service.TranslationService;
 
 public class DocumentMcpToolTest {
@@ -1271,7 +1275,7 @@ public class DocumentMcpToolTest {
     Date expiration = new Date(1893456000000L);
     PublicDocumentAccess access = new PublicDocumentAccess(1L, DOCUMENT_ID, null, null, expiration);
     access.setDecodedPassword("s3cretPass");
-    when(publicDocumentAccessService.createPublicDocumentAccess(eq(USER_IDENTITY_ID),
+    when(publicDocumentAccessService.createDocumentPublicAccess(eq(USER_IDENTITY_ID),
                                                                eq(DOCUMENT_ID),
                                                                eq("s3cretPass"),
                                                                anyLong(),
@@ -1292,7 +1296,7 @@ public class DocumentMcpToolTest {
 
     // Too short for the same password policy DocumentFileRest applies (min 9 chars).
     assertThrows(IllegalArgumentException.class, () -> documentMcpTool.createPublicLink(DOCUMENT_ID, "short", null));
-    verify(publicDocumentAccessService, never()).createPublicDocumentAccess(anyLong(), anyString(), anyString(), anyLong(), anyBoolean());
+    verify(publicDocumentAccessService, never()).createDocumentPublicAccess(anyLong(), anyString(), anyString(), anyLong(), anyBoolean());
   }
 
   @Test
@@ -1301,6 +1305,33 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
 
     assertThrows(IllegalAccessException.class, () -> documentMcpTool.createPublicLink(DOCUMENT_ID, null, null));
+  }
+
+  @Test
+  public void createPublicLinkRefusedWhenTheSpaceLimitsAccessManagement() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(publicDocumentAccessService.createDocumentPublicAccess(anyLong(),
+                                                               anyString(),
+                                                               any(),
+                                                               anyLong(),
+                                                               anyBoolean()))
+                                                                             .thenThrow(new DocumentSharingRefusedException(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED,
+                                                                                                                            7L,
+                                                                                                                            DOCUMENT_ID,
+                                                                                                                            DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION));
+
+    try (MockedStatic<SpaceSecurityAudit> audit = mockStatic(SpaceSecurityAudit.class)) {
+      DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
+                                                             () -> documentMcpTool.createPublicLink(DOCUMENT_ID, null, null));
+
+      assertEquals(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED, refusal.getMessage());
+      audit.verify(() -> SpaceSecurityAudit.actionRefused(7L,
+                                                          DOCUMENT_ID,
+                                                          DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION,
+                                                          USERNAME,
+                                                          DocumentSharingRefusedException.MCP_CHANNEL));
+    }
   }
 
   @Test
@@ -1373,6 +1404,33 @@ public class DocumentMcpToolTest {
     assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, null, null, null));
     // both recipients
     assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", SPACE_ID, null));
+  }
+
+  @Test
+  public void shareDocumentRefusedWhenTheSpaceLimitsAccessManagement() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(identityManager.getOrCreateUserIdentity("bob")).thenReturn(new org.exoplatform.social.core.identity.model.Identity("200"));
+    doThrow(new DocumentSharingRefusedException(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED,
+                                                7L,
+                                                DOCUMENT_ID,
+                                                DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION))
+                                                                                                     .when(documentFileService)
+                                                                                                     .updatePermissions(eq(DOCUMENT_ID),
+                                                                                                                        any(),
+                                                                                                                        eq(USER_IDENTITY_ID));
+
+    try (MockedStatic<SpaceSecurityAudit> audit = mockStatic(SpaceSecurityAudit.class)) {
+      DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
+                                                             () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null));
+
+      assertEquals(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED, refusal.getMessage());
+      audit.verify(() -> SpaceSecurityAudit.actionRefused(7L,
+                                                          DOCUMENT_ID,
+                                                          DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION,
+                                                          USERNAME,
+                                                          DocumentSharingRefusedException.MCP_CHANNEL));
+    }
   }
 
   @Test

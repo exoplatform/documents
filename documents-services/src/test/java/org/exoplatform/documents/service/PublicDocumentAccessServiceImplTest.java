@@ -1,6 +1,7 @@
 package org.exoplatform.documents.service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.model.PublicDocumentInfo;
@@ -32,26 +33,30 @@ public class PublicDocumentAccessServiceImplTest {
 
   private AbstractCodec               codec;
 
+  private DocumentFileService         documentFileService;
+
   @Before
   public void setUp() throws Exception {
     publicDocumentAccessStorage = mock(PublicDocumentAccessStorage.class);
     documentFileStorage = mock(DocumentFileStorage.class);
+    documentFileService = mock(DocumentFileService.class);
     codec = mock(AbstractCodec.class);
     CodecInitializer codecInitializer = mock(CodecInitializer.class);
     when(codecInitializer.getCodec()).thenReturn(codec);
     publicDocumentAccessService = new PublicDocumentAccessServiceImpl(publicDocumentAccessStorage,
                                                                       documentFileStorage,
+                                                                      documentFileService,
                                                                       codecInitializer);
   }
 
   @Test
-  public void createDocumentPublicAccess() {
+  public void createDocumentPublicAccess() throws IllegalAccessException {
     PublicDocumentAccess publicDocumentAccess = new PublicDocumentAccess();
     publicDocumentAccess.setId(1L);
     publicDocumentAccess.setNodeId("123");
     when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(publicDocumentAccess);
     when(publicDocumentAccessStorage.savePublicDocumentAccess(any(), anyLong())).thenReturn(publicDocumentAccess);
-    publicDocumentAccessService.createPublicDocumentAccess(1L, "123", "12345678", new Date().getTime(), false);
+    publicDocumentAccessService.createDocumentPublicAccess(1L, "123", "12345678", new Date().getTime(), false);
     verify(publicDocumentAccessStorage).savePublicDocumentAccess(any(), anyLong());
   }
 
@@ -200,8 +205,70 @@ public class PublicDocumentAccessServiceImplTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   public void revokePublicAccess() {
     publicDocumentAccessService.revokeDocumentPublicAccess("123");
     verify(publicDocumentAccessStorage, times(1)).removePublicDocumentAccess("123");
+  }
+
+  @Test
+  public void createPublicAccessRefusedWhenTheSpaceRefusesTheUser() throws IllegalAccessException {
+    doThrow(refusal(DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION)).when(documentFileService)
+                                                                              .checkCanManageAccess("123",
+                                                                                                    1L,
+                                                                                                    DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION);
+
+    DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
+                                                           () -> publicDocumentAccessService.createDocumentPublicAccess(1L,
+                                                                                                                        "123",
+                                                                                                                        null,
+                                                                                                                        0L,
+                                                                                                                        false));
+
+    assertEquals(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED, refusal.getMessageCode());
+    verify(publicDocumentAccessStorage, never()).savePublicDocumentAccess(any(), anyLong());
+  }
+
+  @Test
+  @SuppressWarnings("removal")
+  public void theDeprecatedCreationThrowsARefusalUnchecked() throws IllegalAccessException {
+    doThrow(refusal(DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION)).when(documentFileService)
+                                                                              .checkCanManageAccess("123",
+                                                                                                    1L,
+                                                                                                    DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION);
+
+    IllegalStateException refusal = assertThrows(IllegalStateException.class,
+                                                 () -> publicDocumentAccessService.createPublicDocumentAccess(1L,
+                                                                                                              "123",
+                                                                                                              null,
+                                                                                                              0L,
+                                                                                                              false));
+
+    assertTrue(refusal.getCause() instanceof DocumentSharingRefusedException);
+    verify(publicDocumentAccessStorage, never()).savePublicDocumentAccess(any(), anyLong());
+  }
+
+  @Test
+  public void revokePublicAccessOnBehalfOfAnAllowedUser() throws IllegalAccessException {
+    publicDocumentAccessService.revokeDocumentPublicAccess("123", 1L);
+
+    verify(documentFileService).checkCanManageAccess("123", 1L, DocumentSharingRefusedException.REVOKE_PUBLIC_LINK_ACTION);
+    verify(publicDocumentAccessStorage).removePublicDocumentAccess("123");
+  }
+
+  @Test
+  public void revokePublicAccessRefusedWhenTheSpaceRefusesTheUser() throws IllegalAccessException {
+    doThrow(refusal(DocumentSharingRefusedException.REVOKE_PUBLIC_LINK_ACTION)).when(documentFileService)
+                                                                              .checkCanManageAccess("123",
+                                                                                                    1L,
+                                                                                                    DocumentSharingRefusedException.REVOKE_PUBLIC_LINK_ACTION);
+
+    assertThrows(DocumentSharingRefusedException.class, () -> publicDocumentAccessService.revokeDocumentPublicAccess("123", 1L));
+
+    verify(publicDocumentAccessStorage, never()).removePublicDocumentAccess(anyString());
+  }
+
+  private static DocumentSharingRefusedException refusal(String action) {
+    return new DocumentSharingRefusedException(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED, 7L, "123", action);
   }
 }
