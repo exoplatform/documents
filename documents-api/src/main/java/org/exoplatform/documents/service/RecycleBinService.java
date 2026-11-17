@@ -195,4 +195,51 @@ public interface RecycleBinService {
    */
   void itemTrashed(long ownerId, long size);
 
+  /**
+   * @return the number of days an item stays in a Recycle Bin before it is
+   *         removed for good, the same for every drive
+   */
+  long getRetentionDays();
+
+  /**
+   * Changes the number of days an item stays in a Recycle Bin. A shorter
+   * period makes items due at once: they are removed as
+   * {@link #purgeExpired(String)} says, for the caller.
+   *
+   * @param retentionDays the new period, in days
+   * @param username the caller
+   * @throws IllegalAccessException when the caller is no administrator of
+   *           the platform
+   * @throws IllegalArgumentException with the code
+   *           {@link org.exoplatform.documents.constant.RecycleBinError#RETENTION_INVALID}
+   *           when the period is outside its bounds
+   */
+  void setRetentionDays(long retentionDays, String username) throws IllegalAccessException;
+
+  /**
+   * The daily run. It gives their facts to the items of the trash that lack
+   * them, counts the bins again from the trash, then removes for good what
+   * has stayed longer than the retention period. It returns at once: the run
+   * goes on in the background, one at a time on a server, and a call made
+   * while one is going on is served by a further round of that one.
+   * <p>
+   * Between the moment the items are selected and the turn of each, an item
+   * may be restored, deleted again or given more time by a longer period:
+   * each is read again at its turn, with the period as it is then, and left
+   * when it is no longer due. An item another actor removes meanwhile is
+   * skipped, and one that cannot be removed is reported and left to the next
+   * run.
+   */
+  void purgeExpired();
+
+  /**
+   * Removes for good what has stayed longer than the retention period, as
+   * {@link #purgeExpired()} does but for the counts, which it leaves as they
+   * are. The requester is told once it is over, on the channel the bulk
+   * actions report on, how many items left the bins, or that it failed.
+   *
+   * @param requester the user to tell
+   */
+  void purgeExpired(String requester);
+
 }
