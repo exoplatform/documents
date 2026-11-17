@@ -24,6 +24,7 @@ import javax.jcr.Session;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.services.security.Identity;
@@ -119,15 +120,6 @@ public interface JCRDeleteFileStorage {
   void deleteDocumentPermanently(String trashNodePath) throws ObjectNotFoundException, RepositoryException;
 
   /**
-   * Delete a list of documents from the trash.
-   *
-   * @param actionId the delete permanently action identifier
-   * @param trashElementNodes the list of the trash nodes to delete
-   * @param aclUserIdentity the user identity
-   */
-  void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, Identity aclUserIdentity);
-  
-  /**
    * Delete a document from the trash based on the specified trash node path.
    *
    * @param trashNodePath the path of the trash node to delete
@@ -138,11 +130,18 @@ public interface JCRDeleteFileStorage {
   void deleteDocumentPermanently(String trashNodePath, String trashNodeId) throws ObjectNotFoundException, RepositoryException;
 
   /**
-   * Restore a list of documents from the trash.
+   * Starts a bulk action that applies one operation to each of its items, in
+   * the background, and returns at once. The items are treated in the order
+   * given, each one at its turn: what an operation finds is the item as it is
+   * then. The user of the action is told when it is over, on the channel the
+   * bulk actions report on, with the ids of the items treated. While it runs,
+   * the action can be cancelled by its id: the items not yet reached are left.
    *
-   * @param actionId the restore action identifier
-   * @param trashElementNodes the list of the trash nodes to restore
-   * @param aclUserIdentity the user identity
+   * @param actionData the action: its id, its type, the identity and the name
+   *          of the user it is started for, the number of its items
+   * @param itemIds the ids of the items
+   * @param itemAction what is done to each item
    */
-  void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, Identity aclUserIdentity);
+  void executeBulkAction(ActionData actionData, List<String> itemIds, BulkItemAction itemAction);
+
 }
