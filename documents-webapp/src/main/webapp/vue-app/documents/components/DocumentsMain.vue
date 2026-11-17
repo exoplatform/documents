@@ -1530,12 +1530,20 @@ export default {
           this.$root.$emit('show-alert', {type: 'success', message: this.$t('documents.label.saveVisibility.success')});
           this.$root.$emit('visibility-saved');
         })
-        .catch(() => {
-          this.$root.$emit('show-alert', {type: 'error', message: this.$t('documents.label.saveVisibility.error')});
-        })
+        .catch(this.showSaveVisibilityError)
         .finally(() => {
           this.loading = false;
         });
+    },
+    showSaveVisibilityError(error) {
+      // A refusal of the space's settings answers 403 with the rule's code
+      const code = error?.status === 403 && error.text ? error.text() : Promise.resolve(error?.message);
+      return code.catch(() => null).then(refusalCode => {
+        const message = refusalCode === 'documents.space.accessManagementLimited'
+          ? this.$t('documents.space.accessManagementLimited')
+          : this.$t('documents.label.saveVisibility.error');
+        this.$root.$emit('show-alert', {type: 'error', message});
+      });
     },
     openDrawer(files) {
 
