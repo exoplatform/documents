@@ -605,7 +605,7 @@ public interface DocumentFileService {
    * @deprecated use {@link RecycleBinService#getItems}, which names the bin
    *             and the caller
    */
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   List<TrashElementNode> getDeletedDocuments(TrashElementNodeFilter trashElementNodeFilter) throws RepositoryException;
 
   /**
@@ -617,7 +617,7 @@ public interface DocumentFileService {
    *           be read
    * @deprecated use {@link RecycleBinService#countItems}
    */
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   int countDeletedDocuments();
 
   /**
@@ -636,7 +636,7 @@ public interface DocumentFileService {
    * @throws RepositoryException when the item cannot be restored
    * @deprecated use {@link RecycleBinService#restoreItem}
    */
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   void restoreDocumentFromTrash(String trashNodePath) throws RepositoryException;
 
   /**
@@ -651,7 +651,7 @@ public interface DocumentFileService {
    * @throws RepositoryException when the item cannot be removed
    * @deprecated use {@link RecycleBinService#deleteItem}
    */
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   void deleteDocumentPermanently(String documentPath) throws ObjectNotFoundException, RepositoryException;
 
   /**
@@ -668,7 +668,7 @@ public interface DocumentFileService {
    * @throws IllegalAccessException when the user is not found
    * @deprecated use {@link RecycleBinService#deleteItems}, which names the bin
    */
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException;
 
   /**
@@ -682,7 +682,7 @@ public interface DocumentFileService {
    * @throws IllegalAccessException when the user is not found
    * @deprecated use {@link RecycleBinService#restoreItems}, which names the bin
    */
-  @Deprecated(forRemoval = false)
+  @Deprecated(since = "7.3.0", forRemoval = false)
   void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException;
 
 

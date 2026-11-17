@@ -60,7 +60,7 @@ import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinScope;
-import org.exoplatform.documents.model.RecycleBinSortField;
+import org.exoplatform.documents.constant.RecycleBinSortField;
 import org.exoplatform.documents.storage.BulkItemAction;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.RecycleBinDriveStorage;
@@ -584,15 +584,20 @@ class RecycleBinServiceImplTest {
 
   @Test
   void aPurgeAskedForLeavesTheCountsAsTheyAreAndTellsItsRequesterWhatLeftTheBins() throws Exception {
-    when(storage.getIdsDeletedBefore(any())).thenReturn(List.of("a", "orphan", "removed", "changed", "broken", "lost", "last"));
+    when(storage.getIdsDeletedBefore(any())).thenReturn(List.of("a", "link", "orphan", "removed", "changed", "broken", "lost", "last"));
     for (String id : List.of("a", "removed", "changed", "broken", "last")) {
       when(storage.getRemovableItem(id)).thenReturn(deleted(id, JOHN_ID, 5, 40));
     }
     // A shortcut whose document left the trash, and an item of no drive: in no bin.
     when(storage.getRemovableItem("orphan")).thenReturn(deleted("orphan", null, 0, 40));
     when(storage.getRemovableItem("lost")).thenThrow(new RepositoryException("The node cannot be read"));
-    // An item of the bin of the space leaves with the first one.
-    when(storage.removeItem("a")).thenReturn(List.of(deleted("link", SALES_ID, 7, 2)));
+    // An item of the bin of the space, selected too, leaves with the first one: its turn finds it gone.
+    java.util.Set<String> gone = new java.util.HashSet<>();
+    when(storage.getRemovableItem("link")).thenAnswer(invocation -> gone.contains("link") ? null : deleted("link", SALES_ID, 7, 40));
+    when(storage.removeItem("a")).thenAnswer(invocation -> {
+      gone.add("link");
+      return List.of(deleted("link", SALES_ID, 7, 40));
+    });
     when(storage.removeItem("orphan")).thenReturn(List.of());
     when(storage.removeItem("removed")).thenThrow(new PathNotFoundException("Removed meanwhile"));
     when(storage.removeItem("changed")).thenThrow(new InvalidItemStateException("Changed meanwhile"));
@@ -609,6 +614,8 @@ class RecycleBinServiceImplTest {
     // What failed is left, and the run goes on to the last.
     verify(storage).removeItem("orphan");
     verify(storage).removeItem("last");
+    verify(storage).getRemovableItem("link");
+    verify(storage, never()).removeItem("link");
     verify(driveStorage, times(2)).remove(JOHN_ID, 5);
     verify(driveStorage).remove(SALES_ID, 7);
     verify(driveStorage, times(3)).remove(anyLong(), anyLong());
@@ -686,7 +693,7 @@ class RecycleBinServiceImplTest {
   }
 
   @Test
-  void aDailyRunThatCannotCountTheBinsRemovesNothingInThatRound() throws Exception {
+  void aStepOfTheDailyRunThatFailsDoesNotHoldTheOtherStepNorTheRemoval() throws Exception {
     doThrow(new IllegalStateException("The database is not available")).when(driveStorage).replaceAll(any());
     when(trashStorage.normalizeRecycleBinItems()).thenReturn(0).thenThrow(new RepositoryException("The trash cannot be read"));
 
@@ -696,9 +703,68 @@ class RecycleBinServiceImplTest {
     service.purgeExpired();
     runHanded();
 
-    verify(storage, times(1)).getDriveTotals();
-    verify(storage, never()).getIdsDeletedBefore(any());
-    assertEquals("FAILED", toldTo(rootAcl, 1).getStatus());
+    verify(trashStorage, times(2)).normalizeRecycleBinItems();
+    // The bins are counted again on the day the former items could not be read, too.
+    verify(storage, times(2)).getDriveTotals();
+    verify(storage, times(2)).getIdsDeletedBefore(any());
+    assertEquals("DONE_SUCCESSFULLY", toldTo(rootAcl, 1).getStatus());
+  }
+
+  @Test
+  void eachStepOfARunAndEachItemHasARequestOfItsOwn() throws Exception {
+    List<String> seen = new ArrayList<>();
+    RecycleBinServiceImpl scoped = new RecycleBinServiceImpl(storage,
+                                                             driveStorage,
+                                                             trashStorage,
+                                                             jcrDeleteFileStorage,
+                                                             retentionSetting,
+                                                             identityManager,
+                                                             spaceService,
+                                                             userAcl,
+                                                             listenerService,
+                                                             true,
+                                                             Runnable::run,
+                                                             step -> {
+                                                               seen.add("begin");
+                                                               step.run();
+                                                               seen.add("end");
+                                                             });
+    when(trashStorage.normalizeRecycleBinItems()).thenAnswer(invocation -> {
+      seen.add("normalize");
+      return 0;
+    });
+    when(storage.getDriveTotals()).thenAnswer(invocation -> {
+      seen.add("count");
+      return List.of();
+    });
+    when(storage.getIdsDeletedBefore(any())).thenReturn(List.of("a", "b"));
+    when(storage.getRemovableItem(anyString())).thenAnswer(invocation -> {
+      seen.add(invocation.getArgument(0));
+      return null;
+    });
+
+    scoped.purgeExpired();
+
+    assertEquals(List.of("begin", "normalize", "end", "begin", "count", "end", "begin", "a", "end", "begin", "b", "end"), seen);
+  }
+
+  @Test
+  void anItemSomeoneElseJustRemovedOrRestoredIsNotFound() throws Exception {
+    when(storage.getItem(ITEM_ID)).thenReturn(item(JOHN_ID, 5));
+    when(storage.removeItem(ITEM_ID)).thenThrow(new InvalidItemStateException("Changed meanwhile"));
+    when(storage.restoreItem(ITEM_ID, johnAcl, false)).thenThrow(new InvalidItemStateException("Changed meanwhile"))
+                                                      .thenThrow(new PathNotFoundException("Gone meanwhile"));
+
+    assertEquals(RecycleBinError.ITEM_NOT_FOUND,
+                 assertThrows(ObjectNotFoundException.class,
+                              () -> service.deleteItem(ITEM_ID, RecycleBinScope.user(), "john")).getMessage());
+    assertEquals(RecycleBinError.ITEM_NOT_FOUND,
+                 assertThrows(ObjectNotFoundException.class,
+                              () -> service.restoreItem(ITEM_ID, RecycleBinScope.user(), "john")).getMessage());
+    assertEquals(RecycleBinError.ITEM_NOT_FOUND,
+                 assertThrows(ObjectNotFoundException.class,
+                              () -> service.restoreItem(ITEM_ID, RecycleBinScope.user(), "john")).getMessage());
+    verifyNoInteractions(driveStorage);
   }
 
   @Test
@@ -820,9 +886,16 @@ class RecycleBinServiceImplTest {
     verify(driveStorage).remove(JOHN_ID, 5);
     // No longer in the bin: left out, and no failure.
     assertFalse(started.action().apply("gone"));
-    // An item of another bin, and a restore the bin refuses: failures of the item.
+    // In another bin since it was selected, or not readable at its turn: left out too.
     when(storage.getItem("foreign")).thenReturn(item(SALES_ID, 1));
-    assertThrows(IllegalAccessException.class, () -> started.action().apply("foreign"));
+    assertFalse(started.action().apply("foreign"));
+    when(storage.getItem("unreadable")).thenThrow(new RepositoryException("The trash cannot be read"));
+    assertFalse(started.action().apply("unreadable"));
+    verify(storage, times(1)).restoreItem(any(), any(), anyBoolean());
+    // Restored by someone else between its read and its turn: left out.
+    doThrow(new InvalidItemStateException("Changed meanwhile")).when(storage).restoreItem(ITEM_ID, johnAcl, false);
+    assertFalse(started.action().apply(ITEM_ID));
+    // A restore the bin refuses is a failure of the item.
     doThrow(new IllegalAccessException(RecycleBinError.RESTORE_TARGET_FORBIDDEN)).when(storage).restoreItem(ITEM_ID, johnAcl, false);
     assertEquals(RecycleBinError.RESTORE_TARGET_FORBIDDEN,
                  assertThrows(IllegalAccessException.class, () -> started.action().apply(ITEM_ID)).getMessage());
@@ -847,8 +920,51 @@ class RecycleBinServiceImplTest {
     // Removed meanwhile, as a shortcut is with the document it points at.
     assertFalse(started.action().apply(ITEM_ID));
     assertFalse(started.action().apply("gone"));
+    // In another bin since it was selected, or not readable at its turn: left out, and not removed.
+    when(storage.getItem("foreign")).thenReturn(item(SALES_ID, 1));
+    assertFalse(started.action().apply("foreign"));
+    when(storage.getItem("unreadable")).thenThrow(new IllegalStateException("The trash cannot be read"));
+    assertFalse(started.action().apply("unreadable"));
+    verify(storage, never()).removeItem("foreign");
+    verify(storage, never()).removeItem("unreadable");
     verify(driveStorage, times(1)).remove(anyLong(), anyLong());
     verify(storage, never()).restoreItem(any(), any(), anyBoolean());
+  }
+
+  @Test
+  void theTurnOfAnItemThatLeftWithAnEarlierOneIsLeftOut() throws Exception {
+    java.util.Map<String, RecycleBinItem> bin = new java.util.HashMap<>();
+    bin.put("document", deleted("document", JOHN_ID, 5, 1));
+    bin.put("shortcut", deleted("shortcut", JOHN_ID, 1, 1));
+    when(storage.getItem(anyString())).thenAnswer(invocation -> bin.get(invocation.<String> getArgument(0)));
+    when(storage.removeItem(anyString())).thenAnswer(invocation -> {
+      if (bin.remove(invocation.<String> getArgument(0)) == null) {
+        throw new PathNotFoundException("Removed with another item");
+      }
+      // The shortcut to a document leaves with it.
+      RecycleBinItem with = bin.remove("shortcut");
+      return with == null ? List.of() : List.of(with);
+    });
+    service.deleteItems("15", List.of("document", "shortcut"), RecycleBinScope.user(), "john");
+    Started started = started();
+
+    assertTrue(started.action().apply("document"));
+    assertFalse(started.action().apply("shortcut"));
+
+    verify(storage, times(1)).removeItem(anyString());
+    verify(driveStorage).remove(JOHN_ID, 5);
+    verify(driveStorage).remove(JOHN_ID, 1);
+  }
+
+  @Test
+  void aCallerWhoNoLongerHoldsTheBinIsRefusedAtEachTurn() throws Exception {
+    service.deleteItems("14", List.of(ITEM_ID), RecycleBinScope.space(SALES_SPACE), "mary");
+    Started started = started();
+    when(spaceService.isManager(any(Space.class), org.mockito.ArgumentMatchers.eq("mary"))).thenReturn(false);
+    when(spaceService.isPublisher(any(Space.class), org.mockito.ArgumentMatchers.eq("mary"))).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class, () -> started.action().apply(ITEM_ID));
+    verifyNoInteractions(storage);
   }
 
   @Test
@@ -863,13 +979,13 @@ class RecycleBinServiceImplTest {
     verifyNoInteractions(storage);
 
     for (List<String> none : new ArrayList<>(java.util.Arrays.asList(null, List.<String> of(), List.of(ITEM_ID, " ")))) {
-      assertThrows(IllegalArgumentException.class, () -> service.restoreItems("1", none, RecycleBinScope.user(), "john"));
-      assertThrows(IllegalArgumentException.class, () -> service.deleteItems("1", none, RecycleBinScope.user(), "john"));
+      assertEquals(RecycleBinError.ITEMS_MANDATORY, assertThrows(IllegalArgumentException.class, () -> service.restoreItems("1", none, RecycleBinScope.user(), "john")).getMessage());
+      assertEquals(RecycleBinError.ITEMS_MANDATORY, assertThrows(IllegalArgumentException.class, () -> service.deleteItems("1", none, RecycleBinScope.user(), "john")).getMessage());
     }
     for (String noId : new String[] { null, " " }) {
-      assertThrows(IllegalArgumentException.class, () -> service.restoreItems(noId, ids, RecycleBinScope.user(), "john"));
-      assertThrows(IllegalArgumentException.class, () -> service.deleteItems(noId, ids, RecycleBinScope.user(), "john"));
-      assertThrows(IllegalArgumentException.class, () -> service.emptyBin(noId, RecycleBinScope.user(), "john"));
+      assertEquals(RecycleBinError.ACTION_ID_MANDATORY, assertThrows(IllegalArgumentException.class, () -> service.restoreItems(noId, ids, RecycleBinScope.user(), "john")).getMessage());
+      assertEquals(RecycleBinError.ACTION_ID_MANDATORY, assertThrows(IllegalArgumentException.class, () -> service.deleteItems(noId, ids, RecycleBinScope.user(), "john")).getMessage());
+      assertEquals(RecycleBinError.ACTION_ID_MANDATORY, assertThrows(IllegalArgumentException.class, () -> service.emptyBin(noId, RecycleBinScope.user(), "john")).getMessage());
     }
 
     verifyNoInteractions(jcrDeleteFileStorage);

@@ -45,7 +45,7 @@ import org.exoplatform.documents.constant.RecycleBinError;
 import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
-import org.exoplatform.documents.model.RecycleBinSortField;
+import org.exoplatform.documents.constant.RecycleBinSortField;
 import org.exoplatform.documents.storage.RecycleBinStorage;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
@@ -222,6 +222,10 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
           throw new PathNotFoundException("No node of the trash carries the id " + itemId);
         }
         String itemPath = item.getPath();
+        if (!itemPath.startsWith(trashHome + "/") || !item.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
+          // The index answered with a node that left the trash since.
+          throw new PathNotFoundException("The node of the id " + itemId + " is no longer in the trash");
+        }
         // What leaves with the item, by path: a shortcut may be found twice.
         Map<String, Node> shortcuts = new TreeMap<>(Comparator.reverseOrder());
         if (!item.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {

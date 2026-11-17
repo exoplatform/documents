@@ -24,8 +24,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 import javax.jcr.InvalidItemStateException;
 import javax.jcr.PathNotFoundException;
@@ -37,9 +36,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
-import org.exoplatform.container.ExoContainerContext;
-import org.exoplatform.container.PortalContainer;
-import org.exoplatform.container.component.RequestLifeCycle;
 import org.exoplatform.documents.constant.RecycleBinError;
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionStatus;
@@ -48,7 +44,8 @@ import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinScope;
-import org.exoplatform.documents.model.RecycleBinSortField;
+import org.exoplatform.documents.constant.RecycleBinScopeType;
+import org.exoplatform.documents.constant.RecycleBinSortField;
 import org.exoplatform.documents.storage.BulkItemAction;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.RecycleBinDriveStorage;
@@ -76,8 +73,6 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   /** What a purge asked for by a user reports under, for a screen to tell it from a bulk action. */
   static final String                      PURGE_ACTION_ID     = "recycle-bin-purge";
 
-  private static final String              PURGE_THREAD        = "documents-recycle-bin-purge";
-
   private static final Log                 LOG                 = ExoLogger.getLogger(RecycleBinServiceImpl.class);
 
   private final RecycleBinStorage          recycleBinStorage;
@@ -102,6 +97,9 @@ public class RecycleBinServiceImpl implements RecycleBinService {
 
   /** Runs the purge, one at a time. */
   private final Executor                   purgeExecutor;
+
+  /** Runs each step of the purge in a request of its own, so that none keeps what another one read. */
+  private final Consumer<Runnable>         requestScope;
 
   /** Guards the three fields below: the daily run and the purges asked for are one run. */
   private final Object                     purgeLock           = new Object();
@@ -134,7 +132,8 @@ public class RecycleBinServiceImpl implements RecycleBinService {
          userAcl,
          listenerService,
          administratorAccessEnabled,
-         newPurgeExecutor());
+         RecycleBinPurgeExecutor.create(),
+         RecycleBinPurgeExecutor::inRequest);
   }
 
   RecycleBinServiceImpl(RecycleBinStorage recycleBinStorage, // NOSONAR the collaborators of a service
@@ -148,6 +147,32 @@ public class RecycleBinServiceImpl implements RecycleBinService {
                         ListenerService listenerService,
                         boolean administratorAccessEnabled,
                         Executor purgeExecutor) {
+    this(recycleBinStorage,
+         recycleBinDriveStorage,
+         trashStorage,
+         jcrDeleteFileStorage,
+         retentionSetting,
+         identityManager,
+         spaceService,
+         userAcl,
+         listenerService,
+         administratorAccessEnabled,
+         purgeExecutor,
+         Runnable::run);
+  }
+
+  RecycleBinServiceImpl(RecycleBinStorage recycleBinStorage, // NOSONAR the collaborators of a service
+                        RecycleBinDriveStorage recycleBinDriveStorage,
+                        TrashStorage trashStorage,
+                        JCRDeleteFileStorage jcrDeleteFileStorage,
+                        RecycleBinRetentionSetting retentionSetting,
+                        IdentityManager identityManager,
+                        SpaceService spaceService,
+                        UserACL userAcl,
+                        ListenerService listenerService,
+                        boolean administratorAccessEnabled,
+                        Executor purgeExecutor,
+                        Consumer<Runnable> requestScope) {
     this.recycleBinStorage = recycleBinStorage;
     this.recycleBinDriveStorage = recycleBinDriveStorage;
     this.trashStorage = trashStorage;
@@ -159,11 +184,12 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     this.listenerService = listenerService;
     this.administratorAccessEnabled = administratorAccessEnabled;
     this.purgeExecutor = purgeExecutor;
+    this.requestScope = requestScope;
   }
 
   @PreDestroy
   void stopPurge() {
-    if (purgeExecutor instanceof PurgeExecutor executor) {
+    if (purgeExecutor instanceof RecycleBinPurgeExecutor executor) {
       executor.close();
     }
   }
@@ -174,7 +200,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     RecycleBinFilter ownerFilter = getOwnerFilter(scope, filter, username);
     try {
       List<RecycleBinItem> items = recycleBinStorage.getItems(ownerFilter);
-      if (scope.getType() == RecycleBinScope.Type.DRIVE) {
+      if (scope.getType() == RecycleBinScopeType.DRIVE) {
         // Without the id of a document there is nothing to open it with.
         items.forEach(item -> item.setDocumentId(null));
       }
@@ -199,23 +225,13 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   public void restoreItem(String itemId, RecycleBinScope scope, String username) throws ObjectNotFoundException,
                                                                                  IllegalAccessException {
     RecycleBinItem item = getItemOfScope(itemId, scope, username);
-    restore(item, username, scope.getType() == RecycleBinScope.Type.DRIVE);
+    restore(item, username, scope.getType() == RecycleBinScopeType.DRIVE);
   }
 
   @Override
   public void deleteItem(String itemId, RecycleBinScope scope, String username) throws ObjectNotFoundException,
                                                                                 IllegalAccessException {
-    RecycleBinItem item = getItemOfScope(itemId, scope, username);
-    List<RecycleBinItem> removedWithIt;
-    try {
-      removedWithIt = recycleBinStorage.removeItem(itemId);
-    } catch (PathNotFoundException e) {
-      throw new ObjectNotFoundException(RecycleBinError.ITEM_NOT_FOUND);
-    } catch (RepositoryException e) {
-      throw new IllegalStateException("The item " + itemId + " of the Recycle Bin cannot be removed", e);
-    }
-    countOut(item);
-    removedWithIt.forEach(this::countOut);
+    remove(getItemOfScope(itemId, scope, username));
   }
 
   @Override
@@ -223,8 +239,12 @@ public class RecycleBinServiceImpl implements RecycleBinService {
                                                                                                           IllegalAccessException {
     getOwnerId(scope, username);
     startBulkAction(actionId, ActionType.RESTORE, checkItemIds(itemIds), username, itemId -> {
+      RecycleBinItem item = getItemAtTurn(itemId, scope, username);
+      if (item == null) {
+        return false;
+      }
       try {
-        restoreItem(itemId, scope, username);
+        restore(item, username, scope.getType() == RecycleBinScopeType.DRIVE);
         return true;
       } catch (ObjectNotFoundException e) {
         return false;
@@ -257,8 +277,12 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   /** The removal of an item at its turn: one that already left, alone or with another, is left out. */
   private BulkItemAction removal(RecycleBinScope scope, String username) {
     return itemId -> {
+      RecycleBinItem item = getItemAtTurn(itemId, scope, username);
+      if (item == null) {
+        return false;
+      }
       try {
-        deleteItem(itemId, scope, username);
+        remove(item);
         return true;
       } catch (ObjectNotFoundException e) {
         return false;
@@ -266,9 +290,46 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     };
   }
 
+  /**
+   * Reads an item again at its turn in a bulk action. The item is acted on
+   * right after this read and not within it: what happens to it in between is
+   * met by the action itself, which then leaves it out.
+   *
+   * @return the item, or null when it is no longer one of the bin named, or
+   *         cannot be read: it is left out and the others go on
+   * @throws IllegalAccessException when the caller no longer holds the bin
+   */
+  private RecycleBinItem getItemAtTurn(String itemId, RecycleBinScope scope, String username) throws ObjectNotFoundException,
+                                                                                              IllegalAccessException {
+    long ownerId = getOwnerId(scope, username);
+    RecycleBinItem item;
+    try {
+      item = recycleBinStorage.getItem(itemId);
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.debug("The item {} of the Recycle Bin could not be read at its turn: it is left out", itemId, e);
+      return null;
+    }
+    return item != null && Objects.equals(item.getOwnerId(), ownerId) ? item : null;
+  }
+
+  /** Removes an item for good, with what leaves with it, and counts them out of their drives. */
+  private void remove(RecycleBinItem item) throws ObjectNotFoundException {
+    List<RecycleBinItem> removedWithIt;
+    try {
+      removedWithIt = recycleBinStorage.removeItem(item.getId());
+    } catch (PathNotFoundException | InvalidItemStateException e) {
+      // Removed or restored by someone else since it was read.
+      throw new ObjectNotFoundException(RecycleBinError.ITEM_NOT_FOUND);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("The item " + item.getId() + " of the Recycle Bin cannot be removed", e);
+    }
+    countOut(item);
+    removedWithIt.forEach(this::countOut);
+  }
+
   private void startBulkAction(String actionId, ActionType actionType, List<String> itemIds, String username, BulkItemAction itemAction) {
     if (StringUtils.isBlank(actionId)) {
-      throw new IllegalArgumentException("The id of the bulk action is mandatory");
+      throw new IllegalArgumentException(RecycleBinError.ACTION_ID_MANDATORY);
     }
     ActionData actionData = new ActionData();
     actionData.setActionId(actionId);
@@ -281,7 +342,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
 
   private static List<String> checkItemIds(List<String> itemIds) {
     if (itemIds == null || itemIds.isEmpty() || itemIds.stream().anyMatch(StringUtils::isBlank)) {
-      throw new IllegalArgumentException("The ids of the items are mandatory");
+      throw new IllegalArgumentException(RecycleBinError.ITEMS_MANDATORY);
     }
     return itemIds;
   }
@@ -336,7 +397,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   public List<RecycleBinDrive> getDrives(long offset, int limit, String username) throws IllegalAccessException {
     checkPlatformAdministrator(username);
     if (offset < 0 || limit < 0) {
-      throw new IllegalArgumentException("The offset and the limit of a page cannot be negative");
+      throw new IllegalArgumentException(RecycleBinError.PAGE_INVALID);
     }
     return recycleBinDriveStorage.getDrives(offset, limit);
   }
@@ -454,14 +515,17 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   private void runPurgeRound(boolean dailyRun, List<String> requesters) {
     int removed = 0;
     boolean failed = false;
-    try {
-      if (dailyRun) {
+    if (dailyRun) {
+      runDailyStep("gives the former items of the trash their Recycle Bin facts", () -> {
         int normalized = trashStorage.normalizeRecycleBinItems();
         if (normalized > 0) {
           LOG.info("{} item(s) of the trash were given their Recycle Bin facts", normalized);
         }
-        recycleBinDriveStorage.replaceAll(recycleBinStorage.getDriveTotals());
-      }
+      });
+      runDailyStep("counts again what each Recycle Bin holds",
+                   () -> recycleBinDriveStorage.replaceAll(recycleBinStorage.getDriveTotals()));
+    }
+    try {
       removed = removeExpiredItems();
     } catch (RepositoryException | RuntimeException e) {
       LOG.error("The run that removes the expired items of the Recycle Bins ended on a failure", e);
@@ -472,17 +536,31 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     }
   }
 
+  /** A step of the daily run that fails is reported and tried again the next day: the removal still runs. */
+  private void runDailyStep(String what, DailyStep step) {
+    requestScope.accept(() -> {
+      try {
+        step.run();
+      } catch (RepositoryException | RuntimeException e) {
+        LOG.warn("The step of the daily run that {} ended on a failure", what, e);
+      }
+    });
+  }
+
   /** @return the number of items that left a bin */
   private int removeExpiredItems() throws RepositoryException {
-    int removed = 0;
-    for (String itemId : recycleBinStorage.getIdsDeletedBefore(getExpiryInstant())) {
-      removed += removeWhenExpired(itemId);
+    List<String> itemIds = recycleBinStorage.getIdsDeletedBefore(getExpiryInstant());
+    int[] removed = { 0 };
+    for (String itemId : itemIds) {
+      requestScope.accept(() -> removed[0] += removeWhenExpired(itemId));
     }
-    return removed;
+    return removed[0];
   }
 
   /**
-   * Reads an item again at its turn and removes it when it is still due.
+   * Reads an item again at its turn and removes it when it is still due. The
+   * removal follows this read and is not within it: an item restored in
+   * between is met by the removal, which then leaves it.
    *
    * @return the number of items that left a bin with it, itself included
    */
@@ -527,49 +605,13 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     }
   }
 
-  private static Executor newPurgeExecutor() {
-    ExecutorService executorService = Executors.newSingleThreadExecutor(task -> {
-      Thread thread = new Thread(task, PURGE_THREAD);
-      thread.setDaemon(true);
-      return thread;
-    });
-    return new PurgeExecutor(executorService);
-  }
-
-  /** Runs each purge on its thread, inside the portal container and a request of its own. */
-  private static final class PurgeExecutor implements Executor, AutoCloseable {
-
-    private final ExecutorService executorService;
-
-    private PurgeExecutor(ExecutorService executorService) {
-      this.executorService = executorService;
-    }
-
-    @Override
-    public void execute(Runnable purge) {
-      PortalContainer container = PortalContainer.getInstance();
-      executorService.execute(() -> {
-        ExoContainerContext.setCurrentContainer(container);
-        RequestLifeCycle.begin(container);
-        try {
-          purge.run();
-        } finally {
-          RequestLifeCycle.end();
-        }
-      });
-    }
-
-    @Override
-    public void close() {
-      executorService.shutdownNow();
-    }
-
-  }
-
   private void restore(RecycleBinItem item, String username, boolean administrator) throws ObjectNotFoundException,
                                                                                     IllegalAccessException {
     try {
       recycleBinStorage.restoreItem(item.getId(), userAcl.getUserIdentity(username), administrator);
+    } catch (PathNotFoundException | InvalidItemStateException e) {
+      // Removed or restored by someone else since it was read.
+      throw new ObjectNotFoundException(RecycleBinError.ITEM_NOT_FOUND);
     } catch (RepositoryException e) {
       throw new IllegalStateException("The item " + item.getId() + " of the Recycle Bin cannot be restored", e);
     }
@@ -600,7 +642,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     long ownerId = getOwnerId(scope, username);
     RecycleBinFilter asked = filter == null ? new RecycleBinFilter() : filter;
     if (asked.getOffset() < 0 || asked.getLimit() < 0) {
-      throw new IllegalArgumentException("The offset and the limit of a page cannot be negative");
+      throw new IllegalArgumentException(RecycleBinError.PAGE_INVALID);
     }
     return new RecycleBinFilter(ownerId, asked.getQuery(), asked.getSortField(), asked.isAscending(), asked.getOffset(), asked.getLimit());
   }
@@ -620,7 +662,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   private long getOwnerId(RecycleBinScope scope, String username) throws ObjectNotFoundException, IllegalAccessException {
     checkCaller(username);
     if (scope == null) {
-      throw new IllegalArgumentException("A Recycle Bin is mandatory");
+      throw new IllegalArgumentException(RecycleBinError.SCOPE_INVALID);
     }
     Identity owner;
     switch (scope.getType()) {
