@@ -761,6 +761,32 @@ class RecycleBinServiceImplTest {
     assertTrue(handedRuns.isEmpty());
   }
 
+  @Test
+  void theContentOfAnItemIsReadByWhoHoldsItsBinAndNoOneElse() throws Exception {
+    io.meeds.portal.thumbnail.model.FileContent content = mock(io.meeds.portal.thumbnail.model.FileContent.class);
+    when(storage.getItem(ITEM_ID)).thenReturn(item(JOHN_ID, 5));
+    when(storage.getItemContent(ITEM_ID)).thenReturn(content);
+
+    assertSame(content, service.getItemContent(ITEM_ID, "john"));
+
+    // Neither another user nor an administrator of the platform, whatever the platform lets them do on the drives.
+    assertThrows(IllegalAccessException.class, () -> service.getItemContent(ITEM_ID, "mary"));
+    assertThrows(IllegalAccessException.class, () -> service.getItemContent(ITEM_ID, "root"));
+    assertThrows(IllegalAccessException.class, () -> service.getItemContent(ITEM_ID, " "));
+    assertThrows(ObjectNotFoundException.class, () -> service.getItemContent("gone", "john"));
+    verify(storage, times(1)).getItemContent(any());
+  }
+
+  @Test
+  void anItemWithNoContentOfItsOwnIsNotFoundAndAContentThatCannotBeReadIsAFailure() throws Exception {
+    when(storage.getItem(ITEM_ID)).thenReturn(item(JOHN_ID, 5));
+    when(storage.getItemContent(ITEM_ID)).thenReturn(null).thenThrow(new RepositoryException("The workspace is not available"));
+
+    assertEquals(RecycleBinError.ITEM_NOT_FOUND,
+                 assertThrows(ObjectNotFoundException.class, () -> service.getItemContent(ITEM_ID, "john")).getMessage());
+    assertThrows(IllegalStateException.class, () -> service.getItemContent(ITEM_ID, "john"));
+  }
+
   /** The bulk action the service started: what it is, its items, and what it does to each. */
   private record Started(ActionData data, List<String> itemIds, BulkItemAction action) {
   }

@@ -24,6 +24,8 @@ import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinScope;
 
+import io.meeds.portal.thumbnail.model.FileContent;
+
 /**
  * The Recycle Bins of the drives: who may see the bin of a drive and act on
  * its items.
@@ -194,6 +196,21 @@ public interface RecycleBinService {
    * @param size size of the item, in bytes
    */
   void itemTrashed(long ownerId, long size);
+
+  /**
+   * Reads the content of a deleted document for who may view it, as
+   * {@link #checkCanView} says: the holder of the bin it is in, and never an
+   * administrator acting on the bin of a drive.
+   *
+   * @param itemId id of the item in the bin
+   * @param username the caller
+   * @return its name, its type and its content
+   * @throws ObjectNotFoundException when no item carries the id, or when the
+   *           item has no content of its own, as a folder
+   * @throws IllegalAccessException when the caller does not hold the bin of
+   *           the item
+   */
+  FileContent getItemContent(String itemId, String username) throws ObjectNotFoundException, IllegalAccessException;
 
   /**
    * Restores several items of a bin, as a bulk action: it returns once the

@@ -59,6 +59,8 @@ import org.exoplatform.services.jcr.impl.core.LocationFactory;
 import org.exoplatform.services.jcr.impl.core.NamespaceRegistryImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.query.DefaultQueryNodeFactory;
+
+import io.meeds.portal.thumbnail.model.FileContent;
 import org.exoplatform.services.jcr.impl.core.query.sql.JCRSQLQueryBuilder;
 
 /**
@@ -474,6 +476,61 @@ class JCRRecycleBinStorageTest {
     for (String statement : jcr.getStatements()) {
       assertNotNull(JCRSQLQueryBuilder.createQuery(statement, locationFactory, new DefaultQueryNodeFactory()), statement);
     }
+  }
+
+  @Test
+  void theContentOfADeletedDocumentIsReadWithItsNameAndItsType() throws Exception {
+    Calendar modified = daysAgo(3);
+    Item file = item(JOHN_BIN + "/report.docx", ID_1, "7", "report.docx", 5, daysAgo(1));
+    file.set("exo:title", "Report.docx");
+    jcr.at(JOHN_BIN + "/report.docx/jcr:content")
+       .set("jcr:data", "hello".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+       .set("jcr:mimeType", "application/msword")
+       .set("jcr:lastModified", modified);
+    Item bare = item(JOHN_BIN + "/bare.bin", ID_2, "7", "bare.bin", 2, daysAgo(1));
+    jcr.at(JOHN_BIN + "/bare.bin/jcr:content").set("jcr:data", new byte[] { 1, 2 });
+    jcr.commit();
+
+    FileContent content = storage.getItemContent(ID_1);
+
+    assertEquals(file.getId(), content.getId());
+    assertEquals("Report.docx", content.getName());
+    assertEquals("application/msword", content.getMimeType());
+    assertEquals("hello", new String(content.getContent().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+    assertEquals(modified.getTime(), content.getUpdatedDate());
+    // Neither a type nor a date was recorded.
+    FileContent bareContent = storage.getItemContent(ID_2);
+    assertEquals(bare.getId(), bareContent.getId());
+    assertNull(bareContent.getMimeType());
+    assertNull(bareContent.getUpdatedDate());
+    assertEquals(2, bareContent.getContent().readAllBytes().length);
+    verify(systemProvider, times(2)).close();
+  }
+
+  @Test
+  void whatHasNoContentOfItsOwnReadsNone() throws Exception {
+    // A folder, a file whose content holds no data, and a shortcut trashed with a document.
+    jcr.add(JOHN_BIN + "/folder", "nt:folder")
+       .mixin("exo:restoreLocation", "exo:recycleBinItem")
+       .set("exo:trashId", ID_1)
+       .set("exo:recycleBinOwner", "7");
+    item(JOHN_BIN + "/empty.docx", ID_2, "7", "empty.docx", 0, daysAgo(1));
+    jcr.at(JOHN_BIN + "/empty.docx/jcr:content").getProperties().remove("jcr:data");
+    Item cascade = jcr.addFile(JOHN_BIN + "/held.docx", 3);
+    cascade.mixin("exo:restoreLocation", "exo:recycleBinItem").set("exo:trashId", ID_3).set("exo:recycleBinOf", ID_2);
+    jcr.at(JOHN_BIN + "/held.docx/jcr:content").set("jcr:data", new byte[] { 1 });
+    jcr.commit();
+
+    assertNull(storage.getItemContent(ID_1));
+    assertNull(storage.getItemContent(ID_2));
+    assertNull(storage.getItemContent(ID_3));
+    assertNull(storage.getItemContent(ID_4));
+    verify(systemProvider, times(4)).close();
+
+    jcr.getStatements().clear();
+    assertNull(storage.getItemContent(null));
+    assertNull(storage.getItemContent("' OR exo:trashId LIKE '%"));
+    assertTrue(jcr.getStatements().isEmpty());
   }
 
   @Test
