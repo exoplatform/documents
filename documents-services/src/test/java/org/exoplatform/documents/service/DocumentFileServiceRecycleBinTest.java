@@ -18,6 +18,7 @@ package org.exoplatform.documents.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.jcr.AccessDeniedException;
@@ -37,17 +39,23 @@ import javax.jcr.PathNotFoundException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
+import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinScope;
 import org.exoplatform.documents.model.RecycleBinSortField;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
+import org.exoplatform.documents.storage.BulkItemAction;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.RecycleBinStorage;
 import org.exoplatform.services.security.ConversationState;
+import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
@@ -70,6 +78,12 @@ class DocumentFileServiceRecycleBinTest {
 
   private IdentityManager         identityManager;
 
+  private JCRDeleteFileStorage    jcrDeleteFileStorage;
+
+  private IdentityRegistry        identityRegistry;
+
+  private final org.exoplatform.services.security.Identity johnAcl = new org.exoplatform.services.security.Identity("john");
+
   private DocumentFileServiceImpl service;
 
   @BeforeEach
@@ -82,10 +96,25 @@ class DocumentFileServiceRecycleBinTest {
     Identity sales = new Identity("space", "sales");
     when(identityManager.getIdentity("7")).thenReturn(john);
     when(identityManager.getIdentity("20")).thenReturn(sales);
+    when(identityManager.getIdentity(7L)).thenReturn(john);
+    jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
+    identityRegistry = mock(IdentityRegistry.class);
+    when(identityRegistry.getIdentity("john")).thenReturn(johnAcl);
     Space space = new Space();
     space.setId("3");
     when(spaceService.getSpaceByPrettyName("sales")).thenReturn(space);
-    service = new DocumentFileServiceImpl(null, null, null, spaceService, identityManager, null, null, null, null, null, null, null) {
+    service = new DocumentFileServiceImpl(null,
+                                          jcrDeleteFileStorage,
+                                          null,
+                                          spaceService,
+                                          identityManager,
+                                          identityRegistry,
+                                          null,
+                                          null,
+                                          null,
+                                          null,
+                                          null,
+                                          null) {
       @Override
       RecycleBinService getRecycleBinService() {
         return recycleBinService;
@@ -202,6 +231,84 @@ class DocumentFileServiceRecycleBinTest {
     assertEquals(gone, assertThrows(ObjectNotFoundException.class, () -> service.deleteDocumentPermanently(PATH)));
     assertThrows(AccessDeniedException.class, () -> service.getDeletedDocuments(null));
     assertThrows(IllegalStateException.class, () -> service.countDeletedDocuments());
+  }
+
+  @Test
+  void theFormerBulkActionsActOnEachItemAtItsTurnThroughTheBinItsHolderNames() throws Exception {
+    String otherPath = "/Trash/Users/j___/jo___/joh___/john/plan.docx";
+
+    service.restoreDocuments(5, nodes("document-id", PATH, null, otherPath), 7L);
+
+    ArgumentCaptor<ActionData> data = ArgumentCaptor.forClass(ActionData.class);
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<String>> keys = ArgumentCaptor.forClass(List.class);
+    ArgumentCaptor<BulkItemAction> action = ArgumentCaptor.forClass(BulkItemAction.class);
+    verify(jcrDeleteFileStorage).executeBulkAction(data.capture(), keys.capture(), action.capture());
+    assertEquals("5", data.getValue().getActionId());
+    assertEquals("RESTORE", data.getValue().getActionType());
+    assertSame(johnAcl, data.getValue().getIdentity());
+    assertEquals("john", data.getValue().getUserName());
+    assertEquals(2, data.getValue().getNumberOfItems());
+    // Each item reports under the id the screen gave it, or under its path when it gave none.
+    assertEquals(List.of("document-id", otherPath), keys.getValue());
+    verifyNoInteractions(recycleBinService, recycleBinStorage);
+
+    when(recycleBinStorage.getItemAt(PATH)).thenReturn(item(7L), item(20L), item(null), item(7L));
+    assertTrue(action.getValue().apply("document-id"));
+    verify(recycleBinService).restoreItem(ITEM_ID, RecycleBinScope.user(), "john");
+    assertTrue(action.getValue().apply("document-id"));
+    verify(recycleBinService).restoreItem(ITEM_ID, RecycleBinScope.space(3), "john");
+    // In no bin a user holds: a failure of the item.
+    assertThrows(AccessDeniedException.class, () -> action.getValue().apply("document-id"));
+    // No longer an item, at its path or for the bin: left out.
+    assertFalse(action.getValue().apply(otherPath));
+    doThrow(new ObjectNotFoundException("recycleBin.item.notFound")).when(recycleBinService).restoreItem(ITEM_ID, RecycleBinScope.user(), "john");
+    assertFalse(action.getValue().apply("document-id"));
+    verify(recycleBinService, never()).deleteItem(anyString(), any(), anyString());
+  }
+
+  @Test
+  void theFormerBulkRemovalRemovesEachItemForGoodThroughItsBin() throws Exception {
+    service.deleteDocumentsPermanently(6, nodes("document-id", PATH), 7L);
+
+    ArgumentCaptor<ActionData> data = ArgumentCaptor.forClass(ActionData.class);
+    ArgumentCaptor<BulkItemAction> action = ArgumentCaptor.forClass(BulkItemAction.class);
+    verify(jcrDeleteFileStorage).executeBulkAction(data.capture(), any(), action.capture());
+    assertEquals("6", data.getValue().getActionId());
+    assertEquals("PERMANENTLY_DELETE", data.getValue().getActionType());
+
+    when(recycleBinStorage.getItemAt(PATH)).thenReturn(item(20L));
+    assertTrue(action.getValue().apply("document-id"));
+    verify(recycleBinService).deleteItem(ITEM_ID, RecycleBinScope.space(3), "john");
+    doThrow(new ObjectNotFoundException("recycleBin.item.notFound")).when(recycleBinService).deleteItem(ITEM_ID, RecycleBinScope.space(3), "john");
+    assertFalse(action.getValue().apply("document-id"));
+    verify(recycleBinService, never()).restoreItem(anyString(), any(), anyString());
+  }
+
+  @Test
+  void theFormerBulkActionsAreStartedForAUserOfThePlatformOnly() throws Exception {
+    Identity guest = new Identity("organization", "__anonim");
+    when(identityManager.getIdentity(9L)).thenReturn(guest);
+    when(identityRegistry.getIdentity("__anonim")).thenReturn(new org.exoplatform.services.security.Identity("__anonim"));
+
+    assertThrows(IllegalAccessException.class, () -> service.restoreDocuments(5, nodes("document-id", PATH), 99L));
+    assertThrows(IllegalAccessException.class, () -> service.deleteDocumentsPermanently(5, nodes("document-id", PATH), 99L));
+    assertThrows(IllegalAccessException.class, () -> service.restoreDocuments(5, nodes("document-id", PATH), 9L));
+    assertThrows(IllegalAccessException.class, () -> service.deleteDocumentsPermanently(5, nodes("document-id", PATH), 9L));
+
+    verifyNoInteractions(jcrDeleteFileStorage, recycleBinService, recycleBinStorage);
+  }
+
+  /** Trash elements as the former screen sends them: an id, which may be missing, and a path. */
+  private static List<AbstractNode> nodes(String... idsAndPaths) {
+    List<AbstractNode> nodes = new ArrayList<>();
+    for (int i = 0; i < idsAndPaths.length; i += 2) {
+      TrashElementNode node = new TrashElementNode();
+      node.setId(idsAndPaths[i]);
+      node.setPath(idsAndPaths[i + 1]);
+      nodes.add(node);
+    }
+    return nodes;
   }
 
   private static RecycleBinItem item(Long ownerId) {
