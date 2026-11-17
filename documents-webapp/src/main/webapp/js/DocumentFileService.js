@@ -199,7 +199,12 @@ export function saveVisibility(file) {
     },
     body: JSON.stringify(abFile),
   }).then(resp => {
-    if (!resp || !resp.ok) {
+    if (resp?.status === 403) {
+      // the body names the rule that refused the change, when one did
+      return resp.text().then(code => {
+        throw new Error(code);
+      });
+    } else if (!resp || !resp.ok) {
       throw new Error('Response code indicates a server error', resp);
     } else {
       return resp.ok;
