@@ -19,6 +19,7 @@ package org.exoplatform.documents.storage.jcr;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
@@ -117,7 +118,7 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
   }
 
   @Override
-  public void removeItem(String itemId) throws RepositoryException {
+  public List<RecycleBinItem> removeItem(String itemId) throws RepositoryException {
     if (itemId == null || !ITEM_ID_PATTERN.matcher(itemId).matches()) {
       throw new PathNotFoundException("No node of the trash carries the id given");
     }
@@ -141,11 +142,21 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
                   shortcuts);
         }
         collect(session, selectItems() + " AND " + NodeTypeConstants.RECYCLE_BIN_OF + " = '" + itemId + "'", itemPath, shortcuts);
-        for (Node shortcut : shortcuts.values()) {
+        // A shortcut that leaves with the item may be an item of a bin itself:
+        // it is read before it is removed, for the caller to count it out. A
+        // shortcut outside the trash is in no bin, whatever marks it kept.
+        List<RecycleBinItem> removedWithIt = new ArrayList<>();
+        for (Map.Entry<String, Node> entry : shortcuts.entrySet()) {
+          Node shortcut = entry.getValue();
+          if (entry.getKey().startsWith(trashHome + "/") && shortcut.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)
+              && shortcut.hasProperty(NodeTypeConstants.RECYCLE_BIN_OWNER)) {
+            removedWithIt.add(toItem(shortcut));
+          }
           shortcut.remove();
         }
         item.remove();
         session.save();
+        return removedWithIt;
       } catch (RepositoryException | RuntimeException e) {
         session.refresh(false);
         throw e;
@@ -233,7 +244,7 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
    * case, and the characters a pattern or a literal reads are escaped.
    */
   private static String escapeTerm(String term) {
-    return term.toLowerCase().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
+    return term.toLowerCase(Locale.ROOT).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
   }
 
   private static String getSortProperty(RecycleBinSortField sortField) {
