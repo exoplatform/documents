@@ -61,6 +61,8 @@ import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinScope;
 import org.exoplatform.documents.model.RecycleBinSortField;
+import org.exoplatform.documents.storage.BulkItemAction;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.RecycleBinDriveStorage;
 import org.exoplatform.documents.storage.RecycleBinStorage;
 import org.exoplatform.documents.storage.TrashStorage;
@@ -103,6 +105,10 @@ class RecycleBinServiceImplTest {
 
   private TrashStorage                                      trashStorage;
 
+  private JCRDeleteFileStorage                              jcrDeleteFileStorage;
+
+  private org.exoplatform.services.security.Identity        johnAcl;
+
   private RecycleBinRetentionSetting                        retentionSetting;
 
   private ListenerService                                   listenerService;
@@ -122,6 +128,7 @@ class RecycleBinServiceImplTest {
     spaceService = mock(SpaceService.class);
     userAcl = mock(UserACL.class);
     trashStorage = mock(TrashStorage.class);
+    jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     retentionSetting = mock(RecycleBinRetentionSetting.class);
     listenerService = mock(ListenerService.class);
     lenient().when(retentionSetting.get()).thenReturn(30L);
@@ -152,7 +159,8 @@ class RecycleBinServiceImplTest {
     lenient().when(userAcl.getAdminGroups()).thenReturn("/platform/administrators");
     maryAcl = new org.exoplatform.services.security.Identity("mary");
     lenient().when(userAcl.getUserIdentity("mary")).thenReturn(maryAcl);
-    lenient().when(userAcl.getUserIdentity("john")).thenReturn(new org.exoplatform.services.security.Identity("john"));
+    johnAcl = new org.exoplatform.services.security.Identity("john");
+    lenient().when(userAcl.getUserIdentity("john")).thenReturn(johnAcl);
     lenient().when(userAcl.getUserIdentity("paul")).thenReturn(new org.exoplatform.services.security.Identity("paul"));
     rootAcl = new org.exoplatform.services.security.Identity("root", Set.of(new MembershipEntry("/platform/administrators", "member")));
     lenient().when(userAcl.getUserIdentity("root")).thenReturn(rootAcl);
@@ -710,6 +718,7 @@ class RecycleBinServiceImplTest {
     RecycleBinServiceImpl stopping = new RecycleBinServiceImpl(storage,
                                                                driveStorage,
                                                                trashStorage,
+                                                               jcrDeleteFileStorage,
                                                                retentionSetting,
                                                                identityManager,
                                                                spaceService,
@@ -752,10 +761,177 @@ class RecycleBinServiceImplTest {
     assertTrue(handedRuns.isEmpty());
   }
 
+  /** The bulk action the service started: what it is, its items, and what it does to each. */
+  private record Started(ActionData data, List<String> itemIds, BulkItemAction action) {
+  }
+
+  @SuppressWarnings("unchecked")
+  private Started started() {
+    ArgumentCaptor<ActionData> data = ArgumentCaptor.forClass(ActionData.class);
+    ArgumentCaptor<List<String>> itemIds = ArgumentCaptor.forClass(List.class);
+    ArgumentCaptor<BulkItemAction> action = ArgumentCaptor.forClass(BulkItemAction.class);
+    verify(jcrDeleteFileStorage).executeBulkAction(data.capture(), itemIds.capture(), action.capture());
+    return new Started(data.getValue(), itemIds.getValue(), action.getValue());
+  }
+
+  @Test
+  void severalItemsAreRestoredAsABulkActionOfTheCallerEachAtItsTurn() throws Exception {
+    service.restoreItems("12", List.of(ITEM_ID, "gone", "foreign"), RecycleBinScope.user(), "john");
+
+    Started started = started();
+    assertEquals("12", started.data().getActionId());
+    assertEquals("RESTORE", started.data().getActionType());
+    assertSame(johnAcl, started.data().getIdentity());
+    assertEquals("john", started.data().getUserName());
+    assertEquals(3, started.data().getNumberOfItems());
+    assertEquals(List.of(ITEM_ID, "gone", "foreign"), started.itemIds());
+    // Nothing is read nor restored before the turn of an item.
+    verifyNoInteractions(storage, driveStorage);
+
+    when(storage.getItem(ITEM_ID)).thenReturn(item(JOHN_ID, 5));
+    assertTrue(started.action().apply(ITEM_ID));
+    verify(storage).restoreItem(ITEM_ID, johnAcl, false);
+    verify(driveStorage).remove(JOHN_ID, 5);
+    // No longer in the bin: left out, and no failure.
+    assertFalse(started.action().apply("gone"));
+    // An item of another bin, and a restore the bin refuses: failures of the item.
+    when(storage.getItem("foreign")).thenReturn(item(SALES_ID, 1));
+    assertThrows(IllegalAccessException.class, () -> started.action().apply("foreign"));
+    doThrow(new IllegalAccessException(RecycleBinError.RESTORE_TARGET_FORBIDDEN)).when(storage).restoreItem(ITEM_ID, johnAcl, false);
+    assertEquals(RecycleBinError.RESTORE_TARGET_FORBIDDEN,
+                 assertThrows(IllegalAccessException.class, () -> started.action().apply(ITEM_ID)).getMessage());
+    verify(driveStorage, times(1)).remove(anyLong(), anyLong());
+  }
+
+  @Test
+  void severalItemsAreRemovedForGoodAsABulkActionAndWhatAlreadyLeftIsLeftOut() throws Exception {
+    service.deleteItems("13", List.of(ITEM_ID, "gone"), RecycleBinScope.user(), "john");
+
+    Started started = started();
+    assertEquals("13", started.data().getActionId());
+    assertEquals("PERMANENTLY_DELETE", started.data().getActionType());
+    assertSame(johnAcl, started.data().getIdentity());
+    assertEquals(2, started.data().getNumberOfItems());
+    verifyNoInteractions(storage, driveStorage);
+
+    when(storage.getItem(ITEM_ID)).thenReturn(item(JOHN_ID, 5));
+    when(storage.removeItem(ITEM_ID)).thenReturn(List.of()).thenThrow(new PathNotFoundException("Removed with another item"));
+    assertTrue(started.action().apply(ITEM_ID));
+    verify(driveStorage).remove(JOHN_ID, 5);
+    // Removed meanwhile, as a shortcut is with the document it points at.
+    assertFalse(started.action().apply(ITEM_ID));
+    assertFalse(started.action().apply("gone"));
+    verify(driveStorage, times(1)).remove(anyLong(), anyLong());
+    verify(storage, never()).restoreItem(any(), any(), anyBoolean());
+  }
+
+  @Test
+  void aBulkActionIsStartedOnlyByWhoHoldsTheBinForItemsNamedAndUnderAnId() throws Exception {
+    List<String> ids = List.of(ITEM_ID);
+    RecycleBinScope salesBin = RecycleBinScope.space(SALES_SPACE);
+    assertThrows(IllegalAccessException.class, () -> service.restoreItems("1", ids, salesBin, "john"));
+    assertThrows(IllegalAccessException.class, () -> service.deleteItems("1", ids, salesBin, "john"));
+    assertThrows(IllegalAccessException.class, () -> service.emptyBin("1", salesBin, "john"));
+    assertThrows(IllegalAccessException.class, () -> service.emptyBin("1", RecycleBinScope.drive(JOHN_ID), "mary"));
+    assertThrows(ObjectNotFoundException.class, () -> service.deleteItems("1", ids, RecycleBinScope.space(99), "john"));
+    verifyNoInteractions(storage);
+
+    for (List<String> none : new ArrayList<>(java.util.Arrays.asList(null, List.<String> of(), List.of(ITEM_ID, " ")))) {
+      assertThrows(IllegalArgumentException.class, () -> service.restoreItems("1", none, RecycleBinScope.user(), "john"));
+      assertThrows(IllegalArgumentException.class, () -> service.deleteItems("1", none, RecycleBinScope.user(), "john"));
+    }
+    for (String noId : new String[] { null, " " }) {
+      assertThrows(IllegalArgumentException.class, () -> service.restoreItems(noId, ids, RecycleBinScope.user(), "john"));
+      assertThrows(IllegalArgumentException.class, () -> service.deleteItems(noId, ids, RecycleBinScope.user(), "john"));
+      assertThrows(IllegalArgumentException.class, () -> service.emptyBin(noId, RecycleBinScope.user(), "john"));
+    }
+
+    verifyNoInteractions(jcrDeleteFileStorage);
+  }
+
+  @Test
+  void whoHoldsTheBinIsAskedAgainAtTheTurnOfEachItem() throws Exception {
+    when(storage.getItem(ITEM_ID)).thenReturn(item(SALES_ID, 1));
+    service.deleteItems("1", List.of(ITEM_ID), RecycleBinScope.space(SALES_SPACE), "mary");
+    Started started = started();
+
+    // No longer a manager of the space when the item is reached.
+    when(spaceService.isManager(sales, "mary")).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class, () -> started.action().apply(ITEM_ID));
+    verify(storage, never()).removeItem(any());
+  }
+
+  @Test
+  void emptyingABinRemovesForGoodTheItemsItHoldsWhenAsked() throws Exception {
+    RecycleBinItem first = item(SALES_ID, 5);
+    first.setId("a");
+    RecycleBinItem second = item(SALES_ID, 7);
+    second.setId("b");
+    when(storage.getItems(any())).thenReturn(List.of(first, second));
+
+    service.emptyBin("14", RecycleBinScope.space(SALES_SPACE), "mary");
+
+    ArgumentCaptor<RecycleBinFilter> filter = ArgumentCaptor.forClass(RecycleBinFilter.class);
+    verify(storage).getItems(filter.capture());
+    // Every item of the bin of the space: no term, no page.
+    assertEquals(SALES_ID, filter.getValue().getOwnerId());
+    assertNull(filter.getValue().getQuery());
+    assertEquals(0, filter.getValue().getOffset());
+    assertEquals(0, filter.getValue().getLimit());
+    Started started = started();
+    assertEquals("14", started.data().getActionId());
+    assertEquals("PERMANENTLY_DELETE", started.data().getActionType());
+    assertSame(maryAcl, started.data().getIdentity());
+    assertEquals("mary", started.data().getUserName());
+    assertEquals(2, started.data().getNumberOfItems());
+    assertEquals(List.of("a", "b"), started.itemIds());
+    verify(storage, never()).removeItem(any());
+
+    when(storage.getItem("a")).thenReturn(first);
+    when(storage.removeItem("a")).thenReturn(List.of(second));
+    assertTrue(started.action().apply("a"));
+    verify(driveStorage).remove(SALES_ID, 5);
+    verify(driveStorage).remove(SALES_ID, 7);
+    // The second left with the first.
+    assertFalse(started.action().apply("b"));
+  }
+
+  @Test
+  void aBinThatCannotBeReadIsNotEmptiedAndAnEmptyOneStillReportsItsEnd() throws Exception {
+    when(storage.getItems(any())).thenThrow(new RepositoryException("The index is not available")).thenReturn(List.of());
+
+    assertThrows(IllegalStateException.class, () -> service.emptyBin("15", RecycleBinScope.user(), "john"));
+    verifyNoInteractions(jcrDeleteFileStorage);
+
+    service.emptyBin("15", RecycleBinScope.user(), "john");
+    Started started = started();
+    assertEquals(0, started.data().getNumberOfItems());
+    assertTrue(started.itemIds().isEmpty());
+  }
+
+  @Test
+  void anAdministratorActsInBulkOnTheBinOfADriveOnlyWhileThePlatformLetsThem() throws Exception {
+    List<String> ids = List.of(ITEM_ID);
+    RecycleBinScope johnDrive = RecycleBinScope.drive(JOHN_ID);
+    assertThrows(IllegalAccessException.class, () -> service(false).restoreItems("1", ids, johnDrive, "root"));
+    verifyNoInteractions(jcrDeleteFileStorage);
+
+    service.restoreItems("16", ids, johnDrive, "root");
+    Started started = started();
+    assertSame(rootAcl, started.data().getIdentity());
+
+    when(storage.getItem(ITEM_ID)).thenReturn(item(JOHN_ID, 5));
+    assertTrue(started.action().apply(ITEM_ID));
+    // Restored as an administrator does: to the folder or to the root of the drive of its owner.
+    verify(storage).restoreItem(ITEM_ID, rootAcl, true);
+  }
+
   private RecycleBinServiceImpl service(boolean administratorAccessEnabled) {
     return new RecycleBinServiceImpl(storage,
                                      driveStorage,
                                      trashStorage,
+                                     jcrDeleteFileStorage,
                                      retentionSetting,
                                      identityManager,
                                      spaceService,
