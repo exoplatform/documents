@@ -734,6 +734,9 @@ public class FakeJcr {
     if (value instanceof Calendar date) {
       lenient().when(property.getDate()).thenReturn(date);
     }
+    if (value instanceof byte[] bytes) {
+      lenient().when(property.getStream()).thenAnswer(invocation -> new java.io.ByteArrayInputStream(bytes));
+    }
     if (value instanceof String[] strings) {
       javax.jcr.Value[] values = new javax.jcr.Value[strings.length];
       for (int i = 0; i < strings.length; i++) {

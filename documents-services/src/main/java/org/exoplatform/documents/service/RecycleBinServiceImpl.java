@@ -64,6 +64,7 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
+import io.meeds.portal.thumbnail.model.FileContent;
 import jakarta.annotation.PreDestroy;
 
 @Service
@@ -293,6 +294,21 @@ public class RecycleBinServiceImpl implements RecycleBinService {
       throw new IllegalAccessException("User " + username + " may not read the item " + itemId + " of the Recycle Bin");
     }
     return item;
+  }
+
+  @Override
+  public FileContent getItemContent(String itemId, String username) throws ObjectNotFoundException, IllegalAccessException {
+    checkCanView(itemId, username);
+    FileContent content;
+    try {
+      content = recycleBinStorage.getItemContent(itemId);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("The content of the item " + itemId + " of the Recycle Bin cannot be read", e);
+    }
+    if (content == null) {
+      throw new ObjectNotFoundException(RecycleBinError.ITEM_NOT_FOUND);
+    }
+    return content;
   }
 
   @Override
