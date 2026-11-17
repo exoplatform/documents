@@ -33,6 +33,11 @@
   </component>
 
   <component>
+    <key>org.exoplatform.documents.storage.RecycleBinStorage</key>
+    <type>org.exoplatform.documents.storage.jcr.JCRRecycleBinStorage</type>
+  </component>
+
+  <component>
     <key>org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector</key>
     <type>org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector</type>
     <init-params>
