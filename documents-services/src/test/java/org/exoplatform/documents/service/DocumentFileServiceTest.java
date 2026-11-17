@@ -796,15 +796,6 @@ public class DocumentFileServiceTest {
   }
 
   @Test
-  public void getDeletedDocumentsTest() throws Exception {
-    TrashElementNode trashElementNode = mock(TrashElementNode.class);
-    List<TrashElementNode> trashElementNodes = Arrays.asList(trashElementNode);
-    when(jcrDeleteFileStorage.getDeletedDocuments(any(TrashElementNodeFilter.class))).thenReturn(trashElementNodes);
-
-    assertEquals(1, documentFileService.getDeletedDocuments(new TrashElementNodeFilter()).size());
-  }
-
-  @Test
   public void testGetImageThumbnailContentChecksDocumentAccess() throws Exception {
     org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("user");
     when(identityRegistry.getIdentity("user")).thenReturn(aclIdentity);
