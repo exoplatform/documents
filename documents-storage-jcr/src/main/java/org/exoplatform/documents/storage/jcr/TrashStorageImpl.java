@@ -56,6 +56,7 @@ import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
@@ -68,7 +69,8 @@ public class TrashStorageImpl implements TrashStorage {
 
   private static final String    TRASH_HOME_PATH         = "trashHomeNodePath";
 
-  private static final String    SELECT_FROM_TRASH_QUERY = "SELECT * FROM nt:base WHERE exo:restorePath IS NOT NULL";
+  private static final Pattern   TRASH_ID_PATTERN        =
+                                                  Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
 
   private RepositoryService      repositoryService;
 
@@ -711,8 +713,7 @@ public class TrashStorageImpl implements TrashStorage {
    * {@inheritDoc}
    */
   public List<Node> getAllNodeInTrash(SessionProvider sessionProvider) throws RepositoryException {
-    StringBuilder query = new StringBuilder(SELECT_FROM_TRASH_QUERY);
-    return selectNodesByQuery(sessionProvider, query.toString(), Query.SQL);
+    return selectNodesByQuery(sessionProvider, selectFromTrash(), Query.SQL);
   }
 
   /**
@@ -720,8 +721,9 @@ public class TrashStorageImpl implements TrashStorage {
    */
   public List<Node> getAllNodeInTrashByUser(SessionProvider sessionProvider,
                                             String userName) throws RepositoryException {
-    StringBuilder query = new StringBuilder(
-        "SELECT * FROM nt:base WHERE exo:restorePath IS NOT NULL AND exo:lastModifier='").append(userName).append("'");
+    StringBuilder query = new StringBuilder(selectFromTrash()).append(" AND exo:lastModifier='")
+                                                              .append(userName.replace("'", "''"))
+                                                              .append("'");
     return selectNodesByQuery(sessionProvider, query.toString(), Query.SQL);
   }
 
@@ -770,6 +772,10 @@ public class TrashStorageImpl implements TrashStorage {
   }
 
   public Node getNodeByTrashId(String trashId) throws RepositoryException {
+    // A trash id is a UUID: anything else names no node and is not written into a statement.
+    if (trashId == null || !TRASH_ID_PATTERN.matcher(trashId).matches()) {
+      return null;
+    }
     QueryResult queryResult;
     NodeIterator iter;
     SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
@@ -777,7 +783,7 @@ public class TrashStorageImpl implements TrashStorage {
                     repositoryService.getCurrentRepository());
     QueryManager queryManager = session.getWorkspace().getQueryManager();
     StringBuilder sb = new StringBuilder();
-    sb.append("SELECT * from exo:restoreLocation WHERE exo:trashId = '").append(trashId).append("'");
+    sb.append("SELECT * FROM exo:restoreLocation WHERE jcr:path LIKE '").append(this.trashHome).append("/%' AND exo:trashId = '").append(trashId).append("'");
     QueryImpl query = (QueryImpl) queryManager.createQuery(sb.toString(), Query.SQL);
     query.setLimit(1);
     queryResult = query.execute();
@@ -823,7 +829,7 @@ public class TrashStorageImpl implements TrashStorage {
     };
     String sortDirection = trashElementNodeFilter.isAscending() ? "ASC" : "DESC";
     // all trash elements has the property exo:restorePath, it is added during the move te trash
-    StringBuilder sb = new StringBuilder(SELECT_FROM_TRASH_QUERY);
+    StringBuilder sb = new StringBuilder(selectFromTrash());
     sb.append(" ORDER BY ").append(mappedSortField).append(" ").append(sortDirection);
 
     List<Node> result = new ArrayList<>();
@@ -853,7 +859,7 @@ public class TrashStorageImpl implements TrashStorage {
   @Override
   public int countDeletedDocuments() {
     try {
-      StringBuilder sb = new StringBuilder(SELECT_FROM_TRASH_QUERY);
+      StringBuilder sb = new StringBuilder(selectFromTrash());
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
       Session session = sessionProvider.getSession(this.trashWorkspace, manageableRepository);
@@ -865,6 +871,15 @@ public class TrashStorageImpl implements TrashStorage {
       LOG.error("Error occurred when counting trash elements", e.getMessage());
       return 0;
     }
+  }
+
+  /**
+   * The statement every listing of the trash starts with. The restore path is
+   * also carried by nodes outside the trash: the path keeps the statement to
+   * the trash home and what it holds.
+   */
+  private String selectFromTrash() {
+    return "SELECT * FROM nt:base WHERE jcr:path LIKE '" + this.trashHome + "/%' AND exo:restorePath IS NOT NULL";
   }
 
   private boolean isDocumentNodeType(Node node) throws RepositoryException {
