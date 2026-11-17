@@ -205,7 +205,8 @@ class RecycleBinDriveStorageTest {
     for (java.lang.reflect.Method method : List.of(RecycleBinDriveStorage.class.getMethod("add", long.class, long.class),
                                                    RecycleBinDriveStorage.class.getMethod("create", long.class, long.class),
                                                    RecycleBinDriveStorage.class.getMethod("remove", long.class, long.class),
-                                                   RecycleBinDriveStorage.class.getMethod("move", long.class, long.class, long.class))) {
+                                                   RecycleBinDriveStorage.class.getMethod("move", long.class, long.class, long.class),
+                                                   RecycleBinDriveStorage.class.getMethod("replaceAll", List.class))) {
       io.meeds.common.ContainerTransactional transactional = method.getAnnotation(io.meeds.common.ContainerTransactional.class);
       assertNotNull(transactional, method.getName());
       assertTrue(transactional.atomic(), method.getName());
@@ -231,6 +232,29 @@ class RecycleBinDriveStorageTest {
     }
 
     assertEquals(List.of(new RecycleBinDrive(7, 15, 2)), storage.getDrives(0, 10));
+  }
+
+  @Test
+  void theTotalsCountedReplaceTheStoredOnesAndADriveNotCountedLosesItsRow() {
+    inTransaction(() -> storage.doCreate(7, 10));
+    inTransaction(() -> storage.doCreate(8, 5));
+    inTransaction(() -> storage.doCreate(9, 3));
+    java.util.Date before = row(7).getUpdatedDate();
+
+    inTransaction(() -> storage.doReplaceAll(List.of(new RecycleBinDrive(7, 15, 2),
+                                                     new RecycleBinDrive(20, 7, 1),
+                                                     // A drive counted with no item has no row.
+                                                     new RecycleBinDrive(30, 4, 0),
+                                                     new RecycleBinDrive(9, 0, 0))));
+    entityManager.clear();
+
+    assertEquals(List.of(new RecycleBinDrive(7, 15, 2), new RecycleBinDrive(20, 7, 1)), storage.getDrives(0, 10));
+    assertEquals(2, storage.countDrives());
+    assertFalse(row(7).getUpdatedDate().before(before));
+    assertNotNull(row(20).getUpdatedDate());
+
+    inTransaction(() -> storage.doReplaceAll(List.of()));
+    assertEquals(0, storage.countDrives());
   }
 
   private RecycleBinDriveStorage storage(EntityManager manager) {

@@ -16,25 +16,43 @@
  */
 package org.exoplatform.documents.service;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+import javax.jcr.InvalidItemStateException;
 import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.container.ExoContainerContext;
+import org.exoplatform.container.PortalContainer;
+import org.exoplatform.container.component.RequestLifeCycle;
 import org.exoplatform.documents.constant.RecycleBinError;
+import org.exoplatform.documents.model.ActionData;
+import org.exoplatform.documents.model.ActionStatus;
+import org.exoplatform.documents.model.ActionType;
 import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinScope;
 import org.exoplatform.documents.storage.RecycleBinDriveStorage;
 import org.exoplatform.documents.storage.RecycleBinStorage;
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.portal.config.UserACL;
+import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.IdentityConstants;
@@ -43,36 +61,101 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
+import jakarta.annotation.PreDestroy;
+
 @Service
 public class RecycleBinServiceImpl implements RecycleBinService {
 
-  private static final Log             LOG = ExoLogger.getLogger(RecycleBinServiceImpl.class);
+  /** The event the bulk actions report on: who listens to it tells the screens of the user. */
+  static final String                      BULK_ACTION_EVENT   = "bulk_actions_document_event";
 
-  private final RecycleBinStorage      recycleBinStorage;
+  /** What a purge asked for by a user reports under, for a screen to tell it from a bulk action. */
+  static final String                      PURGE_ACTION_ID     = "recycle-bin-purge";
 
-  private final RecycleBinDriveStorage recycleBinDriveStorage;
+  private static final String              PURGE_THREAD        = "documents-recycle-bin-purge";
 
-  private final IdentityManager        identityManager;
+  private static final Log                 LOG                 = ExoLogger.getLogger(RecycleBinServiceImpl.class);
 
-  private final SpaceService           spaceService;
+  private final RecycleBinStorage          recycleBinStorage;
 
-  private final UserACL                userAcl;
+  private final RecycleBinDriveStorage     recycleBinDriveStorage;
 
-  private final boolean                administratorAccessEnabled;
+  private final TrashStorage               trashStorage;
 
-  public RecycleBinServiceImpl(RecycleBinStorage recycleBinStorage,
+  private final RecycleBinRetentionSetting retentionSetting;
+
+  private final IdentityManager            identityManager;
+
+  private final SpaceService               spaceService;
+
+  private final UserACL                    userAcl;
+
+  private final ListenerService            listenerService;
+
+  private final boolean                    administratorAccessEnabled;
+
+  /** Runs the purge, one at a time. */
+  private final Executor                   purgeExecutor;
+
+  /** Guards the three fields below: the daily run and the purges asked for are one run. */
+  private final Object                     purgeLock           = new Object();
+
+  private boolean                          purgeRunning;
+
+  private boolean                          dailyRunOwed;
+
+  private final Set<String>                purgeRequesters     = new LinkedHashSet<>();
+
+  @Autowired
+  public RecycleBinServiceImpl(RecycleBinStorage recycleBinStorage, // NOSONAR the collaborators of a service
                                RecycleBinDriveStorage recycleBinDriveStorage,
+                               TrashStorage trashStorage,
+                               RecycleBinRetentionSetting retentionSetting,
                                IdentityManager identityManager,
                                SpaceService spaceService,
                                UserACL userAcl,
+                               ListenerService listenerService,
                                @Value("${exo.documents.recycleBin.administratorAccess.enabled:true}")
                                boolean administratorAccessEnabled) {
+    this(recycleBinStorage,
+         recycleBinDriveStorage,
+         trashStorage,
+         retentionSetting,
+         identityManager,
+         spaceService,
+         userAcl,
+         listenerService,
+         administratorAccessEnabled,
+         newPurgeExecutor());
+  }
+
+  RecycleBinServiceImpl(RecycleBinStorage recycleBinStorage, // NOSONAR the collaborators of a service
+                        RecycleBinDriveStorage recycleBinDriveStorage,
+                        TrashStorage trashStorage,
+                        RecycleBinRetentionSetting retentionSetting,
+                        IdentityManager identityManager,
+                        SpaceService spaceService,
+                        UserACL userAcl,
+                        ListenerService listenerService,
+                        boolean administratorAccessEnabled,
+                        Executor purgeExecutor) {
     this.recycleBinStorage = recycleBinStorage;
     this.recycleBinDriveStorage = recycleBinDriveStorage;
+    this.trashStorage = trashStorage;
+    this.retentionSetting = retentionSetting;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.userAcl = userAcl;
+    this.listenerService = listenerService;
     this.administratorAccessEnabled = administratorAccessEnabled;
+    this.purgeExecutor = purgeExecutor;
+  }
+
+  @PreDestroy
+  void stopPurge() {
+    if (purgeExecutor instanceof PurgeExecutor executor) {
+      executor.close();
+    }
   }
 
   @Override
@@ -191,6 +274,203 @@ public class RecycleBinServiceImpl implements RecycleBinService {
         throw e;
       }
     }
+  }
+
+  @Override
+  public long getRetentionDays() {
+    return retentionSetting.get();
+  }
+
+  @Override
+  public void setRetentionDays(long retentionDays, String username) throws IllegalAccessException {
+    checkPlatformAdministrator(username);
+    long previousDays = retentionSetting.get();
+    retentionSetting.set(retentionDays);
+    // Asked once the period is stored: the purge reads it when it runs.
+    if (retentionDays < previousDays) {
+      purgeExpired(username);
+    }
+  }
+
+  @Override
+  public void purgeExpired() {
+    startPurge(null);
+  }
+
+  @Override
+  public void purgeExpired(String requester) {
+    if (StringUtils.isBlank(requester)) {
+      throw new IllegalArgumentException("The user a purge is run for is mandatory");
+    }
+    startPurge(requester);
+  }
+
+  /** Records what is asked for, and starts the run when none is going on: the one going on serves it. */
+  private void startPurge(String requester) {
+    synchronized (purgeLock) {
+      if (requester == null) {
+        dailyRunOwed = true;
+      } else {
+        purgeRequesters.add(requester);
+      }
+      if (purgeRunning) {
+        return;
+      }
+      purgeRunning = true;
+    }
+    try {
+      purgeExecutor.execute(this::runPurgeRounds);
+    } catch (RuntimeException e) {
+      synchronized (purgeLock) {
+        purgeRunning = false;
+      }
+      throw e;
+    }
+  }
+
+  /** One round for what was asked before it started, then another while more was asked meanwhile. */
+  private void runPurgeRounds() {
+    boolean ended = false;
+    try {
+      while (true) {
+        boolean dailyRun;
+        List<String> requesters;
+        synchronized (purgeLock) {
+          if (!dailyRunOwed && purgeRequesters.isEmpty()) {
+            purgeRunning = false;
+            ended = true;
+            return;
+          }
+          dailyRun = dailyRunOwed;
+          dailyRunOwed = false;
+          requesters = new ArrayList<>(purgeRequesters);
+          purgeRequesters.clear();
+        }
+        runPurgeRound(dailyRun, requesters);
+      }
+    } finally {
+      if (!ended) {
+        // The run broke off: the next call starts another.
+        synchronized (purgeLock) {
+          purgeRunning = false;
+        }
+      }
+    }
+  }
+
+  private void runPurgeRound(boolean dailyRun, List<String> requesters) {
+    int removed = 0;
+    boolean failed = false;
+    try {
+      if (dailyRun) {
+        int normalized = trashStorage.normalizeRecycleBinItems();
+        if (normalized > 0) {
+          LOG.info("{} item(s) of the trash were given their Recycle Bin facts", normalized);
+        }
+        recycleBinDriveStorage.replaceAll(recycleBinStorage.getDriveTotals());
+      }
+      removed = removeExpiredItems();
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.error("The run that removes the expired items of the Recycle Bins ended on a failure", e);
+      failed = true;
+    }
+    for (String requester : requesters) {
+      tellRequester(requester, removed, failed);
+    }
+  }
+
+  /** @return the number of items that left a bin */
+  private int removeExpiredItems() throws RepositoryException {
+    int removed = 0;
+    for (String itemId : recycleBinStorage.getIdsDeletedBefore(getExpiryInstant())) {
+      removed += removeWhenExpired(itemId);
+    }
+    return removed;
+  }
+
+  /**
+   * Reads an item again at its turn and removes it when it is still due.
+   *
+   * @return the number of items that left a bin with it, itself included
+   */
+  private int removeWhenExpired(String itemId) {
+    try {
+      RecycleBinItem item = recycleBinStorage.getRemovableItem(itemId);
+      // Restored, deleted again, or given more time by a longer period since it was selected.
+      if (item == null || item.getDeletedDate() == null || !Instant.ofEpochMilli(item.getDeletedDate()).isBefore(getExpiryInstant())) {
+        return 0;
+      }
+      List<RecycleBinItem> removedWithIt = recycleBinStorage.removeItem(itemId);
+      countOut(item);
+      removedWithIt.forEach(this::countOut);
+      return (item.getOwnerId() == null ? 0 : 1) + removedWithIt.size();
+    } catch (PathNotFoundException | InvalidItemStateException e) {
+      LOG.debug("The expired item {} of the trash was removed or restored meanwhile", itemId, e);
+      return 0;
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.warn("The expired item {} of the trash could not be removed: it is left to the next run", itemId, e);
+      return 0;
+    }
+  }
+
+  /** What was deleted before this instant has stayed longer than the period in force now. */
+  private Instant getExpiryInstant() {
+    return Instant.now().minus(Duration.ofDays(retentionSetting.get()));
+  }
+
+  private void tellRequester(String requester, int removed, boolean failed) {
+    try {
+      org.exoplatform.services.security.Identity aclIdentity = userAcl.getUserIdentity(requester);
+      ActionData actionData = new ActionData();
+      actionData.setActionId(PURGE_ACTION_ID);
+      actionData.setActionType(ActionType.PERMANENTLY_DELETE.name());
+      actionData.setStatus(failed ? ActionStatus.FAILED.name() : ActionStatus.DONE_SUCCESSFULLY.name());
+      actionData.setNumberOfItems(removed);
+      actionData.setUserName(requester);
+      actionData.setIdentity(aclIdentity);
+      listenerService.broadcast(BULK_ACTION_EVENT, aclIdentity, actionData);
+    } catch (Exception e) {
+      LOG.warn("User {} could not be told that the purge of the Recycle Bins is over", requester, e);
+    }
+  }
+
+  private static Executor newPurgeExecutor() {
+    ExecutorService executorService = Executors.newSingleThreadExecutor(task -> {
+      Thread thread = new Thread(task, PURGE_THREAD);
+      thread.setDaemon(true);
+      return thread;
+    });
+    return new PurgeExecutor(executorService);
+  }
+
+  /** Runs each purge on its thread, inside the portal container and a request of its own. */
+  private static final class PurgeExecutor implements Executor, AutoCloseable {
+
+    private final ExecutorService executorService;
+
+    private PurgeExecutor(ExecutorService executorService) {
+      this.executorService = executorService;
+    }
+
+    @Override
+    public void execute(Runnable purge) {
+      PortalContainer container = PortalContainer.getInstance();
+      executorService.execute(() -> {
+        ExoContainerContext.setCurrentContainer(container);
+        RequestLifeCycle.begin(container);
+        try {
+          purge.run();
+        } finally {
+          RequestLifeCycle.end();
+        }
+      });
+    }
+
+    @Override
+    public void close() {
+      executorService.shutdownNow();
+    }
+
   }
 
   private void restore(RecycleBinItem item, String username, boolean administrator) throws ObjectNotFoundException,

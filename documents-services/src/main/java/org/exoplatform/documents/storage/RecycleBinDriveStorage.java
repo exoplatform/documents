@@ -17,7 +17,9 @@
 package org.exoplatform.documents.storage;
 
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
@@ -103,6 +105,19 @@ public class RecycleBinDriveStorage {
   }
 
   /**
+   * Replaces the totals of every drive by the ones counted from the trash, in
+   * one transaction: each drive counted gets its totals, and the row of a
+   * drive that was not counted is deleted. An item counted in or out between
+   * the count and this write is overwritten, until the next replacement.
+   *
+   * @param totals the totals of the drives whose bin holds items
+   */
+  @ContainerTransactional(atomic = true)
+  public void replaceAll(List<RecycleBinDrive> totals) {
+    doReplaceAll(totals);
+  }
+
+  /**
    * Lists the drives whose bin holds items, largest first.
    *
    * @param offset index of the first drive to return
@@ -134,6 +149,25 @@ public class RecycleBinDriveStorage {
   void doRemove(long ownerId, long size) {
     if (recycleBinDriveRepository.addToTotals(ownerId, -size, -1, new Date()) > 0) {
       recycleBinDriveRepository.deleteWhenEmpty(ownerId);
+    }
+  }
+
+  void doReplaceAll(List<RecycleBinDrive> totals) {
+    Date now = new Date();
+    Set<Long> counted = new HashSet<>();
+    for (RecycleBinDrive total : totals) {
+      if (total.getItemsCount() <= 0) {
+        continue;
+      }
+      counted.add(total.getOwnerId());
+      if (recycleBinDriveRepository.setTotals(total.getOwnerId(), total.getItemsSize(), total.getItemsCount(), now) == 0) {
+        recycleBinDriveRepository.insert(total.getOwnerId(), total.getItemsSize(), total.getItemsCount(), now);
+      }
+    }
+    for (Long ownerId : recycleBinDriveRepository.findOwnerIds()) {
+      if (!counted.contains(ownerId)) {
+        recycleBinDriveRepository.deleteByOwner(ownerId);
+      }
     }
   }
 
