@@ -2,21 +2,25 @@
   <div class="align-center">
     <v-tooltip bottom>
       <template #activator="{ on, attrs }">
-        <v-btn
-          class="visibility-btn"
-          :class="btnClass"
-          icon
-          @click="changeVisibility">
-          <v-icon
-            v-bind="attrs"
-            v-on="on"
-            size="13"
-            class="px-2 iconStyle">
-            {{ icon.icon }}
-          </v-icon>
-        </v-btn>
+        <span
+          v-bind="attrs"
+          class="documentVisibilityCell"
+          v-on="on">
+          <v-btn
+            class="visibility-btn"
+            :class="btnClass"
+            :disabled="accessManagementLimited"
+            icon
+            @click="changeVisibility">
+            <v-icon
+              size="13"
+              class="px-2 iconStyle">
+              {{ icon.icon }}
+            </v-icon>
+          </v-btn>
+        </span>
       </template>
-      <span class="center">{{ $shareDocumentSuspended ? shareDocumentSuspendedLabel : icon.title }}</span>
+      <span class="center">{{ tooltipLabel }}</span>
     </v-tooltip>
   </div>
 </template>
@@ -127,11 +131,20 @@ export default {
     },
     btnClass(){
       return this.isMobile && 'ms-2' || 'me-4' ;
-    }
+    },
+    accessManagementLimited() {
+      return !!this.file.acl?.canEdit && this.file.acl?.canManageAccess === false;
+    },
+    tooltipLabel() {
+      if (this.$shareDocumentSuspended) {
+        return this.shareDocumentSuspendedLabel;
+      }
+      return this.accessManagementLimited ? this.$t('documents.tooltip.accessManagementLimited') : this.icon.title;
+    },
   },
   methods: {
     changeVisibility() {
-      if (!this.file.acl.canEdit || this.$shareDocumentSuspended || (this.file.folder && this.file.creatorUserName === '__system' &&  eXo.env.portal.spaceIdentityId &&  !eXo.env.portal.isAdministrator)) {
+      if (!this.file.acl.canEdit || this.file.acl.canManageAccess === false || this.$shareDocumentSuspended || (this.file.folder && this.file.creatorUserName === '__system' &&  eXo.env.portal.spaceIdentityId &&  !eXo.env.portal.isAdministrator)) {
         return;
       }
       this.$root.$emit('open-visibility-drawer', this.file);

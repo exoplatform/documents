@@ -26,6 +26,7 @@
       dense
       link
       class="ps-3"
+      :disabled="disabled"
       :href="href"
       :target="href && target"
       @click.stop="handleClick">
@@ -98,9 +99,17 @@ export default {
       type: String,
       default: '_blank'
     },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
   },
   methods: {
     handleClick(event) {
+      if (this.disabled) {
+        event.preventDefault();
+        return;
+      }
       if (!this.href) {
         event.preventDefault();
       }
