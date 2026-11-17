@@ -8,7 +8,7 @@
 
   .attachment-location {
     background-color: transparent !important;
-    border: 1px solid rgba(0, 0, 0, 0.18) !important;
+    border: 1px solid ~"rgb(var(--skinInk, 0 0 0) / 0.18)" !important;
     color: @greyColorLighten1Default !important;
 
     .mdi-close-circle {
@@ -157,8 +157,8 @@
 
     &:hover,
     &:focus-visible {
-      border-color: rgba(0, 0, 0, 0.26);
-      background-color: rgba(0, 0, 0, 0.04);
+      border-color: ~"rgb(var(--skinInk, 0 0 0) / 0.26)";
+      background-color: ~"rgb(var(--skinInk, 0 0 0) / 0.04)";
       box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
     }
 
@@ -179,8 +179,8 @@
 
     &:hover,
     &:focus-visible {
-      border-color: rgba(0, 0, 0, 0.26);
-      background-color: rgba(0, 0, 0, 0.04);
+      border-color: ~"rgb(var(--skinInk, 0 0 0) / 0.26)";
+      background-color: ~"rgb(var(--skinInk, 0 0 0) / 0.04)";
       box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
     }
   }
@@ -200,7 +200,7 @@
     z-index: 5;
     border: 2px dashed @primaryColor;
     border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.92);
+    background-color: var(--allPagesBaseBackground, rgba(255, 255, 255, 0.92));
     color: @primaryColor;
     pointer-events: none;
   }
@@ -211,7 +211,7 @@
 
     .attachmentSourceBadge {
       background-color: transparent !important;
-      border-color: rgba(0, 0, 0, 0.18) !important;
+      border-color: ~"rgb(var(--skinInk, 0 0 0) / 0.18)" !important;
       color: @greyColorLighten1Default !important;
       height: 18px;
     }
@@ -252,8 +252,8 @@
 
       &:hover,
       &:focus-visible {
-        border-color: rgba(0, 0, 0, 0.26);
-        background-color: rgba(0, 0, 0, 0.04);
+        border-color: ~"rgb(var(--skinInk, 0 0 0) / 0.26)";
+        background-color: ~"rgb(var(--skinInk, 0 0 0) / 0.04)";
         box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
       }
 
@@ -399,12 +399,12 @@
 
         .searchInput {
           width: 100%;
-          border: 1px solid #b3b3b3;
+          border: 1px solid var(--allPagesBorderColorLight, #b3b3b3);
           display: none;
         }
 
         .uiIconAddFolder {
-          border: 1px solid #b3b3b3;
+          border: 1px solid var(--allPagesBorderColorLight, #b3b3b3);
           padding: 10px;
           border-radius: 15%;
           color: @iconColor;
@@ -418,9 +418,9 @@
           position: relative;
 
           .uiActionIcon {
-            border: 1px solid #b3b3b3;
+            border: 1px solid var(--allPagesBorderColorLight, #b3b3b3);
             border-radius: 15%;
-            color: #4d5466;
+            color: var(--allPagesDarkGrey, #4d5466);
             cursor: pointer;
 
             &:before {
@@ -470,7 +470,7 @@
 
             .selectionLabel {
               &.connectingDriveTitle {
-                color: #b3b3b3;
+                color: var(--allPagesBaseColorMedium, #b3b3b3);
               }
             }
 
@@ -488,7 +488,7 @@
           .connectingDriveProgress {
             svg {
               .v-progress-circular__underlay {
-                stroke: #e2e9ef;
+                stroke: var(--skinGreyLighten2, #e2e9ef);
               }
             }
 
@@ -547,7 +547,7 @@
 
           &Content {
             padding: 0;
-            color: #c3cad6;
+            color: var(--allPagesBaseColorMedium, #c3cad6);
 
             &:after {
               content: '';
@@ -556,7 +556,7 @@
               width: 100%;
               margin-right: -100%;
               margin-left: 10px;
-              border-top: 1px solid #efefef;
+              border-top: 1px solid var(--skinGreyLighten2, #efefef);
             }
           }
 
@@ -576,7 +576,7 @@
     .attachActions {
       bottom: 10px;
       position: absolute;
-      border-top: 1px solid #efefef;
+      border-top: 1px solid var(--skinGreyLighten2, #efefef);
       right: 0;
       left: 0;
 
@@ -603,11 +603,11 @@
   }
 
   .drawerContent::-webkit-scrollbar-track  {
-    background: #ced2d5;
+    background: var(--skinGreyLighten2, #ced2d5);
   }
 
   .drawerContent::-webkit-scrollbar-track  {
-    background: #ced2d5;
+    background: var(--skinGreyLighten2, #ced2d5);
   }
 
   .drawerContent::-webkit-scrollbar {
@@ -953,11 +953,11 @@
       text-align: left;
 
       &:hover {
-        background-color: #f7f7f7;
+        background-color: var(--skinGreyLighten4, #f7f7f7);
       }
 
       &.selected-row {
-        background-color: #E1E8EE;
+        background-color: var(--skinGreyLighten2, #E1E8EE);
       }
 
       /* Match the Documents list row name size (the drawer's inherited default
