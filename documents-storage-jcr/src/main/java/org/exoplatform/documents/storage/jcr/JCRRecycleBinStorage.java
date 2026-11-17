@@ -68,6 +68,8 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 
+import io.meeds.portal.thumbnail.model.FileContent;
+
 /**
  * Reads, restores and removes the items of the Recycle Bins in the trash of
  * the repository. Each call opens a system session of its own and closes it,
@@ -250,6 +252,34 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
         session.refresh(false);
         throw e;
       }
+    } finally {
+      provider.close();
+    }
+  }
+
+  @Override
+  public FileContent getItemContent(String itemId) throws RepositoryException {
+    if (itemId == null || !ITEM_ID_PATTERN.matcher(itemId).matches()) {
+      return null;
+    }
+    SessionProvider provider = createSystemProvider();
+    try {
+      Node node = findNode(getSession(provider), itemId);
+      if (node == null || node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OF) || !node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+        return null;
+      }
+      Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+      if (!content.hasProperty(NodeTypeConstants.JCR_DATA)) {
+        return null;
+      }
+      return new FileContent(((ExtendedNode) node).getIdentifier(),
+                             JCRDocumentsUtil.getTitle(node),
+                             getString(content, NodeTypeConstants.JCR_MIME_TYPE),
+                             content.getProperty(NodeTypeConstants.JCR_DATA).getStream(),
+                             content.hasProperty(NodeTypeConstants.JCR_LAST_MODIFIED) ? content.getProperty(NodeTypeConstants.JCR_LAST_MODIFIED)
+                                                                                               .getDate()
+                                                                                               .getTime()
+                                                                                      : null);
     } finally {
       provider.close();
     }

@@ -27,6 +27,8 @@ import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.services.security.Identity;
 
+import io.meeds.portal.thumbnail.model.FileContent;
+
 /**
  * Reads, restores and removes the items of the Recycle Bins. It acts with
  * the rights of the system, and its callers decide who may see or act on the
@@ -110,6 +112,18 @@ public interface RecycleBinStorage {
    *           removed then
    */
   List<RecycleBinItem> removeItem(String itemId) throws RepositoryException;
+
+  /**
+   * Reads the content of a deleted document, whoever asks: the caller checks
+   * first who may read it.
+   *
+   * @param itemId id of the item in the bin
+   * @return its name, its type and its content, null when the id names no
+   *         item or an item that has no content of its own, as a folder or a
+   *         shortcut
+   * @throws RepositoryException when the item cannot be read
+   */
+  FileContent getItemContent(String itemId) throws RepositoryException;
 
   /**
    * Lists what the trash holds that was deleted before an instant, whatever
