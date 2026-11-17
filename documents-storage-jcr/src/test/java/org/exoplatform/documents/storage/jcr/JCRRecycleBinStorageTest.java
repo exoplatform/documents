@@ -265,6 +265,36 @@ class JCRRecycleBinStorageTest {
   }
 
   @Test
+  void aDeletedDocumentIsReadAsTheItemItIsByItsOwnId() throws Exception {
+    Item file = item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
+    Item folder = jcr.add(JOHN_BIN + "/archive", "nt:folder");
+    folder.mixin("exo:recycleBinItem", "exo:restoreLocation").set("exo:trashId", ID_2).set("exo:recycleBinOwner", "7");
+    Item inside = jcr.addFile(JOHN_BIN + "/archive/inside.txt", 3);
+    Item cascade = shortcut(JOHN_BIN + "/link", file.getId(), ID_3, ID_1);
+    Item alive = jcr.addFile("/Users/j___/jo___/joh___/john/Private/alive.txt", 1);
+    // Back in a drive with the marks of an earlier stay in a bin.
+    alive.mixin("exo:recycleBinItem", "exo:restoreLocation").set("exo:trashId", ID_4).set("exo:recycleBinOwner", "7");
+    Item unmarked = jcr.addFile("/Trash/unmarked.txt", 1);
+    jcr.commit();
+
+    assertEquals(ID_1, storage.getItemOfDocument(file.getId()).getId());
+    assertEquals(7L, storage.getItemOfDocument(file.getId()).getOwnerId());
+    assertTrue(storage.getItemOfDocument(folder.getId()).isFolder());
+    // What a deleted folder holds, a shortcut trashed with a document, a
+    // document of a drive and a node of the trash that is no item are none.
+    assertNull(storage.getItemOfDocument(inside.getId()));
+    assertNull(storage.getItemOfDocument(cascade.getId()));
+    assertNull(storage.getItemOfDocument(alive.getId()));
+    assertNull(storage.getItemOfDocument(unmarked.getId()));
+    assertNull(storage.getItemOfDocument("an-id-of-no-node"));
+    verify(systemProvider, times(8)).close();
+    assertNull(storage.getItemOfDocument(null));
+    assertNull(storage.getItemOfDocument(" "));
+    verify(systemProvider, times(8)).close();
+    assertTrue(jcr.getStatements().isEmpty());
+  }
+
+  @Test
   void everyStatementIsAcceptedByTheRepositoryParser() throws Exception {
     storage.getItems(new RecycleBinFilter(7, "N'S 100%_\\", RecycleBinSortField.SIZE, true, 0, 10));
     storage.countItems(filter(7, "a"));
