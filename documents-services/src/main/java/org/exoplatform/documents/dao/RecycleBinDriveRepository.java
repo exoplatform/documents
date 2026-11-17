@@ -76,4 +76,37 @@ public interface RecycleBinDriveRepository extends JpaRepository<RecycleBinDrive
   @Query("DELETE FROM RecycleBinDrive d WHERE d.ownerId = :ownerId AND d.itemsCount <= 0")
   int deleteWhenEmpty(@Param("ownerId") long ownerId);
 
+  /**
+   * Writes the totals of a drive in place of the stored ones.
+   *
+   * @return the number of rows changed, 0 when the drive has no row
+   */
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("""
+      UPDATE RecycleBinDrive d
+         SET d.itemsSize = :size,
+             d.itemsCount = :count,
+             d.updatedDate = :updatedDate
+       WHERE d.ownerId = :ownerId
+      """)
+  int setTotals(@Param("ownerId") long ownerId,
+                @Param("size") long size,
+                @Param("count") long count,
+                @Param("updatedDate") Date updatedDate);
+
+  /**
+   * @return the owners of the drives that have a row
+   */
+  @Query("SELECT d.ownerId FROM RecycleBinDrive d")
+  List<Long> findOwnerIds();
+
+  /**
+   * Deletes the row of a drive, whatever it counts.
+   *
+   * @return the number of rows deleted
+   */
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("DELETE FROM RecycleBinDrive d WHERE d.ownerId = :ownerId")
+  int deleteByOwner(@Param("ownerId") long ownerId);
+
 }
