@@ -52,7 +52,7 @@ import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinScope;
-import org.exoplatform.documents.model.RecycleBinSortField;
+import org.exoplatform.documents.constant.RecycleBinSortField;
 import org.exoplatform.documents.rest.model.RecycleBinDriveEntity;
 import org.exoplatform.documents.rest.model.RecycleBinItemEntity;
 import org.exoplatform.documents.rest.model.RecycleBinSettingsEntity;
@@ -168,21 +168,20 @@ class DocumentFileRestRecycleBinTest {
 
   @Test
   void aBinThatIsNotNamedInFullOrAPageThatIsNoneIsRefusedBeforeTheServiceIsAsked() {
-    assertEquals(400, rest.getRecycleBinItems("SPACE", null, 7L, null, null, null, 0, 10).getStatus());
-    assertEquals(400, rest.getRecycleBinItems("DRIVE", 3L, null, null, null, null, 0, 10).getStatus());
-    assertEquals(400, rest.getRecycleBinItems("EVERYONE", 3L, 7L, null, null, null, 0, 10).getStatus());
-    assertEquals(400, rest.getRecycleBinItems(null, null, null, null, null, null, -1, 10).getStatus());
-    assertEquals(400, rest.getRecycleBinItems(null, null, null, null, null, null, 0, -1).getStatus());
-    assertEquals(400, rest.getRecycleBinDrives(-1, 10).getStatus());
-    assertEquals(400, rest.getRecycleBinDrives(0, -1).getStatus());
-    assertEquals(400, rest.restoreRecycleBinItem(ITEM_ID, "SPACE", null, null).getStatus());
-    assertEquals(400, rest.deleteRecycleBinItem(ITEM_ID, "DRIVE", null, null).getStatus());
-    assertEquals(400, rest.restoreRecycleBinItems("1", "nowhere", null, null, List.of(ITEM_ID)).getStatus());
-    assertEquals(400, rest.deleteRecycleBinItems("1", "SPACE", null, null, List.of(ITEM_ID)).getStatus());
-    Response response = rest.emptyRecycleBin("1", "DRIVE", null, null);
-    assertEquals(400, response.getStatus());
-    assertNotCached(response);
-    assertNull(response.getEntity());
+    String scope = "recycleBin.scope.invalid";
+    String page = "recycleBin.page.invalid";
+    assertRefused(scope, rest.getRecycleBinItems("SPACE", null, 7L, null, null, null, 0, 10));
+    assertRefused(scope, rest.getRecycleBinItems("DRIVE", 3L, null, null, null, null, 0, 10));
+    assertRefused(scope, rest.getRecycleBinItems("EVERYONE", 3L, 7L, null, null, null, 0, 10));
+    assertRefused(page, rest.getRecycleBinItems(null, null, null, null, null, null, -1, 10));
+    assertRefused(page, rest.getRecycleBinItems(null, null, null, null, null, null, 0, -1));
+    assertRefused(page, rest.getRecycleBinDrives(-1, 10));
+    assertRefused(page, rest.getRecycleBinDrives(0, -1));
+    assertRefused(scope, rest.restoreRecycleBinItem(ITEM_ID, "SPACE", null, null));
+    assertRefused(scope, rest.deleteRecycleBinItem(ITEM_ID, "DRIVE", null, null));
+    assertRefused(scope, rest.restoreRecycleBinItems("1", "nowhere", null, null, List.of(ITEM_ID)));
+    assertRefused(scope, rest.deleteRecycleBinItems("1", "SPACE", null, null, List.of(ITEM_ID)));
+    assertRefused(scope, rest.emptyRecycleBin("1", "DRIVE", null, null));
 
     verifyNoInteractions(service);
   }
@@ -363,6 +362,12 @@ class DocumentFileRestRecycleBinTest {
   private static void assertRole(String role, String method, Class<?>... parameters) throws Exception {
     RolesAllowed allowed = DocumentFileRest.class.getMethod(method, parameters).getAnnotation(RolesAllowed.class);
     assertEquals(List.of(role), List.of(allowed.value()), method);
+  }
+
+  private static void assertRefused(String code, Response response) {
+    assertEquals(400, response.getStatus());
+    assertEquals(code, response.getEntity());
+    assertNotCached(response);
   }
 
   private static void assertNotCached(Response response) {

@@ -16,7 +16,6 @@
  */
 package org.exoplatform.documents.rest.model;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -41,36 +40,15 @@ public class RecycleBinItemEntity {
   private Long             deletedDate;
 
   /** Who deleted the item, null when it was not recorded. */
-  private User             deletedBy;
+  private RecycleBinUserEntity     deletedBy;
 
   /** Where the item was deleted from. */
-  private Location         originalLocation;
+  private RecycleBinLocationEntity originalLocation;
 
   /** Whether the caller may open the item from this bin. */
   private boolean          canView;
 
   /** Id of the deleted document itself, given only to who may open it. */
   private String           documentId;
-
-  @Data
-  @NoArgsConstructor
-  @AllArgsConstructor
-  public static class User {
-
-    private String username;
-
-    private String fullName;
-
-  }
-
-  @Data
-  @NoArgsConstructor
-  @AllArgsConstructor
-  public static class Location {
-
-    /** Path of the folder, from the root of its drive. */
-    private String path;
-
-  }
 
 }

@@ -92,19 +92,6 @@ public class RecycleBinDriveStorage {
   }
 
   /**
-   * Moves the count of one item from the bin of a drive to another's, in one
-   * transaction.
-   *
-   * @param fromOwnerId identity id of the owner of the drive the item leaves
-   * @param toOwnerId identity id of the owner of the drive the item joins
-   * @param size size of the item, in bytes
-   */
-  @ContainerTransactional(atomic = true)
-  public void move(long fromOwnerId, long toOwnerId, long size) {
-    doMove(fromOwnerId, toOwnerId, size);
-  }
-
-  /**
    * Replaces the totals of every drive by the ones counted from the trash, in
    * one transaction: each drive counted gets its totals, and the row of a
    * drive that was not counted is deleted. An item counted in or out between
@@ -168,13 +155,6 @@ public class RecycleBinDriveStorage {
       if (!counted.contains(ownerId)) {
         recycleBinDriveRepository.deleteByOwner(ownerId);
       }
-    }
-  }
-
-  void doMove(long fromOwnerId, long toOwnerId, long size) {
-    doRemove(fromOwnerId, size);
-    if (!doAdd(toOwnerId, size)) {
-      doCreate(toOwnerId, size);
     }
   }
 

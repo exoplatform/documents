@@ -415,6 +415,27 @@ class JCRRecycleBinStorageRestoreTest {
   }
 
   @Test
+  void aFolderWhoseNameHoldsADotIsRenamedForATakenNameAsAMovedOneIs() throws Exception {
+    Item folder = jcr.add(JOHN_BIN + "/v1.2", "nt:folder");
+    folder.mixin("exo:restoreLocation", "exo:recycleBinItem")
+          .set("exo:trashId", ID_1)
+          .set("exo:recycleBinOwner", "7")
+          .set("exo:restorePath", JOHN_FOLDER + "/v1.2")
+          .set("exo:restoreWorkspace", WORKSPACE)
+          .set("exo:title", "v1.2");
+    Item taken = jcr.add(JOHN_FOLDER + "/v1.2", "nt:folder");
+    jcr.commit();
+
+    storage.restoreItem(ID_1, MARY, false);
+
+    assertSame(jcr.find(taken.getId()), jcr.at(JOHN_FOLDER + "/v1.2"));
+    String name = org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.increaseNameIndex("v1.2", 1);
+    assertSame(jcr.find(folder.getId()), jcr.at(JOHN_FOLDER + "/" + name));
+    assertEquals("v1(1).2", name);
+    assertEquals("v1(1).2", jcr.at(JOHN_FOLDER + "/" + name).get("exo:title"));
+  }
+
+  @Test
   void anItemRestoredToAPersonalDriveLosesTheEntryOfThePlatformAdministratorsAndSoDoesWhatItHolds() throws Exception {
     Item folder = jcr.add(JOHN_BIN + "/Plans", "nt:folder");
     folder.mixin("exo:restoreLocation", "exo:recycleBinItem", "exo:privilegeable")
