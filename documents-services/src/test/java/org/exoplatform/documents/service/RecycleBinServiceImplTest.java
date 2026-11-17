@@ -26,19 +26,25 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.RejectedExecutionException;
 
+import javax.jcr.InvalidItemStateException;
 import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 
@@ -49,6 +55,7 @@ import org.mockito.InOrder;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.RecycleBinError;
+import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
@@ -56,7 +63,9 @@ import org.exoplatform.documents.model.RecycleBinScope;
 import org.exoplatform.documents.model.RecycleBinSortField;
 import org.exoplatform.documents.storage.RecycleBinDriveStorage;
 import org.exoplatform.documents.storage.RecycleBinStorage;
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.portal.config.UserACL;
+import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.MembershipEntry;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
@@ -92,6 +101,17 @@ class RecycleBinServiceImplTest {
 
   private org.exoplatform.services.security.Identity        maryAcl;
 
+  private TrashStorage                                      trashStorage;
+
+  private RecycleBinRetentionSetting                        retentionSetting;
+
+  private ListenerService                                   listenerService;
+
+  private org.exoplatform.services.security.Identity        rootAcl;
+
+  /** The runs the service handed to its executor, which the test runs when it chooses. */
+  private final List<Runnable>                              handedRuns   = new ArrayList<>();
+
   private RecycleBinServiceImpl                             service;
 
   @BeforeEach
@@ -101,6 +121,10 @@ class RecycleBinServiceImplTest {
     identityManager = mock(IdentityManager.class);
     spaceService = mock(SpaceService.class);
     userAcl = mock(UserACL.class);
+    trashStorage = mock(TrashStorage.class);
+    retentionSetting = mock(RecycleBinRetentionSetting.class);
+    listenerService = mock(ListenerService.class);
+    lenient().when(retentionSetting.get()).thenReturn(30L);
 
     Identity john = identity("organization", "john", JOHN_ID);
     Identity mary = identity("organization", "mary", 8);
@@ -130,9 +154,8 @@ class RecycleBinServiceImplTest {
     lenient().when(userAcl.getUserIdentity("mary")).thenReturn(maryAcl);
     lenient().when(userAcl.getUserIdentity("john")).thenReturn(new org.exoplatform.services.security.Identity("john"));
     lenient().when(userAcl.getUserIdentity("paul")).thenReturn(new org.exoplatform.services.security.Identity("paul"));
-    lenient().when(userAcl.getUserIdentity("root"))
-             .thenReturn(new org.exoplatform.services.security.Identity("root",
-                                                                        Set.of(new MembershipEntry("/platform/administrators", "member"))));
+    rootAcl = new org.exoplatform.services.security.Identity("root", Set.of(new MembershipEntry("/platform/administrators", "member")));
+    lenient().when(userAcl.getUserIdentity("root")).thenReturn(rootAcl);
 
     service = service(true);
   }
@@ -443,8 +466,327 @@ class RecycleBinServiceImplTest {
     assertSame(failure, assertThrows(IllegalStateException.class, () -> service.itemTrashed(8, 1)));
   }
 
+  @Test
+  void thePeriodIsReadByAnyoneAndSetByAnAdministratorOfThePlatformOnly() throws Exception {
+    when(retentionSetting.get()).thenReturn(45L);
+
+    assertEquals(45, service.getRetentionDays());
+    assertThrows(IllegalAccessException.class, () -> service.setRetentionDays(10, "john"));
+    // Managing a space, or every space, makes no administrator of the platform.
+    assertThrows(IllegalAccessException.class, () -> service.setRetentionDays(10, "mary"));
+    assertThrows(IllegalAccessException.class, () -> service.setRetentionDays(10, " "));
+    assertThrows(IllegalAccessException.class, () -> service.setRetentionDays(10, "__anonim"));
+
+    verify(retentionSetting, never()).set(anyLong());
+    assertTrue(handedRuns.isEmpty());
+    // The setting is the platform's, whatever the administrators may do on the drives.
+    service(false).setRetentionDays(60, "root");
+    verify(retentionSetting).set(60);
+  }
+
+  @Test
+  void aPeriodTheBoundsRefuseIsToldAndStartsNoPurge() {
+    IllegalArgumentException refusal = new IllegalArgumentException(RecycleBinError.RETENTION_INVALID);
+    doThrow(refusal).when(retentionSetting).set(0);
+
+    assertSame(refusal, assertThrows(IllegalArgumentException.class, () -> service.setRetentionDays(0, "root")));
+
+    assertTrue(handedRuns.isEmpty());
+  }
+
+  @Test
+  void onlyAShorterPeriodStartsAPurgeForTheAdministratorOnceItIsStored() throws Exception {
+    service.setRetentionDays(30, "root");
+    service.setRetentionDays(31, "root");
+    assertTrue(handedRuns.isEmpty());
+
+    doAnswer(invocation -> {
+      // Stored before the purge is asked for: it reads the period when it runs.
+      assertTrue(handedRuns.isEmpty());
+      return null;
+    }).when(retentionSetting).set(29);
+    service.setRetentionDays(29, "root");
+
+    verify(retentionSetting).set(29);
+    assertEquals(1, handedRuns.size());
+    when(storage.getIdsDeletedBefore(any())).thenReturn(List.of());
+    runHanded();
+    assertEquals(0, toldTo(rootAcl, 1).getNumberOfItems());
+    verify(trashStorage, never()).normalizeRecycleBinItems();
+  }
+
+  @Test
+  void theDailyRunGivesTheirFactsToTheItemsCountsTheBinsAgainThenRemovesWhatIsDue() throws Exception {
+    List<RecycleBinDrive> totals = List.of(new RecycleBinDrive(JOHN_ID, 15, 2));
+    when(storage.getDriveTotals()).thenReturn(totals);
+    when(storage.getIdsDeletedBefore(any())).thenReturn(List.of("old", "recent"));
+    when(storage.getRemovableItem("old")).thenReturn(deleted("old", JOHN_ID, 5, 31));
+    when(storage.getRemovableItem("recent")).thenReturn(deleted("recent", JOHN_ID, 9, 29));
+    when(storage.removeItem("old")).thenReturn(List.of());
+
+    service.purgeExpired();
+
+    // The call returns at once: the run is the executor's.
+    verifyNoInteractions(trashStorage, storage, driveStorage);
+    Instant before = Instant.now();
+    runHanded();
+    Instant after = Instant.now();
+
+    InOrder order = inOrder(trashStorage, storage, driveStorage);
+    order.verify(trashStorage).normalizeRecycleBinItems();
+    order.verify(storage).getDriveTotals();
+    order.verify(driveStorage).replaceAll(totals);
+    ArgumentCaptor<Instant> expiry = ArgumentCaptor.forClass(Instant.class);
+    order.verify(storage).getIdsDeletedBefore(expiry.capture());
+    order.verify(storage).removeItem("old");
+    order.verify(driveStorage).remove(JOHN_ID, 5);
+    // Thirty days back from now, in days of the calendar of no one.
+    assertFalse(expiry.getValue().isBefore(before.minus(Duration.ofDays(30))));
+    assertFalse(expiry.getValue().isAfter(after.minus(Duration.ofDays(30))));
+    verify(storage, never()).removeItem("recent");
+    verify(driveStorage, never()).remove(JOHN_ID, 9);
+    // No one asked for it: no one is told.
+    verifyNoInteractions(listenerService);
+  }
+
+  @Test
+  void anItemIsReadAgainAtItsTurnWithThePeriodAsItIsThen() throws Exception {
+    when(storage.getIdsDeletedBefore(any())).thenReturn(List.of("kept", "gone", "undated", "due"));
+    // Ten days when the items are selected, sixty from the turn of the first on, ten again for the last.
+    when(retentionSetting.get()).thenReturn(10L, 60L, 10L);
+    when(storage.getRemovableItem("kept")).thenReturn(deleted("kept", JOHN_ID, 5, 20));
+    // Restored meanwhile, or a shortcut its document holds.
+    when(storage.getRemovableItem("gone")).thenReturn(null);
+    RecycleBinItem undated = deleted("undated", JOHN_ID, 5, 20);
+    undated.setDeletedDate(null);
+    when(storage.getRemovableItem("undated")).thenReturn(undated);
+    when(storage.getRemovableItem("due")).thenReturn(deleted("due", JOHN_ID, 5, 20));
+    when(storage.removeItem("due")).thenReturn(List.of());
+
+    service.purgeExpired("root");
+    runHanded();
+
+    verify(storage, never()).removeItem("kept");
+    verify(storage, never()).removeItem("gone");
+    verify(storage, never()).removeItem("undated");
+    verify(storage).removeItem("due");
+    verify(driveStorage, times(1)).remove(anyLong(), anyLong());
+    assertEquals(1, toldTo(rootAcl, 1).getNumberOfItems());
+  }
+
+  @Test
+  void aPurgeAskedForLeavesTheCountsAsTheyAreAndTellsItsRequesterWhatLeftTheBins() throws Exception {
+    when(storage.getIdsDeletedBefore(any())).thenReturn(List.of("a", "orphan", "removed", "changed", "broken", "lost", "last"));
+    for (String id : List.of("a", "removed", "changed", "broken", "last")) {
+      when(storage.getRemovableItem(id)).thenReturn(deleted(id, JOHN_ID, 5, 40));
+    }
+    // A shortcut whose document left the trash, and an item of no drive: in no bin.
+    when(storage.getRemovableItem("orphan")).thenReturn(deleted("orphan", null, 0, 40));
+    when(storage.getRemovableItem("lost")).thenThrow(new RepositoryException("The node cannot be read"));
+    // An item of the bin of the space leaves with the first one.
+    when(storage.removeItem("a")).thenReturn(List.of(deleted("link", SALES_ID, 7, 2)));
+    when(storage.removeItem("orphan")).thenReturn(List.of());
+    when(storage.removeItem("removed")).thenThrow(new PathNotFoundException("Removed meanwhile"));
+    when(storage.removeItem("changed")).thenThrow(new InvalidItemStateException("Changed meanwhile"));
+    when(storage.removeItem("broken")).thenThrow(new IllegalStateException("The workspace is not available"));
+    when(storage.removeItem("last")).thenReturn(List.of());
+
+    service.purgeExpired("root");
+    runHanded();
+
+    // Neither the facts nor the counts: they are the daily run's.
+    verifyNoInteractions(trashStorage);
+    verify(storage, never()).getDriveTotals();
+    verify(driveStorage, never()).replaceAll(any());
+    // What failed is left, and the run goes on to the last.
+    verify(storage).removeItem("orphan");
+    verify(storage).removeItem("last");
+    verify(driveStorage, times(2)).remove(JOHN_ID, 5);
+    verify(driveStorage).remove(SALES_ID, 7);
+    verify(driveStorage, times(3)).remove(anyLong(), anyLong());
+
+    ActionData told = toldTo(rootAcl, 1);
+    assertEquals("recycle-bin-purge", told.getActionId());
+    assertEquals("PERMANENTLY_DELETE", told.getActionType());
+    assertEquals("DONE_SUCCESSFULLY", told.getStatus());
+    // The first and what left with it, and the last.
+    assertEquals(3, told.getNumberOfItems());
+    assertEquals("root", told.getUserName());
+    assertSame(rootAcl, told.getIdentity());
+  }
+
+  @Test
+  void aRunGoingOnServesWhatIsAskedMeanwhileInAFurtherRound() throws Exception {
+    when(storage.getIdsDeletedBefore(any())).thenAnswer(invocation -> {
+      // Asked while the first round is going on.
+      service.purgeExpired("mary");
+      service.purgeExpired();
+      return List.of();
+    }).thenReturn(List.of());
+
+    service.purgeExpired("root");
+    service.purgeExpired("root");
+    assertEquals(1, handedRuns.size());
+    runHanded();
+
+    // One run was handed over, and it went round twice.
+    verify(storage, times(2)).getIdsDeletedBefore(any());
+    verify(trashStorage, times(1)).normalizeRecycleBinItems();
+    toldTo(rootAcl, 1);
+    toldTo(maryAcl, 1);
+
+    // Over: the next call starts a run of its own.
+    service.purgeExpired();
+    assertEquals(1, handedRuns.size());
+    runHanded();
+    verify(trashStorage, times(2)).normalizeRecycleBinItems();
+    verify(listenerService, times(2)).broadcast(anyString(), any(), any());
+  }
+
+  @Test
+  void theDailyRunAndThePurgesAskedForBeforeARoundStartsAreServedByThatRound() throws Exception {
+    when(storage.getIdsDeletedBefore(any())).thenReturn(List.of());
+
+    service.purgeExpired("root");
+    service.purgeExpired("mary");
+    service.purgeExpired();
+    service.purgeExpired("mary");
+    assertEquals(1, handedRuns.size());
+    runHanded();
+
+    verify(storage, times(1)).getIdsDeletedBefore(any());
+    verify(trashStorage, times(1)).normalizeRecycleBinItems();
+    toldTo(rootAcl, 1);
+    toldTo(maryAcl, 1);
+  }
+
+  @Test
+  void aRoundThatFailsTellsItsRequestersAndTheNextCallRunsAgain() throws Exception {
+    when(storage.getIdsDeletedBefore(any())).thenThrow(new RepositoryException("The index is not available")).thenReturn(List.of());
+
+    service.purgeExpired("root");
+    runHanded();
+
+    ActionData told = toldTo(rootAcl, 1);
+    assertEquals("FAILED", told.getStatus());
+    assertEquals(0, told.getNumberOfItems());
+
+    service.purgeExpired("mary");
+    assertEquals(1, handedRuns.size());
+    runHanded();
+    assertEquals("DONE_SUCCESSFULLY", toldTo(maryAcl, 1).getStatus());
+  }
+
+  @Test
+  void aDailyRunThatCannotCountTheBinsRemovesNothingInThatRound() throws Exception {
+    doThrow(new IllegalStateException("The database is not available")).when(driveStorage).replaceAll(any());
+    when(trashStorage.normalizeRecycleBinItems()).thenReturn(0).thenThrow(new RepositoryException("The trash cannot be read"));
+
+    service.purgeExpired();
+    service.purgeExpired("root");
+    runHanded();
+    service.purgeExpired();
+    runHanded();
+
+    verify(storage, times(1)).getDriveTotals();
+    verify(storage, never()).getIdsDeletedBefore(any());
+    assertEquals("FAILED", toldTo(rootAcl, 1).getStatus());
+  }
+
+  @Test
+  void aRunThatBreaksOffOrIsNotTakenLetsTheNextOneStart() throws Exception {
+    when(storage.getIdsDeletedBefore(any())).thenThrow(new StackOverflowError("The run breaks off")).thenReturn(List.of());
+
+    service.purgeExpired("root");
+    Runnable run = handedRuns.remove(0);
+    assertThrows(StackOverflowError.class, run::run);
+    service.purgeExpired("root");
+    assertEquals(1, handedRuns.size());
+    runHanded();
+    toldTo(rootAcl, 1);
+
+    List<Runnable> taken = new ArrayList<>();
+    boolean[] refusing = { true };
+    RecycleBinServiceImpl stopping = new RecycleBinServiceImpl(storage,
+                                                               driveStorage,
+                                                               trashStorage,
+                                                               retentionSetting,
+                                                               identityManager,
+                                                               spaceService,
+                                                               userAcl,
+                                                               listenerService,
+                                                               true,
+                                                               run1 -> {
+                                                                 if (refusing[0]) {
+                                                                   throw new RejectedExecutionException("The executor is stopping");
+                                                                 }
+                                                                 taken.add(run1);
+                                                               });
+    assertThrows(RejectedExecutionException.class, stopping::purgeExpired);
+    refusing[0] = false;
+    stopping.purgeExpired();
+    assertEquals(1, taken.size());
+  }
+
+  @Test
+  void aRequesterWhoCannotBeToldDoesNotKeepTheOthersFromIt() throws Exception {
+    when(storage.getIdsDeletedBefore(any())).thenReturn(List.of());
+    doThrow(new IllegalStateException("The channel is closed")).when(listenerService)
+                                                               .broadcast(anyString(), org.mockito.ArgumentMatchers.same(rootAcl), any());
+
+    service.purgeExpired("root");
+    service.purgeExpired("mary");
+    runHanded();
+
+    toldTo(maryAcl, 1);
+    // And the run is over as any other.
+    service.purgeExpired();
+    assertEquals(1, handedRuns.size());
+  }
+
+  @Test
+  void aPurgeIsAskedForSomeone() {
+    assertThrows(IllegalArgumentException.class, () -> service.purgeExpired(null));
+    assertThrows(IllegalArgumentException.class, () -> service.purgeExpired(" "));
+
+    assertTrue(handedRuns.isEmpty());
+  }
+
   private RecycleBinServiceImpl service(boolean administratorAccessEnabled) {
-    return new RecycleBinServiceImpl(storage, driveStorage, identityManager, spaceService, userAcl, administratorAccessEnabled);
+    return new RecycleBinServiceImpl(storage,
+                                     driveStorage,
+                                     trashStorage,
+                                     retentionSetting,
+                                     identityManager,
+                                     spaceService,
+                                     userAcl,
+                                     listenerService,
+                                     administratorAccessEnabled,
+                                     handedRuns::add);
+  }
+
+  /** Runs what the service handed to its executor, in the order it did. */
+  private void runHanded() {
+    while (!handedRuns.isEmpty()) {
+      handedRuns.remove(0).run();
+    }
+  }
+
+  private static RecycleBinItem deleted(String id, Long ownerId, long size, int daysAgo) {
+    RecycleBinItem item = new RecycleBinItem();
+    item.setId(id);
+    item.setOwnerId(ownerId);
+    item.setSize(size);
+    item.setDeletedDate(Instant.now().minus(Duration.ofDays(daysAgo)).toEpochMilli());
+    return item;
+  }
+
+  private ActionData toldTo(org.exoplatform.services.security.Identity user, int times) throws Exception {
+    ArgumentCaptor<ActionData> told = ArgumentCaptor.forClass(ActionData.class);
+    verify(listenerService, times(times)).broadcast(org.mockito.ArgumentMatchers.eq("bulk_actions_document_event"),
+                                                    org.mockito.ArgumentMatchers.same(user),
+                                                    told.capture());
+    return told.getValue();
   }
 
   private static RecycleBinItem item(Long ownerId, long size) {

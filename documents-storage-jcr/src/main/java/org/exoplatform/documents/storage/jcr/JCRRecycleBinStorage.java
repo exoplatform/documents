@@ -17,6 +17,9 @@
 package org.exoplatform.documents.storage.jcr;
 
 import java.security.AccessControlException;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -39,6 +42,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.RecycleBinError;
+import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinSortField;
@@ -74,6 +78,10 @@ import org.exoplatform.social.core.space.spi.SpaceService;
 public class JCRRecycleBinStorage implements RecycleBinStorage {
 
   private static final String     GROUP_ADMINISTRATORS = "*:/platform/administrators";
+
+  /** A date as a statement reads it, in UTC. */
+  private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSxxx")
+                                                                             .withZone(ZoneOffset.UTC);
 
   private static final Pattern    ITEM_ID_PATTERN = Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
 
@@ -242,6 +250,71 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
         session.refresh(false);
         throw e;
       }
+    } finally {
+      provider.close();
+    }
+  }
+
+  @Override
+  public List<String> getIdsDeletedBefore(Instant instant) throws RepositoryException {
+    SessionProvider provider = createSystemProvider();
+    try {
+      String statement = selectItems() + " AND " + NodeTypeConstants.DELETED_DATE + " < TIMESTAMP '" + TIMESTAMP_FORMAT.format(instant)
+          + "'";
+      List<String> ids = new ArrayList<>();
+      for (NodeIterator nodes = createQuery(provider, statement).execute().getNodes(); nodes.hasNext();) {
+        String id = getString(nodes.nextNode(), NodeTypeConstants.TRASH_ID);
+        if (id != null) {
+          ids.add(id);
+        }
+      }
+      return ids;
+    } finally {
+      provider.close();
+    }
+  }
+
+  @Override
+  public RecycleBinItem getRemovableItem(String itemId) throws RepositoryException {
+    if (itemId == null || !ITEM_ID_PATTERN.matcher(itemId).matches()) {
+      return null;
+    }
+    SessionProvider provider = createSystemProvider();
+    try {
+      Session session = getSession(provider);
+      Node node = findNode(session, itemId);
+      if (node == null) {
+        return null;
+      }
+      // A shortcut trashed with a document leaves with it while it is there.
+      String documentItemId = getString(node, NodeTypeConstants.RECYCLE_BIN_OF);
+      boolean heldByItsDocument = documentItemId != null && ITEM_ID_PATTERN.matcher(documentItemId).matches()
+          && findNode(session, documentItemId) != null;
+      return heldByItsDocument ? null : toItem(node);
+    } finally {
+      provider.close();
+    }
+  }
+
+  @Override
+  public List<RecycleBinDrive> getDriveTotals() throws RepositoryException {
+    SessionProvider provider = createSystemProvider();
+    try {
+      Map<Long, RecycleBinDrive> totals = new TreeMap<>();
+      for (NodeIterator nodes = createQuery(provider, selectItems()).execute().getNodes(); nodes.hasNext();) {
+        Node node = nodes.nextNode();
+        String ownerId = getString(node, NodeTypeConstants.RECYCLE_BIN_OWNER);
+        // A shortcut trashed with a document records no owner, as an item of no drive.
+        if (!StringUtils.isNumeric(ownerId)) {
+          continue;
+        }
+        RecycleBinDrive drive = totals.computeIfAbsent(Long.valueOf(ownerId), id -> new RecycleBinDrive(id, 0, 0));
+        drive.setItemsCount(drive.getItemsCount() + 1);
+        if (node.hasProperty(NodeTypeConstants.RECYCLE_BIN_SIZE)) {
+          drive.setItemsSize(drive.getItemsSize() + node.getProperty(NodeTypeConstants.RECYCLE_BIN_SIZE).getLong());
+        }
+      }
+      return new ArrayList<>(totals.values());
     } finally {
       provider.close();
     }
