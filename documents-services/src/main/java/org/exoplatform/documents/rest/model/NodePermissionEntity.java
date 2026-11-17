@@ -39,4 +39,18 @@ public class NodePermissionEntity {
 
   private List<PermissionEntryEntity> collaborators;
 
+  /**
+   * Whether the document's space lets the user change its access list.
+   */
+  private boolean canManageAccess = true;
+
+  public NodePermissionEntity(boolean canAccess,
+                              boolean canEdit,
+                              boolean canDelete,
+                              boolean allMembersCanEdit,
+                              String visibilityChoice,
+                              List<PermissionEntryEntity> collaborators) {
+    this(canAccess, canEdit, canDelete, allMembersCanEdit, visibilityChoice, collaborators, true);
+  }
+
 }

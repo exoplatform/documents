@@ -59,6 +59,7 @@ import org.exoplatform.services.jcr.impl.core.WorkspaceImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 import org.exoplatform.services.cms.documents.NewDocumentTemplate;
 import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
+import org.exoplatform.services.cms.documents.security.DocumentSpaceGuard;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.social.core.activity.model.ExoSocialActivity;
@@ -738,6 +739,8 @@ public class JCRDocumentFileStorageTest {
     jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0);
     verify(documentSearchServiceConnector,
            times(1)).search(identity, "collaboration", List.of("/documents/path"), filter, 0, 0, "lastUpdatedDate", "ASC");
+    // the results are converted in one listing, which decides each space's access management once
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.toSearchedFileNodes(any(), any(), eq(identity), any(), any()));
 
   }
 
@@ -913,9 +916,105 @@ public class JCRDocumentFileStorageTest {
     doNothing().when(node).checkout();
     doNothing().when(node).restore(version, true);
     when(node.isNodeType(NodeTypeConstants.EXO_MODIFY)).thenReturn(true);
-    this.jcrDocumentFileStorage.restoreVersion("123", "user");
+    DocumentSpaceGuard guard = mockDocumentSpaceGuard();
+    this.jcrDocumentFileStorage.restoreVersion("123", "user", false);
     verify(node, times(1)).restore(version, true);
     verify(node, times(1)).checkin();
+    verify(guard, never()).getAccessList(any());
+    verify(guard, never()).restoreAccessList(any(), any());
+  }
+
+  @Test
+  public void restoreVersionKeepsTheAccessListOfAUserTheSpaceRefuses() throws RepositoryException {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = new RepositoryEntry();
+    repositoryEntry.setName("repository");
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Version version = mock(Version.class);
+    Node frozen = mock(Node.class);
+    Node node = mock(Node.class);
+    when(session.getNodeByUUID("123")).thenReturn(version);
+    when(version.getNode(NodeTypeConstants.JCR_FROZEN_NODE)).thenReturn(frozen);
+    when(Utils.getStringProperty(frozen, NodeTypeConstants.JCR_FROZEN_UUID)).thenReturn("111");
+    when(session.getNodeByUUID("111")).thenReturn(node);
+    when(node.getUUID()).thenReturn("111");
+    SessionImpl systemSession = mock(SessionImpl.class);
+    SessionProvider systemSessionProvider = mock(SessionProvider.class);
+    SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(systemSessionProvider);
+    when(systemSessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    Node storedNode = mock(Node.class);
+    when(systemSession.getNodeByIdentifier("111")).thenReturn(storedNode);
+    DocumentSpaceGuard guard = mockDocumentSpaceGuard();
+    Map<String, List<String>> accessList = Map.of("*:/spaces/team", List.of("read"));
+    when(guard.getAccessList(storedNode)).thenReturn(accessList);
+
+    this.jcrDocumentFileStorage.restoreVersion("123", "user", true);
+
+    // the list is put back before the checkin, so that the new version carries it too
+    InOrder inOrder = inOrder(guard, node);
+    inOrder.verify(guard).getAccessList(storedNode);
+    inOrder.verify(node).restore(version, true);
+    inOrder.verify(guard).restoreAccessList(storedNode, accessList);
+    inOrder.verify(node).checkin();
+
+    // a list that cannot be put back fails the restore, never silently
+    doThrow(new RepositoryException("not privilegeable")).when(guard).restoreAccessList(storedNode, accessList);
+    assertThrows(IllegalStateException.class, () -> this.jcrDocumentFileStorage.restoreVersion("123", "user", true));
+  }
+
+  @Test
+  public void getDocumentSpace() throws RepositoryException {
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = new RepositoryEntry();
+    repositoryEntry.setName("repository");
+    repositoryEntry.setDefaultWorkspaceName("collaboration");
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    SessionImpl systemSession = mock(SessionImpl.class);
+    SessionProvider systemSessionProvider = mock(SessionProvider.class);
+    SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(systemSessionProvider);
+    when(systemSessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    Node node = mock(Node.class);
+    when(systemSession.getNodeByIdentifier("123")).thenReturn(node);
+    when(systemSession.getNodeByIdentifier("missing")).thenThrow(new ItemNotFoundException("missing"));
+    Space space = new Space();
+    space.setId(7L);
+    DocumentSpaceGuard guard = mockDocumentSpaceGuard();
+    when(guard.getDocumentSpace(node)).thenReturn(space);
+
+    assertSame(space, this.jcrDocumentFileStorage.getDocumentSpace("123"));
+    assertNull(this.jcrDocumentFileStorage.getDocumentSpace("missing"));
+    verify(systemSessionProvider, times(2)).close();
+
+    // a version resolves through its frozen node, which the guard maps to its document
+    Node version = mock(Node.class);
+    Node frozenNode = mock(Node.class);
+    when(systemSession.getNodeByIdentifier("version-id")).thenReturn(version);
+    when(version.isNodeType(NodeTypeConstants.NT_VERSION)).thenReturn(true);
+    when(version.getNode(NodeTypeConstants.JCR_FROZEN_NODE)).thenReturn(frozenNode);
+    when(guard.getDocumentSpace(frozenNode)).thenReturn(space);
+    assertSame(space, this.jcrDocumentFileStorage.getDocumentSpace("version-id"));
+
+    // a read that fails for another reason is no "no space": the caller fails closed
+    when(systemSession.getNodeByIdentifier("unreadable")).thenThrow(new RepositoryException("unreadable"));
+    assertThrows(IllegalStateException.class, () -> this.jcrDocumentFileStorage.getDocumentSpace("unreadable"));
+
+    when(guard.getDocumentSpace(node)).thenThrow(new RepositoryException("unreadable"));
+    assertThrows(IllegalStateException.class, () -> this.jcrDocumentFileStorage.getDocumentSpace("123"));
+  }
+
+  private DocumentSpaceGuard mockDocumentSpaceGuard() {
+    DocumentSpaceGuard guard = mock(DocumentSpaceGuard.class);
+    this.jcrDocumentFileStorage = spy(this.jcrDocumentFileStorage);
+    doReturn(guard).when(this.jcrDocumentFileStorage).getDocumentSpaceGuard();
+    return guard;
   }
 
   @Test
