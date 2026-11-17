@@ -38,7 +38,10 @@ public interface TrashStorage {
    * @throws RepositoryException
    * @return -1: move failed.
    *          trashId if moved succesfully
+   * @deprecated use {@link #moveToTrash(Node, SessionProvider, String)}, which
+   *             records who deleted the node. Since 7.3.0, for removal.
    */
+  @Deprecated(since = "7.3.0", forRemoval = true)
   public String moveToTrash(Node node, SessionProvider sessionProvider) throws RepositoryException;
 
   /**
@@ -49,8 +52,45 @@ public interface TrashStorage {
    * @return -1: move failed.
    *          trashId if moved succesfully
    * @throws RepositoryException
+   * @deprecated use {@link #moveToTrash(Node, SessionProvider, String, int)},
+   *             which records who deleted the node. Since 7.3.0, for removal.
    */
+  @Deprecated(since = "7.3.0", forRemoval = true)
   public String moveToTrash(Node node, SessionProvider sessionProvider, int deep) throws RepositoryException;
+
+  /**
+   * Moves a node to the trash and records what its Recycle Bin shows of it:
+   * the drive it belongs to, the folder it was deleted from, who deleted it
+   * and when, its size and its name. A node deleted from a personal or a space
+   * drive goes to that drive's bin folder, any other one under the trash home.
+   * The shortcuts pointing at the node or at one of its descendants are moved
+   * with it. The move, the recorded facts and the shortcuts are saved together
+   * or not at all.
+   *
+   * @param node node to move, read in the session of the user deleting it
+   * @param sessionProvider session provider of the caller
+   * @param deletedBy username of the user deleting the node. When null, the
+   *          user of the node's session is recorded, unless it is the system
+   *          or the anonymous one
+   * @return the trash id of the node, null when it was already in the trash
+   * @throws RepositoryException when the node cannot be moved; nothing is
+   *           changed then
+   */
+  public String moveToTrash(Node node, SessionProvider sessionProvider, String deletedBy) throws RepositoryException;
+
+  /**
+   * Same as {@link #moveToTrash(Node, SessionProvider, String)}, with the depth
+   * of the call: a depth other than 0 is a move made on behalf of another one
+   * and does not look for the target of a category link.
+   *
+   * @param node node to move
+   * @param sessionProvider session provider of the caller
+   * @param deletedBy username of the user deleting the node, may be null
+   * @param deep depth of the call
+   * @return the trash id of the node, null when it was already in the trash
+   * @throws RepositoryException when the node cannot be moved
+   */
+  public String moveToTrash(Node node, SessionProvider sessionProvider, String deletedBy, int deep) throws RepositoryException;
   
   /**
    * Restore node from trash
