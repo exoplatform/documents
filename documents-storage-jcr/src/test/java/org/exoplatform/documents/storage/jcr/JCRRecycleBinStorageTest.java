@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +37,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.jcr.InvalidItemStateException;
+import javax.jcr.PathNotFoundException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -292,6 +296,106 @@ class JCRRecycleBinStorageTest {
     verify(systemProvider, times(6)).close();
   }
 
+  @Test
+  void anItemIsRemovedForGoodInOneSaveAndTheOthersStay() throws Exception {
+    Item file = item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
+    Item other = item(JOHN_BIN + "/other.txt", ID_2, "7", "other.txt", 1, Calendar.getInstance());
+    Item folder = jcr.add(JOHN_BIN + "/archive", "nt:folder");
+    folder.mixin("exo:recycleBinItem", "exo:restoreLocation").set("exo:trashId", ID_3).set("exo:recycleBinOwner", "7");
+    Item inside = jcr.addFile(JOHN_BIN + "/archive/inside.txt", 3);
+
+    storage.removeItem(ID_1);
+    assertNull(jcr.find(file.getId()));
+    assertEquals(1, jcr.getSaves());
+
+    storage.removeItem(ID_3);
+    assertNull(jcr.find(folder.getId()));
+    assertNull(jcr.find(inside.getId()));
+    assertEquals(2, jcr.getSaves());
+    assertNotNull(jcr.find(other.getId()));
+    assertNotNull(jcr.at(JOHN_BIN));
+  }
+
+  @Test
+  void theShortcutsToAnItemAndTheOnesTrashedWithItLeaveInTheSameSave() throws Exception {
+    Item file = item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
+    Item other = item(JOHN_BIN + "/other.txt", ID_2, "7", "other.txt", 1, Calendar.getInstance());
+    // Trashed with the item, and pointing at it: found by both lookups.
+    Item cascade = shortcut(JOHN_BIN + "/mine-link", file.getId(), ID_3, ID_1);
+    // Trashed with the item, pointing at a document a deleted folder held.
+    Item cascadeOfInner = shortcut(JOHN_BIN + "/inner-link", "another-id", ID_4, ID_1);
+    // Left in a drive by a deletion made before the Recycle Bin.
+    Item left = shortcut("/Groups/spaces/marketing/Documents/mine-link", file.getId(), null, null);
+    Item cascadeOfOther = shortcut(JOHN_BIN + "/other-link", other.getId(), "55555555-5555-5555-5555-555555555555", ID_2);
+
+    storage.removeItem(ID_1);
+
+    assertNull(jcr.find(file.getId()));
+    assertNull(jcr.find(cascade.getId()));
+    assertNull(jcr.find(cascadeOfInner.getId()));
+    assertNull(jcr.find(left.getId()));
+    assertNotNull(jcr.find(other.getId()));
+    assertNotNull(jcr.find(cascadeOfOther.getId()));
+    assertEquals(1, jcr.getSaves());
+  }
+
+  @Test
+  void aShortcutIsRemovedWithoutLookingForShortcutsToIt() throws Exception {
+    Item own = shortcut(JOHN_BIN + "/own-link", "a-document", ID_4, null);
+    own.set("exo:recycleBinOwner", "7");
+    Item cascade = shortcut(JOHN_BIN + "/link", "a-document", ID_3, ID_1);
+    jcr.commit();
+
+    storage.removeItem(ID_4);
+    // A shortcut trashed with a document can be removed by its id too.
+    storage.removeItem(ID_3);
+
+    assertNull(jcr.find(own.getId()));
+    assertNull(jcr.find(cascade.getId()));
+    assertFalse(jcr.getStatements().stream().anyMatch(statement -> statement.contains("exo:uuid=")), jcr.getStatements().toString());
+  }
+
+  @Test
+  void anIdThatNamesNoNodeOfTheTrashRemovesNothing() throws Exception {
+    item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
+
+    assertThrows(PathNotFoundException.class, () -> storage.removeItem(ID_2));
+    assertThrows(PathNotFoundException.class, () -> storage.removeItem(null));
+    assertThrows(PathNotFoundException.class, () -> storage.removeItem(ID_1 + "' OR exo:recycleBinOwner = '7"));
+
+    assertEquals(0, jcr.getSaves());
+    assertEquals(1, jcr.getStatements().size());
+    assertNotNull(jcr.at(JOHN_BIN + "/mine.txt"));
+  }
+
+  @Test
+  void aRemovalThatCannotBeSavedLeavesTheItemAndItsShortcutsAndTellsWhy() throws Exception {
+    Item file = item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
+    Item cascade = shortcut(JOHN_BIN + "/mine-link", file.getId(), ID_3, ID_1);
+    InvalidItemStateException failure = new InvalidItemStateException("The item was changed by another session");
+    jcr.failNextSave(failure);
+
+    assertSame(failure, assertThrows(InvalidItemStateException.class, () -> storage.removeItem(ID_1)));
+
+    assertEquals(1, jcr.getRefreshes());
+    assertNotNull(jcr.find(file.getId()));
+    assertNotNull(jcr.find(cascade.getId()));
+    verify(systemProvider).close();
+  }
+
+  @Test
+  void theStatementsOfARemovalAreAcceptedByTheRepositoryParser() throws Exception {
+    item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
+
+    storage.removeItem(ID_1);
+
+    assertEquals(3, jcr.getStatements().size());
+    LocationFactory locationFactory = new LocationFactory(new NamespaceRegistryImpl());
+    for (String statement : jcr.getStatements()) {
+      assertNotNull(JCRSQLQueryBuilder.createQuery(statement, locationFactory, new DefaultQueryNodeFactory()), statement);
+    }
+  }
+
   private String orderOf(RecycleBinSortField sortField, boolean ascending) throws Exception {
     jcr.getStatements().clear();
     storage.getItems(new RecycleBinFilter(7, null, sortField, ascending, 0, 10));
@@ -331,6 +435,19 @@ class JCRRecycleBinStorageTest {
    * term the statement names, in the order it asks for.
    */
   private List<Item> answer(String statement) {
+    String target = group(statement, "^SELECT \\* FROM exo:symlink WHERE exo:uuid='([^']*)' AND exo:workspace='collaboration'$");
+    if (target != null) {
+      List<Item> links = new ArrayList<>();
+      collectLinks(jcr.at("/"), target, links);
+      return links;
+    }
+    String cascadeOf = group(statement, "exo:recycleBinOf = '([^']*)'");
+    if (cascadeOf != null) {
+      List<Item> cascades = new ArrayList<>();
+      collect(jcr.at("/Trash"), cascades);
+      cascades.removeIf(item -> !cascadeOf.equals(item.get("exo:recycleBinOf")));
+      return cascades;
+    }
     assertTrue(statement.startsWith("SELECT * FROM exo:recycleBinItem WHERE jcr:path LIKE '/Trash/%' AND "), statement);
     String owner = group(statement, "exo:recycleBinOwner = '([^']*)'");
     String id = group(statement, "exo:trashId = '([^']*)'");
@@ -362,6 +479,28 @@ class JCRRecycleBinStorageTest {
       }
       collect(child, found);
     }
+  }
+
+  private void collectLinks(Item item, String targetId, List<Item> found) {
+    for (Item child : item.getChildren()) {
+      if (child.has("exo:symlink") && targetId.equals(child.get("exo:uuid"))) {
+        found.add(child);
+      }
+      collectLinks(child, targetId, found);
+    }
+  }
+
+  private Item shortcut(String path, String targetId, String trashId, String cascadeOf) {
+    Item link = jcr.add(path, "exo:symlink");
+    link.set("exo:uuid", targetId);
+    if (trashId != null) {
+      link.mixin("exo:restoreLocation", "exo:recycleBinItem").set("exo:trashId", trashId);
+    }
+    if (cascadeOf != null) {
+      link.set("exo:recycleBinOf", cascadeOf);
+    }
+    jcr.commit();
+    return link;
   }
 
   private static String group(String statement, String regex) {
