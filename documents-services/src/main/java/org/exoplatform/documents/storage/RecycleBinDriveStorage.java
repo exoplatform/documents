@@ -32,8 +32,11 @@ import io.meeds.common.ContainerTransactional;
  * Keeps what the Recycle Bin of each drive holds: its number of items and
  * their total size. The totals are changed in the database, by adding to or
  * subtracting from the stored values, so that concurrent changes all count.
- * Each write is a transaction of its own: a caller that chains several of
- * them is not atomic and says how it handles a failure in between.
+ * Each write is a transaction of its own when its caller holds none: a caller
+ * that chains several of them is not atomic and says how it handles a failure
+ * in between. Called inside a transaction, a write joins it, and a write that
+ * fails marks that whole transaction for rollback: a caller that means to
+ * retry after a failure, as after {@link #create(long, long)}, holds none.
  */
 @Component
 public class RecycleBinDriveStorage {
@@ -107,8 +110,7 @@ public class RecycleBinDriveStorage {
    * @return the drives of that page
    */
   public List<RecycleBinDrive> getDrives(long offset, int limit) {
-    return recycleBinDriveRepository.findAll(new OffsetPageable(offset, limit, LARGEST_FIRST))
-                                    .getContent()
+    return recycleBinDriveRepository.findAllBy(new OffsetPageable(offset, limit, LARGEST_FIRST))
                                     .stream()
                                     .map(RecycleBinDriveStorage::toModel)
                                     .toList();

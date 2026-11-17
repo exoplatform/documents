@@ -222,6 +222,8 @@ class TrashStorageMoveToTrashTest {
     assertEquals(savesBefore + 1, jcr.getSaves());
     assertEquals(JOHN_HOME + "/Private/Documents/report.docx -> " + JOHN_BIN + "/report.docx", jcr.getMoves().get(1));
     verify(systemSession.getWorkspace(), never()).move(anyString(), anyString());
+    // Nothing is written through the session of the user who deletes.
+    assertEquals(java.util.Set.of("__system"), jcr.getWriters());
     verify(systemProvider, org.mockito.Mockito.times(2)).close();
   }
 
@@ -570,6 +572,57 @@ class TrashStorageMoveToTrashTest {
     for (String statement : jcr.getStatements()) {
       assertNotNull(JCRSQLQueryBuilder.createQuery(statement, locationFactory, new DefaultQueryNodeFactory()), statement);
     }
+  }
+
+  @Test
+  void aNodeOfAnotherWorkspaceIsCopiedToTheTrashWithItsFactsAndTheListenersToldOnceItIsSaved() throws Exception {
+    FakeJcr other = new FakeJcr("dms-system");
+    Item file = other.addFile("/templates/form.txt", 4);
+    jcr.linkWorkspace(other);
+    SessionImpl otherSystemSession = other.session("__system");
+    when(systemProvider.getSession(eq("dms-system"), any())).thenReturn(otherSystemSession);
+    int[] savesAtBroadcast = new int[] { -1 };
+    org.mockito.Mockito.doAnswer(invocation -> {
+      savesAtBroadcast[0] = jcr.getSaves();
+      return null;
+    }).when(listenerService).broadcast(eq(TrashStorage.FILE_REMOVE_ACTIVITY), isNull(), any());
+
+    String trashId = trashStorage.moveToTrash(other.node(other.session("john"), file), mock(SessionProvider.class), "john");
+
+    Item trashed = jcr.at("/Trash/form.txt");
+    assertNotNull(trashed);
+    assertEquals(file.getId(), trashed.getId());
+    assertNull(other.at("/templates/form.txt"));
+    assertEquals(trashId, trashed.get(NodeTypeConstants.TRASH_ID));
+    assertEquals("/templates/form.txt", trashed.get(NodeTypeConstants.RESTORE_PATH));
+    assertEquals("dms-system", trashed.get(NodeTypeConstants.RESTORE_WORKSPACE));
+    assertTrue(trashed.has(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM));
+    assertEquals("john", trashed.get(NodeTypeConstants.DELETED_BY));
+    assertEquals(4L, trashed.get(NodeTypeConstants.RECYCLE_BIN_SIZE));
+    assertFalse(trashed.getProperties().containsKey(NodeTypeConstants.RECYCLE_BIN_OWNER));
+    verify(listenerService).broadcast(eq(TrashStorage.FILE_REMOVE_ACTIVITY), isNull(), argThat(isAt("/Trash/form.txt")));
+    assertEquals(1, jcr.getSaves());
+    assertEquals(1, savesAtBroadcast[0]);
+  }
+
+  @Test
+  void aNodeOfAnotherWorkspaceWhoseFactsCannotBeSavedStaysCopiedAndTellsNoListener() throws Exception {
+    FakeJcr other = new FakeJcr("dms-system");
+    Item file = other.addFile("/templates/form.txt", 4);
+    jcr.linkWorkspace(other);
+    SessionImpl otherSystemSession = other.session("__system");
+    when(systemProvider.getSession(eq("dms-system"), any())).thenReturn(otherSystemSession);
+    jcr.failNextSave(new RepositoryException("The save failed"));
+
+    assertThrows(RepositoryException.class,
+                 () -> trashStorage.moveToTrash(other.node(other.session("john"), file), mock(SessionProvider.class), "john"));
+
+    // The copy is persisted by the repository before the save: it stays in
+    // the trash, without the facts the save was to write.
+    Item copied = jcr.at("/Trash/form.txt");
+    assertNotNull(copied);
+    assertFalse(copied.has(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM));
+    verify(listenerService, never()).broadcast(anyString(), any(), any());
   }
 
   private org.mockito.ArgumentMatcher<Object> isAt(String path) {

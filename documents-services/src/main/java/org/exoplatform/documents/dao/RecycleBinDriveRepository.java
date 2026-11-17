@@ -17,7 +17,9 @@
 package org.exoplatform.documents.dao;
 
 import java.util.Date;
+import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -26,6 +28,11 @@ import org.springframework.data.repository.query.Param;
 import org.exoplatform.documents.entity.RecycleBinDriveEntity;
 
 public interface RecycleBinDriveRepository extends JpaRepository<RecycleBinDriveEntity, Long> {
+
+  /**
+   * Reads a page of drives without counting them all.
+   */
+  List<RecycleBinDriveEntity> findAllBy(Pageable pageable);
 
   /**
    * Adds to the totals of a drive, in the database: the stored values are not
