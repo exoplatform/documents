@@ -31,6 +31,9 @@ public final class RecycleBinError {
   /** Neither the folder the item was deleted from nor a drive to restore it to exists any more. */
   public static final String RESTORE_LOCATION_MISSING = "recycleBin.restore.locationMissing";
 
+  /** The retention period asked for is outside the bounds a period may take. */
+  public static final String RETENTION_INVALID        = "recycleBin.retention.invalid";
+
   private RecycleBinError() {
   }
 
