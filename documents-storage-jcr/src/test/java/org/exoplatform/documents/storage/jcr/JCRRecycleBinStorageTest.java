@@ -49,7 +49,7 @@ import org.junit.jupiter.api.Test;
 import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
-import org.exoplatform.documents.model.RecycleBinSortField;
+import org.exoplatform.documents.constant.RecycleBinSortField;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.FakeJcr.Item;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -435,6 +435,25 @@ class JCRRecycleBinStorageTest {
     assertNull(jcr.find(own.getId()));
     assertNull(jcr.find(cascade.getId()));
     assertFalse(jcr.getStatements().stream().anyMatch(statement -> statement.contains("exo:uuid=")), jcr.getStatements().toString());
+  }
+
+  @Test
+  void aNodeTheIndexStillAnswersWithAfterItLeftTheTrashIsNotRemoved() throws Exception {
+    Item restored = jcr.addFile("/Library/report.docx", 5);
+    restored.mixin("exo:recycleBinItem").set("exo:trashId", ID_1);
+    Item unmarked = jcr.addFile(JOHN_BIN + "/plain.docx", 5);
+    unmarked.set("exo:trashId", ID_2);
+    jcr.commit();
+    int saves = jcr.getSaves();
+
+    jcr.setQueryHandler(statement -> List.of(restored));
+    assertThrows(PathNotFoundException.class, () -> storage.removeItem(ID_1));
+    jcr.setQueryHandler(statement -> List.of(unmarked));
+    assertThrows(PathNotFoundException.class, () -> storage.removeItem(ID_2));
+
+    assertEquals(saves, jcr.getSaves());
+    assertNotNull(jcr.at("/Library/report.docx"));
+    assertNotNull(jcr.at(JOHN_BIN + "/plain.docx"));
   }
 
   @Test

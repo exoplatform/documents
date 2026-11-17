@@ -125,8 +125,18 @@ class RecycleBinEntityBuilderTest {
     assertEquals("/", RecycleBinEntityBuilder.toOriginalLocation("/Groups/spaces/sales/Documents/q1.xlsx"));
     // A folder named as a drive root, deeper in a drive, is a folder.
     assertEquals("/Private/Documents", RecycleBinEntityBuilder.toOriginalLocation("/Users/j___/jo___/joh___/john/Private/Private/Documents/a.txt"));
+    // The public folder of a user is told from the private one.
+    assertEquals("/Public", RecycleBinEntityBuilder.toOriginalLocation("/Users/j___/jo___/joh___/john/Public/a.txt"));
+    assertEquals("/Public/Photos", RecycleBinEntityBuilder.toOriginalLocation("/Users/j___/jo___/joh___/john/Public/Photos/a.png"));
+    // A short name lies under fewer levels.
+    assertEquals("/Docs", RecycleBinEntityBuilder.toOriginalLocation("/Users/b___/bo___/bob/Private/Docs/a.txt"));
+    assertEquals("/", RecycleBinEntityBuilder.toOriginalLocation("/Users/a___/al/Private/a.txt"));
+    assertEquals("/Public", RecycleBinEntityBuilder.toOriginalLocation("/Users/x/Public/a.txt"));
+    // A folder above the home of a user is told by its marker, and no other folder is one.
+    assertEquals("/Users/shared/team/Private/x", RecycleBinEntityBuilder.toOriginalLocation("/Users/shared/team/Private/x/a.txt"));
     // In no drive: the folder as it is.
-    assertEquals("/Users/j___/jo___/joh___/john/Public", RecycleBinEntityBuilder.toOriginalLocation("/Users/j___/jo___/joh___/john/Public/a.txt"));
+    assertEquals("/Users/j___/jo___/joh___/john", RecycleBinEntityBuilder.toOriginalLocation("/Users/j___/jo___/joh___/john/a.txt"));
+    assertEquals("/Users/j___/jo___/joh___/john/Other/Private", RecycleBinEntityBuilder.toOriginalLocation("/Users/j___/jo___/joh___/john/Other/Private/a.txt"));
     assertEquals("/Groups/platform/users/Documents", RecycleBinEntityBuilder.toOriginalLocation("/Groups/platform/users/Documents/a.txt"));
     assertEquals("/sites", RecycleBinEntityBuilder.toOriginalLocation("/sites/a.txt"));
     assertEquals("/", RecycleBinEntityBuilder.toOriginalLocation("/a.txt"));

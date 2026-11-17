@@ -25,6 +25,8 @@ import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.rest.model.RecycleBinDriveEntity;
 import org.exoplatform.documents.rest.model.RecycleBinItemEntity;
+import org.exoplatform.documents.rest.model.RecycleBinLocationEntity;
+import org.exoplatform.documents.rest.model.RecycleBinUserEntity;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
@@ -36,11 +38,16 @@ import org.exoplatform.social.core.space.spi.SpaceService;
  */
 public final class RecycleBinEntityBuilder {
 
-  /** The folders of a personal drive, under the home of its user. */
-  private static final Pattern USER_DRIVE  = Pattern.compile("^/Users/(?:[^/]+/){3}[^/]+/Private(/.*)?$");
+  /**
+   * The folders a user owns under their home: the home lies under one level
+   * per leading letter of the name, three at most, each ending with "___".
+   */
+  private static final Pattern USER_DRIVE  = Pattern.compile("^/Users/(?:[^/]+___/){0,3}[^/]+/(Private|Public)(/.*)?$");
 
   /** The folders of the drive of a space. */
   private static final Pattern SPACE_DRIVE = Pattern.compile("^/Groups/spaces/[^/]+/Documents(/.*)?$");
+
+  private static final String  PUBLIC_FOLDER = "Public";
 
   private RecycleBinEntityBuilder() {
   }
@@ -63,7 +70,7 @@ public final class RecycleBinEntityBuilder {
     entity.setDeletedDate(item.getDeletedDate());
     entity.setDeletedBy(toUser(item.getDeletedBy(), identityManager));
     String location = toOriginalLocation(item.getRestorePath());
-    entity.setOriginalLocation(location == null ? null : new RecycleBinItemEntity.Location(location));
+    entity.setOriginalLocation(location == null ? null : new RecycleBinLocationEntity(location));
     // A folder and a shortcut have no content of their own to open.
     entity.setCanView(viewable && !item.isFolder() && !item.isShortcut());
     entity.setDocumentId(entity.isCanView() ? item.getDocumentId() : null);
@@ -73,7 +80,8 @@ public final class RecycleBinEntityBuilder {
   /**
    * @param restorePath the path an item was deleted from
    * @return the folder it was in, from the root of its drive, "/" for the
-   *         root itself; the whole path of the folder when it is in no
+   *         root itself, the public folder of a user and what it holds
+   *         under "/Public"; the whole path of the folder when it is in no
    *         drive; null when no path was recorded
    */
   public static String toOriginalLocation(String restorePath) {
@@ -82,11 +90,14 @@ public final class RecycleBinEntityBuilder {
     }
     int nameIndex = restorePath.lastIndexOf('/');
     String folder = nameIndex <= 0 ? "/" : restorePath.substring(0, nameIndex);
-    for (Pattern drive : new Pattern[] { USER_DRIVE, SPACE_DRIVE }) {
-      Matcher matcher = drive.matcher(folder);
-      if (matcher.matches()) {
-        return matcher.group(1) == null ? "/" : matcher.group(1);
-      }
+    Matcher userDrive = USER_DRIVE.matcher(folder);
+    if (userDrive.matches()) {
+      String inDrive = StringUtils.defaultString(userDrive.group(2));
+      return PUBLIC_FOLDER.equals(userDrive.group(1)) ? "/" + PUBLIC_FOLDER + inDrive : StringUtils.defaultIfEmpty(inDrive, "/");
+    }
+    Matcher spaceDrive = SPACE_DRIVE.matcher(folder);
+    if (spaceDrive.matches()) {
+      return StringUtils.defaultIfEmpty(spaceDrive.group(1), "/");
     }
     return folder;
   }
@@ -125,11 +136,11 @@ public final class RecycleBinEntityBuilder {
     return entity;
   }
 
-  private static RecycleBinItemEntity.User toUser(String username, IdentityManager identityManager) {
+  private static RecycleBinUserEntity toUser(String username, IdentityManager identityManager) {
     if (StringUtils.isBlank(username)) {
       return null;
     }
-    return new RecycleBinItemEntity.User(username, getFullName(identityManager.getOrCreateUserIdentity(username), username));
+    return new RecycleBinUserEntity(username, getFullName(identityManager.getOrCreateUserIdentity(username), username));
   }
 
   private static String getFullName(Identity identity, String fallback) {
