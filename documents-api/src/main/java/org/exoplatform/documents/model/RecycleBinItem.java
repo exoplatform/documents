@@ -36,6 +36,9 @@ public class RecycleBinItem {
   /** Id of the deleted document or folder itself. */
   private String  documentId;
 
+  /** Path of the item in the trash. */
+  private String  path;
+
   /**
    * Identity id of the user or the space whose drive the item was deleted
    * from, null when it belongs to no drive.

@@ -612,36 +612,64 @@ public interface DocumentFileService {
                    long authenticatedUserId) throws Exception;
 
   /**
-   * Retrieves a list of trash elements that match the specified filter.
+   * Lists the items of the Recycle Bin of the current user's personal drive.
+   * The user is the one of the current conversation state: a call with none,
+   * or an anonymous one, is refused.
    *
-   * @param trashElementNodeFilter the filter used to find trash elements
-   * @return a list of nodes representing the trash elements
-   * @throws RepositoryException if an error occurs while accessing the repository
+   * @param trashElementNodeFilter the sort and the page
+   * @return the items of that page
+   * @throws javax.jcr.AccessDeniedException when no user is acting
+   * @throws RepositoryException when the bin cannot be read
+   * @deprecated use {@link RecycleBinService#getItems}, which names the bin
+   *             and the caller
    */
+  @Deprecated(forRemoval = false)
   List<TrashElementNode> getDeletedDocuments(TrashElementNodeFilter trashElementNodeFilter) throws RepositoryException;
 
   /**
-   * Counts the total number of deleted documents in the trash.
+   * Counts the items of the Recycle Bin of the current user's personal
+   * drive. The user is the one of the current conversation state.
    *
-   * @return the total count of deleted documents
+   * @return the number of items
+   * @throws IllegalStateException when no user is acting or the bin cannot
+   *           be read
+   * @deprecated use {@link RecycleBinService#countItems}
    */
+  @Deprecated(forRemoval = false)
   int countDeletedDocuments();
 
   /**
-   * Restores a document from the trash based on the specified trash node path.
+   * Restores an item of a Recycle Bin the current user holds: their own, or
+   * the one of a space they manage or publish in. The item goes where
+   * {@link RecycleBinService#restoreItem} says, the user having to be able to
+   * add content there. The bin of another drive is never reached this way,
+   * whoever the user is.
    *
-   * @param trashNodePath the path of the trash node to restore
-   * @throws RepositoryException if an error occurs during the restoration process
+   * @param trashNodePath the path of the item in the trash
+   * @throws javax.jcr.PathNotFoundException when the path is not the one of
+   *           an item of a bin
+   * @throws javax.jcr.AccessDeniedException when no user is acting, when the
+   *           user does not hold the bin of the item or can add content to
+   *           no target
+   * @throws RepositoryException when the item cannot be restored
+   * @deprecated use {@link RecycleBinService#restoreItem}
    */
+  @Deprecated(forRemoval = false)
   void restoreDocumentFromTrash(String trashNodePath) throws RepositoryException;
 
   /**
-   * Delete a document from the trash based on the specified trash node path.
+   * Removes for good an item of a Recycle Bin the current user holds: their
+   * own, or the one of a space they manage or publish in.
    *
-   * @param documentPath the path of the trash node to delete
-   * @throws ObjectNotFoundException if a document not exist in the trash
-   * @throws RepositoryException if an error occurs during the delete process
+   * @param documentPath the path of the item in the trash
+   * @throws ObjectNotFoundException when the path is not the one of an item
+   *           of a bin
+   * @throws javax.jcr.AccessDeniedException when no user is acting or the
+   *           user does not hold the bin of the item
+   * @throws RepositoryException when the item cannot be removed
+   * @deprecated use {@link RecycleBinService#deleteItem}
    */
+  @Deprecated(forRemoval = false)
   void deleteDocumentPermanently(String documentPath) throws ObjectNotFoundException, RepositoryException;
 
   /**
