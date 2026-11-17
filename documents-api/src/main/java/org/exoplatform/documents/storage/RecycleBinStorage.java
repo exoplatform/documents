@@ -65,6 +65,18 @@ public interface RecycleBinStorage {
   RecycleBinItem getItem(String itemId) throws RepositoryException;
 
   /**
+   * Reads the item of a bin a deleted document is, by the id of the document.
+   *
+   * @param documentId id of the document or folder itself, as
+   *          {@link RecycleBinItem#getDocumentId()} gives it
+   * @return the item, null when no node carries that id, when the node is
+   *         not in the trash, when it is held by a deleted folder or when it
+   *         is a shortcut trashed with the document it points at
+   * @throws RepositoryException when the node cannot be read
+   */
+  RecycleBinItem getItemOfDocument(String documentId) throws RepositoryException;
+
+  /**
    * Removes an item of a bin for good, with the shortcuts pointing at it and
    * the ones trashed with it, in one save: all of them are removed or none.
    * The id may also name a shortcut trashed with a document, which

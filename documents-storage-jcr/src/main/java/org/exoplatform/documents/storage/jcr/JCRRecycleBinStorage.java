@@ -50,6 +50,7 @@ import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
@@ -145,6 +146,28 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
       Node node = findNode(getSession(provider), itemId);
       // A shortcut trashed with the document it points at is no item.
       return node == null || node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OF) ? null : toItem(node);
+    } finally {
+      provider.close();
+    }
+  }
+
+  @Override
+  public RecycleBinItem getItemOfDocument(String documentId) throws RepositoryException {
+    if (StringUtils.isBlank(documentId)) {
+      return null;
+    }
+    SessionProvider provider = createSystemProvider();
+    try {
+      Node node;
+      try {
+        node = ((ExtendedSession) getSession(provider)).getNodeByIdentifier(documentId);
+      } catch (ItemNotFoundException e) {
+        return null;
+      }
+      // What a deleted folder holds carries no mark of its own: the folder is the item.
+      boolean item = node.getPath().startsWith(trashHome + "/") && node.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)
+          && node.hasProperty(NodeTypeConstants.TRASH_ID) && !node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OF);
+      return item ? toItem(node) : null;
     } finally {
       provider.close();
     }
