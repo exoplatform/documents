@@ -40,7 +40,7 @@
       flat>
       <div>
         <p>
-          <v-icon color="tertiary" size="60">fa-layer-group</v-icon>
+          <v-icon color="secondary" size="60">fa-layer-group</v-icon>
         </p>
         <p class="text-title">
           {{ $t('documents.label.noResults') }}

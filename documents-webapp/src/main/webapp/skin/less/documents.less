@@ -38,10 +38,10 @@
         height: 500px;
         .uploadText {
           font-size: 24px;
-          color: #5F708A;
+          color: var(--allPagesBaseColorMedium, #5F708A);
         }
         .uploadIcon {
-          color: #5F708A;
+          color: var(--allPagesBaseColorMedium, #5F708A);
         }
       }
     }
@@ -259,7 +259,7 @@
         height: 276px;
       }
       .action-menu-item:hover {
-        background-color: #e4e5e7;
+        background-color: var(--skinGreyLighten3, #e4e5e7);
       }
       .action-menu-item {
         min-height: 30px !important;
@@ -398,7 +398,7 @@
     }
 
     .is-intersected[data-isfolder="true"] {
-      border: 2px dashed #c0bebe !important;
+      border: 2px dashed var(--allPagesBorderColorLight, #c0bebe) !important;
       cursor: move;
     }
 
@@ -774,7 +774,7 @@
   .absolute-deactivated {
     position: absolute;
     left: 19px;
-    color: #4d5466;
+    color: var(--allPagesDarkGrey, #4d5466);
     text-align: right;
     font-size: 8px;
     width: calc(100% - 30px);
