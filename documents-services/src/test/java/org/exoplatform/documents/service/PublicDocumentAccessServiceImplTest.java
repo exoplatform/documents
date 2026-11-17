@@ -11,6 +11,7 @@ import org.exoplatform.web.security.codec.CodecInitializer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.lang.reflect.InvocationTargetException;
@@ -52,6 +53,37 @@ public class PublicDocumentAccessServiceImplTest {
     when(publicDocumentAccessStorage.savePublicDocumentAccess(any(), anyLong())).thenReturn(publicDocumentAccess);
     publicDocumentAccessService.createPublicDocumentAccess(1L, "123", "12345678", new Date().getTime(), false);
     verify(publicDocumentAccessStorage).savePublicDocumentAccess(any(), anyLong());
+  }
+
+  /**
+   * The link records the user who creates it, and another user who saves the
+   * link again leaves its creator unchanged: a folder link is archived with the
+   * creator's rights. A link that records no creator takes the user who saves
+   * it.
+   */
+  @Test
+  public void createDocumentPublicAccessKeepsTheFirstCreator() {
+    ArgumentCaptor<PublicDocumentAccess> saved = ArgumentCaptor.forClass(PublicDocumentAccess.class);
+    when(publicDocumentAccessStorage.savePublicDocumentAccess(saved.capture(), anyLong())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(null);
+    publicDocumentAccessService.createPublicDocumentAccess(5L, "123", null, 0L, false);
+    assertEquals(Long.valueOf(0L), saved.getValue().getId());
+    assertEquals(Long.valueOf(5L), saved.getValue().getCreatorId());
+
+    PublicDocumentAccess existing = new PublicDocumentAccess(9L, "123", null, null, null);
+    existing.setCreatorId(5L);
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(existing);
+    publicDocumentAccessService.createPublicDocumentAccess(7L, "123", null, 0L, false);
+    assertEquals(Long.valueOf(9L), saved.getValue().getId());
+    assertEquals(Long.valueOf(5L), saved.getValue().getCreatorId());
+    verify(publicDocumentAccessStorage).savePublicDocumentAccess(saved.getValue(), 7L);
+
+    PublicDocumentAccess legacy = new PublicDocumentAccess(11L, "456", null, null, null);
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("456")).thenReturn(legacy);
+    publicDocumentAccessService.createPublicDocumentAccess(7L, "456", null, 0L, false);
+    assertEquals(Long.valueOf(11L), saved.getValue().getId());
+    assertEquals(Long.valueOf(7L), saved.getValue().getCreatorId());
   }
 
   @Test

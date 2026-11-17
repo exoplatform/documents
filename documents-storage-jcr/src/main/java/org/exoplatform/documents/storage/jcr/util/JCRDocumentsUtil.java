@@ -59,7 +59,10 @@ import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.impl.RepositoryServiceImpl;
+import org.exoplatform.services.jcr.impl.WorkspaceContainer;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -818,6 +821,30 @@ public class JCRDocumentsUtil {
     }
   }
 
+  /**
+   * Opens a session of the default workspace that carries the given identity,
+   * whatever the identity of the current thread. A session of
+   * {@link #getUserSessionProvider(RepositoryService, Identity)} carries the
+   * current thread's identity instead, the JCR login reading
+   * {@link ConversationState#getCurrent()}: it is the given user's only on that
+   * user's own request. The caller logs the session out.
+   *
+   * @param repositoryService the repository service
+   * @param aclIdentity the identity whose rights the session applies
+   * @return the session
+   * @throws RepositoryException when the session cannot be opened
+   */
+  public static Session openUserSession(RepositoryService repositoryService, Identity aclIdentity) throws RepositoryException {
+    if (!(repositoryService instanceof RepositoryServiceImpl repositoryServiceImpl)) {
+      throw new RepositoryException("A session of a given identity needs the repository's own service");
+    }
+    ManageableRepository repository = repositoryService.getCurrentRepository();
+    String workspaceName = repository.getConfiguration().getDefaultWorkspaceName();
+    WorkspaceContainer workspaceContainer = repositoryServiceImpl.getRepositoryContainer(repository.getConfiguration().getName())
+                                                                 .getWorkspaceContainer(workspaceName);
+    return new SessionImpl(workspaceName, new ConversationState(aclIdentity), workspaceContainer);
+  }
+
   public static long getUserIdentityId(IdentityManager identityManager, String username) {
     if (StringUtils.equals(IdentityConstants.ANONIM, username)
         || StringUtils.equals(IdentityConstants.SYSTEM, username)
@@ -1058,11 +1085,22 @@ public class JCRDocumentsUtil {
     if (node == null) {
       return;
     }
+    createFile(node, symlinkPath, sourcePath, tempFolderPath, getPathWithTitles(parentNode));
+  }
+
+  private static void createFile(Node node,
+                                 String symlinkPath,
+                                 String sourcePath,
+                                 String tempFolderPath,
+                                 String parentPath) throws RepositoryException, IOException {
+    if (node == null) {
+      return;
+    }
     if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
       String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
       Node sourceNode = getNodeByIdentifier(node.getSession(), sourceID);
       if (sourceNode != null) {
-        createFile(sourceNode, getPathWithTitles(node), getPathWithTitles(sourceNode), tempFolderPath, parentNode);
+        createFile(sourceNode, getPathWithTitles(node), getPathWithTitles(sourceNode), tempFolderPath, parentPath);
       }
       return;
     }
@@ -1070,7 +1108,6 @@ public class JCRDocumentsUtil {
     InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
     String path = "";
     String nodePath = getPathWithTitles(node);
-    String parentPath = getPathWithTitles(parentNode);
     if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
       nodePath = symlinkPath + nodePath.replace(sourcePath, "");
     }
@@ -1106,7 +1143,28 @@ public class JCRDocumentsUtil {
                                                String sourcePath,
                                                String tempFolderPath,
                                                Node parentNode) throws Exception {
-    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, parentNode, new HashSet<>());
+    if (node == null) {
+      return;
+    }
+    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, getPathWithTitles(parentNode));
+  }
+
+  /**
+   * Copies the tree under a node, following shortcuts to their targets, each
+   * one at its titles path ({@link #getPathWithTitles(Node)}) less
+   * {@code parentPath}, under {@code tempFolderPath}.
+   *
+   * @param parentPath the titles path the walk strips from each node's: the
+   *          parent's, or "" when the walking session cannot read the parent,
+   *          the node's own titles path then starting at the node, with no
+   *          leading separator
+   */
+  public static void createTempFilesAndFolders(Node node,
+                                               String symlinkPath,
+                                               String sourcePath,
+                                               String tempFolderPath,
+                                               String parentPath) throws Exception {
+    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, parentPath, new HashSet<>());
   }
 
   /**
@@ -1118,7 +1176,7 @@ public class JCRDocumentsUtil {
                                                 String symlinkPath,
                                                 String sourcePath,
                                                 String tempFolderPath,
-                                                Node parentNode,
+                                                String parentPath,
                                                 Set<String> walkPath) throws Exception {
     if (node == null) {
       return;
@@ -1130,7 +1188,6 @@ public class JCRDocumentsUtil {
     try {
       if (JCRDocumentsUtil.isFolder(node)) {
         String nodePath = getPathWithTitles(node);
-        String parentPath = getPathWithTitles(parentNode);
         if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
           nodePath = symlinkPath + nodePath.replace(sourcePath, "");
         }
@@ -1139,7 +1196,7 @@ public class JCRDocumentsUtil {
         NodeIterator nodeIterator = node.getNodes();
         while (nodeIterator.hasNext()) {
           Node child = nodeIterator.nextNode();
-          createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentNode, walkPath);
+          createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentPath, walkPath);
         }
       } else {
         if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
@@ -1150,11 +1207,11 @@ public class JCRDocumentsUtil {
                                       getPathWithTitles(node),
                                       getPathWithTitles(sourceNode),
                                       tempFolderPath,
-                                      parentNode,
+                                      parentPath,
                                       walkPath);
           }
         } else {
-          createFile(node, symlinkPath, sourcePath, tempFolderPath, parentNode);
+          createFile(node, symlinkPath, sourcePath, tempFolderPath, parentPath);
         }
       }
     } finally {
