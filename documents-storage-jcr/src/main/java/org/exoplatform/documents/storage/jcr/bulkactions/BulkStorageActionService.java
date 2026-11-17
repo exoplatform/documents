@@ -17,9 +17,9 @@
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,6 +35,7 @@ import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionStatus;
 import org.exoplatform.documents.model.ActionType;
+import org.exoplatform.documents.storage.BulkItemAction;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
@@ -60,7 +61,8 @@ public class BulkStorageActionService implements Startable {
 
   private long                          DEFAULT_ZIP_UPLOAD_LIMIT    = 3000;
 
-  private static final List<ActionData> actionList = new ArrayList<>();
+  /** The actions going on, read and written by the threads of the requests and of the actions. */
+  private static final List<ActionData> actionList = new CopyOnWriteArrayList<>();
 
   public void executeBulkAction(Session session,
                                 DocumentFileStorage documentFileStorage,
@@ -86,6 +88,36 @@ public class BulkStorageActionService implements Startable {
                                                   session,
                                                   items,
                                                   authenticatedUserId));
+  }
+
+  /**
+   * Starts a bulk action that applies one operation to each item of a list
+   * of ids. The action is known by its id, for a cancellation to reach it,
+   * until it is over.
+   *
+   * @param listenerService the service the end of the action is told through
+   * @param actionData the action
+   * @param itemIds the ids of its items
+   * @param itemAction what is done to each item
+   */
+  public void executeItemAction(ListenerService listenerService, ActionData actionData, List<String> itemIds, BulkItemAction itemAction) {
+    actionData.setStatus(ActionStatus.STARTED.name());
+    actionList.add(actionData);
+    try {
+      execute(new ActionThread(this, listenerService, actionData, List.copyOf(itemIds), itemAction));
+    } catch (RuntimeException e) {
+      actionList.remove(actionData);
+      throw e;
+    }
+  }
+
+  /** Forgets an action that is over. */
+  void releaseActionData(ActionData actionData) {
+    actionList.remove(actionData);
+  }
+
+  void execute(Runnable action) {
+    bulkActionThreadPool.execute(action);
   }
 
   @Override

@@ -956,13 +956,60 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  @Deprecated(forRemoval = false)
   public void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException {
-   jcrDeleteFileStorage.deleteDocumentsPermanently(actionId, trashElementNodes, getAclUserIdentity(userIdentityId));
+    startTrashBulkAction(actionId, ActionType.PERMANENTLY_DELETE, trashElementNodes, userIdentityId);
   }
 
   @Override
+  @Deprecated(forRemoval = false)
   public void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException {
-    jcrDeleteFileStorage.restoreDocuments(actionId, trashElementNodes, getAclUserIdentity(userIdentityId));
+    startTrashBulkAction(actionId, ActionType.RESTORE, trashElementNodes, userIdentityId);
+  }
+
+  /**
+   * The former bulk actions of the trash name their items by path and no
+   * bin: each item is looked for at its turn and acted on through the bin
+   * the user holds it in.
+   */
+  private void startTrashBulkAction(int actionId,
+                                    ActionType actionType,
+                                    List<AbstractNode> trashElementNodes,
+                                    long userIdentityId) throws IllegalAccessException {
+    org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);
+    String username = aclIdentity.getUserId();
+    if (StringUtils.isBlank(username) || IdentityConstants.ANONIM.equals(username)) {
+      throw new IllegalAccessException("A Recycle Bin is opened by a user of the platform only");
+    }
+    // Looked for here, on the thread of the request: the action runs on another.
+    RecycleBinService recycleBinService = getRecycleBinService();
+    RecycleBinStorage recycleBinStorage = getRecycleBinStorage();
+    Map<String, String> pathsByKey = new LinkedHashMap<>();
+    for (AbstractNode node : trashElementNodes) {
+      pathsByKey.put(node.getId() == null ? node.getPath() : node.getId(), node.getPath());
+    }
+    ActionData actionData = new ActionData();
+    actionData.setActionId(String.valueOf(actionId));
+    actionData.setActionType(actionType.name());
+    actionData.setIdentity(aclIdentity);
+    actionData.setUserName(username);
+    actionData.setNumberOfItems(pathsByKey.size());
+    jcrDeleteFileStorage.executeBulkAction(actionData, new ArrayList<>(pathsByKey.keySet()), key -> {
+      RecycleBinItem item = recycleBinStorage.getItemAt(pathsByKey.get(key));
+      if (item == null) {
+        return false;
+      }
+      try {
+        if (actionType == ActionType.RESTORE) {
+          recycleBinService.restoreItem(item.getId(), getHeldScope(item), username);
+        } else {
+          recycleBinService.deleteItem(item.getId(), getHeldScope(item), username);
+        }
+        return true;
+      } catch (ObjectNotFoundException e) {
+        return false;
+      }
+    });
   }
 
   @Override

@@ -41,6 +41,7 @@ import org.exoplatform.container.component.RequestLifeCycle;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionType;
+import org.exoplatform.documents.storage.BulkItemAction;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
@@ -310,41 +311,8 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   }
 
   @Override
-  public void deleteDocumentsPermanently(int actionId,
-                                         List<AbstractNode> trashElementNodes,
-                                         Identity aclUserIdentity) {
-    ActionData actionData = new ActionData();
-    actionData.setActionId(String.valueOf(actionId));
-    actionData.setActionType(ActionType.PERMANENTLY_DELETE.name());
-    actionData.setIdentity(aclUserIdentity);
-    bulkStorageActionService.executeBulkAction(null,
-                                               null,
-                                               this,
-                                               listenerService,
-                                               null,
-                                               trashElementNodes,
-                                               actionData,
-                                               null,
-                                               null,
-                                               0);
-  }
-
-  @Override
-  public void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, Identity aclUserIdentity) {
-    ActionData actionData = new ActionData();
-    actionData.setActionId(String.valueOf(actionId));
-    actionData.setActionType(ActionType.RESTORE.name());
-    actionData.setIdentity(aclUserIdentity);
-    bulkStorageActionService.executeBulkAction(null,
-                                               null,
-                                               this,
-                                               listenerService,
-                                               null,
-                                               trashElementNodes,
-                                               actionData,
-                                               null,
-                                               null,
-                                               0);
+  public void executeBulkAction(ActionData actionData, List<String> itemIds, BulkItemAction itemAction) {
+    bulkStorageActionService.executeItemAction(listenerService, actionData, itemIds, itemAction);
   }
 
   private void deletePendingDocument(String documentId) {
