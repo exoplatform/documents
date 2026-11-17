@@ -24,9 +24,9 @@ import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 
 /**
- * Reads the items of the Recycle Bins. It checks no permission: it reads
- * with the rights of the system, and its callers decide who may see or act
- * on the bin of a drive.
+ * Reads and removes the items of the Recycle Bins. It checks no permission:
+ * it acts with the rights of the system, and its callers decide who may see
+ * or act on the bin of a drive.
  */
 public interface RecycleBinStorage {
 
@@ -60,5 +60,23 @@ public interface RecycleBinStorage {
    * @throws RepositoryException when the bin cannot be read
    */
   RecycleBinItem getItem(String itemId) throws RepositoryException;
+
+  /**
+   * Removes an item of a bin for good, with the shortcuts pointing at it and
+   * the ones trashed with it, in one save: all of them are removed or none.
+   * The id may also name a shortcut trashed with a document, which
+   * {@link #getItem(String)} does not read. Between the moment a caller
+   * selects an item and this call, another actor may have restored or
+   * removed it: the item is then no longer found.
+   *
+   * @param itemId id of the item in the bin
+   * @throws javax.jcr.PathNotFoundException when no node of the trash carries
+   *           that id
+   * @throws javax.jcr.InvalidItemStateException when another session removed
+   *           or changed the item meanwhile
+   * @throws RepositoryException when the item cannot be removed; nothing is
+   *           removed then
+   */
+  void removeItem(String itemId) throws RepositoryException;
 
 }

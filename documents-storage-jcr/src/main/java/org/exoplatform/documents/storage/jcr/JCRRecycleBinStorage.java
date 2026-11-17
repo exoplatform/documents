@@ -17,11 +17,15 @@
 package org.exoplatform.documents.storage.jcr;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.regex.Pattern;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.query.Query;
@@ -41,8 +45,9 @@ import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
 
 /**
- * Reads the items of the Recycle Bins in the trash of the repository. Each
- * call opens a system session of its own and closes it. An item is a node
+ * Reads and removes the items of the Recycle Bins in the trash of the
+ * repository. Each call opens a system session of its own and closes it, and
+ * a removal that fails discards what it had pending. An item is a node
  * carrying exo:recycleBinItem under the trash home: its drive is the one
  * recorded on it when it was deleted, never deduced from its path.
  */
@@ -103,16 +108,48 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
     }
     SessionProvider provider = createSystemProvider();
     try {
-      String statement = selectItems() + " AND " + NodeTypeConstants.TRASH_ID + " = '" + itemId + "'";
-      QueryImpl query = (QueryImpl) createQuery(provider, statement);
-      query.setLimit(1);
-      NodeIterator nodes = query.execute().getNodes();
-      if (!nodes.hasNext()) {
-        return null;
-      }
-      Node node = nodes.nextNode();
+      Node node = findNode(getSession(provider), itemId);
       // A shortcut trashed with the document it points at is no item.
-      return node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OF) ? null : toItem(node);
+      return node == null || node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OF) ? null : toItem(node);
+    } finally {
+      provider.close();
+    }
+  }
+
+  @Override
+  public void removeItem(String itemId) throws RepositoryException {
+    if (itemId == null || !ITEM_ID_PATTERN.matcher(itemId).matches()) {
+      throw new PathNotFoundException("No node of the trash carries the id given");
+    }
+    SessionProvider provider = createSystemProvider();
+    try {
+      Session session = getSession(provider);
+      try {
+        Node item = findNode(session, itemId);
+        if (item == null) {
+          throw new PathNotFoundException("No node of the trash carries the id " + itemId);
+        }
+        String itemPath = item.getPath();
+        // What leaves with the item, by path: a shortcut may be found twice.
+        Map<String, Node> shortcuts = new TreeMap<>(Comparator.reverseOrder());
+        if (!item.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+          collect(session,
+                  "SELECT * FROM " + NodeTypeConstants.EXO_SYMLINK + " WHERE " + NodeTypeConstants.EXO_SYMLINK_UUID + "='"
+                      + ((ExtendedNode) item).getIdentifier() + "' AND " + NodeTypeConstants.EXO_WORKSPACE + "='"
+                      + trashWorkspace.replace("'", "''") + "'",
+                  itemPath,
+                  shortcuts);
+        }
+        collect(session, selectItems() + " AND " + NodeTypeConstants.RECYCLE_BIN_OF + " = '" + itemId + "'", itemPath, shortcuts);
+        for (Node shortcut : shortcuts.values()) {
+          shortcut.remove();
+        }
+        item.remove();
+        session.save();
+      } catch (RepositoryException | RuntimeException e) {
+        session.refresh(false);
+        throw e;
+      }
     } finally {
       provider.close();
     }
@@ -123,9 +160,33 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
   }
 
   private Query createQuery(SessionProvider provider, String statement) throws RepositoryException {
+    return getSession(provider).getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+  }
+
+  private Session getSession(SessionProvider provider) throws RepositoryException {
     readTrashLocation();
-    Session session = provider.getSession(trashWorkspace, repositoryService.getCurrentRepository());
-    return session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+    return provider.getSession(trashWorkspace, repositoryService.getCurrentRepository());
+  }
+
+  /** The node of the trash carrying an id, an item or a shortcut trashed with one. */
+  private Node findNode(Session session, String itemId) throws RepositoryException {
+    String statement = selectItems() + " AND " + NodeTypeConstants.TRASH_ID + " = '" + itemId + "'";
+    QueryImpl query = (QueryImpl) session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+    query.setLimit(1);
+    NodeIterator nodes = query.execute().getNodes();
+    return nodes.hasNext() ? nodes.nextNode() : null;
+  }
+
+  /** Adds the nodes a statement finds, but the ones the item holds: they leave with it. */
+  private void collect(Session session, String statement, String itemPath, Map<String, Node> found) throws RepositoryException {
+    Query query = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+    for (NodeIterator nodes = query.execute().getNodes(); nodes.hasNext();) {
+      Node node = nodes.nextNode();
+      String path = node.getPath();
+      if (!path.equals(itemPath) && !path.startsWith(itemPath + "/")) {
+        found.put(path, node);
+      }
+    }
   }
 
   /**
