@@ -104,6 +104,27 @@
     </depends>
   </module>
 
+  <module>
+    <name>DocumentsSpaceSettingExtension</name>
+    <load-group>SpaceSettingExtensions</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsSpaceSettings.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+  </module>
+
   <portlet>
     <name>Documents</name>
     <module>
