@@ -186,16 +186,17 @@ public interface TrashStorage {
 
 
   /**
-   * Updates the restore paths of nodes in the trash workspace when a parent folder has been renamed.
-   * <p>
-   * This method searches for all nodes whose {@code exo:restoreWorkspace} property starts with the given
-   * {@code oldPath}, and replaces that prefix with {@code newPath}. This ensures that nodes in the trash
-   * can be restored correctly even after the original folder has been moved or renamed.
-   * </p>
+   * Makes the nodes of the trash follow a folder that moved or was renamed:
+   * the path each was deleted from is rewritten when it lies under the
+   * folder, and under it only (a folder named foo does not take the nodes of
+   * foobar). Each node is rewritten in a save of its own; one that fails is
+   * reported and the others still follow. An item of a Recycle Bin stays in
+   * the bin of the drive it was deleted from, and keeps the path it had when
+   * the folder leaves that drive.
    *
-   * @param oldPath the old path prefix to look for in the {@code exo:restoreWorkspace} property
-   * @param newPath the new path prefix to replace the old path with
-   * @throws RepositoryException if an error occurs while accessing or updating nodes in the repository
+   * @param oldPath the path the folder had
+   * @param newPath the path the folder has now
+   * @throws RepositoryException when the nodes of the trash cannot be read
    */
   void updateRestorePath(String oldPath, String newPath) throws RepositoryException;
 
