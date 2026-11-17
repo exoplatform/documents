@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_FOLDER;
+import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.NT_UNSTRUCTURED;
 
 
 @Component
@@ -50,7 +51,8 @@ public class MoveNodeListener extends Listener<Map<String, String>, String> {
         Map<String, String> source = event.getSource();
         String newPath = source.get("destPath");
         String oldPath = source.get("srcPath");
-        boolean isFolder = event.getData().equals(NT_FOLDER);
+        // Every type a folder of a drive may have, as JCRDocumentsUtil#isFolder tells them.
+        boolean isFolder = NT_FOLDER.equals(event.getData()) || NT_UNSTRUCTURED.equals(event.getData());
         if (isFolder) {
             trashStorage.updateRestorePath(oldPath, newPath);
         }
