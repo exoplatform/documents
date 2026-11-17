@@ -295,6 +295,30 @@ class JCRRecycleBinStorageTest {
   }
 
   @Test
+  void anItemIsReadAtItsPathInTheTrashAndNowhereElse() throws Exception {
+    Item file = item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
+    Item folder = jcr.add(JOHN_BIN + "/archive", "nt:folder");
+    folder.mixin("exo:recycleBinItem", "exo:restoreLocation").set("exo:trashId", ID_2).set("exo:recycleBinOwner", "7");
+    jcr.addFile(JOHN_BIN + "/archive/inside.txt", 3);
+    shortcut(JOHN_BIN + "/link", file.getId(), ID_3, ID_1);
+    Item alive = jcr.addFile("/Users/j___/jo___/joh___/john/Private/alive.txt", 1);
+    alive.mixin("exo:recycleBinItem", "exo:restoreLocation").set("exo:trashId", ID_4).set("exo:recycleBinOwner", "7");
+    jcr.commit();
+
+    assertEquals(ID_1, storage.getItemAt(JOHN_BIN + "/mine.txt").getId());
+    assertEquals(JOHN_BIN + "/mine.txt", storage.getItemAt(JOHN_BIN + "/mine.txt").getPath());
+    assertEquals(JOHN_BIN + "/mine.txt", storage.getItem(ID_1).getPath());
+    assertNull(storage.getItemAt(JOHN_BIN + "/archive/inside.txt"));
+    assertNull(storage.getItemAt(JOHN_BIN + "/link"));
+    assertNull(storage.getItemAt(JOHN_BIN + "/gone.txt"));
+    assertNull(storage.getItemAt("/Users/j___/jo___/joh___/john/Private/alive.txt"));
+    assertNull(storage.getItemAt("/Trash"));
+    assertNull(storage.getItemAt("/Trashed/mine.txt"));
+    assertNull(storage.getItemAt(null));
+    assertNull(storage.getItemAt(" "));
+  }
+
+  @Test
   void everyStatementIsAcceptedByTheRepositoryParser() throws Exception {
     storage.getItems(new RecycleBinFilter(7, "N'S 100%_\\", RecycleBinSortField.SIZE, true, 0, 10));
     storage.countItems(filter(7, "a"));
