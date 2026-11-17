@@ -1074,33 +1074,73 @@ public class TrashStorageImpl implements TrashStorage {
 
   @Override
   public void updateRestorePath(String oldPath, String newPath) throws RepositoryException {
-    SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-    Session session = sessionProvider.getSession(this.trashWorkspace, repositoryService.getCurrentRepository());
+    String movedPath = oldPath.startsWith("/") ? oldPath : "/" + oldPath;
+    // A session of its own, so that a rewrite that fails leaves nothing
+    // pending for a later save of the same thread.
+    SessionProvider trashProvider = createSystemProvider();
+    try {
+      Session trashSession = trashProvider.getSession(this.trashWorkspace, repositoryService.getCurrentRepository());
+      // The statement only narrows the candidates: a pattern reads the
+      // characters of the path its own way, so each one is checked again.
+      String statement = "SELECT * FROM " + NodeTypeConstants.EXO_RESTORE_LOCATION + " WHERE jcr:path LIKE '" + this.trashHome + "/%' AND "
+          + NodeTypeConstants.RESTORE_PATH + " LIKE '" + escapeLikePattern(movedPath) + "/%' ESCAPE '\\'";
+      List<String> candidateIds = new ArrayList<>();
+      NodeIterator candidates = trashSession.getWorkspace().getQueryManager().createQuery(statement, Query.SQL).execute().getNodes();
+      while (candidates.hasNext()) {
+        candidateIds.add(((ExtendedNode) candidates.nextNode()).getIdentifier());
+      }
+      for (String candidateId : candidateIds) {
+        followFolderMove(trashSession, trashProvider, candidateId, movedPath, newPath);
+      }
+    } finally {
+      trashProvider.close();
+    }
+  }
 
-    String safePath = oldPath.startsWith("/") ? oldPath : "/" + oldPath;
-    String queryStr = """
-                        SELECT * FROM exo:restoreLocation
-                        WHERE jcr:path LIKE '%s/%%'
-                        AND exo:restorePath LIKE '%s%%'
-                        """.formatted(
-                          trashHome.replace("'", "''"),
-                          safePath.replace("'", "''"));
-    QueryManager queryManager = session.getWorkspace().getQueryManager();
-    Query query = queryManager.createQuery(queryStr, Query.SQL);
-    QueryResult result = query.execute();
-
-    NodeIterator nodes = result.getNodes();
-    while (nodes.hasNext()) {
-      Node node = nodes.nextNode();
-      if (node.hasProperty(RESTORE_PATH)) {
-        String restorePath = node.getProperty(RESTORE_PATH).getString();
-
-        //Update path prefix
-        String updatedPath = restorePath.replaceFirst("^" + oldPath, newPath);
-        node.setProperty(RESTORE_PATH, updatedPath);
+  /**
+   * Rewrites the path a node of the trash was deleted from when it lies
+   * under a folder that moved, in a save of its own. The Recycle Bin an item
+   * is in is the one of the drive it was deleted from, whatever the folder
+   * becomes: where it is restored to follows the folder inside that drive,
+   * and an item whose folder left it keeps the path it had. A node that
+   * cannot be rewritten is reported and left as it was, and the others still
+   * follow.
+   */
+  private void followFolderMove(Session trashSession, SessionProvider trashProvider, String nodeId, String movedPath, String newPath) {
+    try {
+      Node node = ((ExtendedSession) trashSession).getNodeByIdentifier(nodeId);
+      if (!node.hasProperty(NodeTypeConstants.RESTORE_PATH)) {
+        return;
+      }
+      String restorePath = node.getProperty(NodeTypeConstants.RESTORE_PATH).getString();
+      String restoreWorkspace = node.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE) ? node.getProperty(NodeTypeConstants.RESTORE_WORKSPACE)
+                                                                                           .getString()
+                                                                                      : null;
+      if (!restorePath.startsWith(movedPath + "/") || restoreWorkspace != null && !restoreWorkspace.equals(this.trashWorkspace)) {
+        return;
+      }
+      String newRestorePath = newPath + restorePath.substring(movedPath.length());
+      String ownerId = node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OWNER) ? node.getProperty(NodeTypeConstants.RECYCLE_BIN_OWNER).getString()
+                                                                              : null;
+      if (ownerId != null
+          && !ownerId.equals(JCRDocumentsUtil.resolveRecycleBinOwner(newRestorePath, nodeHierarchyCreator, identityManager, spaceService, trashProvider))) {
+        return;
+      }
+      node.setProperty(NodeTypeConstants.RESTORE_PATH, newRestorePath);
+      trashSession.save();
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.warn("The path the node {} of the trash was deleted from could not follow the move of {} to {}", nodeId, movedPath, newPath, e);
+      try {
+        trashSession.refresh(false);
+      } catch (RepositoryException | RuntimeException refreshFailure) {
+        LOG.warn("The changes pending on the node {} of the trash could not be discarded", nodeId, refreshFailure);
       }
     }
-    session.save();
+  }
+
+  /** A text as a pattern reads it literally: its quote is doubled and its wildcards are escaped. */
+  private static String escapeLikePattern(String text) {
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
   }
 
 }
