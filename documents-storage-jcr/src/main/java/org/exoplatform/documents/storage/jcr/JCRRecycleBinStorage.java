@@ -164,13 +164,38 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
       } catch (ItemNotFoundException e) {
         return null;
       }
-      // What a deleted folder holds carries no mark of its own: the folder is the item.
-      boolean item = node.getPath().startsWith(trashHome + "/") && node.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)
-          && node.hasProperty(NodeTypeConstants.TRASH_ID) && !node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OF);
-      return item ? toItem(node) : null;
+      return toItemOrNull(node);
     } finally {
       provider.close();
     }
+  }
+
+  @Override
+  public RecycleBinItem getItemAt(String path) throws RepositoryException {
+    if (StringUtils.isBlank(path)) {
+      return null;
+    }
+    SessionProvider provider = createSystemProvider();
+    try {
+      try {
+        return getSession(provider).getItem(path) instanceof Node node ? toItemOrNull(node) : null;
+      } catch (PathNotFoundException e) {
+        return null;
+      }
+    } finally {
+      provider.close();
+    }
+  }
+
+  /**
+   * The item a node is, null when it is none: a node of a drive, whatever
+   * marks it kept, a node a deleted folder holds, which carries no mark of
+   * its own, or a shortcut trashed with the document it points at.
+   */
+  private RecycleBinItem toItemOrNull(Node node) throws RepositoryException {
+    boolean item = node.getPath().startsWith(trashHome + "/") && node.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)
+        && node.hasProperty(NodeTypeConstants.TRASH_ID) && !node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OF);
+    return item ? toItem(node) : null;
   }
 
   @Override
@@ -705,6 +730,7 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
     RecycleBinItem item = new RecycleBinItem();
     item.setId(getString(node, NodeTypeConstants.TRASH_ID));
     item.setDocumentId(((ExtendedNode) node).getIdentifier());
+    item.setPath(node.getPath());
     String ownerId = getString(node, NodeTypeConstants.RECYCLE_BIN_OWNER);
     item.setOwnerId(StringUtils.isNumeric(ownerId) ? Long.valueOf(ownerId) : null);
     item.setName(JCRDocumentsUtil.getTitle(node));
