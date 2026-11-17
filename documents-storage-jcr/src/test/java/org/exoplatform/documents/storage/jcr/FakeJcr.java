@@ -63,7 +63,8 @@ import org.exoplatform.services.jcr.impl.ext.action.SessionActionInterceptor;
  * through mocked sessions and nodes whose answers come from that tree. A
  * session's save keeps the tree as the saved state and its refresh(false)
  * brings the tree back to it, so a test can tell what a failed save leaves
- * behind. It knows no node type rule, no access check and no query grammar: a
+ * behind. It knows no node type rule and no query grammar, and the only
+ * access check it makes is the refusal a test registers for a user and a path: a
  * statement is answered by the function the test registers, and the statements
  * run are kept for the test to parse with the repository's own parser.
  */
@@ -154,6 +155,14 @@ public class FakeJcr {
   private int                                         refreshes;
 
   private RepositoryException                         saveFailure;
+
+  private RepositoryException                         lookupFailure;
+
+  private final Set<String>                           refusals         = new LinkedHashSet<>();
+
+  private final List<String>                          permissionChecks = new ArrayList<>();
+
+  private int                                         logouts;
 
   private final List<String>                          statements       = new ArrayList<>();
 
@@ -285,6 +294,25 @@ public class FakeJcr {
     return writers;
   }
 
+  /** Makes the next read of a node by its id fail, as a repository that cannot answer. */
+  public void failNextLookup(RepositoryException failure) {
+    this.lookupFailure = failure;
+  }
+
+  /** Refuses a path to a user: the permission check of a session of that user fails on it. */
+  public void refuse(String userId, String path) {
+    refusals.add(userId + " " + path);
+  }
+
+  /** The permission checks asked, as "user path action". */
+  public List<String> getPermissionChecks() {
+    return permissionChecks;
+  }
+
+  public int getLogouts() {
+    return logouts;
+  }
+
   public void failNextSave(RepositoryException failure) {
     this.saveFailure = failure;
   }
@@ -351,8 +379,22 @@ public class FakeJcr {
       return at(invocation.getArgument(0)) != null;
     case "getRootNode":
       return node(session, root);
+    case "checkPermission":
+      permissionChecks.add(userId + " " + invocation.getArgument(0) + " " + invocation.getArgument(1));
+      if (refusals.contains(userId + " " + invocation.getArgument(0))) {
+        throw new java.security.AccessControlException("Permission denied");
+      }
+      return null;
+    case "logout":
+      logouts++;
+      return null;
     case "getNodeByUUID":
     case "getNodeByIdentifier": {
+      if (lookupFailure != null) {
+        RepositoryException failure = lookupFailure;
+        lookupFailure = null;
+        throw failure;
+      }
       Item item = find(invocation.getArgument(0));
       if (item == null) {
         throw new ItemNotFoundException((String) invocation.getArgument(0));
@@ -552,6 +594,10 @@ public class FakeJcr {
       throw new InvalidItemStateException("Node " + id + " no longer exists");
     }
     if (WRITES.contains(method)) {
+      // A versionable node that is checked in takes no change.
+      if (Boolean.FALSE.equals(item.properties.get("jcr:isCheckedOut"))) {
+        throw new javax.jcr.version.VersionException("Node " + id + " is checked in");
+      }
       writers.add(users.get(session));
     }
     switch (method) {
@@ -579,6 +625,11 @@ public class FakeJcr {
       lenient().when(nodeType.getName()).thenReturn(item.primaryType);
       return nodeType;
     }
+    case "isCheckedOut":
+      return !Boolean.FALSE.equals(item.properties.get("jcr:isCheckedOut"));
+    case "checkout":
+      item.properties.put("jcr:isCheckedOut", Boolean.TRUE);
+      return null;
     case "canAddMixin":
       return !item.mixins.contains(invocation.getArgument(0));
     case "addMixin":
@@ -682,6 +733,14 @@ public class FakeJcr {
     }
     if (value instanceof Calendar date) {
       lenient().when(property.getDate()).thenReturn(date);
+    }
+    if (value instanceof String[] strings) {
+      javax.jcr.Value[] values = new javax.jcr.Value[strings.length];
+      for (int i = 0; i < strings.length; i++) {
+        values[i] = mock(javax.jcr.Value.class);
+        lenient().when(values[i].getString()).thenReturn(strings[i]);
+      }
+      lenient().when(property.getValues()).thenReturn(values);
     }
     lenient().doAnswer(invocation -> {
       find(id).properties.remove(name);
