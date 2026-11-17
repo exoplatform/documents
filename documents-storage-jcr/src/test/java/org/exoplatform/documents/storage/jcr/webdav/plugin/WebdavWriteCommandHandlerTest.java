@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr.webdav.plugin;
 
+import static org.exoplatform.documents.webdav.model.constant.PropertyConstants.getStatusDescription;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -25,22 +26,31 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.security.AccessControlException;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.jcr.Node;
 import javax.jcr.Property;
+import javax.jcr.RepositoryException;
 import javax.jcr.lock.Lock;
 import javax.jcr.version.Version;
+import javax.xml.namespace.QName;
 
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -52,12 +62,17 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import org.exoplatform.common.http.HTTPStatus;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.webdav.model.WebDavException;
+import org.exoplatform.documents.webdav.model.WebDavItemProperty;
+import org.exoplatform.services.cms.documents.security.DocumentSpaceGuard;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
+import org.exoplatform.services.jcr.config.RepositoryEntry;
+import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.LocationFactory;
@@ -149,6 +164,21 @@ public class WebdavWriteCommandHandlerTest {
   @InjectMocks
   private WebdavWriteCommandHandler handler;
 
+  @Mock
+  private NodeImpl                  storedNode;
+
+  private WebdavWriteCommandHandler spiedHandler;
+
+  /** The spellings a client may use for exo:permissions. */
+  private static final List<QName>  ACCESS_LIST_NAMES  = List.of(new QName("http://www.exoplatform.com/jcr/exo/1.0",
+                                                                           "permissions",
+                                                                           "exo"),
+                                                                 new QName("http://www.exoplatform.com/jcr/exo/1.0",
+                                                                           "permissions",
+                                                                           "x"),
+                                                                 new QName("exo:", "permissions"),
+                                                                 new QName("urn:any", "permissions", "exo"));
+
   @AfterClass
   public static void afterRunBare() throws Exception { // NOSONAR
     JCR_DOCUMENTS_UTIL.close();
@@ -190,6 +220,116 @@ public class WebdavWriteCommandHandlerTest {
     when(contentNode.setProperty(anyString(), anyString())).thenReturn(property);
     when(contentNode.setProperty(anyString(), any(InputStream.class))).thenReturn(property);
     when(contentNode.setProperty(eq("jcr:lastModified"), any(java.util.Calendar.class))).thenReturn(property);
+  }
+
+  @Test
+  @SneakyThrows
+  public void testSavePropertiesNeverWritesTheAccessList() {
+    for (QName accessList : ACCESS_LIST_NAMES) {
+      Map<String, Collection<WebDavItemProperty>> result =
+                                                         handler.saveProperties(session,
+                                                                                JCR_PATH,
+                                                                                List.of(new WebDavItemProperty(accessList,
+                                                                                                               "*:/spaces/other read")),
+                                                                                Collections.emptyList());
+
+      assertEquals(Set.of(getStatusDescription(HTTPStatus.CONFLICT)), result.keySet());
+    }
+    verify(node, never()).setProperty(eq("exo:permissions"), anyString());
+    verify(node, never()).setProperty(eq("exo:permissions"), any(String[].class));
+  }
+
+  @Test
+  @SneakyThrows
+  public void testSavePropertiesLeavesOtherExoPropertiesToTheJcr() {
+    Map<String, Collection<WebDavItemProperty>> result =
+                                                       handler.saveProperties(session,
+                                                                              JCR_PATH,
+                                                                              List.of(new WebDavItemProperty(new QName("http://www.exoplatform.com/jcr/exo/1.0",
+                                                                                                                       "title",
+                                                                                                                       "exo"),
+                                                                                                             "Report")),
+                                                                              Collections.emptyList());
+
+    assertFalse(result.containsKey(getStatusDescription(HTTPStatus.CONFLICT)));
+  }
+
+  @Test
+  @SneakyThrows
+  public void testSavePropertiesNeverRemovesTheAccessList() {
+    for (QName accessList : ACCESS_LIST_NAMES) {
+      Map<String, Collection<WebDavItemProperty>> result =
+                                                         handler.saveProperties(session,
+                                                                                JCR_PATH,
+                                                                                Collections.emptyList(),
+                                                                                List.of(new WebDavItemProperty(accessList)));
+
+      assertEquals(Set.of(getStatusDescription(HTTPStatus.CONFLICT)), result.keySet());
+    }
+    verify(node, never()).getProperty(anyString());
+  }
+
+  @Test
+  @SneakyThrows
+  public void testUncheckoutRestoresTheAccessListOfAUserTheSpaceRefuses() {
+    DocumentSpaceGuard guard = mockUncheckout(false);
+    Map<String, List<String>> accessList = Map.of("*:/spaces/team", List.of(PermissionType.READ));
+    when(guard.getAccessList(storedNode)).thenReturn(accessList);
+
+    spiedHandler.uncheckout(session, JCR_PATH);
+
+    InOrder inOrder = inOrder(guard, node, storedNode);
+    inOrder.verify(guard).getAccessList(storedNode);
+    inOrder.verify(node).restore(version, true);
+    inOrder.verify(storedNode).refresh(false);
+    inOrder.verify(guard).restoreAccessList(storedNode, accessList);
+  }
+
+  @Test
+  @SneakyThrows
+  public void testUncheckoutWhoseAccessListCannotBePutBackFails() {
+    DocumentSpaceGuard guard = mockUncheckout(false);
+    doThrow(new RepositoryException("not privilegeable")).when(guard).restoreAccessList(any(), any());
+
+    assertThrows(RepositoryException.class, () -> spiedHandler.uncheckout(session, JCR_PATH));
+  }
+
+  @Test
+  @SneakyThrows
+  public void testUncheckoutLeavesTheAccessListToAUserTheSpaceAllows() {
+    DocumentSpaceGuard guard = mockUncheckout(true);
+
+    spiedHandler.uncheckout(session, JCR_PATH);
+
+    verify(node).restore(version, true);
+    verify(guard, never()).getAccessList(any());
+    verify(guard, never()).restoreAccessList(any(), any());
+  }
+
+  @SneakyThrows
+  private DocumentSpaceGuard mockUncheckout(boolean allowed) {
+    Node rootNode = mock(Node.class);
+    when(session.getRootNode()).thenReturn(rootNode);
+    when(rootNode.getNode("jcr/path")).thenReturn(node);
+    when(session.getUserID()).thenReturn("mary");
+    WorkspaceImpl workspace = mock(WorkspaceImpl.class);
+    when(workspace.getName()).thenReturn("collaboration");
+    when(session.getWorkspace()).thenReturn(workspace);
+    when(node.getBaseVersion()).thenReturn(version);
+    when(node.getIdentifier()).thenReturn("documentId");
+    ManageableRepository repository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = new RepositoryEntry();
+    repositoryEntry.setName("repository");
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    SessionImpl systemSession = mock(SessionImpl.class);
+    when(repository.getSystemSession("collaboration")).thenReturn(systemSession);
+    when(systemSession.getNodeByIdentifier("documentId")).thenReturn(storedNode);
+    DocumentSpaceGuard guard = mock(DocumentSpaceGuard.class);
+    when(guard.canManageAccess(node, "mary", null)).thenReturn(allowed);
+    spiedHandler = spy(handler);
+    doReturn(guard).when(spiedHandler).getDocumentSpaceGuard();
+    return guard;
   }
 
   @Test

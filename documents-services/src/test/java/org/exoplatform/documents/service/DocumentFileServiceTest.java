@@ -26,10 +26,13 @@ import java.util.*;
 
 import io.meeds.analytics.api.service.AnalyticsService;
 import io.meeds.portal.thumbnail.model.FileContent;
+import io.meeds.social.space.security.model.SpaceSecuritySettings;
+import io.meeds.social.space.security.service.SpaceSecurityService;
 import org.junit.Before;
 import org.junit.Test;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.commons.file.model.FileInfo;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.FileListingType;
@@ -470,6 +473,107 @@ public class DocumentFileServiceTest {
   }
 
   @Test
+  public void testUpdatePermissionsRefusedWhenTheSpaceLimitsAccessManagement() throws Exception {
+    NodePermission nodePermission = new NodePermission();
+    nodePermission.setToShare(Map.of(1L, "read"));
+    SpaceSecurityService spaceSecurityService = limitAccessManagement("username", false);
+
+    DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
+                                                           () -> documentFileService.updatePermissions("123",
+                                                                                                       nodePermission,
+                                                                                                       1L));
+
+    assertEquals(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED, refusal.getMessageCode());
+    assertEquals(7L, refusal.getSpaceId());
+    assertEquals("123", refusal.getDocumentId());
+    assertEquals(DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION, refusal.getAction());
+    verify(spaceSecurityService).getSettings(7L);
+    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any());
+    verify(documentFileStorage, never()).shareDocument(anyString(), anyLong(), any(), anyBoolean());
+  }
+
+  @Test
+  public void testUpdatePermissionsAllowedWhenTheSpaceLetsTheUserManageAccess() throws Exception {
+    NodePermission nodePermission = new NodePermission();
+    nodePermission.setToShare(Map.of(1L, "read"));
+    limitAccessManagement("username", true);
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("username");
+    when(identityRegistry.getIdentity("username")).thenReturn(aclIdentity);
+
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+
+    verify(documentFileStorage).updatePermissions("123", nodePermission, aclIdentity);
+    verify(documentFileStorage).shareDocument("123", 1L, aclIdentity, false);
+  }
+
+  @Test
+  public void testShareDocumentRefusedWhenTheSpaceLimitsAccessManagement() throws Exception {
+    limitAccessManagement("username", false);
+
+    assertThrows(DocumentSharingRefusedException.class, () -> documentFileService.shareDocument("123", 5L, 1L, false));
+
+    verify(documentFileStorage, never()).shareDocument(anyString(), anyLong(), any(), anyBoolean());
+  }
+
+  @Test
+  public void testShareDocumentAllowedWhenTheSpaceLetsTheUserManageAccess() throws Exception {
+    limitAccessManagement("username", true);
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("username");
+    when(identityRegistry.getIdentity("username")).thenReturn(aclIdentity);
+
+    documentFileService.shareDocument("123", 5L, 1L, true);
+
+    verify(documentFileStorage).shareDocument("123", 5L, aclIdentity, true);
+  }
+
+  @Test
+  public void testCanManageAccess() throws Exception {
+    SpaceSecurityService spaceSecurityService = limitAccessManagement("username", false);
+    assertFalse(documentFileService.canManageAccess("123", 1L));
+
+    when(spaceSecurityService.canManageDocumentsAccess(any(), any(), eq("username"))).thenReturn(true);
+    assertTrue(documentFileService.canManageAccess("123", 1L));
+  }
+
+  @Test
+  public void testCanManageAccessOfADocumentOutsideEverySpace() throws Exception {
+    SpaceSecurityService spaceSecurityService = limitAccessManagement("username", false);
+    when(documentFileStorage.getDocumentSpace("123")).thenReturn(null);
+
+    assertTrue(documentFileService.canManageAccess("123", 1L));
+    verify(spaceSecurityService, never()).getSettings(anyLong());
+  }
+
+  @Test
+  public void testCanManageAccessRefusedWhenTheSpaceIsGone() throws Exception {
+    SpaceSecurityService spaceSecurityService = limitAccessManagement("username", true);
+    when(spaceSecurityService.getSettings(7L)).thenThrow(new ObjectNotFoundException("gone"));
+
+    assertFalse(documentFileService.canManageAccess("123", 1L));
+  }
+
+  /**
+   * Document 123 lies in space 7, whose settings limit access management;
+   * the space lets the user manage access or not.
+   */
+  private SpaceSecurityService limitAccessManagement(String username, boolean allowed) throws Exception {
+    Identity socialIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    socialIdentity.setId("1");
+    when(identityManager.getIdentity(1L)).thenReturn(socialIdentity);
+    Space space = new Space();
+    space.setId(7L);
+    when(documentFileStorage.getDocumentSpace("123")).thenReturn(space);
+    SpaceSecuritySettings settings = new SpaceSecuritySettings();
+    settings.setLimitAccessManagement(true);
+    SpaceSecurityService spaceSecurityService = mock(SpaceSecurityService.class);
+    when(spaceSecurityService.getSettings(7L)).thenReturn(settings);
+    when(spaceSecurityService.canManageDocumentsAccess(space, settings, username)).thenReturn(allowed);
+    documentFileService = spy(documentFileService);
+    doReturn(spaceSecurityService).when(documentFileService).getSpaceSecurityService();
+    return spaceSecurityService;
+  }
+
+  @Test
   public void testUpdatePermissions() throws IllegalAccessException {
     NodePermission nodePermission = new NodePermission();
     Map<Long, String> toShare = new HashMap<>();
@@ -638,9 +742,26 @@ public class DocumentFileServiceTest {
     Throwable exception =
                         assertThrows(IllegalArgumentException.class, () -> this.documentFileService.restoreVersion(null, "user"));
     assertEquals("version id is mandatory", exception.getMessage());
-    verify(documentFileStorage, times(0)).restoreVersion(anyString(), anyString());
+    verify(documentFileStorage, times(0)).restoreVersion(anyString(), anyString(), anyBoolean());
     documentFileService.restoreVersion("123", "user");
-    verify(documentFileStorage, times(1)).restoreVersion("123", "user");
+    verify(documentFileStorage, times(1)).restoreVersion("123", "user", false);
+  }
+
+  @Test
+  public void restoreVersionKeepsTheAccessListForAUserTheSpaceRefuses() throws Exception {
+    SpaceSecurityService spaceSecurityService = limitAccessManagement("username", false);
+
+    documentFileService.restoreVersion("123", "username");
+    verify(documentFileStorage).restoreVersion("123", "username", true);
+
+    when(spaceSecurityService.canManageDocumentsAccess(any(), any(), eq("username"))).thenReturn(true);
+    documentFileService.restoreVersion("123", "username");
+    verify(documentFileStorage).restoreVersion("123", "username", false);
+
+    // undecidable: the list is kept
+    when(spaceSecurityService.getSettings(7L)).thenThrow(new IllegalStateException("unreadable"));
+    documentFileService.restoreVersion("123", "username");
+    verify(documentFileStorage, times(2)).restoreVersion("123", "username", true);
   }
 
   @Test

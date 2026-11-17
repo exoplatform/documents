@@ -64,6 +64,7 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.DocumentFavoriteFilter;
 import org.exoplatform.documents.model.DocumentFolderFilter;
@@ -1105,6 +1106,9 @@ public class DocumentFileRest implements ResourceContainer {
 
     try {
       documentFileService.updatePermissions(nodeEntity.getId(),EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager), userIdentityId);
+    } catch (DocumentSharingRefusedException e) {
+      e.audit(RestUtils.getCurrentUser(), DocumentSharingRefusedException.REST_CHANNEL);
+      return Response.status(Status.FORBIDDEN).entity(e.getMessageCode()).build();
     } catch (IllegalAccessException e) {
       return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
     }
@@ -1371,6 +1375,7 @@ public class DocumentFileRest implements ResourceContainer {
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "403", description = "Refused by the document's space settings"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response createPublicAccessLink(@javax.ws.rs.core.Context HttpServletRequest request,
                                          @Parameter(description = "target file node identifier", required = true)
@@ -1400,13 +1405,16 @@ public class DocumentFileRest implements ResourceContainer {
       if (!hasEditPermission) {
           return Response.status(Response.Status.UNAUTHORIZED).build();
       }
-      return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccessService.createPublicDocumentAccess(userIdentityId,
+      return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccessService.createDocumentPublicAccess(userIdentityId,
                       nodeId,
                       password,
                       expirationDate,
                       hasPassword)))
               .build();
 
+    } catch (DocumentSharingRefusedException e) {
+      e.audit(RestUtils.getCurrentUser(), DocumentSharingRefusedException.REST_CHANNEL);
+      return Response.status(Status.FORBIDDEN).entity(e.getMessageCode()).build();
     } catch (Exception e) {
       LOG.error("Error while creating a document public access for document: {}", nodeId, e);
       return Response.serverError().build();
@@ -1422,6 +1430,7 @@ public class DocumentFileRest implements ResourceContainer {
   @ApiResponses(value = { @ApiResponse(responseCode = "204", description = "Request fulfilled"),
       @ApiResponse(responseCode = "400", description = "Invalid query input"),
       @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+      @ApiResponse(responseCode = "403", description = "Refused by the document's space settings"),
       @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response revokePublicAccessLink(@Parameter(description = "target file node identifier", required = true)
                                          @QueryParam("nodeId") String nodeId) {
@@ -1437,8 +1446,11 @@ public class DocumentFileRest implements ResourceContainer {
       if (!hasEditPermission) {
         return Response.status(Response.Status.UNAUTHORIZED).build();
       }
-      publicDocumentAccessService.revokeDocumentPublicAccess(nodeId);
+      publicDocumentAccessService.revokeDocumentPublicAccess(nodeId, userIdentityId);
       return Response.noContent().build();
+    } catch (DocumentSharingRefusedException e) {
+      e.audit(RestUtils.getCurrentUser(), DocumentSharingRefusedException.REST_CHANNEL);
+      return Response.status(Status.FORBIDDEN).entity(e.getMessageCode()).build();
     } catch (Exception e) {
       LOG.error("Error while revoking public access link for document: {}", nodeId, e);
       return Response.serverError().build();
@@ -1852,6 +1864,11 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                                                    RestUtils.getCurrentUser()),
                                                                                expand,
                                                                                userIdentityId);
+      if (abstractNodeEntity.getAcl() != null) {
+        // The listing decides on the cached space; this answer, on its committed settings and roles
+        NodePermissionEntity acl = abstractNodeEntity.getAcl();
+        acl.setCanManageAccess(acl.isCanEdit() && documentFileService.canManageAccess(documentId, userIdentityId));
+      }
       return Response.ok(abstractNodeEntity).build();
 
     } catch (IllegalArgumentException e) {
