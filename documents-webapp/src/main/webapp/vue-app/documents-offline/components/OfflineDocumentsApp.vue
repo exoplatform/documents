@@ -21,7 +21,7 @@
     min-height="50vh"
     min-width="100%"
     flat>
-    <v-icon size="75" class="tertiary-color mt-auto mb-5">fa-wifi</v-icon>
+    <v-icon size="75" class="secondary--text mt-auto mb-5">fa-wifi</v-icon>
     <div class="text-title mb-auto mx-5 text-truncate">{{ $t('OfflineApp.pwa.noSiteConnection') }}</div>
   </v-card>
   <v-card
@@ -63,7 +63,7 @@
       min-height="180"
       min-width="100%"
       flat>
-      <v-icon size="75" class="tertiary-color mt-auto mb-5">fa-file-alt</v-icon>
+      <v-icon size="75" class="secondary--text mt-auto mb-5">fa-file-alt</v-icon>
       <div class="mb-auto mx-5 text-truncate">{{ $t('OfflineApp.pwa.offlineBookmarkDocumentsCta') }}</div>
     </v-card>
     <documents-offline-preview-dialog
