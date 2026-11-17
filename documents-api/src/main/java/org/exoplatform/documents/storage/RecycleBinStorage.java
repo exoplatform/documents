@@ -67,9 +67,13 @@ public interface RecycleBinStorage {
    * The id may also name a shortcut trashed with a document, which
    * {@link #getItem(String)} does not read. Between the moment a caller
    * selects an item and this call, another actor may have restored or
-   * removed it: the item is then no longer found.
+   * removed it: the item is then no longer found. A shortcut pointing at the
+   * item may itself be an item of a bin, of this drive or of another one: it
+   * is removed too, and returned for the caller to count it out of its bin.
    *
    * @param itemId id of the item in the bin
+   * @return the items of a bin removed with the one asked for, as they were
+   *         before their removal; empty when there is none
    * @throws javax.jcr.PathNotFoundException when no node of the trash carries
    *           that id
    * @throws javax.jcr.InvalidItemStateException when another session removed
@@ -77,6 +81,6 @@ public interface RecycleBinStorage {
    * @throws RepositoryException when the item cannot be removed; nothing is
    *           removed then
    */
-  void removeItem(String itemId) throws RepositoryException;
+  List<RecycleBinItem> removeItem(String itemId) throws RepositoryException;
 
 }

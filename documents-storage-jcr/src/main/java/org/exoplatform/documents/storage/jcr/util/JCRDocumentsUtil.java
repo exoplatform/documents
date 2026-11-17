@@ -1530,7 +1530,11 @@ public class JCRDocumentsUtil {
       }
       systemSession.save();
       // A node added under the trash home may be marked as a deleted item by
-      // an action of the repository: a bin folder is never one.
+      // an action of the repository: a bin folder is never one, and a marked
+      // one would be cleaned with the deleted items. The action writes in a
+      // session of its own during the save, which the node read before the
+      // save does not show: the level is read again through the session.
+      level = (Node) systemSession.getItem(level.getPath());
       if (level.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION)) {
         level.removeMixin(NodeTypeConstants.EXO_RESTORE_LOCATION);
         systemSession.save();

@@ -28,7 +28,6 @@ import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
-import org.exoplatform.services.jcr.ext.ActivityTypeUtils;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
@@ -57,7 +56,6 @@ import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
 import java.util.*;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 
@@ -247,7 +245,7 @@ public class TrashStorageImpl implements TrashStorage {
       boolean broadcastRemoval = isRemovalBroadcast(source);
       List<String> permissions = readInheritedPermissions(source);
       String parentId = getReferenceableParentId(source);
-      String name = JCRDocumentsUtil.getTitle(source).toLowerCase();
+      String name = JCRDocumentsUtil.getTitle(source).toLowerCase(Locale.ROOT);
       Map<String, Node> shortcuts = source.isNodeType(NodeTypeConstants.EXO_SYMLINK) ? null : new TreeMap<>(Comparator.reverseOrder());
       long size = measureItem(source, nodePath, nodeWorkspaceName, trashSession, shortcuts, true);
 
@@ -278,8 +276,11 @@ public class TrashStorageImpl implements TrashStorage {
         // The paths are walked in descending order, so that moving a shortcut
         // never renumbers a same-name sibling still to move.
         for (Node shortcut : shortcuts.values()) {
+          boolean broadcastShortcutRemoval = isRemovalBroadcast(shortcut);
           Node trashedShortcut = moveShortcutToTrash(trashSession, shortcut, destination, nodeWorkspaceName, trashId, deleter, deletedDate);
-          trashedNodes.add(trashedShortcut);
+          if (broadcastShortcutRemoval) {
+            trashedNodes.add(trashedShortcut);
+          }
         }
       }
       trashSession.save();
@@ -293,7 +294,7 @@ public class TrashStorageImpl implements TrashStorage {
       try {
         listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, trashedNode);
       } catch (Exception e) {
-        LOG.error(e.getMessage());
+        LOG.error("A listener of the removal of {} failed", trashedNode, e);
       }
     }
     return trashId;
@@ -314,13 +315,8 @@ public class TrashStorageImpl implements TrashStorage {
     String nodePath = node.getPath();
     String nodeName = node.getName();
     String restorePath = fixRestorePath(nodePath);
-    try {
-      if (isRemovalBroadcast(node)) {
-        listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, node);
-      }
-    } catch (Exception e) {
-      LOG.error(e.getMessage());
-    }
+    boolean broadcastRemoval = isRemovalBroadcast(node);
+    Node trashed;
     try {
       Session sourceSession = trashProvider.getSession(nodeWorkspaceName, manageableRepository);
       Node source = (Node) sourceSession.getItem(nodePath);
@@ -332,13 +328,13 @@ public class TrashStorageImpl implements TrashStorage {
       Node destination = getDestination(ownerId, trashSession, trashProvider);
       List<String> permissions = readInheritedPermissions(source);
       String parentId = getReferenceableParentId(source);
-      String name = JCRDocumentsUtil.getTitle(source).toLowerCase();
+      String name = JCRDocumentsUtil.getTitle(source).toLowerCase(Locale.ROOT);
       long size = measureItem(source, nodePath, nodeWorkspaceName, sourceSession, null, false);
 
       String destinationPath = destination.getPath() + "/" + nodeName;
       trashSession.getWorkspace().clone(nodeWorkspaceName, nodePath, destinationPath, true);
       node.remove();
-      Node trashed = getLastSameNameNode(destination, nodeName);
+      trashed = getLastSameNameNode(destination, nodeName);
       writeRestoreLocation(trashed, restorePath, nodeWorkspaceName, trashId);
       if (!trashed.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
         trashed.addMixin(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM);
@@ -346,16 +342,28 @@ public class TrashStorageImpl implements TrashStorage {
       setOrRemoveProperty(trashed, NodeTypeConstants.RECYCLE_BIN_OWNER, ownerId);
       setOrRemoveProperty(trashed, NodeTypeConstants.RESTORE_PARENT_ID, parentId);
       setOrRemoveProperty(trashed, NodeTypeConstants.DELETED_BY, deleter);
+      setOrRemoveProperty(trashed, NodeTypeConstants.RECYCLE_BIN_OF, null);
       trashed.setProperty(NodeTypeConstants.DELETED_DATE, Calendar.getInstance());
       trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_SIZE, size);
       trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_NAME, name);
       if (permissions != null) {
         trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS, permissions.toArray(new String[0]));
+      } else if (trashed.hasProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS)) {
+        trashed.getProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS).remove();
       }
       trashSession.save();
     } catch (RepositoryException | RuntimeException e) {
       trashSession.refresh(false);
       throw e;
+    }
+    // The listeners are told once the node is in the trash, as for a node of
+    // the trash workspace.
+    if (broadcastRemoval) {
+      try {
+        listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, trashed);
+      } catch (Exception e) {
+        LOG.error("A listener of the removal of {} failed", trashed, e);
+      }
     }
     return trashId;
   }
@@ -659,7 +667,7 @@ public class TrashStorageImpl implements TrashStorage {
       Calendar deletedDate = item.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE) ? item.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate()
                                                                                          : Calendar.getInstance();
       long size = measureItem(item, item.getPath(), workspaceName, trashSession, null, false);
-      String name = JCRDocumentsUtil.getTitle(item).toLowerCase();
+      String name = JCRDocumentsUtil.getTitle(item).toLowerCase(Locale.ROOT);
 
       item.addMixin(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM);
       setOrRemoveProperty(item, NodeTypeConstants.RECYCLE_BIN_OWNER, ownerId);
