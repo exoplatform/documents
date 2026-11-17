@@ -51,9 +51,11 @@ import org.exoplatform.documents.webdav.model.WebDavException;
 import org.exoplatform.documents.webdav.model.WebDavItemOrder;
 import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.WebDavLockResponse;
+import org.exoplatform.services.cms.documents.security.DocumentSpaceGuard;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.core.nodetype.NodeTypeDataManager;
 import org.exoplatform.services.jcr.core.nodetype.PropertyDefinitionData;
@@ -90,6 +92,13 @@ public class WebdavWriteCommandHandler {
                                                                                                PropertyConstants.GETCONTENTTYPE,
                                                                                                PropertyConstants.GETLASTMODIFIED,
                                                                                                PropertyConstants.JCR_DATA));
+
+  /** The exo namespace a client may declare for exo:permissions. */
+  private static final String     EXO_NAMESPACE_URI              = "http://www.exoplatform.com/jcr/exo/1.0";
+
+  private static final String     EXO_PREFIX                     = "exo";
+
+  private static final String     PERMISSIONS_LOCAL_NAME         = "permissions";
 
   private static final String     RESOURCE_WITH_PATH_S_NOT_FOUND = "Resource with path '%s' not found";
 
@@ -248,7 +257,7 @@ public class WebdavWriteCommandHandler {
     for (int i = 0; i < propertiesToRemove.size(); i++) {
       WebDavItemProperty removeProperty = propertiesToRemove.get(i);
 
-      if (NON_REMOVING_PROPS.contains(removeProperty.getName())) {
+      if (NON_REMOVING_PROPS.contains(removeProperty.getName()) || isAccessList(removeProperty.getName())) {
         String statname = getStatusDescription(HTTPStatus.CONFLICT);
         Collection<WebDavItemProperty> propSet = result.computeIfAbsent(statname, k -> new HashSet<>());
         propSet.add(new WebDavItemProperty(removeProperty.getName()));
@@ -390,7 +399,52 @@ public class WebdavWriteCommandHandler {
     checkResourceExists(session, jcrPath);
     Node node = session.getRootNode().getNode(TextUtil.relativizePath(jcrPath));
     Version restoreVersion = node.getBaseVersion();
-    node.restore(restoreVersion, true);
+    DocumentSpaceGuard guard = getDocumentSpaceGuard();
+    if (guard.canManageAccess(node, session.getUserID(), null)) {
+      node.restore(restoreVersion, true);
+      return;
+    }
+    // Under the space's "Limit Access Management", a user who may not change
+    // the access list restores the content and keeps the current access list
+    String nodeId = ((NodeImpl) node).getIdentifier();
+    SessionProvider systemSessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session systemSession = systemSessionProvider.getSession(session.getWorkspace().getName(),
+                                                               repositoryService.getCurrentRepository());
+      Node storedNode = ((ExtendedSession) systemSession).getNodeByIdentifier(nodeId);
+      Map<String, List<String>> accessList = guard.getAccessList(storedNode);
+      node.restore(restoreVersion, true);
+      storedNode.refresh(false);
+      try {
+        guard.restoreAccessList(storedNode, accessList);
+      } catch (RepositoryException | RuntimeException e) {
+        // the version is restored: its access list is not the one the user may set
+        LOG.error("Version of document {} restored, but its access list could not be put back", nodeId, e);
+        throw e;
+      }
+    } finally {
+      systemSessionProvider.close();
+    }
+  }
+
+  /**
+   * @return the guard deciding whether a document's space lets a user change
+   *         its access list
+   */
+  protected DocumentSpaceGuard getDocumentSpaceGuard() {
+    return DocumentSpaceGuard.getInstance();
+  }
+
+  /**
+   * exo:permissions is the access list: never written through a PROPPATCH,
+   * whatever the namespace spelling the client uses.
+   */
+  private static boolean isAccessList(QName name) {
+    return name != null
+           && PERMISSIONS_LOCAL_NAME.equals(name.getLocalPart())
+           && (EXO_PREFIX.equals(name.getPrefix())
+               || EXO_NAMESPACE_URI.equals(name.getNamespaceURI())
+               || (EXO_PREFIX + ":").equals(name.getNamespaceURI()));
   }
 
   @SneakyThrows
@@ -632,7 +686,7 @@ public class WebdavWriteCommandHandler {
 
   private String setProperty(Node node, WebDavItemProperty property) {
     String propertyName = WebDavNamespaceContext.createName(property.getName());
-    if (READ_ONLY_PROPS.contains(property.getName())) {
+    if (READ_ONLY_PROPS.contains(property.getName()) || isAccessList(property.getName())) {
       return getStatusDescription(HTTPStatus.CONFLICT);
     }
 

@@ -21,8 +21,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -56,11 +58,16 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.AbstractNode;
+import org.exoplatform.documents.model.DocumentFolderFilter;
 import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
+import org.exoplatform.services.cms.documents.security.DocumentSpaceGuard;
+import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
@@ -74,7 +81,11 @@ import org.exoplatform.services.organization.OrganizationService;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
+
+import io.meeds.social.space.security.model.SpaceSecuritySettings;
+import io.meeds.social.space.security.service.SpaceSecurityService;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDocumentsUtilTest {
@@ -90,6 +101,203 @@ public class JCRDocumentsUtilTest {
   public void setUp() throws Exception {
     JCRDeleteFileStorage jcrDeleteFileStorage = mock(JCRDeleteFileStorage.class);
     COMMONS_UTILS_UTIL.when(() -> CommonsUtils.getService(JCRDeleteFileStorage.class)).thenReturn(jcrDeleteFileStorage);
+  }
+
+  @Test
+  public void testComputeDocumentAclCanManageAccess() throws Exception {
+    NodeImpl node = mock(NodeImpl.class);
+    when(node.getACL()).thenReturn(new AccessControlList("root",
+                                                         List.of(new AccessControlEntry("mary", PermissionType.READ),
+                                                                 new AccessControlEntry("mary", PermissionType.SET_PROPERTY),
+                                                                 new AccessControlEntry("john", PermissionType.READ))));
+    when(node.getPath()).thenReturn("/Groups/spaces/team/Documents/report.docx");
+    IdentityManager identityManager = mock(IdentityManager.class);
+    SpaceService spaceService = mock(SpaceService.class);
+    Space space = new Space();
+    space.setId(7L);
+    SpaceSecuritySettings settings = new SpaceSecuritySettings();
+    settings.setLimitAccessManagement(true);
+    SpaceSecurityService spaceSecurityService = mock(SpaceSecurityService.class);
+    when(spaceSecurityService.getDisplaySettings(space)).thenReturn(settings);
+    COMMONS_UTILS_UTIL.when(() -> CommonsUtils.getService(SpaceSecurityService.class)).thenReturn(spaceSecurityService);
+    DocumentSpaceGuard guard = mock(DocumentSpaceGuard.class);
+    when(guard.getDocumentSpace(node)).thenReturn(space);
+
+    try (MockedStatic<DocumentSpaceGuard> guards = mockStatic(DocumentSpaceGuard.class)) {
+      guards.when(DocumentSpaceGuard::getInstance).thenReturn(guard);
+
+      // an editor the space refuses
+      FileNode document = new FileNode();
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), identityManager, spaceService);
+      assertTrue(document.getAcl().isCanEdit());
+      assertFalse(document.getAcl().isCanManageAccess());
+
+      // an editor the space allows
+      when(spaceSecurityService.canManageDocumentsAccess(space, settings, "mary")).thenReturn(true);
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), identityManager, spaceService);
+      assertTrue(document.getAcl().isCanManageAccess());
+
+      // a reader never manages access
+      when(spaceSecurityService.canManageDocumentsAccess(space, settings, "john")).thenReturn(true);
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("john"), identityManager, spaceService);
+      assertFalse(document.getAcl().isCanEdit());
+      assertFalse(document.getAcl().isCanManageAccess());
+
+      // a document of no space
+      when(guard.getDocumentSpace(node)).thenReturn(null);
+      when(spaceSecurityService.canManageDocumentsAccess(space, settings, "mary")).thenReturn(false);
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), identityManager, spaceService);
+      assertTrue(document.getAcl().isCanManageAccess());
+
+      // a space that cannot be resolved is shown as refused
+      when(guard.getDocumentSpace(node)).thenThrow(new RepositoryException("unreadable"));
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), identityManager, spaceService);
+      assertFalse(document.getAcl().isCanManageAccess());
+    }
+  }
+
+  /**
+   * A listing decides once per space and user, not once per document.
+   * Mutant: no shared decision asks the space for every document.
+   */
+  @Test
+  public void testAListingDecidesAccessManagementOncePerSpace() throws Exception {
+    NodeImpl node = mock(NodeImpl.class);
+    when(node.getACL()).thenReturn(new AccessControlList("root",
+                                                         List.of(new AccessControlEntry("mary", PermissionType.READ),
+                                                                 new AccessControlEntry("mary", PermissionType.SET_PROPERTY))));
+    Space space = new Space();
+    space.setId(7L);
+    SpaceSecuritySettings settings = new SpaceSecuritySettings();
+    settings.setLimitAccessManagement(true);
+    SpaceSecurityService spaceSecurityService = mock(SpaceSecurityService.class);
+    when(spaceSecurityService.getDisplaySettings(space)).thenReturn(settings);
+    when(spaceSecurityService.canManageDocumentsAccess(space, settings, "mary")).thenReturn(true);
+    COMMONS_UTILS_UTIL.when(() -> CommonsUtils.getService(SpaceSecurityService.class)).thenReturn(spaceSecurityService);
+    DocumentSpaceGuard guard = mock(DocumentSpaceGuard.class);
+    when(guard.getDocumentSpace(node)).thenReturn(space);
+
+    try (MockedStatic<DocumentSpaceGuard> guards = mockStatic(DocumentSpaceGuard.class)) {
+      guards.when(DocumentSpaceGuard::getInstance).thenReturn(guard);
+      FileNode first = new FileNode();
+      FileNode second = new FileNode();
+      try (AccessDecisionScope decisions = JCRDocumentsUtil.openAccessDecisions()) {
+        JCRDocumentsUtil.computeDocumentAcl(node, first, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
+        JCRDocumentsUtil.computeDocumentAcl(node, second, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
+      }
+
+      assertTrue(first.getAcl().isCanManageAccess());
+      assertTrue(second.getAcl().isCanManageAccess());
+      verify(spaceSecurityService, times(1)).canManageDocumentsAccess(space, settings, "mary");
+    }
+  }
+
+  /**
+   * A folder listing decides once per space and user, not once per document.
+   * Mutant: a folder listing outside a decision scope asks the space for every
+   * document.
+   */
+  @Test
+  public void testAFolderListingDecidesAccessManagementOncePerSpace() throws Exception {
+    NodeImpl first = listedFile("a.docx");
+    NodeImpl second = listedFile("b.docx");
+    NodeIterator nodes = mock(NodeIterator.class);
+    when(nodes.hasNext()).thenReturn(true, true, false);
+    when(nodes.nextNode()).thenReturn(first, second);
+    DocumentFolderFilter filter = mock(DocumentFolderFilter.class);
+    when(filter.getSortField()).thenReturn(DocumentSortField.NAME);
+    when(filter.isAscending()).thenReturn(true);
+    SpaceSecurityService spaceSecurityService = spaceLimitingAccessManagement();
+
+    DocumentSpaceGuard guard = guardOfListedSpace();
+    try (MockedStatic<DocumentSpaceGuard> guards = mockStatic(DocumentSpaceGuard.class)) {
+      guards.when(DocumentSpaceGuard::getInstance).thenReturn(guard);
+
+      List<AbstractNode> listed = JCRDocumentsUtil.toNodes(mock(IdentityManager.class),
+                                                           mock(ExtendedSession.class),
+                                                           nodes,
+                                                           new Identity("mary"),
+                                                           mock(SpaceService.class),
+                                                           false,
+                                                           filter);
+
+      assertEquals(2, listed.size());
+      assertTrue(listed.stream().allMatch(node -> node.getAcl().isCanManageAccess()));
+      verify(spaceSecurityService, times(1)).canManageDocumentsAccess(any(), any(), eq("mary"));
+    }
+  }
+
+  /**
+   * The documents a search returns decide once per space and user. Mutant:
+   * converting the results outside a decision scope asks the space for every
+   * document.
+   */
+  @Test
+  public void testSearchResultsDecideAccessManagementOncePerSpace() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    NodeImpl first = listedFile("a.docx");
+    NodeImpl second = listedFile("b.docx");
+    when(session.getNodeByIdentifier("a")).thenReturn(first);
+    when(session.getNodeByIdentifier("b")).thenReturn(second);
+    DocumentFileSearchResult firstResult = mock(DocumentFileSearchResult.class);
+    when(firstResult.getId()).thenReturn("a");
+    DocumentFileSearchResult secondResult = mock(DocumentFileSearchResult.class);
+    when(secondResult.getId()).thenReturn("b");
+    SpaceSecurityService spaceSecurityService = spaceLimitingAccessManagement();
+
+    DocumentSpaceGuard guard = guardOfListedSpace();
+    try (MockedStatic<DocumentSpaceGuard> guards = mockStatic(DocumentSpaceGuard.class)) {
+      guards.when(DocumentSpaceGuard::getInstance).thenReturn(guard);
+
+      List<FileNode> found = JCRDocumentsUtil.toSearchedFileNodes(mock(IdentityManager.class),
+                                                                  session,
+                                                                  new Identity("mary"),
+                                                                  List.of(firstResult, secondResult),
+                                                                  mock(SpaceService.class));
+
+      assertEquals(2, found.size());
+      assertTrue(found.stream().allMatch(node -> node.getAcl().isCanManageAccess()));
+      verify(spaceSecurityService, times(1)).canManageDocumentsAccess(any(), any(), eq("mary"));
+    }
+  }
+
+  /**
+   * A file of the listed space that mary may edit
+   */
+  private NodeImpl listedFile(String name) throws RepositoryException {
+    NodeImpl node = mock(NodeImpl.class);
+    when(node.getName()).thenReturn(name);
+    when(node.getIdentifier()).thenReturn(name);
+    when(node.getPath()).thenReturn("/Groups/spaces/listed/Documents/" + name);
+    when(node.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
+    when(node.getSession()).thenReturn(mock(SessionImpl.class));
+    NodeType primaryType = mock(NodeType.class);
+    when(primaryType.getName()).thenReturn("");
+    when(node.getPrimaryNodeType()).thenReturn(primaryType);
+    when(node.getACL()).thenReturn(new AccessControlList("root",
+                                                         List.of(new AccessControlEntry("mary", PermissionType.READ),
+                                                                 new AccessControlEntry("mary", PermissionType.SET_PROPERTY))));
+    return node;
+  }
+
+  private Space listedSpace;
+
+  private SpaceSecurityService spaceLimitingAccessManagement() {
+    listedSpace = new Space();
+    listedSpace.setId(7L);
+    SpaceSecuritySettings settings = new SpaceSecuritySettings();
+    settings.setLimitAccessManagement(true);
+    SpaceSecurityService spaceSecurityService = mock(SpaceSecurityService.class);
+    when(spaceSecurityService.getDisplaySettings(listedSpace)).thenReturn(settings);
+    when(spaceSecurityService.canManageDocumentsAccess(listedSpace, settings, "mary")).thenReturn(true);
+    COMMONS_UTILS_UTIL.when(() -> CommonsUtils.getService(SpaceSecurityService.class)).thenReturn(spaceSecurityService);
+    return spaceSecurityService;
+  }
+
+  private DocumentSpaceGuard guardOfListedSpace() throws RepositoryException {
+    DocumentSpaceGuard guard = mock(DocumentSpaceGuard.class);
+    when(guard.getDocumentSpace(any())).thenReturn(listedSpace);
+    return guard;
   }
 
   @Test

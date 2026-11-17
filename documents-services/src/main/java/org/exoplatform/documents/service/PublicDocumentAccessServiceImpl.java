@@ -18,6 +18,7 @@ package org.exoplatform.documents.service;
 
 import org.apache.commons.codec.binary.Hex;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.model.PublicDocumentInfo;
@@ -47,6 +48,8 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
 
   private final AbstractCodec codec;
 
+  private final DocumentFileService   documentFileService;
+
 
   private static final String         HASHING_ALGORITHM            = "PBKDF2WithHmacSHA512";
 
@@ -57,10 +60,12 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
   
   public PublicDocumentAccessServiceImpl(PublicDocumentAccessStorage publicDocumentAccessStorage,
                                          DocumentFileStorage documentFileStorage,
+                                         DocumentFileService documentFileService,
                                          CodecInitializer codecInitializer)
       throws TokenServiceInitializationException {
     this.publicDocumentAccessStorage = publicDocumentAccessStorage;
     this.documentFileStorage = documentFileStorage;
+    this.documentFileService = documentFileService;
     this.codec = codecInitializer.getCodec();
   }
 
@@ -68,11 +73,30 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
    * {@inheritDoc}
    */
   @Override
+  @Deprecated(forRemoval = true, since = "7.3.0")
   public PublicDocumentAccess createPublicDocumentAccess(long docOwnerId,
                                                          String nodeId,
                                                          String password,
                                                          Long expirationDate,
                                                          boolean hasPassword) {
+    try {
+      return createDocumentPublicAccess(docOwnerId, nodeId, password, expirationDate, hasPassword);
+    } catch (IllegalAccessException e) {
+      throw new IllegalStateException("Public link of document " + nodeId + " refused", e);
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public PublicDocumentAccess createDocumentPublicAccess(long docOwnerId,
+                                                         String nodeId,
+                                                         String password,
+                                                         Long expirationDate,
+                                                         boolean hasPassword) throws IllegalAccessException {
+    // Decided ahead of the catch-all below, so that a refusal reaches the caller
+    documentFileService.checkCanManageAccess(nodeId, docOwnerId, DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION);
     try {
       PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(nodeId);
       Date expiration = expirationDate != 0L ? new Date(expirationDate) : null;
@@ -205,7 +229,17 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
    * {@inheritDoc}
    */
   @Override
+  @Deprecated(forRemoval = true, since = "7.3.0")
   public void revokeDocumentPublicAccess(String documentId) {
+    publicDocumentAccessStorage.removePublicDocumentAccess(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void revokeDocumentPublicAccess(String documentId, long userIdentityId) throws IllegalAccessException {
+    documentFileService.checkCanManageAccess(documentId, userIdentityId, DocumentSharingRefusedException.REVOKE_PUBLIC_LINK_ACTION);
     publicDocumentAccessStorage.removePublicDocumentAccess(documentId);
   }
 
