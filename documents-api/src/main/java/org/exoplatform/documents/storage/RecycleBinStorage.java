@@ -16,11 +16,13 @@
  */
 package org.exoplatform.documents.storage;
 
+import java.time.Instant;
 import java.util.List;
 
 import javax.jcr.RepositoryException;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.services.security.Identity;
@@ -108,6 +110,40 @@ public interface RecycleBinStorage {
    *           removed then
    */
   List<RecycleBinItem> removeItem(String itemId) throws RepositoryException;
+
+  /**
+   * Lists what the trash holds that was deleted before an instant, whatever
+   * the drive: the items of the bins, the items of no drive and the shortcuts
+   * trashed with a document.
+   *
+   * @param instant the instant the deletion precedes
+   * @return the ids {@link #removeItem(String)} takes
+   * @throws RepositoryException when the trash cannot be read
+   */
+  List<String> getIdsDeletedBefore(Instant instant) throws RepositoryException;
+
+  /**
+   * Reads what a retention run may remove under an id: an item, of a bin or
+   * of no drive, or a shortcut trashed with a document that is no longer in
+   * the trash. A shortcut whose document is still there is not one: it leaves
+   * with its document.
+   *
+   * @param itemId an id {@link #getIdsDeletedBefore(Instant)} listed
+   * @return what the id names as it stands now, null when nothing a run may
+   *         remove carries it any more
+   * @throws RepositoryException when the trash cannot be read
+   */
+  RecycleBinItem getRemovableItem(String itemId) throws RepositoryException;
+
+  /**
+   * Counts the items of every bin from the trash itself: for each drive that
+   * has items, their number and the sum of their sizes. An item of no drive
+   * and a shortcut trashed with a document count in none.
+   *
+   * @return the totals of the drives whose bin holds items
+   * @throws RepositoryException when the trash cannot be read
+   */
+  List<RecycleBinDrive> getDriveTotals() throws RepositoryException;
 
   /**
    * Restores an item of a bin, with the shortcuts trashed with it, in one

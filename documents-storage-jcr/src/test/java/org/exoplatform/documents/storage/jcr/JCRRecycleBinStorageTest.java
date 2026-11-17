@@ -31,6 +31,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Comparator;
@@ -44,6 +46,7 @@ import javax.jcr.PathNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinSortField;
@@ -473,6 +476,110 @@ class JCRRecycleBinStorageTest {
     }
   }
 
+  @Test
+  void whatWasDeletedBeforeAnInstantIsListedByItsIdWhateverItsDrive() throws Exception {
+    item(JOHN_BIN + "/old.docx", ID_1, "7", "old.docx", 10, daysAgo(10));
+    item(JOHN_BIN + "/recent.docx", ID_2, "7", "recent.docx", 10, daysAgo(1));
+    item("/Trash/lost.docx", ID_3, null, "lost.docx", 10, daysAgo(10));
+    shortcut(JOHN_BIN + "/link", "target-id", ID_4, ID_1).set("exo:deletedDate", daysAgo(10));
+    // A node that lost its id cannot be named to a removal.
+    item(JOHN_BIN + "/unnamed.docx", ID_2, "7", "unnamed.docx", 10, daysAgo(10)).getProperties().remove("exo:trashId");
+    jcr.commit();
+
+    List<String> ids = storage.getIdsDeletedBefore(daysAgo(5).toInstant());
+
+    assertEquals(List.of(ID_1, ID_3, ID_4), ids.stream().sorted().toList());
+
+    jcr.getStatements().clear();
+    storage.getIdsDeletedBefore(Instant.parse("2026-03-01T02:00:00.123Z"));
+    // The instant is written in UTC, to the millisecond.
+    assertEquals(List.of("SELECT * FROM exo:recycleBinItem WHERE jcr:path LIKE '/Trash/%' AND exo:deletedDate < TIMESTAMP '2026-03-01T02:00:00.123+00:00'"),
+                 jcr.getStatements());
+  }
+
+  @Test
+  void aShortcutTrashedWithADocumentIsRemovableOnlyOnceItsDocumentHasLeftTheTrash() throws Exception {
+    item(JOHN_BIN + "/report.docx", ID_1, "7", "report.docx", 10, daysAgo(10));
+    shortcut(JOHN_BIN + "/link", "target-id", ID_3, ID_1).set("exo:deletedDate", daysAgo(10));
+    shortcut(JOHN_BIN + "/orphan", "gone-id", ID_4, ID_2).set("exo:deletedDate", daysAgo(10));
+    jcr.commit();
+
+    RecycleBinItem item = storage.getRemovableItem(ID_1);
+    assertEquals(ID_1, item.getId());
+    assertEquals(Long.valueOf(7), item.getOwnerId());
+    assertEquals(10, item.getSize());
+    assertNotNull(item.getDeletedDate());
+    // Held by its document, which is still in the trash.
+    assertNull(storage.getRemovableItem(ID_3));
+    // Its document was restored or removed: nothing else will take it away.
+    RecycleBinItem orphan = storage.getRemovableItem(ID_4);
+    assertEquals(ID_4, orphan.getId());
+    assertNull(orphan.getOwnerId());
+    assertNotNull(orphan.getDeletedDate());
+    assertNull(storage.getRemovableItem(ID_2));
+
+    jcr.getStatements().clear();
+    assertNull(storage.getRemovableItem(null));
+    assertNull(storage.getRemovableItem("' OR exo:trashId LIKE '%"));
+    assertTrue(jcr.getStatements().isEmpty());
+  }
+
+  @Test
+  void aShortcutWhoseDocumentIsNamedByNoIdIsRemovableWithoutThatNameBeingRead() throws Exception {
+    shortcut(JOHN_BIN + "/odd", "target-id", ID_4, "' OR exo:trashId LIKE '%").set("exo:deletedDate", daysAgo(10));
+    jcr.commit();
+
+    assertEquals(ID_4, storage.getRemovableItem(ID_4).getId());
+    assertEquals(1, jcr.getStatements().size());
+  }
+
+  @Test
+  void theItemsOfEachDriveAreCountedFromTheTrashItself() throws Exception {
+    item(JOHN_BIN + "/a.docx", ID_1, "7", "a.docx", 10, daysAgo(1));
+    item(JOHN_BIN + "/b.docx", ID_2, "7", "b.docx", 5, daysAgo(1));
+    item("/Trash/Groups/spaces/sales/c.docx", ID_3, "20", "c.docx", 7, daysAgo(1)).getProperties().remove("exo:recycleBinSize");
+    // In no drive: an item that records no owner, one whose owner is no identity id, and a shortcut trashed with a document.
+    item("/Trash/lost.docx", ID_4, null, "lost.docx", 100, daysAgo(1));
+    item("/Trash/odd.docx", ID_4, "john", "odd.docx", 100, daysAgo(1));
+    shortcut(JOHN_BIN + "/link", "target-id", ID_4, ID_1);
+    jcr.commit();
+    jcr.getStatements().clear();
+
+    List<RecycleBinDrive> totals = storage.getDriveTotals();
+
+    assertEquals(List.of(new RecycleBinDrive(7, 15, 2), new RecycleBinDrive(20, 0, 1)), totals);
+    assertEquals(List.of("SELECT * FROM exo:recycleBinItem WHERE jcr:path LIKE '/Trash/%'"), jcr.getStatements());
+  }
+
+  @Test
+  void theReadsOfARetentionRunCloseTheirSessionAndAreAcceptedByTheRepositoryParser() throws Exception {
+    shortcut(JOHN_BIN + "/link", "target-id", ID_3, ID_1);
+    storage.getIdsDeletedBefore(Instant.now());
+    storage.getRemovableItem(ID_3);
+    storage.getDriveTotals();
+    verify(systemProvider, times(3)).close();
+
+    LocationFactory locationFactory = new LocationFactory(new NamespaceRegistryImpl());
+    assertEquals(4, jcr.getStatements().size());
+    for (String statement : jcr.getStatements()) {
+      assertNotNull(JCRSQLQueryBuilder.createQuery(statement, locationFactory, new DefaultQueryNodeFactory()), statement);
+    }
+
+    jcr.setQueryHandler(statement -> {
+      throw new IllegalStateException("The index is not available");
+    });
+    assertThrows(IllegalStateException.class, () -> storage.getIdsDeletedBefore(Instant.now()));
+    assertThrows(IllegalStateException.class, () -> storage.getRemovableItem(ID_3));
+    assertThrows(IllegalStateException.class, () -> storage.getDriveTotals());
+    verify(systemProvider, times(6)).close();
+  }
+
+  private static Calendar daysAgo(int days) {
+    Calendar date = Calendar.getInstance();
+    date.add(Calendar.DAY_OF_MONTH, -days);
+    return date;
+  }
+
   private String orderOf(RecycleBinSortField sortField, boolean ascending) throws Exception {
     jcr.getStatements().clear();
     storage.getItems(new RecycleBinFilter(7, null, sortField, ascending, 0, 10));
@@ -525,7 +632,9 @@ class JCRRecycleBinStorageTest {
       cascades.removeIf(item -> !cascadeOf.equals(item.get("exo:recycleBinOf")));
       return cascades;
     }
-    assertTrue(statement.startsWith("SELECT * FROM exo:recycleBinItem WHERE jcr:path LIKE '/Trash/%' AND "), statement);
+    assertTrue(statement.equals("SELECT * FROM exo:recycleBinItem WHERE jcr:path LIKE '/Trash/%'")
+        || statement.startsWith("SELECT * FROM exo:recycleBinItem WHERE jcr:path LIKE '/Trash/%' AND "), statement);
+    String before = group(statement, "exo:deletedDate < TIMESTAMP '([^']*)'$");
     String owner = group(statement, "exo:recycleBinOwner = '([^']*)'");
     String id = group(statement, "exo:trashId = '([^']*)'");
     String pattern = group(statement, "exo:recycleBinName LIKE '%(.*)%' ESCAPE '\\\\'");
@@ -534,6 +643,8 @@ class JCRRecycleBinStorageTest {
     collect(jcr.at("/Trash"), found);
     found.removeIf(item -> owner != null && !owner.equals(item.get("exo:recycleBinOwner")));
     found.removeIf(item -> id != null && !id.equals(item.get("exo:trashId")));
+    found.removeIf(item -> before != null && !(item.get("exo:deletedDate") instanceof Calendar deleted
+        && deleted.toInstant().isBefore(OffsetDateTime.parse(before).toInstant())));
     found.removeIf(item -> term != null && !String.valueOf(item.get("exo:recycleBinName")).contains(term));
     Matcher order = Pattern.compile(" ORDER BY (\\S+) (ASC|DESC)$").matcher(statement);
     if (order.find()) {
