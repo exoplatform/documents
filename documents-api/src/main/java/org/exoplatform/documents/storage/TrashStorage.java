@@ -191,4 +191,19 @@ public interface TrashStorage {
    * @throws RepositoryException if an error occurs while accessing or updating nodes in the repository
    */
   void updateRestorePath(String oldPath, String newPath) throws RepositoryException;
+
+  /**
+   * Gives the items of the trash that lack them the facts the Recycle Bin
+   * lists: the drive they belong to, their deletion date, their size and
+   * their name. Such items were deleted before those facts were recorded, or
+   * by a mover that records none. Who deleted them, the folder they were
+   * deleted from and the permissions they inherited are not known and are
+   * left out; the deletion date is the item's last modification date. An item
+   * is not moved. Each item is saved on its own, an item another run handled
+   * meanwhile is skipped, and a failure on one item does not stop the others.
+   *
+   * @return the number of items given their facts by this run
+   * @throws RepositoryException when the items of the trash cannot be read
+   */
+  int normalizeRecycleBinItems() throws RepositoryException;
 }
