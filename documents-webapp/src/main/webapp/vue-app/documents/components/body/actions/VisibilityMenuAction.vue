@@ -1,8 +1,24 @@
 <template>
-  <document-action-item
-    icon="fas fa-shield-alt"
-    :label="$t('documents.label.visibility')"
-    @click="changeVisibility" />
+  <v-tooltip
+    :disabled="canManageAccess"
+    content-class="accessManagementLimitedTooltip"
+    bottom>
+    <template #activator="{ on, attrs }">
+      <div
+        v-bind="attrs"
+        class="visibilityMenuAction"
+        v-on="on">
+        <document-action-item
+          icon="fas fa-shield-alt"
+          :label="$t('documents.label.visibility')"
+          :disabled="!canManageAccess"
+          :icon-extra-class="canManageAccess ? null : 'icon-disabled-color'"
+          :label-extra-class="canManageAccess ? null : 'text-disabled-color'"
+          @click="changeVisibility" />
+      </div>
+    </template>
+    <span>{{ $t('documents.tooltip.accessManagementLimited') }}</span>
+  </v-tooltip>
 </template>
 <script>
 export default {
@@ -20,8 +36,16 @@ export default {
     viewTab: 'RECENT',
     spaceId: eXo.env.portal.spaceId,
   }),
+  computed: {
+    canManageAccess() {
+      return this.file?.acl?.canManageAccess !== false;
+    },
+  },
   methods: {
     changeVisibility(){
+      if (!this.canManageAccess) {
+        return;
+      }
       this.$root.$emit('open-visibility-drawer', this.file);
       this.getDocumentView();
       document.dispatchEvent(new CustomEvent('manage-access', {
