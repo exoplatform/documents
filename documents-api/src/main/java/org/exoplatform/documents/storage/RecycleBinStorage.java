@@ -20,13 +20,16 @@ import java.util.List;
 
 import javax.jcr.RepositoryException;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
+import org.exoplatform.services.security.Identity;
 
 /**
- * Reads and removes the items of the Recycle Bins. It checks no permission:
- * it acts with the rights of the system, and its callers decide who may see
- * or act on the bin of a drive.
+ * Reads, restores and removes the items of the Recycle Bins. It acts with
+ * the rights of the system, and its callers decide who may see or act on the
+ * bin of a drive: the only right it asks is, on a restore, the one to add
+ * content to the folder the item goes to.
  */
 public interface RecycleBinStorage {
 
@@ -82,5 +85,42 @@ public interface RecycleBinStorage {
    *           removed then
    */
   List<RecycleBinItem> removeItem(String itemId) throws RepositoryException;
+
+  /**
+   * Restores an item of a bin, with the shortcuts trashed with it, in one
+   * save: on a failure nothing has moved.
+   * <p>
+   * The item goes back to the folder it was deleted from, wherever that
+   * folder was moved since, when it still exists in the drive of the item and
+   * the caller can add content to it. Otherwise it goes to the root of its
+   * drive, with the permissions it had when it was deleted, when the caller
+   * can add content there. An item of no drive only goes back to the folder
+   * it was deleted from. A name already taken there is not replaced: the
+   * restored item is renamed as a moved document is.
+   * <p>
+   * A shortcut trashed with the item goes back to its own folder when it
+   * still exists and its name is free there, and stays in the trash
+   * otherwise. An item deleted from another workspace than the trash's is
+   * copied back then removed from the trash, as two operations.
+   *
+   * @param itemId id of the item in the bin
+   * @param caller who restores: the target must accept content from them;
+   *          ignored when administrator is true
+   * @param administrator whether the caller acts as an administrator of the
+   *          platform on the bin of a drive: the target is then not checked
+   * @return the item as it was in the bin
+   * @throws ObjectNotFoundException when no item of a bin carries that id
+   * @throws IllegalAccessException with
+   *           {@link org.exoplatform.documents.constant.RecycleBinError#RESTORE_TARGET_FORBIDDEN}
+   *           when the caller can add content to no target
+   * @throws IllegalArgumentException with
+   *           {@link org.exoplatform.documents.constant.RecycleBinError#RESTORE_LOCATION_MISSING}
+   *           when no target exists any more
+   * @throws RepositoryException when a target cannot be read or the item
+   *           cannot be restored; it stays in the bin then
+   */
+  RecycleBinItem restoreItem(String itemId, Identity caller, boolean administrator) throws RepositoryException,
+                                                                                    ObjectNotFoundException,
+                                                                                    IllegalAccessException;
 
 }

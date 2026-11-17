@@ -16,23 +16,29 @@
  */
 package org.exoplatform.documents.storage.jcr;
 
+import java.security.AccessControlException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 
+import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.Value;
 import javax.jcr.query.Query;
 
 import org.apache.commons.lang3.StringUtils;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.constant.RecycleBinError;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinSortField;
@@ -41,18 +47,32 @@ import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.access.AccessControlEntry;
+import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
+import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.impl.RepositoryServiceImpl;
+import org.exoplatform.services.jcr.impl.WorkspaceContainer;
+import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
+import org.exoplatform.services.security.ConversationState;
+import org.exoplatform.services.security.Identity;
+import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.space.model.Space;
+import org.exoplatform.social.core.space.spi.SpaceService;
 
 /**
- * Reads and removes the items of the Recycle Bins in the trash of the
- * repository. Each call opens a system session of its own and closes it, and
- * a removal that fails discards what it had pending. An item is a node
+ * Reads, restores and removes the items of the Recycle Bins in the trash of
+ * the repository. Each call opens a system session of its own and closes it,
+ * and a restore or a removal that fails discards what it had pending. An item is a node
  * carrying exo:recycleBinItem under the trash home: its drive is the one
  * recorded on it when it was deleted, never deduced from its path.
  */
 public class JCRRecycleBinStorage implements RecycleBinStorage {
+
+  private static final String     GROUP_ADMINISTRATORS = "*:/platform/administrators";
 
   private static final Pattern    ITEM_ID_PATTERN = Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
 
@@ -60,13 +80,26 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
 
   private final TrashStorage      trashStorage;
 
+  private final NodeHierarchyCreator nodeHierarchyCreator;
+
+  private final IdentityManager   identityManager;
+
+  private final SpaceService      spaceService;
+
   private String                  trashHome;
 
   private String                  trashWorkspace;
 
-  public JCRRecycleBinStorage(RepositoryService repositoryService, TrashStorage trashStorage) {
+  public JCRRecycleBinStorage(RepositoryService repositoryService,
+                              TrashStorage trashStorage,
+                              NodeHierarchyCreator nodeHierarchyCreator,
+                              IdentityManager identityManager,
+                              SpaceService spaceService) {
     this.repositoryService = repositoryService;
     this.trashStorage = trashStorage;
+    this.nodeHierarchyCreator = nodeHierarchyCreator;
+    this.identityManager = identityManager;
+    this.spaceService = spaceService;
   }
 
   @Override
@@ -166,8 +199,393 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
     }
   }
 
+  @Override
+  public RecycleBinItem restoreItem(String itemId, Identity caller, boolean administrator) throws RepositoryException,
+                                                                                           ObjectNotFoundException,
+                                                                                           IllegalAccessException {
+    if (itemId == null || !ITEM_ID_PATTERN.matcher(itemId).matches()) {
+      throw new ObjectNotFoundException(RecycleBinError.ITEM_NOT_FOUND);
+    }
+    if (!administrator && caller == null) {
+      throw new IllegalAccessException(RecycleBinError.RESTORE_TARGET_FORBIDDEN);
+    }
+    SessionProvider provider = createSystemProvider();
+    Identity checkedCaller = administrator ? null : caller;
+    try {
+      Session session = getSession(provider);
+      Session restoreSession = null;
+      try {
+        Node node = findNode(session, itemId);
+        // A shortcut trashed with the document it points at is no item.
+        if (node == null || node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OF)) {
+          throw new ObjectNotFoundException(RecycleBinError.ITEM_NOT_FOUND);
+        }
+        RecycleBinItem item = toItem(node);
+        if (item.getRestorePath() == null) {
+          throw new IllegalArgumentException(RecycleBinError.RESTORE_LOCATION_MISSING);
+        }
+        if (item.getRestoreWorkspace() != null && !item.getRestoreWorkspace().equals(trashWorkspace)) {
+          restoreSession = provider.getSession(item.getRestoreWorkspace(), repositoryService.getCurrentRepository());
+          restoreToItsWorkspace(session, restoreSession, checkedCaller, node, item);
+        } else {
+          restoreInOneSave(session, provider, checkedCaller, node, item);
+        }
+        return item;
+      } catch (RepositoryException | RuntimeException | ObjectNotFoundException | IllegalAccessException e) {
+        session.refresh(false);
+        if (restoreSession != null) {
+          restoreSession.refresh(false);
+        }
+        throw e;
+      }
+    } finally {
+      provider.close();
+    }
+  }
+
   SessionProvider createSystemProvider() {
     return SessionProvider.createSystemProvider();
+  }
+
+  /**
+   * A session acting as the user given, whoever the thread acts as: a restore
+   * run on a thread of its own still asks the caller's rights. The one who
+   * opens it logs it out.
+   */
+  Session openSession(Identity user, String workspace) throws RepositoryException {
+    ManageableRepository repository = repositoryService.getCurrentRepository();
+    WorkspaceContainer workspaceContainer = ((RepositoryServiceImpl) repositoryService).getRepositoryContainer(repository.getConfiguration()
+                                                                                                                         .getName())
+                                                                                      .getWorkspaceContainer(workspace);
+    return new SessionImpl(workspace, new ConversationState(user), workspaceContainer);
+  }
+
+  /**
+   * Moves an item of the trash workspace back, with the shortcuts trashed
+   * with it, and gives it its name, its permissions and its marks back, as
+   * pending changes of the session saved once at the end.
+   */
+  private void restoreInOneSave(Session session,
+                                SessionProvider provider,
+                                Identity caller,
+                                Node node,
+                                RecycleBinItem item) throws RepositoryException, IllegalAccessException {
+    String itemPath = node.getPath();
+    // The owner is resolved before any target: without it no drive is known.
+    org.exoplatform.social.core.identity.model.Identity owner = null;
+    if (item.getOwnerId() != null) {
+      owner = identityManager.getIdentity(String.valueOf(item.getOwnerId()));
+      if (owner == null || owner.isDeleted()) {
+        throw new IllegalArgumentException(RecycleBinError.RESTORE_LOCATION_MISSING);
+      }
+    }
+    String name = getRestoreName(item.getRestorePath());
+    Node target = findOriginalFolder(session, provider, item.getRestoreParentId(), item.getRestorePath(), item.getOwnerId());
+    boolean toRoot = false;
+    if (owner == null) {
+      // An item of no drive has no root to go to.
+      if (target == null) {
+        throw new IllegalArgumentException(RecycleBinError.RESTORE_LOCATION_MISSING);
+      }
+      if (!acceptsContent(caller, target)) {
+        throw new IllegalAccessException(RecycleBinError.RESTORE_TARGET_FORBIDDEN);
+      }
+    } else if (target == null || !acceptsContent(caller, target)) {
+      // At the root the item takes the permissions it had: one that has none
+      // to take would get the root's, wider than its own, so it stays.
+      if (target != null && !node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)
+          && !node.hasProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS)) {
+        throw new IllegalAccessException(RecycleBinError.RESTORE_TARGET_FORBIDDEN);
+      }
+      target = getDriveRoot(session, provider, owner);
+      if (target == null) {
+        throw new IllegalArgumentException(RecycleBinError.RESTORE_LOCATION_MISSING);
+      }
+      if (!acceptsContent(caller, target)) {
+        throw new IllegalAccessException(RecycleBinError.RESTORE_TARGET_FORBIDDEN);
+      }
+      toRoot = true;
+    }
+
+    // Both statements read what is saved: they run before anything is pending.
+    Map<String, Node> shortcuts = new TreeMap<>(Comparator.reverseOrder());
+    collect(session, selectItems() + " AND " + NodeTypeConstants.RECYCLE_BIN_OF + " = '" + item.getId() + "'", itemPath, shortcuts);
+    boolean personalDrive = owner != null && !owner.isSpace();
+    List<String> withOwnPermissions = personalDrive ? findDescendantsWithOwnPermissions(session, itemPath) : List.of();
+    Map<String, String[]> snapshot = toRoot ? readPermissionsSnapshot(node) : Map.of();
+
+    Node restored = moveBack(session, itemPath, target.getPath(), name);
+    if (!snapshot.isEmpty()) {
+      if (restored.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        restored.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+      }
+      ((ExtendedNode) restored).setPermissions(snapshot);
+    }
+    if (personalDrive) {
+      String restoredPath = restored.getPath();
+      removeAdministratorsEntries(restored, owner.getRemoteId());
+      for (String relativePath : withOwnPermissions) {
+        removeAdministratorsEntries((Node) session.getItem(restoredPath + relativePath), owner.getRemoteId());
+      }
+    }
+    // The paths are walked in descending order, so that moving a shortcut
+    // never renumbers a same-name sibling still to move.
+    for (Node shortcut : shortcuts.values()) {
+      restoreShortcut(session, provider, shortcut);
+    }
+    session.save();
+  }
+
+  /**
+   * The trash workspace is not the item's: the item is copied back to the
+   * folder it was deleted from, then removed from the trash, as two
+   * operations. A failure between them leaves the item in both.
+   */
+  private void restoreToItsWorkspace(Session session,
+                                     Session restoreSession,
+                                     Identity caller,
+                                     Node node,
+                                     RecycleBinItem item) throws RepositoryException, IllegalAccessException {
+    Node target;
+    try {
+      target = (Node) restoreSession.getItem(getParentPath(item.getRestorePath()));
+    } catch (PathNotFoundException e) {
+      throw new IllegalArgumentException(RecycleBinError.RESTORE_LOCATION_MISSING);
+    }
+    if (!acceptsContent(caller, target)) {
+      throw new IllegalAccessException(RecycleBinError.RESTORE_TARGET_FORBIDDEN);
+    }
+    String name = getRestoreName(item.getRestorePath());
+    String targetPath = target.getPath();
+    int count = getFreeNameIndex(restoreSession, targetPath, name);
+    String destinationPath = getChildPath(targetPath, count == 0 ? name : JCRDocumentsUtil.increaseNameIndex(name, count));
+    restoreSession.getWorkspace().clone(trashWorkspace, node.getPath(), destinationPath, true);
+    Node restored = (Node) restoreSession.getItem(destinationPath);
+    giveBackNameAndMarks(restored, count);
+    restoreSession.save();
+    node.remove();
+    session.save();
+  }
+
+  /** Moves a node of the trash under a folder, at the first name free there, and removes its marks. */
+  private Node moveBack(Session session, String path, String targetPath, String name) throws RepositoryException {
+    int count = getFreeNameIndex(session, targetPath, name);
+    String destinationPath = getChildPath(targetPath, count == 0 ? name : JCRDocumentsUtil.increaseNameIndex(name, count));
+    session.move(path, destinationPath);
+    Node restored = (Node) session.getItem(destinationPath);
+    giveBackNameAndMarks(restored, count);
+    return restored;
+  }
+
+  /**
+   * The name of a node and its title are two names: a restored node renamed
+   * for a taken name gets the same index in its title, as a moved one does.
+   */
+  private void giveBackNameAndMarks(Node restored, int count) throws RepositoryException {
+    if (restored.isNodeType(NodeTypeConstants.MIX_VERSIONABLE) && !restored.isCheckedOut()) {
+      restored.checkout();
+    }
+    if (count > 0 && restored.hasProperty(NodeTypeConstants.EXO_TITLE)) {
+      String title = restored.getProperty(NodeTypeConstants.EXO_TITLE).getString();
+      restored.setProperty(NodeTypeConstants.EXO_TITLE, JCRDocumentsUtil.getNewIndexedName(title, "(" + count + ")"));
+    }
+    if (restored.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
+      restored.removeMixin(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM);
+    }
+    if (restored.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION)) {
+      restored.removeMixin(NodeTypeConstants.EXO_RESTORE_LOCATION);
+    }
+  }
+
+  /** The index that makes a name free under a folder, 0 when the name itself is. */
+  private int getFreeNameIndex(Session session, String targetPath, String name) throws RepositoryException {
+    int count = 0;
+    String candidate = name;
+    while (session.itemExists(getChildPath(targetPath, candidate))) {
+      candidate = JCRDocumentsUtil.increaseNameIndex(name, ++count);
+    }
+    return count;
+  }
+
+  /**
+   * A shortcut trashed with the item goes back to its own folder, with no
+   * check of the caller: it left with the item. One whose folder is gone or
+   * whose name is taken stays in the trash.
+   */
+  private void restoreShortcut(Session session, SessionProvider provider, Node shortcut) throws RepositoryException {
+    String restorePath = getString(shortcut, NodeTypeConstants.RESTORE_PATH);
+    String restoreWorkspace = getString(shortcut, NodeTypeConstants.RESTORE_WORKSPACE);
+    if (restorePath == null || restoreWorkspace != null && !restoreWorkspace.equals(trashWorkspace)) {
+      return;
+    }
+    Node folder = findOriginalFolder(session, provider, getString(shortcut, NodeTypeConstants.RESTORE_PARENT_ID), restorePath, null);
+    String name = getRestoreName(restorePath);
+    if (folder == null || session.itemExists(getChildPath(folder.getPath(), name))) {
+      return;
+    }
+    moveBack(session, shortcut.getPath(), folder.getPath(), name);
+  }
+
+  /**
+   * The folder a node was deleted from: the one recorded by its id, wherever
+   * it was moved since, or for a node that recorded none the parent of the
+   * path it was deleted from. Null when that folder is gone, is itself in the
+   * trash, or left the drive given. Only a folder the repository says is not
+   * there is gone: any other failure of the read is thrown.
+   */
+  private Node findOriginalFolder(Session session,
+                                  SessionProvider provider,
+                                  String parentId,
+                                  String restorePath,
+                                  Long ownerId) throws RepositoryException {
+    Node folder;
+    try {
+      if (parentId != null) {
+        folder = session.getNodeByUUID(parentId);
+      } else if (session.getItem(getParentPath(restorePath)) instanceof Node parent) {
+        folder = parent;
+      } else {
+        return null;
+      }
+    } catch (ItemNotFoundException | PathNotFoundException e) {
+      return null;
+    }
+    String folderPath = folder.getPath();
+    if (folderPath.equals(trashHome) || folderPath.startsWith(trashHome + "/")) {
+      return null;
+    }
+    if (ownerId != null) {
+      String folderOwner = JCRDocumentsUtil.resolveRecycleBinOwner(getChildPath(folderPath, getRestoreName(restorePath)),
+                                                                  nodeHierarchyCreator,
+                                                                  identityManager,
+                                                                  spaceService,
+                                                                  provider);
+      if (!String.valueOf(ownerId).equals(folderOwner)) {
+        return null;
+      }
+    }
+    return folder;
+  }
+
+  /** The root folder of a drive: the Private folder of a user, the Documents folder of a space. */
+  private Node getDriveRoot(Session session,
+                            SessionProvider provider,
+                            org.exoplatform.social.core.identity.model.Identity owner) throws RepositoryException {
+    String rootPath;
+    if (owner.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(owner.getRemoteId());
+      if (space == null) {
+        return null;
+      }
+      rootPath = JCRDocumentsUtil.getGroupsPath(nodeHierarchyCreator) + space.getGroupId() + "/" + JCRDocumentsUtil.DOCUMENTS_NODE;
+    } else {
+      rootPath = JCRDocumentsUtil.getUserHomePath(nodeHierarchyCreator, provider, owner.getRemoteId()) + "/"
+          + JCRDocumentsUtil.USER_PRIVATE_ROOT_NODE;
+    }
+    try {
+      return session.getItem(rootPath) instanceof Node root ? root : null;
+    } catch (PathNotFoundException e) {
+      return null;
+    }
+  }
+
+  /** Whether a folder accepts content from the caller, asked in the caller's own session. */
+  private boolean acceptsContent(Identity caller, Node folder) throws RepositoryException {
+    if (caller == null) {
+      return true;
+    }
+    Session callerSession = openSession(caller, folder.getSession().getWorkspace().getName());
+    try {
+      callerSession.checkPermission(folder.getPath(), PermissionType.ADD_NODE);
+      return true;
+    } catch (AccessControlException e) {
+      return false;
+    } finally {
+      callerSession.logout();
+    }
+  }
+
+  /** The permission entries recorded at the deletion of a node that had none of its own. */
+  private Map<String, String[]> readPermissionsSnapshot(Node node) throws RepositoryException {
+    if (!node.hasProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS)) {
+      return Map.of();
+    }
+    Map<String, List<String>> entries = new LinkedHashMap<>();
+    for (Value value : node.getProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS).getValues()) {
+      String entry = value.getString();
+      int separator = entry.lastIndexOf(' ');
+      if (separator > 0) {
+        entries.computeIfAbsent(entry.substring(0, separator), key -> new ArrayList<>()).add(entry.substring(separator + 1));
+      }
+    }
+    return toPermissions(entries);
+  }
+
+  /** The paths, relative to an item, of what it holds that carries permissions of its own. */
+  private List<String> findDescendantsWithOwnPermissions(Session session, String itemPath) throws RepositoryException {
+    // The path is spliced as it is but for a quote: a path comparison takes
+    // no escape, so what it finds is kept only when the item holds it.
+    String statement = "SELECT * FROM " + NodeTypeConstants.EXO_PRIVILEGEABLE + " WHERE jcr:path LIKE '" + itemPath.replace("'", "''")
+        + "/%'";
+    List<String> relativePaths = new ArrayList<>();
+    Query query = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+    for (NodeIterator nodes = query.execute().getNodes(); nodes.hasNext();) {
+      String path = nodes.nextNode().getPath();
+      if (path.startsWith(itemPath + "/")) {
+        relativePaths.add(path.substring(itemPath.length()));
+      }
+    }
+    return relativePaths;
+  }
+
+  /**
+   * In a personal drive the administrators of the platform hold no entry: a
+   * node restored there loses the one its own permissions carry. A shortcut
+   * is left as it is. A node left with no entry gets its owner's.
+   */
+  private void removeAdministratorsEntries(Node node, String driveOwner) throws RepositoryException {
+    if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK) || !node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+      return;
+    }
+    Map<String, List<String>> kept = new LinkedHashMap<>();
+    boolean removed = false;
+    for (AccessControlEntry entry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
+      if (GROUP_ADMINISTRATORS.equals(entry.getIdentity())) {
+        removed = true;
+      } else {
+        kept.computeIfAbsent(entry.getIdentity(), key -> new ArrayList<>()).add(entry.getPermission());
+      }
+    }
+    if (!removed) {
+      return;
+    }
+    Map<String, String[]> permissions = toPermissions(kept);
+    if (permissions.isEmpty()) {
+      String nodeOwner = getString(node, NodeTypeConstants.EXO_OWNER);
+      permissions.put(nodeOwner == null ? driveOwner : nodeOwner, PermissionType.ALL);
+    }
+    ((ExtendedNode) node).setPermissions(permissions);
+  }
+
+  private static Map<String, String[]> toPermissions(Map<String, List<String>> entries) {
+    Map<String, String[]> permissions = new LinkedHashMap<>();
+    entries.forEach((identity, types) -> permissions.put(identity, types.toArray(new String[0])));
+    return permissions;
+  }
+
+  /** The name a node had where it was deleted from: the last segment of its path, without its index. */
+  private static String getRestoreName(String restorePath) {
+    String name = restorePath.substring(restorePath.lastIndexOf('/') + 1);
+    return name.endsWith("]") && name.lastIndexOf('[') > 0 ? name.substring(0, name.lastIndexOf('[')) : name;
+  }
+
+  private static String getParentPath(String path) {
+    int slash = path.lastIndexOf('/');
+    return slash <= 0 ? "/" : path.substring(0, slash);
+  }
+
+  private static String getChildPath(String parentPath, String name) {
+    return "/".equals(parentPath) ? "/" + name : parentPath + "/" + name;
   }
 
   private Query createQuery(SessionProvider provider, String statement) throws RepositoryException {
