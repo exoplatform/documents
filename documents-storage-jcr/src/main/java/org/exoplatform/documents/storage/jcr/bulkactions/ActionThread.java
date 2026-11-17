@@ -39,6 +39,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.utils.MimeTypeResolver;
+import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.container.component.RequestLifeCycle;
 import org.exoplatform.documents.model.AbstractNode;
@@ -51,8 +52,10 @@ import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
+import org.exoplatform.documents.storage.BulkItemAction;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.upload.UploadService;
 
 import net.lingala.zip4j.ZipFile;
@@ -149,6 +152,25 @@ public class ActionThread implements Runnable {
 
   private final Node                     parent;
 
+  /** The ids of the items of an action that applies one operation to each. */
+  private List<String>                   itemIds;
+
+  /** What such an action does to each item, null for the other actions. */
+  private BulkItemAction                 itemAction;
+
+  /**
+   * An action that applies one operation to each item of a list of ids.
+   */
+  public ActionThread(BulkStorageActionService bulkStorageActionService,
+                      ListenerService listenerService,
+                      ActionData actionData,
+                      List<String> itemIds,
+                      BulkItemAction itemAction) {
+    this(null, null, bulkStorageActionService, listenerService, null, actionData, null, null, null, null, null);
+    this.itemIds = itemIds;
+    this.itemAction = itemAction;
+  }
+
   public ActionThread(DocumentFileStorage documentFileStorage,
                       JCRDeleteFileStorage jCrDeleteFileStorage,
                       BulkStorageActionService bulkStorageActionService,
@@ -176,7 +198,12 @@ public class ActionThread implements Runnable {
   @Override
   public void run() {
     try {
-      RequestLifeCycle.begin(PortalContainer.getInstance());
+      PortalContainer container = PortalContainer.getInstance();
+      if (itemAction != null) {
+        // What the operation looks for is looked for in the portal container.
+        ExoContainerContext.setCurrentContainer(container);
+      }
+      RequestLifeCycle.begin(container);
       processAction();
     } catch (Exception e) {
       log.error("Cannot execute Action {} operation", actionData.getActionType(), e);
@@ -188,6 +215,10 @@ public class ActionThread implements Runnable {
   }
 
   public void processAction() throws RepositoryException {
+    if (itemAction != null) {
+      applyItemAction();
+      return;
+    }
     actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
     if (actionData.getActionType().equals(ActionType.DELETE.name())) {
       actionData.setStatus(ActionStatus.IN_PROGRESS.name());
@@ -202,14 +233,6 @@ public class ActionThread implements Runnable {
     }
     if (actionData.getActionType().equals(ActionType.IMPORT_ZIP.name())) {
       importFromZip();
-    }
-    if (actionData.getActionType().equals(ActionType.PERMANENTLY_DELETE.name())) {
-      actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-      permanentlyDeleteItems();
-    }
-    if (actionData.getActionType().equals(ActionType.RESTORE.name())) {
-      actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-      restoreItems();
     }
   }
 
@@ -248,60 +271,44 @@ public class ActionThread implements Runnable {
     brodcastEvent();
   }
 
-  private void permanentlyDeleteItems() {
-    int errors = 0;
-    List<String> treatedItemsIds = new ArrayList<>();
-    for (AbstractNode item : items) {
-      if (checkCanceled()) {
-        break;
+  /**
+   * Applies the operation of the action to each of its items, in the order
+   * given, as the user the action was started for. An item that is no longer
+   * there is left out, one that fails is counted and the others go on, and a
+   * cancellation leaves the items not yet reached.
+   */
+  private void applyItemAction() {
+    ConversationState previousState = ConversationState.getCurrent();
+    // Whatever reads the current user while an item is treated reads the one the action is for.
+    ConversationState.setCurrent(actionData.getIdentity() == null ? null : new ConversationState(actionData.getIdentity()));
+    try {
+      actionData.setStatus(ActionStatus.IN_PROGRESS.name());
+      int errors = 0;
+      boolean canceled = false;
+      List<String> treatedItemsIds = new ArrayList<>();
+      for (String itemId : itemIds) {
+        if (ActionStatus.CANCELED.name().equals(actionData.getStatus())) {
+          canceled = true;
+          break;
+        }
+        try {
+          if (itemAction.apply(itemId)) {
+            treatedItemsIds.add(itemId);
+          }
+        } catch (Exception e) {
+          log.warn("The action {} {} could not be applied to the item {}", actionData.getActionType(), actionData.getActionId(), itemId, e);
+          errors++;
+        }
       }
-      try {
-        jCrDeleteFileStorage.deleteDocumentPermanently(item.getPath(), item.getId());
-        actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-        treatedItemsIds.add(item.getId());
-      } catch (PathNotFoundException path) {
-        log.error("The document with this path is not found" + item.getPath(), path);
-        errors++;
-      } catch (Exception e) {
-        log.error("Error when deleting the document" + item.getPath(), e);
-        errors++;
+      if (!canceled) {
+        actionData.setStatus(errors > 0 ? ActionStatus.DONE_WITH_ERRORS.name() : ActionStatus.DONE_SUCCESSFULLY.name());
       }
+      actionData.setTreatedItemsIds(treatedItemsIds);
+      brodcastEvent();
+    } finally {
+      ConversationState.setCurrent(previousState);
+      bulkStorageActionService.releaseActionData(actionData);
     }
-    if (errors > 0) {
-      actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
-    } else {
-      actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
-    }
-    actionData.setTreatedItemsIds(treatedItemsIds);
-    brodcastEvent();
-  }
-
-  private void restoreItems() {
-    int errors = 0;
-    List<String> treatedItemsIds = new ArrayList<>();
-    for (AbstractNode item : items) {
-      if (checkCanceled()) {
-        break;
-      }
-      try {
-        jCrDeleteFileStorage.restoreFromTrash(item.getPath());
-        actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-        treatedItemsIds.add(item.getId());
-      } catch (PathNotFoundException path) {
-        log.error("The document with this path is not found" + item.getPath(), path);
-        errors++;
-      } catch (Exception e) {
-        log.error("Error when restoring the document" + item.getPath(), e);
-        errors++;
-      }
-    }
-    if (errors > 0) {
-      actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
-    } else {
-      actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
-    }
-    actionData.setTreatedItemsIds(treatedItemsIds);
-    brodcastEvent();
   }
 
   public static void fixAndExtractZip(File zipFile, File outputDir) throws IOException {

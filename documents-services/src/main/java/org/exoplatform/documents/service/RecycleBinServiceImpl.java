@@ -48,6 +48,9 @@ import org.exoplatform.documents.model.RecycleBinDrive;
 import org.exoplatform.documents.model.RecycleBinFilter;
 import org.exoplatform.documents.model.RecycleBinItem;
 import org.exoplatform.documents.model.RecycleBinScope;
+import org.exoplatform.documents.model.RecycleBinSortField;
+import org.exoplatform.documents.storage.BulkItemAction;
+import org.exoplatform.documents.storage.JCRDeleteFileStorage;
 import org.exoplatform.documents.storage.RecycleBinDriveStorage;
 import org.exoplatform.documents.storage.RecycleBinStorage;
 import org.exoplatform.documents.storage.TrashStorage;
@@ -82,6 +85,8 @@ public class RecycleBinServiceImpl implements RecycleBinService {
 
   private final TrashStorage               trashStorage;
 
+  private final JCRDeleteFileStorage       jcrDeleteFileStorage;
+
   private final RecycleBinRetentionSetting retentionSetting;
 
   private final IdentityManager            identityManager;
@@ -110,6 +115,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   public RecycleBinServiceImpl(RecycleBinStorage recycleBinStorage, // NOSONAR the collaborators of a service
                                RecycleBinDriveStorage recycleBinDriveStorage,
                                TrashStorage trashStorage,
+                               JCRDeleteFileStorage jcrDeleteFileStorage,
                                RecycleBinRetentionSetting retentionSetting,
                                IdentityManager identityManager,
                                SpaceService spaceService,
@@ -120,6 +126,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     this(recycleBinStorage,
          recycleBinDriveStorage,
          trashStorage,
+         jcrDeleteFileStorage,
          retentionSetting,
          identityManager,
          spaceService,
@@ -132,6 +139,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   RecycleBinServiceImpl(RecycleBinStorage recycleBinStorage, // NOSONAR the collaborators of a service
                         RecycleBinDriveStorage recycleBinDriveStorage,
                         TrashStorage trashStorage,
+                        JCRDeleteFileStorage jcrDeleteFileStorage,
                         RecycleBinRetentionSetting retentionSetting,
                         IdentityManager identityManager,
                         SpaceService spaceService,
@@ -142,6 +150,7 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     this.recycleBinStorage = recycleBinStorage;
     this.recycleBinDriveStorage = recycleBinDriveStorage;
     this.trashStorage = trashStorage;
+    this.jcrDeleteFileStorage = jcrDeleteFileStorage;
     this.retentionSetting = retentionSetting;
     this.identityManager = identityManager;
     this.spaceService = spaceService;
@@ -206,6 +215,74 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     }
     countOut(item);
     removedWithIt.forEach(this::countOut);
+  }
+
+  @Override
+  public void restoreItems(String actionId, List<String> itemIds, RecycleBinScope scope, String username) throws ObjectNotFoundException,
+                                                                                                          IllegalAccessException {
+    getOwnerId(scope, username);
+    startBulkAction(actionId, ActionType.RESTORE, checkItemIds(itemIds), username, itemId -> {
+      try {
+        restoreItem(itemId, scope, username);
+        return true;
+      } catch (ObjectNotFoundException e) {
+        return false;
+      }
+    });
+  }
+
+  @Override
+  public void deleteItems(String actionId, List<String> itemIds, RecycleBinScope scope, String username) throws ObjectNotFoundException,
+                                                                                                         IllegalAccessException {
+    getOwnerId(scope, username);
+    startBulkAction(actionId, ActionType.PERMANENTLY_DELETE, checkItemIds(itemIds), username, removal(scope, username));
+  }
+
+  @Override
+  public void emptyBin(String actionId, RecycleBinScope scope, String username) throws ObjectNotFoundException, IllegalAccessException {
+    long ownerId = getOwnerId(scope, username);
+    List<String> itemIds;
+    try {
+      itemIds = recycleBinStorage.getItems(new RecycleBinFilter(ownerId, null, RecycleBinSortField.DELETED_DATE, false, 0, 0))
+                                 .stream()
+                                 .map(RecycleBinItem::getId)
+                                 .toList();
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("The Recycle Bin of the drive " + ownerId + " cannot be read", e);
+    }
+    startBulkAction(actionId, ActionType.PERMANENTLY_DELETE, itemIds, username, removal(scope, username));
+  }
+
+  /** The removal of an item at its turn: one that already left, alone or with another, is left out. */
+  private BulkItemAction removal(RecycleBinScope scope, String username) {
+    return itemId -> {
+      try {
+        deleteItem(itemId, scope, username);
+        return true;
+      } catch (ObjectNotFoundException e) {
+        return false;
+      }
+    };
+  }
+
+  private void startBulkAction(String actionId, ActionType actionType, List<String> itemIds, String username, BulkItemAction itemAction) {
+    if (StringUtils.isBlank(actionId)) {
+      throw new IllegalArgumentException("The id of the bulk action is mandatory");
+    }
+    ActionData actionData = new ActionData();
+    actionData.setActionId(actionId);
+    actionData.setActionType(actionType.name());
+    actionData.setIdentity(userAcl.getUserIdentity(username));
+    actionData.setUserName(username);
+    actionData.setNumberOfItems(itemIds.size());
+    jcrDeleteFileStorage.executeBulkAction(actionData, itemIds, itemAction);
+  }
+
+  private static List<String> checkItemIds(List<String> itemIds) {
+    if (itemIds == null || itemIds.isEmpty() || itemIds.stream().anyMatch(StringUtils::isBlank)) {
+      throw new IllegalArgumentException("The ids of the items are mandatory");
+    }
+    return itemIds;
   }
 
   @Override
