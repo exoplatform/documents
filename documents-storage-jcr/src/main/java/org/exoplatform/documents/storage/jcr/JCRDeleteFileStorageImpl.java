@@ -164,6 +164,9 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
     if (folderPath == null) {
       folderPath = nodeToDelete.getPath();
     }
+    // The user deleting is resolved while the request is at hand: the delayed
+    // task below runs on a thread that knows no user.
+    String deletedBy = getUsername(userIdentityId);
     if (delay > 0) {
       documentsToDeleteQueue.put(documentId, String.valueOf(userIdentityId));
       String finalFolderPath = folderPath;
@@ -173,7 +176,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
           RequestLifeCycle.begin(container);
           try {
             documentsToDeleteQueue.remove(documentId);
-            moveToTrash(finalFolderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
+            moveToTrash(finalFolderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash, deletedBy);
           } catch (Exception e) {
             LOG.error("Error when deleting the document with path" + finalFolderPath, e);
           } finally {
@@ -182,7 +185,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
         }
       }, delay, TimeUnit.SECONDS);
     } else {
-      moveToTrash(folderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
+      moveToTrash(folderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash, deletedBy);
     }
     if (isSymlink) {
       clearSymlinksNavHistory();
@@ -312,7 +315,12 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                                                0);
   }
 
-  private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash) throws RepositoryException, ObjectNotFoundException  {
+  private String getUsername(long userIdentityId) {
+    org.exoplatform.social.core.identity.model.Identity userIdentity = identityManager.getIdentity(String.valueOf(userIdentityId));
+    return userIdentity == null ? null : userIdentity.getRemoteId();
+  }
+
+  private void moveToTrash(String folderPath, Session session, long userIdentityId, boolean favorite, boolean checkToMoveToTrash, String deletedBy) throws RepositoryException, ObjectNotFoundException  {
     Node node = null;
     String trashId;
     if(StringUtils.isNotBlank(folderPath)){
@@ -327,7 +335,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
           LOG.warn("no Favorite to remove for node {}", node.getName());
         }
       }
-      trashId = processRemoveOrMoveToTrash(node, checkToMoveToTrash);
+      trashId = processRemoveOrMoveToTrash(node, checkToMoveToTrash, deletedBy);
       if (trashId.equals("-1")) {
         LOG.error("an unexpected error occurs while removing or moving the node to trash");
       }
@@ -345,13 +353,13 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
    * trashId: moved to trash successfully
    * @throws RepositoryException
    */
-  private String processRemoveOrMoveToTrash(Node node, boolean checkToMoveToTrash) throws RepositoryException {
+  private String processRemoveOrMoveToTrash(Node node, boolean checkToMoveToTrash, String deletedBy) throws RepositoryException {
     String trashId;
     if (!checkToMoveToTrash || trashStorage.isInTrash(node)) {
       processRemoveNode( node);
       return "0";
     }else {
-      trashId = moveToTrash(node);
+      trashId = moveToTrash(node, deletedBy);
       if (!trashId.equals("-1")) {
         //Broadcast the event when delete folder, in case deleting file, Thrash service will broadcast event
         node = trashStorage.getNodeByTrashId(trashId);
@@ -431,7 +439,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
    * @return
    * @throws RepositoryException
    */
-  private String moveToTrash(Node node) throws RepositoryException {
+  private String moveToTrash(Node node, String deletedBy) throws RepositoryException {
     boolean ret = true;
     String trashId = null;
     try {
@@ -440,7 +448,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       if (!canRemoveNode(node))
         throw new AccessDeniedException("access denied, can't move to trash node:" + node.getPath());
       SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-      trashId = trashStorage.moveToTrash(node, sessionProvider);
+      trashId = trashStorage.moveToTrash(node, sessionProvider, deletedBy);
 
     } catch (PathNotFoundException e) {
       if (LOG.isErrorEnabled()) {
