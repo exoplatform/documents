@@ -43,6 +43,7 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
@@ -922,12 +923,17 @@ public class DocumentMcpTool implements McpToolPlugin {
       }
     }
     long expiration = expirationDate == null ? 0L : expirationDate.longValue();
-    PublicDocumentAccess access = publicDocumentAccessService.createPublicDocumentAccess(userIdentityId,
-                                                                                        documentId,
-                                                                                        StringUtils.isBlank(password) ? null
-                                                                                                                      : password,
-                                                                                        expiration,
-                                                                                        false);
+    PublicDocumentAccess access;
+    try {
+      access = publicDocumentAccessService.createDocumentPublicAccess(userIdentityId,
+                                                                      documentId,
+                                                                      StringUtils.isBlank(password) ? null : password,
+                                                                      expiration,
+                                                                      false);
+    } catch (DocumentSharingRefusedException e) {
+      e.audit(getCurrentUserName(), DocumentSharingRefusedException.MCP_CHANNEL);
+      throw e;
+    }
     if (access == null) {
       throw new IllegalStateException("The public link could not be created for document %s. Verify the document id and retry."
           .formatted(documentId));
@@ -1044,7 +1050,12 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                                toShare,
                                                                                toNotify,
                                                                                null);
-    documentFileService.updatePermissions(documentId, nodePermission, getCurrentUserIdentityId());
+    try {
+      documentFileService.updatePermissions(documentId, nodePermission, getCurrentUserIdentityId());
+    } catch (DocumentSharingRefusedException e) {
+      e.audit(getCurrentUserName(), DocumentSharingRefusedException.MCP_CHANNEL);
+      throw e;
+    }
   }
 
   /**

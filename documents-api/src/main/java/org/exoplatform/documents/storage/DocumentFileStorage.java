@@ -346,6 +346,19 @@ public interface DocumentFileStorage {
   void notifyMember(String documentId, long destId) throws IllegalAccessException;
 
   boolean canAccess(String documentID, Identity aclIdentity);
+
+  /**
+   * Resolves the space a document belongs to from its stored path: a symlink
+   * resolves to its target, a version to its versionable document, a trashed
+   * document through its restore path.
+   *
+   * @param documentId the identifier of a document, or of one of its versions
+   * @return the space whose drive holds the document, or null when the document
+   *         lies in no space's drive or does not exist
+   * @throws IllegalStateException when the document cannot be read: the caller
+   *           fails closed
+   */
+  Space getDocumentSpace(String documentId);
   
   default void updateDocumentDescription(long ownerId,
                                          String documentID,
@@ -485,8 +498,27 @@ public interface DocumentFileStorage {
    * @param versionId   version id
    * @param aclIdentity current user identity
    * @return {@link FileVersion}
+   * @deprecated use {@link #restoreVersion(String, String, boolean)}, which
+   *             says whether the document keeps its access list; not for
+   *             removal
    */
-  FileVersion restoreVersion(String versionId, String aclIdentity);
+  @Deprecated(since = "7.3.0")
+  default FileVersion restoreVersion(String versionId, String aclIdentity) {
+    return restoreVersion(versionId, aclIdentity, false);
+  }
+
+  /**
+   * Restores a document's version, as a new version of it
+   *
+   * @param versionId version id
+   * @param aclIdentity current user identity
+   * @param keepAccessList true to keep the document's current access list,
+   *          rather than the version's
+   * @return the version created
+   * @throws IllegalStateException when the version cannot be restored, or when
+   *           the access list kept cannot be put back once it is
+   */
+  FileVersion restoreVersion(String versionId, String aclIdentity, boolean keepAccessList);
 
   /**
    * Get the zip for download by action ID

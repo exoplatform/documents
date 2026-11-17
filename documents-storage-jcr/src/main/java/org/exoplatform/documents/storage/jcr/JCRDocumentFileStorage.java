@@ -62,6 +62,7 @@ import org.exoplatform.services.document.DocumentReaderService;
 import org.exoplatform.services.cms.documents.DocumentService;
 import org.exoplatform.services.cms.documents.NewDocumentTemplate;
 import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
+import org.exoplatform.services.cms.documents.security.DocumentSpaceGuard;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -293,6 +294,33 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   @Override
+  public Space getDocumentSpace(String documentId) {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node node;
+      try {
+        node = ((ExtendedSession) systemSession).getNodeByIdentifier(documentId);
+      } catch (ItemNotFoundException | PathNotFoundException e) {
+        return null;
+      }
+      if (node.isNodeType(NodeTypeConstants.NT_VERSION)) {
+        node = node.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
+      }
+      return getDocumentSpaceGuard().getDocumentSpace(node);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("The space of document " + documentId + " could not be resolved", e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  protected DocumentSpaceGuard getDocumentSpaceGuard() {
+    return DocumentSpaceGuard.getInstance();
+  }
+
+  @Override
   @SneakyThrows
   public long getRootFolderOwnerId(String documentId) {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
@@ -394,10 +422,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                                      limit,
                                                                                                      sortField,
                                                                                                      sortDirection);
-        return filesSearchList.stream()
-                              .map(result -> toFileNode(identityManager, session, aclIdentity, result, spaceService))
-                              .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
-                              .collect(Collectors.toList());
+        List<FileNode> fileNodes = toSearchedFileNodes(identityManager, session, aclIdentity, filesSearchList, spaceService);
+        return fileNodes.stream()
+                        .filter(item -> !item.isHidden() || filter.isIncludeHiddenFiles())
+                        .collect(Collectors.toList());
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving User '" + username + "' parent node", e);
@@ -482,12 +510,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                            limit,
                                                                                            "_score",
                                                                                            "DESC");
-      return results.stream()
-                    .map(result -> (AbstractNode) toFileNode(identityManager, session, identity, result, spaceService))
-                    .filter(Objects::nonNull)
-                    .filter(FileNode.class::isInstance)
-                    .map(FileNode.class::cast)
-                    .toList();
+      return toSearchedFileNodes(identityManager, session, identity, results, spaceService);
     } finally {
       if (sessionProvider != null) {
         sessionProvider.close();
@@ -549,10 +572,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                            limit,
                                                                                            "fileSizeWithVersions",
                                                                                            "DESC");
-      return results.stream()
-                    .map(result -> (AbstractNode) toFileNode(identityManager, session, aclIdentity, result, spaceService))
-                    .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
-                    .toList();
+      List<FileNode> fileNodes = toSearchedFileNodes(identityManager, session, aclIdentity, results, spaceService);
+      return fileNodes.stream()
+                      .map(AbstractNode.class::cast)
+                      .filter(item -> !item.isHidden() || filter.isIncludeHiddenFiles())
+                      .toList();
     } catch (Exception e) {
       throw new IllegalStateException("Error when getting the documents size for identity " + ownerId, e);
     } finally {
@@ -789,10 +813,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                                        limit,
                                                                                                        sortField,
                                                                                                        sortDirection);
-          return filesSearchList.stream()
-                                .map(result -> toFileNode(identityManager, session, aclIdentity, result, spaceService))
-                                .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
-                                .collect(Collectors.toList());
+          List<FileNode> fileNodes = toSearchedFileNodes(identityManager, session, aclIdentity, filesSearchList, spaceService);
+          return fileNodes.stream()
+                          .filter(item -> !item.isHidden() || filter.isIncludeHiddenFiles())
+                          .collect(Collectors.toList());
         }
 
       }
@@ -3048,7 +3072,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @return
    */
   @Override
-  public FileVersion restoreVersion(String versionId, String aclIdentity) {
+  public FileVersion restoreVersion(String versionId, String aclIdentity, boolean keepAccessList) {
     Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
     FileVersion versionFileNode = new FileVersion();
     try {
@@ -3061,9 +3085,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String frozenUuid = Utils.getStringProperty(frozen, NodeTypeConstants.JCR_FROZEN_UUID);
         node = session.getNodeByUUID(frozenUuid);
         if (node != null) {
+          String nodeId = node.getUUID();
+          Map<String, List<String>> accessList = keepAccessList ? getStoredAccessList(nodeId) : null;
           node.restore(version, true);
           if (!node.isCheckedOut()) {
             node.checkout();
+          }
+          if (keepAccessList) {
+            // before the checkin, so that the new version carries it too
+            putBackAccessList(nodeId, accessList);
           }
           Version newVersion = node.checkin();
           versionFileNode = JCRDocumentsUtil.toFileVersion(newVersion, node, identityManager);
@@ -3072,6 +3102,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             node.setProperty(NodeTypeConstants.EXO_DATE_MODIFIED, Calendar.getInstance());
             node.setProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE, Calendar.getInstance());
           }
+          session.save();
         }
       }
       session.save();
@@ -3079,6 +3110,43 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalStateException("Error while restoring version", e);
     }
     return versionFileNode;
+  }
+
+  /**
+   * @param nodeId a document's identifier
+   * @return its access list, read through a system session, null when it has
+   *         none of its own
+   */
+  private Map<String, List<String>> getStoredAccessList(String nodeId) throws RepositoryException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      return getDocumentSpaceGuard().getAccessList(getSystemNode(sessionProvider, nodeId));
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * Puts back, through a system session, an access list a version restore
+   * changed: a failure leaves the restored version's access list on the
+   * document, so it is an error, never a refusal.
+   */
+  private void putBackAccessList(String nodeId, Map<String, List<String>> accessList) {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      getDocumentSpaceGuard().restoreAccessList(getSystemNode(sessionProvider, nodeId), accessList);
+    } catch (Exception e) {
+      LOG.error("Version of document {} restored, but its access list could not be put back", nodeId, e);
+      throw new IllegalStateException("The access list of document " + nodeId + " could not be put back", e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  private Node getSystemNode(SessionProvider sessionProvider, String nodeId) throws RepositoryException {
+    ManageableRepository repository = repositoryService.getCurrentRepository();
+    Session systemSession = sessionProvider.getSession(COLLABORATION, repository);
+    return ((ExtendedSession) systemSession).getNodeByIdentifier(nodeId);
   }
 
   public Map<String, Boolean> countNodeAccessList(Node node, Identity aclIdentity) throws RepositoryException {

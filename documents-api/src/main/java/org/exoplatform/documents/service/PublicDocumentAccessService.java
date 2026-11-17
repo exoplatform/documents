@@ -17,6 +17,7 @@
 package org.exoplatform.documents.service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.model.PublicDocumentInfo;
 
@@ -31,12 +32,37 @@ public interface PublicDocumentAccessService {
    * @param expirationDate public access expiration date
    * @param hasPassword document has already old password
    * @return {@link PublicDocumentAccess}
+   * @deprecated use
+   *             {@link #createDocumentPublicAccess(long, String, String, Long, boolean)},
+   *             which applies the document's space settings to the user
+   *             creating the link; a refusal is thrown here as an
+   *             {@link IllegalStateException}
    */
+  @Deprecated(forRemoval = true, since = "7.3.0")
   PublicDocumentAccess createPublicDocumentAccess(long docOwnerId,
                                                   String nodeId,
                                                   String password,
                                                   Long expirationDate,
                                                   boolean hasPassword);
+
+  /**
+   * Creates or updates a document public access on behalf of a user.
+   *
+   * @param userIdentityId social identity id of the user creating the link
+   * @param documentId document node id
+   * @param password password of the public access
+   * @param expirationDate public access expiration date
+   * @param hasPassword document has already old password
+   * @return {@link PublicDocumentAccess}, null when it could not be saved
+   * @throws DocumentSharingRefusedException when the document's space refuses
+   *           the user to manage its access
+   * @throws IllegalAccessException when the user is unknown
+   */
+  PublicDocumentAccess createDocumentPublicAccess(long userIdentityId,
+                                                  String documentId,
+                                                  String password,
+                                                  Long expirationDate,
+                                                  boolean hasPassword) throws IllegalAccessException;
 
   /**
    * Gets a document public access by its node id
@@ -86,10 +112,24 @@ public interface PublicDocumentAccessService {
   PublicDocumentInfo getPublicDocumentInfo(String documentId) throws ObjectNotFoundException;
 
   /**
-   * Revokes a document public access
+   * Revokes a document public access, with no check of the caller.
    *
    * @param documentId document id
+   * @deprecated use {@link #revokeDocumentPublicAccess(String, long)}, which
+   *             applies the document's space settings to the user revoking
    */
+  @Deprecated(forRemoval = true, since = "7.3.0")
   void revokeDocumentPublicAccess(String documentId);
+
+  /**
+   * Revokes a document public access on behalf of a user.
+   *
+   * @param documentId document id
+   * @param userIdentityId social identity id of the user revoking the link
+   * @throws DocumentSharingRefusedException when the document's space refuses
+   *           the user to manage its access
+   * @throws IllegalAccessException when the user is unknown
+   */
+  void revokeDocumentPublicAccess(String documentId, long userIdentityId) throws IllegalAccessException;
 
 }

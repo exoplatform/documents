@@ -49,6 +49,7 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.HTMLSanitizer;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.plugin.DocumentCategoryPlugin;
 import org.exoplatform.documents.storage.DocumentFileStorage;
@@ -72,6 +73,8 @@ import io.meeds.analytics.utils.AnalyticsUtils;
 import io.meeds.portal.thumbnail.model.FileContent;
 import io.meeds.social.category.model.CategoryObject;
 import io.meeds.social.category.service.CategoryLinkService;
+import io.meeds.social.space.security.model.SpaceSecuritySettings;
+import io.meeds.social.space.security.service.SpaceSecurityService;
 import lombok.SneakyThrows;
 
 public class DocumentFileServiceImpl implements DocumentFileService {
@@ -142,6 +145,8 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   private ImageThumbnailService imageThumbnailService;
 
   private CategoryLinkService   categoryLinkService;
+
+  private SpaceSecurityService  spaceSecurityService;
 
   private RepositoryService      repositoryService;
 
@@ -495,12 +500,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   @Override
   public void updatePermissions(String documentId,  NodePermission nodePermissionEntity, long authenticatedUserId) throws IllegalAccessException {
-
-    documentFileStorage.updatePermissions(documentId, nodePermissionEntity, getAclUserIdentity(authenticatedUserId));
+    // Decided once for the whole request, before any write
+    checkCanManageAccess(documentId, authenticatedUserId, DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION);
+    org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(authenticatedUserId);
+    documentFileStorage.updatePermissions(documentId, nodePermissionEntity, aclIdentity);
     nodePermissionEntity.getToShare().keySet().forEach(destId-> {
       try {
         boolean notifyMember = nodePermissionEntity.getToNotify() != null && nodePermissionEntity.getToNotify().containsKey(destId);
-        shareDocument(documentId, destId, authenticatedUserId, notifyMember);
+        documentFileStorage.shareDocument(documentId, destId, aclIdentity, notifyMember);
       } catch (IllegalAccessException e) {
         throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
       }
@@ -518,6 +525,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   @Override
   public void shareDocument(String documentId, long destId, long authenticatedUserId, boolean notifyMember) throws IllegalAccessException {
+    checkCanManageAccess(documentId, authenticatedUserId, DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION);
     documentFileStorage.shareDocument(documentId, destId, getAclUserIdentity(authenticatedUserId), notifyMember );
   }
 
@@ -534,6 +542,48 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public boolean canAccess(String documentID, org.exoplatform.services.security.Identity aclIdentity) {
     return documentFileStorage.canAccess(documentID, aclIdentity);
+  }
+
+  @Override
+  public void checkCanManageAccess(String documentId, long userIdentityId, String action) throws IllegalAccessException {
+    Identity userIdentity = identityManager.getIdentity(userIdentityId);
+    if (userIdentity == null) {
+      throw new IllegalAccessException("Can't find user identity with id " + userIdentityId);
+    }
+    Space space = documentFileStorage.getDocumentSpace(documentId);
+    if (space == null) {
+      return;
+    }
+    SpaceSecurityService securityService = getSpaceSecurityService();
+    SpaceSecuritySettings settings;
+    try {
+      settings = securityService.getSettings(space.getSpaceId());
+    } catch (ObjectNotFoundException e) {
+      // The space was deleted meanwhile: refuse rather than decide on no settings
+      throw new DocumentSharingRefusedException(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED,
+                                                space.getSpaceId(),
+                                                documentId,
+                                                action);
+    }
+    if (!securityService.canManageDocumentsAccess(space, settings, userIdentity.getRemoteId())) {
+      throw new DocumentSharingRefusedException(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED,
+                                                space.getSpaceId(),
+                                                documentId,
+                                                action);
+    }
+  }
+
+  @Override
+  public boolean canManageAccess(String documentId, long userIdentityId) {
+    try {
+      checkCanManageAccess(documentId, userIdentityId, DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION);
+      return true;
+    } catch (IllegalAccessException e) {
+      return false;
+    } catch (RuntimeException e) {
+      LOG.warn("Access management of document {} could not be decided: refused", documentId, e);
+      return false;
+    }
   }
 
   private org.exoplatform.services.security.Identity getAclUserIdentity(long userIdentityId) throws IllegalAccessException{
@@ -642,7 +692,30 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (versionId == null) {
       throw new IllegalArgumentException("version id is mandatory");
     }
-    return documentFileStorage.restoreVersion(versionId, aclIdentity);
+    // Under its space's "Limit Access Management", a user who may not change
+    // the document's access list restores the version's content, not its list
+    return documentFileStorage.restoreVersion(versionId, aclIdentity, !canManageAccessAs(versionId, aclIdentity));
+  }
+
+  /**
+   * Decides, on the committed settings and rows, whether a user may change a
+   * document's access list; refused when it cannot be decided
+   *
+   * @param documentId a document's identifier, or one of its versions'
+   * @param username the user
+   */
+  private boolean canManageAccessAs(String documentId, String username) {
+    try {
+      Space space = documentFileStorage.getDocumentSpace(documentId);
+      if (space == null) {
+        return true;
+      }
+      SpaceSecurityService securityService = getSpaceSecurityService();
+      return securityService.canManageDocumentsAccess(space, securityService.getSettings(space.getSpaceId()), username);
+    } catch (Exception e) {
+      LOG.warn("Access management of document {} could not be decided: its access list is kept", documentId, e);
+      return false;
+    }
   }
 
   @Override
@@ -987,6 +1060,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
       }
     }
     return parameters.get(fieldName);
+  }
+
+  protected SpaceSecurityService getSpaceSecurityService() {
+    if (spaceSecurityService == null) {
+      spaceSecurityService = CommonsUtils.getService(SpaceSecurityService.class);
+    }
+    return spaceSecurityService;
   }
 
   private CategoryLinkService getCategoryLinkService() {
