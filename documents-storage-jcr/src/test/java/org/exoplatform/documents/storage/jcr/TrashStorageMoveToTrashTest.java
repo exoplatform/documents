@@ -56,6 +56,7 @@ import org.mockito.MockedStatic;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.container.xml.ValueParam;
+import org.exoplatform.documents.service.RecycleBinService;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.FakeJcr.Item;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
@@ -109,6 +110,8 @@ class TrashStorageMoveToTrashTest {
   private ListenerService                   listenerService;
 
   private TrashStorageImpl                  trashStorage;
+
+  private RecycleBinService                 recycleBinService = mock(RecycleBinService.class);
 
   @BeforeAll
   static void mockContainerLookups() {
@@ -175,7 +178,65 @@ class TrashStorageMoveToTrashTest {
       SessionProvider createSystemProvider() {
         return systemProvider;
       }
+
+      @Override
+      RecycleBinService getRecycleBinService() {
+        return recycleBinService;
+      }
     };
+  }
+
+  @Test
+  void aDeletionFromADriveIsReportedWithItsDriveAndItsSizeOnceItIsSaved() throws Exception {
+    jcr.add(JOHN_HOME + "/Private/Documents/archive", "nt:folder");
+    jcr.addFile(JOHN_HOME + "/Private/Documents/archive/a.txt", 5);
+    jcr.addFile(JOHN_HOME + "/Private/Documents/archive/b.txt", 7);
+    Item file = jcr.addFile("/Groups/spaces/marketing/Documents/plan.txt", 3);
+    int[] savesAtReport = new int[1];
+    org.mockito.Mockito.doAnswer(invocation -> {
+      savesAtReport[0] = jcr.getSaves();
+      return null;
+    }).when(recycleBinService).itemTrashed(7L, 12L);
+
+    trashStorage.moveToTrash(jcr.node(johnSession, jcr.at(JOHN_HOME + "/Private/Documents/archive")), mock(SessionProvider.class), "john");
+    int savesOfTheFirst = jcr.getSaves();
+    trashStorage.moveToTrash(jcr.node(johnSession, file), mock(SessionProvider.class), "john");
+
+    verify(recycleBinService).itemTrashed(7L, 12L);
+    verify(recycleBinService).itemTrashed(9L, 3L);
+    assertEquals(savesOfTheFirst, savesAtReport[0]);
+  }
+
+  @Test
+  void aDeletionFromNoDriveAndOneThatIsNotSavedAreNotReported() throws Exception {
+    Item form = jcr.addFile("/Application Data/form.txt", 4);
+    trashStorage.moveToTrash(jcr.node(johnSession, form), mock(SessionProvider.class), "john");
+    Item first = jcr.addFile(JOHN_HOME + "/Private/Documents/first.txt", 1);
+    trashStorage.moveToTrash(jcr.node(johnSession, first), mock(SessionProvider.class), "john");
+    org.mockito.Mockito.clearInvocations(recycleBinService);
+    Item file = jcr.addFile(JOHN_HOME + "/Private/Documents/report.docx", 10);
+    Node node = jcr.node(johnSession, file);
+    jcr.failNextSave(new RepositoryException("save refused"));
+
+    assertThrows(RepositoryException.class, () -> trashStorage.moveToTrash(node, mock(SessionProvider.class), "john"));
+
+    verify(recycleBinService, never()).itemTrashed(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+  }
+
+  @Test
+  void aDeletionStandsWhenItsReportFailsOrFindsNoService() throws Exception {
+    Item first = jcr.addFile(JOHN_HOME + "/Private/Documents/first.txt", 1);
+    Item second = jcr.addFile(JOHN_HOME + "/Private/Documents/second.txt", 1);
+    org.mockito.Mockito.doThrow(new IllegalStateException("The database refuses the statement")).when(recycleBinService).itemTrashed(7L, 1L);
+
+    trashStorage.moveToTrash(jcr.node(johnSession, first), mock(SessionProvider.class), "john");
+    recycleBinService = null;
+    trashStorage.moveToTrash(jcr.node(johnSession, second), mock(SessionProvider.class), "john");
+
+    assertNotNull(jcr.at(JOHN_BIN + "/first.txt"));
+    assertNotNull(jcr.at(JOHN_BIN + "/second.txt"));
+    assertEquals(0, jcr.getRefreshes());
+    verify(listenerService, org.mockito.Mockito.times(2)).broadcast(eq(TrashStorage.FILE_REMOVE_ACTIVITY), any(), any());
   }
 
   @Test
@@ -603,6 +664,20 @@ class TrashStorageMoveToTrashTest {
     verify(listenerService).broadcast(eq(TrashStorage.FILE_REMOVE_ACTIVITY), isNull(), argThat(isAt("/Trash/form.txt")));
     assertEquals(1, jcr.getSaves());
     assertEquals(1, savesAtBroadcast[0]);
+  }
+
+  @Test
+  void aNodeOfAnotherWorkspaceDeletedFromTheSamePathAsADriveIsReportedToo() throws Exception {
+    FakeJcr other = new FakeJcr("dms-system");
+    Item file = other.addFile(JOHN_HOME + "/Private/Documents/form.txt", 4);
+    jcr.linkWorkspace(other);
+    SessionImpl otherSystemSession = other.session("__system");
+    when(systemProvider.getSession(eq("dms-system"), any())).thenReturn(otherSystemSession);
+
+    trashStorage.moveToTrash(other.node(other.session("john"), file), mock(SessionProvider.class), "john");
+
+    assertNotNull(jcr.at(JOHN_BIN + "/form.txt"));
+    verify(recycleBinService).itemTrashed(7L, 4L);
   }
 
   @Test
