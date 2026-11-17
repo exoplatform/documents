@@ -508,4 +508,15 @@ public class JCRDeleteFileStorageTest {
     verify(node).remove();
   }
 
+  @Test
+  public void aBulkActionOnItemsIsStartedThroughTheBulkActionsWithTheListenerOfTheStorage() {
+    org.exoplatform.documents.model.ActionData actionData = new org.exoplatform.documents.model.ActionData();
+    List<String> itemIds = List.of("a", "b");
+    org.exoplatform.documents.storage.BulkItemAction itemAction = itemId -> true;
+
+    jcrDeleteFileStorage.executeBulkAction(actionData, itemIds, itemAction);
+
+    verify(bulkStorageActionService).executeItemAction(listenerService, actionData, itemIds, itemAction);
+  }
+
 }

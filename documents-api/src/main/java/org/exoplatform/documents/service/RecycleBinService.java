@@ -196,6 +196,57 @@ public interface RecycleBinService {
   void itemTrashed(long ownerId, long size);
 
   /**
+   * Restores several items of a bin, as a bulk action: it returns once the
+   * action is started, and the caller is told when it is over, on the channel
+   * the bulk actions report on, with the ids of the items restored. Each item
+   * is restored at its turn as {@link #restoreItem} does, the bin and what the
+   * caller may do being checked again then: an item that is no longer in the
+   * bin is left out, and one that is refused is a failure of that item, the
+   * others being restored.
+   *
+   * @param actionId the id the action reports under and is cancelled by
+   * @param itemIds ids of the items in the bin
+   * @param scope the bin
+   * @param username the caller
+   * @throws ObjectNotFoundException when the drive does not exist
+   * @throws IllegalAccessException when the caller does not hold the bin
+   * @throws IllegalArgumentException when no item or no action id is given
+   */
+  void restoreItems(String actionId, List<String> itemIds, RecycleBinScope scope, String username) throws ObjectNotFoundException,
+                                                                                                   IllegalAccessException;
+
+  /**
+   * Removes for good several items of a bin, as a bulk action, the way
+   * {@link #restoreItems} restores them, each as {@link #deleteItem} does. An
+   * item that left with another one of the action, as a shortcut does with
+   * the document it points at, is left out.
+   *
+   * @param actionId the id the action reports under and is cancelled by
+   * @param itemIds ids of the items in the bin
+   * @param scope the bin
+   * @param username the caller
+   * @throws ObjectNotFoundException when the drive does not exist
+   * @throws IllegalAccessException when the caller does not hold the bin
+   * @throws IllegalArgumentException when no item or no action id is given
+   */
+  void deleteItems(String actionId, List<String> itemIds, RecycleBinScope scope, String username) throws ObjectNotFoundException,
+                                                                                                  IllegalAccessException;
+
+  /**
+   * Empties a bin: removes for good, as {@link #deleteItems} does, the items
+   * it holds when the call is made. An item that joins the bin afterwards
+   * stays.
+   *
+   * @param actionId the id the action reports under and is cancelled by
+   * @param scope the bin
+   * @param username the caller
+   * @throws ObjectNotFoundException when the drive does not exist
+   * @throws IllegalAccessException when the caller does not hold the bin
+   * @throws IllegalArgumentException when no action id is given
+   */
+  void emptyBin(String actionId, RecycleBinScope scope, String username) throws ObjectNotFoundException, IllegalAccessException;
+
+  /**
    * @return the number of days an item stays in a Recycle Bin before it is
    *         removed for good, the same for every drive
    */
