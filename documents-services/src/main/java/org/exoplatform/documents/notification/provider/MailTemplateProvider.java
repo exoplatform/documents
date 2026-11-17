@@ -29,6 +29,7 @@ import org.exoplatform.commons.api.notification.model.MessageInfo;
 import org.exoplatform.commons.api.notification.model.NotificationInfo;
 import org.exoplatform.commons.api.notification.model.PluginKey;
 import org.exoplatform.commons.api.notification.service.template.TemplateContext;
+import org.exoplatform.commons.notification.mail.MailPalette;
 import org.exoplatform.commons.notification.template.TemplateUtils;
 import org.exoplatform.commons.utils.HTMLEntityEncoder;
 import org.exoplatform.commons.utils.TimeConvertUtils;
@@ -112,6 +113,8 @@ public class MailTemplateProvider extends TemplateProvider {
       // Footer
       templateContext.put("FOOTER_LINK", LinkProviderUtils.getRedirectUrl("notification_settings", receiver.getRemoteId()));
       templateContext.put("COMPANY_LINK", LinkProviderUtils.getBaseUrl());
+      // the colours and logos of the recipient's display mode, read by the shared header, footer and templates
+      MailPalette.bind(templateContext, notificationInfo.getTo());
       String subject = TemplateUtils.processSubject(templateContext);
       String body = TemplateUtils.processGroovy(templateContext);
       notificationContext.setException(templateContext.getException());

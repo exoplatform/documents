@@ -17,7 +17,7 @@
 <template>
   <div class="mx-auto d-flex flex-column align-center justify-center full-width full-height">
     <v-icon
-      color="tertiary"
+      color="secondary"
       size="60">
       fas fa-file-alt
     </v-icon>
