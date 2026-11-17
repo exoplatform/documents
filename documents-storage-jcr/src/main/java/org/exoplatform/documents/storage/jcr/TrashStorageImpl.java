@@ -26,6 +26,7 @@ import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.ActivityTypeUtils;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
@@ -585,6 +586,115 @@ public class TrashStorageImpl implements TrashStorage {
    */
   SessionProvider createSystemProvider() {
     return SessionProvider.createSystemProvider();
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public int normalizeRecycleBinItems() throws RepositoryException {
+    int normalized = 0;
+    SessionProvider trashProvider = createSystemProvider();
+    try {
+      Session trashSession = trashProvider.getSession(this.trashWorkspace, repositoryService.getCurrentRepository());
+      // The mixin is also carried outside the trash: the path keeps the
+      // statement to the trash home and its bin folders.
+      String statement = "SELECT * FROM " + NodeTypeConstants.EXO_RESTORE_LOCATION + " WHERE jcr:path LIKE '" + this.trashHome
+          + "/%'";
+      Query query = trashSession.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+      List<String> itemIds = new ArrayList<>();
+      for (NodeIterator nodes = query.execute().getNodes(); nodes.hasNext();) {
+        Node node = nodes.nextNode();
+        if (lacksRecycleBinFacts(node)) {
+          itemIds.add(((ExtendedNode) node).getIdentifier());
+        }
+      }
+      for (String itemId : itemIds) {
+        if (normalizeRecycleBinItem(trashSession, trashProvider, itemId)) {
+          normalized++;
+        }
+      }
+    } finally {
+      trashProvider.close();
+    }
+    return normalized;
+  }
+
+  /**
+   * Whether a node is an entry of the trash, listed as one item: it carries
+   * the restore location, is not a bin folder, and sits right under the trash
+   * home or under a bin folder. What a deleted folder holds is no entry.
+   */
+  private boolean isTrashEntry(Node node) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION) || node.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_FOLDER)) {
+      return false;
+    }
+    Node parent = node.getParent();
+    return this.trashHome.equals(parent.getPath()) || parent.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_FOLDER);
+  }
+
+  private boolean lacksRecycleBinFacts(Node node) throws RepositoryException {
+    return !node.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM) && isTrashEntry(node);
+  }
+
+  private boolean normalizeRecycleBinItem(Session trashSession, SessionProvider trashProvider, String itemId) {
+    try {
+      Node item = ((ExtendedSession) trashSession).getNodeByIdentifier(itemId);
+      if (!lacksRecycleBinFacts(item)) {
+        return false;
+      }
+      String workspaceName = item.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE) ? item.getProperty(NodeTypeConstants.RESTORE_WORKSPACE).getString()
+                                                                                   : trashSession.getWorkspace().getName();
+      String ownerId = item.hasProperty(NodeTypeConstants.RESTORE_PATH) ? JCRDocumentsUtil.resolveRecycleBinOwner(item.getProperty(NodeTypeConstants.RESTORE_PATH)
+                                                                                                                     .getString(),
+                                                                                                                 nodeHierarchyCreator,
+                                                                                                                 identityManager,
+                                                                                                                 spaceService,
+                                                                                                                 trashProvider)
+                                                                        : null;
+      // The date the item went to the trash was not kept: its last
+      // modification is the closest date it carries, read before it is written.
+      Calendar deletedDate = item.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE) ? item.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate()
+                                                                                         : Calendar.getInstance();
+      long size = measureItem(item, item.getPath(), workspaceName, trashSession, null, false);
+      String name = JCRDocumentsUtil.getTitle(item).toLowerCase();
+
+      item.addMixin(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM);
+      setOrRemoveProperty(item, NodeTypeConstants.RECYCLE_BIN_OWNER, ownerId);
+      item.setProperty(NodeTypeConstants.DELETED_DATE, deletedDate);
+      item.setProperty(NodeTypeConstants.RECYCLE_BIN_SIZE, size);
+      item.setProperty(NodeTypeConstants.RECYCLE_BIN_NAME, name);
+      if (!item.hasProperty(NodeTypeConstants.TRASH_ID)) {
+        item.setProperty(NodeTypeConstants.TRASH_ID, java.util.UUID.randomUUID().toString());
+      }
+      trashSession.save();
+      return true;
+    } catch (RepositoryException | RuntimeException e) {
+      discardAndReportNormalizationFailure(trashSession, itemId, e);
+      return false;
+    }
+  }
+
+  /**
+   * A run on another node may have given the item its facts first, which
+   * fails this run's save: the item is then read again, and only an item
+   * still lacking its facts is a failure worth a warning.
+   */
+  private void discardAndReportNormalizationFailure(Session trashSession, String itemId, Exception failure) {
+    try {
+      trashSession.refresh(false);
+      Node item = ((ExtendedSession) trashSession).getNodeByIdentifier(itemId);
+      if (item.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
+        LOG.debug("The item {} of the trash was given its Recycle Bin facts meanwhile", itemId);
+        return;
+      }
+    } catch (ItemNotFoundException e) {
+      LOG.debug("The item {} of the trash no longer exists", itemId);
+      return;
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.debug("The item {} of the trash could not be read again", itemId, e);
+    }
+    LOG.warn("The item {} of the trash could not be given its Recycle Bin facts", itemId, failure);
   }
 
   /**
