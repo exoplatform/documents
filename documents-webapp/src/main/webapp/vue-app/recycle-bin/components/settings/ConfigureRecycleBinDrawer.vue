@@ -43,6 +43,8 @@
               @valid="inRange = $event" />
             <div class="ps-2">{{ $t('recycleBin.configure.retention.unit') }}</div>
           </div>
+          <div class="text-header pb-3">{{ $t('recycleBin.configure.overview') }}</div>
+          <documents-recycle-bin-overview ref="overview" @open-drive="openDrive" />
         </div>
       </template>
       <template #footer>
@@ -66,6 +68,10 @@
         </div>
       </template>
     </exo-drawer>
+    <documents-recycle-bin-drawer
+      ref="driveDrawer"
+      drawer-id="recycleBinDriveDrawer"
+      @changed="refreshOverview" />
     <documents-recycle-bin-confirm-dialog
       ref="confirmShorten"
       :title="$t('recycleBin.confirm.shorten.title')"
@@ -134,6 +140,9 @@ export default {
         .catch(this.displayError)
         .finally(() => this.saving = false);
     },
+    openDrive(drive) {
+      this.$refs.driveDrawer.open(drive);
+    },
     // A shorter period removes for good what stayed longer, then tells who set it.
     purgeEnded(action) {
       if (action.actionId === PURGE_ACTION_ID) {
@@ -142,7 +151,11 @@ export default {
         } else {
           this.$recycleBinService.displayAlert(this.$t('recycleBin.purge.failed'), 'error');
         }
+        this.refreshOverview();
       }
+    },
+    refreshOverview() {
+      this.$refs.overview?.refresh?.();
     },
     displayError(error) {
       this.$recycleBinService.displayError(error, key => this.$t(key));
