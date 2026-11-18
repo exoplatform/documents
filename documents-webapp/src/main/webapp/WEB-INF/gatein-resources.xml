@@ -330,6 +330,9 @@
       <depends>
         <module>eXoVueI18n</module>
       </depends>
+      <depends>
+        <module>documentsRecycleBin</module>
+      </depends>
     </module>
   </portlet>
 
