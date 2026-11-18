@@ -25,7 +25,9 @@
         :supported-documents="supportedDocuments"
         :attachments="attachments"
         :open-attachments-in-editor="openAttachmentsInEditor"
-        :can-fill-attachments="canFillAttachments" />
+        :can-fill-attachments="canFillAttachments"
+        :readonly="readonly"
+        :entity-id="entityId ? String(entityId) : ''" />
     </div>
   </v-app>
 </template>
@@ -34,6 +36,7 @@
 export default {
   data () {
     return {
+      readonly: false,
       attachments: [],
       files: [],
       currentSpace: {},
@@ -158,6 +161,8 @@ export default {
       this.entityId = config.entityId;
       this.openAttachmentsInEditor = config.openAttachmentsInEditor || true;
       this.canFillAttachments = config.canFillAttachments;
+      // read at each opening: a read-only list opened from one entity never makes the next one read-only
+      this.readonly = !!config.readonly;
       this.displayUploadedFiles = config.displayUploadedFiles;
       this.createEntityTypeFolder = config.createEntityTypeFolder;
       this.showCustomDrawerOverlay = config.showCustomDrawerOverlay;
