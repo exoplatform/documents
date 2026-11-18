@@ -1,6 +1,6 @@
 <template>
   <v-main>
-    <div :class="[allowToPreview && 'clickable', attachment.uploadFailed && 'attachment--failed']" class="attachment d-flex align-center">
+    <div :class="[allowToPreview && 'clickable', attachment.uploadFailed && 'attachment--failed']" class="attachment d-flex align-center text-start">
       <v-list-item-avatar
         :class="smallAttachmentIcon ? 'me-0' :'me-3'"
         class="border-radius"
@@ -45,7 +45,7 @@
         <v-list-item-title class="uploadedFileTitle" :title="attachmentTitle">
           {{ attachmentTitle || notAccessibleAttachmentTitle }}
         </v-list-item-title>
-        <v-list-item-subtitle class="d-flex align-center flex-wrap v-messages uploadedFileMeta">
+        <v-list-item-subtitle class="d-flex align-center flex-wrap text-start v-messages uploadedFileMeta">
           <span v-if="humanizedSize" class="attachmentMetaSize">{{ humanizedSize }}</span>
           <span v-if="humanizedSize && fileExtension" class="attachmentMetaSep mx-1">·</span>
           <span v-if="fileExtension" class="attachmentMetaType">{{ fileExtension }}</span>
