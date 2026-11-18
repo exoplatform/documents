@@ -80,6 +80,36 @@
     </depends>
   </module>
 
+  <!-- The Recycle Bin of the documents: its list, its drawers and its labels.
+       A plain named module (no load-group): each page that opens a Recycle Bin
+       depends on it. -->
+  <module>
+    <name>documentsRecycleBin</name>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsRecycleBin.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+    <depends>
+      <module>commons-cometd3</module>
+      <as>cCometd</as>
+    </depends>
+  </module>
+
   <module>
     <name>DocumentsLeftHeaderExtension</name>
     <load-group>documentLeftHeaderGRP</load-group>
