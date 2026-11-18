@@ -117,6 +117,12 @@ export default {
       const excludedIds = (this.excludedIds || []).map(String);
       return excludedIds.length ? this.attachments.filter(attachment => !excludedIds.includes(String(attachment.id))) : this.attachments;
     },
+    /**
+     * Builds the configuration the drawers open with: the entity, its drive and folder, the files shown,
+     * readonly, and excludedIds, the files the drawers neither list nor detach.
+     *
+     * @returns {Object} the drawers' opening configuration
+     */
     attachmentAppConfiguration() {
       return {
         'entityId': this.entityId,
