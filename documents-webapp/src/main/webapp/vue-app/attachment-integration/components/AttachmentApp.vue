@@ -34,7 +34,7 @@
         v-if="$scopedSlots.attachmentsList"
         class="attachedFilesList"
         @click="openAttachmentsDrawerList()">
-        <slot :attachments="attachments" name="attachedFilesList"></slot>
+        <slot :attachments="shownAttachments" name="attachedFilesList"></slot>
       </div>
       <div v-else-if="entityId && entityType" class="attachmentsPreview v-card__text ms-3 pa-0">
         <div v-if="shownAttachments.length" class="attachmentsList">
