@@ -146,6 +146,11 @@ export default {
   watch: {
     entityId: {
       immediate: true,
+      /**
+       * Loads the entity's files, unless the embedding app gives them.
+       *
+       * @returns {Promise} settled once they are loaded
+       */
       async handler() {
         this.entityFiles = this.files ? [] : await this.initEntityAttachmentsList();
       },
@@ -206,9 +211,14 @@ export default {
     isFileReadable(file) {
       return this.$supportedDocuments && this.$supportedDocuments.filter(doc => doc.mimeType === file.mimetype).length > 0;
     },
+    /**
+     * Builds a file's thumbnail URL, without writing onto the file, which may be the embedding app's.
+     *
+     * @param {Object} file the file
+     * @returns {String} the thumbnail's URL
+     */
     getImageUrl(file) {
-      file.readable = this.isFileReadable(file);
-      return this.$documentsUtils.getThumbnailUrl(file,'250x250',file.updatedDate);
+      return this.$documentsUtils.getThumbnailUrl({...file, readable: this.isFileReadable(file)}, '250x250', file.updatedDate);
     },
     getDownloadUrl(file) {
       return this.$documentsUtils.getDownloadUrl(file.id,file.updatedDate);
