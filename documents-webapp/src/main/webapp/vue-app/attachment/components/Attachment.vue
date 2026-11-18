@@ -25,7 +25,9 @@
         :supported-documents="supportedDocuments"
         :attachments="attachments"
         :open-attachments-in-editor="openAttachmentsInEditor"
-        :can-fill-attachments="canFillAttachments" />
+        :can-fill-attachments="canFillAttachments"
+        :readonly="readonly"
+        :entity-id="entityId ? String(entityId) : ''" />
     </div>
   </v-app>
 </template>
@@ -34,6 +36,8 @@
 export default {
   data () {
     return {
+      readonly: false,
+      excludedIds: [],
       attachments: [],
       files: [],
       currentSpace: {},
@@ -117,6 +121,13 @@ export default {
     openAttachmentsAppDrawer() {
       this.$root.$emit('open-attachments-app-drawer');
     },
+    /**
+     * Reads the configuration a caller opens the drawers with, read again at each opening: the entity, the
+     * drive and folder, the files, whether the files are attached to the entity, readonly and excludedIds.
+     *
+     * @param {Object} config the opening event's configuration
+     * @returns {void}
+     */
     readConfiguration(config) {
       config = config || {};
       this.spaceId = this.getURLQueryParam('spaceId') || config.spaceId || eXo.env.portal.spaceId;
@@ -145,7 +156,9 @@ export default {
       }
       this.sourceApp = config.sourceApp || null;
       this.files = config.files || null;
-      this.attachments = config.attachments || [];
+      // read at each opening, as readonly: the ids of the files the caller shows elsewhere, never listed here
+      this.excludedIds = (config.excludedIds || []).map(String);
+      this.attachments = this.withoutExcluded(config.attachments || []);
       if (typeof config.attachToEntity !== 'undefined') {
         this.attachToEntity = config.attachToEntity;
         this.attachments.forEach((attachment) => {
@@ -158,6 +171,8 @@ export default {
       this.entityId = config.entityId;
       this.openAttachmentsInEditor = config.openAttachmentsInEditor || true;
       this.canFillAttachments = config.canFillAttachments;
+      // read at each opening: a read-only list opened from one entity never makes the next one read-only
+      this.readonly = !!config.readonly;
       this.displayUploadedFiles = config.displayUploadedFiles;
       this.createEntityTypeFolder = config.createEntityTypeFolder;
       this.showCustomDrawerOverlay = config.showCustomDrawerOverlay;
@@ -177,6 +192,15 @@ export default {
         this.$refs.attachmentsAppDrawer.endLoading();
       }
     },
+    /**
+     * Leaves out the files the caller excluded, compared as strings.
+     *
+     * @param {Array} attachments files
+     * @returns {Array} the files but the excluded ones
+     */
+    withoutExcluded(attachments) {
+      return this.excludedIds.length ? attachments.filter(attachment => !this.excludedIds.includes(String(attachment.id))) : attachments;
+    },
     initAttachmentEnvironment() {
       if (this.entityType && this.entityId && this.attachToEntity) {
         this.startLoadingList();
@@ -184,9 +208,15 @@ export default {
           .finally(() => this.endLoadingList());
       }
     },
+    /**
+     * Reloads the entity's files, but the excluded ones.
+     *
+     * @returns {Promise} settled once the files are listed, none without an entity
+     */
     initEntityAttachmentsList() {
       if (this.entityType && this.entityId) {
         return this.$attachmentService.getEntityAttachments(this.entityType, this.entityId).then(attachments => {
+          attachments = this.withoutExcluded(attachments);
           attachments.forEach(attachment => attachment.name = attachment.title);
           Object.assign(this.attachments, attachments);
         });
