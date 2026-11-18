@@ -75,10 +75,12 @@
             <div
               v-tree-node="$t('documents.tree.subFoldersOf', {0: item.name})"
               class="d-flex clickable"
+              :aria-current="destinationFolderId && destinationFolderId === item.id ? 'true' : null"
               role="button"
               tabindex="0"
               @click="getDestination(item)"
-              @keydown.enter="getDestination(item)">
+              @keydown.enter.prevent="$event.currentTarget.click()"
+              @keydown.space.prevent="$event.currentTarget.click()">
               <v-icon size="24" class="primary--text">
                 {{ 'fas fa-folder' }}
               </v-icon>

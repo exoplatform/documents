@@ -38,7 +38,10 @@
           activatable
           open-on-click>
           <template #prepend="{ item }">
-            <v-radio :value="item.id" color="primary" />
+            <v-radio
+              :value="item.id"
+              :aria-label="item.name"
+              color="primary" />
           </template>
           <template #label="{ item }">
             <span v-tree-node="$t('documents.tree.subFoldersOf', {0: item.name})">{{ item.name }}</span>
