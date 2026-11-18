@@ -126,6 +126,7 @@ export default {
         'spaceId': this.spaceId,
         'attachments': this.shownAttachments,
         'readonly': this.readonly,
+        'excludedIds': this.excludedIds,
       };
     }
   },

@@ -37,6 +37,7 @@ export default {
   data () {
     return {
       readonly: false,
+      excludedIds: [],
       attachments: [],
       files: [],
       currentSpace: {},
@@ -148,7 +149,9 @@ export default {
       }
       this.sourceApp = config.sourceApp || null;
       this.files = config.files || null;
-      this.attachments = config.attachments || [];
+      // read at each opening, as readonly: the ids of the files the caller shows elsewhere, never listed here
+      this.excludedIds = (config.excludedIds || []).map(String);
+      this.attachments = this.withoutExcluded(config.attachments || []);
       if (typeof config.attachToEntity !== 'undefined') {
         this.attachToEntity = config.attachToEntity;
         this.attachments.forEach((attachment) => {
@@ -182,6 +185,15 @@ export default {
         this.$refs.attachmentsAppDrawer.endLoading();
       }
     },
+    /**
+     * Leaves out the files the caller excluded, compared as strings.
+     *
+     * @param {Array} attachments files
+     * @returns {Array} the files but the excluded ones
+     */
+    withoutExcluded(attachments) {
+      return this.excludedIds.length ? attachments.filter(attachment => !this.excludedIds.includes(String(attachment.id))) : attachments;
+    },
     initAttachmentEnvironment() {
       if (this.entityType && this.entityId && this.attachToEntity) {
         this.startLoadingList();
@@ -192,6 +204,7 @@ export default {
     initEntityAttachmentsList() {
       if (this.entityType && this.entityId) {
         return this.$attachmentService.getEntityAttachments(this.entityType, this.entityId).then(attachments => {
+          attachments = this.withoutExcluded(attachments);
           attachments.forEach(attachment => attachment.name = attachment.title);
           Object.assign(this.attachments, attachments);
         });
