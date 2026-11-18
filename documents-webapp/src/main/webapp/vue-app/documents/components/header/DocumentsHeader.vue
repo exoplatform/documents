@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div v-if="!showFilter">
+    <div v-if="!showFilter" class="d-flex align-center">
       <application-toolbar
         :center-button-toggle="centerBotton"
         :right-text-filter="{
@@ -30,7 +30,8 @@
         @filter-select-change="changeDocumentsFilter($event)"
         @toggle-select="changeDocumentView($event)"
         @filter-expand="filterDispalyed = !filterDispalyed"
-        class="mb-4"
+        class="flex-grow-1 mb-4"
+        style="min-width: 0"
         ref="applicationToolbar">
         <template #left>
           <documents-header-left
@@ -108,6 +109,7 @@
           </div>
         </template>
       </application-toolbar>
+      <documents-header-menu v-if="!filterDispalyed" class="flex-shrink-0 mb-4 me-4 ms-n1" />
     </div>
     <documents-setting-drawer :view-list="viewList" />
   </div>
