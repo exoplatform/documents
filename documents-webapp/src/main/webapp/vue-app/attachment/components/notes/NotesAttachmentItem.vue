@@ -112,6 +112,16 @@
               class="white--text my-auto mx-0">
               <v-icon size="20">fa-info-circle</v-icon>
             </v-btn>
+            <v-btn
+              v-if="allowToDetach"
+              :title="$t('attachment.detach')"
+              :aria-label="$t('attachment.detach')"
+              small
+              icon
+              class="attachment-detach white--text my-auto mx-0"
+              @click="detach">
+              <v-icon size="18">fa-unlink</v-icon>
+            </v-btn>
           </v-card-text>
         </v-card>
       </v-expand-transition>
@@ -185,6 +195,11 @@ export default {
     ownerId: {
       type: [String, Number],
       default: null,
+    },
+    /** Offers a detach button, which emits detach for the embedding app to detach the file */
+    allowToDetach: {
+      type: Boolean,
+      default: false,
     },
   },
   data: () => ({
@@ -294,6 +309,19 @@ export default {
         event.stopPropagation();
       }
       document.dispatchEvent(new CustomEvent('open-document-info-drawer', {detail: this.ownerId ? {id: this.attachment.id, ownerId: this.ownerId} : this.attachment.id}));
+    },
+    /**
+     * Asks the embedding app to detach the file, without opening it.
+     *
+     * @param {Event} event the button's click
+     * @returns {void}
+     */
+    detach(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      this.$emit('detach', this.attachment);
     },
     playMedia(event) {
       if (event) {
