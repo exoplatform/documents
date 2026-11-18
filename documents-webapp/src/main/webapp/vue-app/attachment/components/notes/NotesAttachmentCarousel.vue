@@ -80,9 +80,19 @@ export default {
       const excludedIds = (this.excludedIds || []).map(String);
       return excludedIds.length ? (this.files || []).filter(file => !excludedIds.includes(String(file.id))) : this.files || [];
     },
+    /**
+     * Tells whether a card shows: the entity has a file that is not excluded.
+     *
+     * @returns {Boolean} true when a card shows
+     */
     displayAttachmentItem() {
       return this.shownFiles.length > 0;
     },
+    /**
+     * Maps the files shown to the cards' entries: their name, preview, links and how they open.
+     *
+     * @returns {Array} the cards' entries
+     */
     attachments() {
       const attachments = [];
       this.shownFiles.forEach(attachment => {
