@@ -20,6 +20,8 @@ import RecycleBinToolbar from './components/RecycleBinToolbar.vue';
 import RecycleBinConfirmDialog from './components/RecycleBinConfirmDialog.vue';
 import RecycleBinList from './components/list/RecycleBinList.vue';
 import RecycleBinItem from './components/list/RecycleBinItem.vue';
+import ConfigureRecycleBinDrawer from './components/settings/ConfigureRecycleBinDrawer.vue';
+import RecycleBinSettingsEntry from './components/settings/RecycleBinSettingsEntry.vue';
 import RecycleBinSpaceSettings from './components/settings/RecycleBinSpaceSettings.vue';
 
 const components = {
@@ -28,6 +30,8 @@ const components = {
   'documents-recycle-bin-confirm-dialog': RecycleBinConfirmDialog,
   'documents-recycle-bin-list': RecycleBinList,
   'documents-recycle-bin-item': RecycleBinItem,
+  'documents-recycle-bin-configure-drawer': ConfigureRecycleBinDrawer,
+  'documents-recycle-bin-settings-entry': RecycleBinSettingsEntry,
   'documents-recycle-bin-space-settings': RecycleBinSpaceSettings,
 };
 

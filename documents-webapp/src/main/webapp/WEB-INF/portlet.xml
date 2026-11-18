@@ -80,21 +80,21 @@
   </portlet>
 
   <portlet>
-    <portlet-name>TrashManagement</portlet-name>
-    <display-name>Trash Management</display-name>
+    <portlet-name>DocumentSettings</portlet-name>
+    <display-name>Document Settings</display-name>
     <portlet-class>org.exoplatform.commons.api.portlet.GenericDispatchedViewPortlet</portlet-class>
     <init-param>
       <name>portlet-view-dispatched-file-path</name>
-      <value>/html/trashManagement.html</value>
+      <value>/html/documentSettings.html</value>
     </init-param>
     <supports>
       <mime-type>text/html</mime-type>
     </supports>
     <supported-locale>en</supported-locale>
-    <resource-bundle>locale.portlet.TrashManagement</resource-bundle>
+    <resource-bundle>locale.portlet.RecycleBin</resource-bundle>
     <portlet-info>
-      <title>Trash Management</title>
-      <keywords>Trash Management</keywords>
+      <title>Document Settings</title>
+      <keywords>Document Settings</keywords>
     </portlet-info>
   </portlet>
 

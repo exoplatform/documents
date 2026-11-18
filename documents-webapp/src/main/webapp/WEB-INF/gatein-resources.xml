@@ -297,11 +297,11 @@
   </portlet>
 
   <portlet>
-    <name>TrashManagement</name>
+    <name>DocumentSettings</name>
     <module>
       <script>
         <minify>false</minify>
-        <path>/js/trashManagement.bundle.js</path>
+        <path>/js/documentSettings.bundle.js</path>
       </script>
       <depends>
         <module>commonVueComponents</module>
@@ -319,15 +319,7 @@
         <module>eXoVueI18n</module>
       </depends>
       <depends>
-        <module>jquery</module>
-        <as>$</as>
-      </depends>
-      <depends>
-        <module>applicationToolbarComponent</module>
-      </depends>
-      <depends>
-        <module>commons-cometd3</module>
-        <as>cCometd</as>
+        <module>documentsRecycleBin</module>
       </depends>
     </module>
   </portlet>
