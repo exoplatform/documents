@@ -18,7 +18,13 @@
 -->
 <template>
   <v-app>
-    <div class="application-body">
+    <v-card
+      v-if="recycleBinDisplayed"
+      class="application-body px-4 pt-3 pb-4"
+      flat>
+      <documents-recycle-bin @back="closeRecycleBin" />
+    </v-card>
+    <div v-else class="application-body">
       <v-list>
         <v-list-item>
           <v-list-item-content>
@@ -42,6 +48,26 @@
             </v-btn>
           </v-list-item-action>
         </v-list-item>
+        <v-list-item v-if="recycleBinLabelsLoaded">
+          <v-list-item-content>
+            <v-list-item-title>
+              {{ $t('recycleBin.userSettings.review') }}
+            </v-list-item-title>
+          </v-list-item-content>
+          <v-list-item-action>
+            <v-btn
+              id="documentsUserSettingsRecycleBin"
+              :title="$t('recycleBin.userSettings.review')"
+              :aria-label="$t('recycleBin.userSettings.review')"
+              small
+              icon
+              @click="openRecycleBin">
+              <v-icon size="24" class="icon-default-color">
+                {{ $vuetify.rtl && 'fa-caret-left' || 'fa-caret-right' }}
+              </v-icon>
+            </v-btn>
+          </v-list-item-action>
+        </v-list-item>
       </v-list>
       <documents-webdav-drawer
         ref="webdavDrawer" />
@@ -55,6 +81,8 @@ export default {
       .toString()
       .toString()}`,
     displayed: true,
+    recycleBinLabelsLoaded: false,
+    recycleBinDisplayed: false,
   }),
   watch: {
     displayed() {
@@ -62,6 +90,7 @@ export default {
     },
   },
   created() {
+    this.$recycleBinService.loadLabels().then(() => this.recycleBinLabelsLoaded = true);
     document.addEventListener('showSettingsApps', this.showSettingsApps);
     document.addEventListener('hideSettingsApps', this.hideSettingsApps);
   },
@@ -73,11 +102,22 @@ export default {
     document.removeEventListener('hideSettingsApps', this.hideSettingsApps);
   },
   methods: {
-    hideSettingsApps() {
-      this.displayed = false;
+    // Another setting displays its detail in place of the page; this one stays when the detail is its own.
+    hideSettingsApps(event) {
+      if (event?.detail !== this.id) {
+        this.displayed = false;
+      }
     },
     showSettingsApps() {
       this.displayed = true;
+    },
+    openRecycleBin() {
+      document.dispatchEvent(new CustomEvent('hideSettingsApps', {detail: this.id}));
+      this.recycleBinDisplayed = true;
+    },
+    closeRecycleBin() {
+      this.recycleBinDisplayed = false;
+      document.dispatchEvent(new CustomEvent('showSettingsApps'));
     },
   },
 };
