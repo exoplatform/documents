@@ -601,30 +601,4 @@ public class EntityBuilder {
     return publicDocumentAccessEntity;
   }
 
-  public static TrashElementEntity toTrashElement(TrashElementNode trashElementNode) {
-    TrashElementEntity trashElementEntity = new TrashElementEntity();
-    trashElementEntity.setId(trashElementNode.getId());
-    trashElementEntity.setName(trashElementNode.getName());
-    trashElementEntity.setSize(trashElementNode.getSize());
-    trashElementEntity.setFolder(trashElementNode.isFolder());
-    trashElementEntity.setLastModificationDate(trashElementNode.getModifiedDate());
-    String restorePath = trashElementNode.getRestorePath();
-    String trashElementOriginPart = restorePath.substring(0,restorePath.lastIndexOf("/"));
-    String trashElementOrigin = trashElementOriginPart.substring(trashElementOriginPart.lastIndexOf("/") + 1);
-    trashElementEntity.setOrigin(trashElementOrigin);
-    trashElementEntity.setRestorePath(trashElementNode.getRestorePath());
-    trashElementEntity.setMimeType(trashElementNode.getMimeType());
-    trashElementEntity.setPath(trashElementNode.getPath());
-    return trashElementEntity;
-  }
-
-  public static List<AbstractNode> toNodesFromTrashEntities(List<TrashElementEntity> trashElementEntities) {
-    return trashElementEntities.stream().map(trashElementEntity -> {
-      AbstractNode trashElementNode = new TrashElementNode();
-      trashElementNode.setId(trashElementEntity.getId());
-      trashElementNode.setPath(trashElementEntity.getPath());
-      return trashElementNode;
-    }).toList();
-  }
-
 }

@@ -107,7 +107,9 @@ public interface JCRDeleteFileStorage {
    *
    * @param trashNodePath the path of the trash node to restore
    * @throws RepositoryException if an error occurs during the restoration process
+   * @deprecated a deleted document is restored by RecycleBinService
    */
+  @Deprecated(since = "7.3.0", forRemoval = true)
   void restoreFromTrash(String trashNodePath) throws RepositoryException;
 
   /**
