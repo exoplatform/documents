@@ -27,7 +27,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import javax.annotation.security.RolesAllowed;
 import javax.jcr.AccessDeniedException;
@@ -77,8 +76,6 @@ import org.exoplatform.documents.model.RecycleBinScope;
 import org.exoplatform.documents.constant.RecycleBinScopeType;
 import org.exoplatform.documents.constant.RecycleBinSortField;
 import org.exoplatform.documents.model.PublicDocumentInfo;
-import org.exoplatform.documents.model.TrashElementNode;
-import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
 import org.exoplatform.documents.rest.model.DocumentsUserSettings;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
@@ -87,7 +84,6 @@ import org.exoplatform.documents.rest.model.PublicDocumentAccessOptionsEntity;
 import org.exoplatform.documents.rest.model.RecycleBinDriveEntity;
 import org.exoplatform.documents.rest.model.RecycleBinItemEntity;
 import org.exoplatform.documents.rest.model.RecycleBinSettingsEntity;
-import org.exoplatform.documents.rest.model.TrashElementEntity;
 
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RecycleBinEntityBuilder;
@@ -1617,165 +1613,6 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (Exception ex) {
       LOG.warn("Failed to import documents ", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
-    }
-  }
-
-  @GET
-  @Produces(MediaType.APPLICATION_JSON)
-  @RolesAllowed("administrators")
-  @Path("/deleted")
-  @Operation(summary = "Fetch trash documents", method = "GET", description = "Fetch trash document")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-      @ApiResponse(responseCode = "400", description = "Invalid query input"),
-      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
-      @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response getDeletedDocuments(@Parameter(description = "Sort filed")
-                                      @Schema(defaultValue = "modifiedDate")
-                                      @QueryParam("sortField")
-                                      String sortField,
-                                      @Parameter(description = "Sort ascending or descending")
-                                      @Schema(defaultValue = "desc")
-                                      @QueryParam("sortDirection")
-                                      String sortDirection,
-                                      @Parameter(description = "Offset of results to return")
-                                      @Schema(defaultValue = "0")
-                                      @QueryParam("offset")
-                                      int offset,
-                                      @Parameter(description = "Limit of results to return")
-                                      @Schema(defaultValue = "20")
-                                      @QueryParam("limit")
-                                      int limit) {
-    if (limit < 0 || offset < 0) {
-      LOG.error("Invalid offset or limit parameters");
-      return Response.status(Response.Status.BAD_REQUEST).build();
-    }
-    TrashElementNodeFilter filter = new TrashElementNodeFilter();
-    filter.setAscending(sortDirection.equalsIgnoreCase("asc"));
-    filter.setOffset(offset);
-    filter.setLimit(limit);
-    filter.setSortField(getFromAlias(sortField));
-    try {
-      List<TrashElementNode> trashElementNodes = documentFileService.getDeletedDocuments(filter);
-      int size = documentFileService.countDeletedDocuments();
-      List<TrashElementEntity> trashElementEntities = trashElementNodes.stream()
-                                                                       .map(EntityBuilder::toTrashElement)
-                                                                       .collect(Collectors.toList());
-      CollectionEntity<TrashElementEntity> collectionEntity = new CollectionEntity<>(trashElementEntities,
-                                                                                     filter.getOffset(),
-                                                                                     filter.getLimit(),
-                                                                                     size);
-      return Response.ok(collectionEntity).cacheControl(NO_STORE_CACHE_CONTROL).build();
-    } catch (Exception ex) {
-      LOG.error("Error while fetching trash documents", ex);
-      return Response.serverError().build();
-    }
-  }
-
-  @PUT
-  @Produces(MediaType.APPLICATION_JSON)
-  @RolesAllowed("administrators")
-  @Path("/trash/restore")
-  @Operation(summary = "Restores a document from the trash", method = "PUT", description = "Restores a document from the trash based on the specified trash node path")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-      @ApiResponse(responseCode = "400", description = "Invalid query input"),
-      @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response restoreDocumentFromTrash(@Parameter(description = "node path", required = true)
-                                           @QueryParam("documentPath")
-                                           String documentPath) {
-    if (StringUtils.isBlank(documentPath)) {
-      return Response.status(Status.BAD_REQUEST).entity("document_path_is_mandatory").build();
-    }
-    try {
-      documentFileService.restoreDocumentFromTrash(documentPath);
-      return Response.ok().build();
-    } catch (Exception e) {
-      LOG.error("Error when restoring the document with path " + documentPath, e);
-      return Response.serverError().entity(e.getMessage()).build();
-    }
-
-  }
-
-  @DELETE
-  @Produces(MediaType.APPLICATION_JSON)
-  @RolesAllowed("administrators")
-  @Path("/trash/delete")
-  @Operation(summary = "Delete a document from the trash", method = "DELETE", description = "Delete a document from the trash based on the specified trash node path")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
-      @ApiResponse(responseCode = "400", description = "Invalid query input"),
-      @ApiResponse(responseCode = "404", description = "Document not found"),
-      @ApiResponse(responseCode = "500", description = "Internal server error"), })
-  public Response deleteDocumentPermanently(@Parameter(description = "node path", required = true)
-                                            @QueryParam("documentPath")
-                                            String documentPath) {
-    if (StringUtils.isBlank(documentPath)) {
-      return Response.status(Status.BAD_REQUEST).entity("document_path_is_mandatory").build();
-    }
-    try {
-      documentFileService.deleteDocumentPermanently(documentPath);
-      return Response.ok().build();
-    } catch (ObjectNotFoundException exception) {
-      return Response.status(HTTPStatus.NOT_FOUND).entity(exception.getMessage()).build();
-    } catch (Exception e) {
-      LOG.error("Error when restoring the document with path " + documentPath, e);
-      return Response.serverError().entity(e.getMessage()).build();
-    }
-  }
-
-  @DELETE
-  @Produces(MediaType.APPLICATION_JSON)
-  @RolesAllowed("administrators")
-  @Path("/trash/bulk/delete/{actionId}")
-  @Operation(summary = "Delete list of documents permanently", method = "DELETE", description = "This deletes a list of documents permanently")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Document deleted"),
-      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
-      @ApiResponse(responseCode = "400", description = "Invalid request body input"),
-      @ApiResponse(responseCode = "500", description = "Internal server error") })
-  public Response deleteDocumentsPermanently(@Parameter(description = "action ID", required = true)
-                                            @PathParam("actionId")
-                                            int actionId,
-                                            @RequestBody(description = "documents List", required = true)
-                                            List<TrashElementEntity> documents) {
-    if (documents.isEmpty()) {
-      return Response.status(Status.BAD_REQUEST).entity("documents list is mandatory").build();
-    }
-    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
-    try {
-      documentFileService.deleteDocumentsPermanently(actionId, EntityBuilder.toNodesFromTrashEntities(documents), userIdentityId);
-      return Response.ok().build();
-    } catch (IllegalAccessException e) {
-      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
-    } catch (Exception e) {
-      LOG.error("Error while permanently deleting documents", e);
-      return Response.serverError().entity(e.getMessage()).build();
-    }
-  }
-
-  @PUT
-  @Produces(MediaType.APPLICATION_JSON)
-  @RolesAllowed("administrators")
-  @Path("/trash/bulk/restore/{actionId}")
-  @Operation(summary = "Restore list of documents", method = "PUT", description = "This restore a list of documents")
-  @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Document deleted"),
-      @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
-      @ApiResponse(responseCode = "400", description = "Invalid request body input"),
-      @ApiResponse(responseCode = "500", description = "Internal server error") })
-  public Response restoreDocuments(@Parameter(description = "action ID", required = true)
-                                   @PathParam("actionId")
-                                   int actionId,
-                                   @RequestBody(description = "documents List", required = true)
-                                   List<TrashElementEntity> documents) {
-    if (documents.isEmpty()) {
-      return Response.status(Status.BAD_REQUEST).entity("documents list is mandatory").build();
-    }
-    long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
-    try {
-      documentFileService.restoreDocuments(actionId, EntityBuilder.toNodesFromTrashEntities(documents), userIdentityId);
-      return Response.ok().build();
-    } catch (IllegalAccessException e) {
-      return Response.status(Status.UNAUTHORIZED).entity(e.getMessage()).build();
-    } catch (Exception e) {
-      LOG.error("Error while permanently deleting documents", e);
-      return Response.serverError().entity(e.getMessage()).build();
     }
   }
 
