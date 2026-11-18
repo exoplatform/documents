@@ -32,7 +32,9 @@
         :preview-width="previewWidth"
         :preview-height="previewHeight"
         :owner-id="spaceIdentityId"
-        class="note-file-item" />
+        :allow-to-detach="allowToDetach"
+        class="note-file-item"
+        @detach="$emit('detach', fileById(attachment.id))" />
     </card-carousel>
   </div>
 </template>
@@ -61,24 +63,39 @@ export default {
       type: Array,
       default: () => [],
     },
+    /**
+     * The files to show, kept up to date by the embedding app: when given, the entity's files are not
+     * loaded
+     */
+    files: {
+      type: Array,
+      default: null,
+    },
+    /** Offers a detach button on each card, which emits detach with the file for the embedding app to detach */
+    allowToDetach: {
+      type: Boolean,
+      default: false,
+    },
   },
   data() {
     return {
       spaceIdentityId: null,
-      files: [],
+      entityFiles: [],
       previewHeight: '152px',
       previewWidth: '250px',
     };
   },
   computed: {
     /**
-     * Lists the entity's files but the excluded ones, compared as strings.
+     * Lists the given files, or else the entity's, but the excluded ones (compared as strings) and those
+     * not attached yet (an upload in progress has no id).
      *
      * @returns {Array} the files shown
      */
     shownFiles() {
+      const files = (this.files || this.entityFiles || []).filter(file => file && file.id);
       const excludedIds = (this.excludedIds || []).map(String);
-      return excludedIds.length ? (this.files || []).filter(file => !excludedIds.includes(String(file.id))) : this.files || [];
+      return excludedIds.length ? files.filter(file => !excludedIds.includes(String(file.id))) : files;
     },
     /**
      * Tells whether a card shows: the entity has a file that is not excluded.
@@ -130,7 +147,7 @@ export default {
     entityId: {
       immediate: true,
       async handler() {
-        this.files = await this.initEntityAttachmentsList();
+        this.entityFiles = this.files ? [] : await this.initEntityAttachmentsList();
       },
     },
     spaceId: {
@@ -161,6 +178,15 @@ export default {
     }
   },
   methods: {
+    /**
+     * Finds a shown file by its id, as the embedding app gave it or as the entity listed it.
+     *
+     * @param {String} id the file's id
+     * @returns {Object} the file
+     */
+    fileById(id) {
+      return this.shownFiles.find(file => String(file.id) === String(id));
+    },
     async initEntityAttachmentsList() {
       if (this.entityType && this.entityId) {
         const files = await this.$attachmentService.getEntityAttachments(this.entityType, this.entityId);
