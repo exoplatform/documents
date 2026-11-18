@@ -6,7 +6,14 @@
     flat>
     <v-hover v-model="$root.hover">
       <div class="application-body" @mouseover="hideOverlay">
+        <documents-recycle-bin
+          v-if="recycleBin"
+          :scope="recycleBin.scope"
+          :space-id="recycleBin.spaceId"
+          class="px-4 pt-3 pb-4"
+          @back="closeRecycleBin" />
         <div
+          v-show="!recycleBin"
           @dragover.prevent
           @drop.prevent
           @dragstart.prevent>
@@ -204,6 +211,8 @@ export default {
     drives: [],
     createDocDrive: null,
     createDocFolderPath: '',
+    // The Recycle Bin displayed in place of the documents: {scope, spaceId}
+    recycleBin: null,
   }),
   computed: {
     displayCategoriesFilter() {
@@ -373,6 +382,10 @@ export default {
     this.$root.$on('documents-preview', this.previewDocument);
     this.$root.$on('hide-element', this.hideElement);
     this.$root.$on('add-drives', this.addDrives);
+    this.$root.$on('documents-recycle-bin-open', this.openRecycleBin);
+    this.$root.$on('document-open-folder', this.closeRecycleBin);
+    this.$root.$on('document-open-home', this.closeRecycleBin);
+    this.$root.$on('document-show-drives', this.closeRecycleBin);
     document.addEventListener('move-dropped-documents', this.handleMoveDroppedDocuments);
     document.addEventListener('document-open-folder-to-drop', this.handleOpenFolderToDrop);
     document.addEventListener('document-category-selected', (event) => {
@@ -395,6 +408,16 @@ export default {
     this.$root.$off('add-drives', this.addDrives());
   },
   methods: {
+    // Displays the bin of the drive: the user's own, or the one of the space ({spaceId}).
+    openRecycleBin(bin) {
+      this.recycleBin = {
+        scope: bin?.spaceId && 'SPACE' || 'USER',
+        spaceId: bin?.spaceId && String(bin.spaceId) || null,
+      };
+    },
+    closeRecycleBin() {
+      this.recycleBin = null;
+    },
     copyPublicLinkToClipBoard(text) {
       navigator.clipboard.writeText(text).then(() => {
         this.$root.$emit('show-alert', {
@@ -636,6 +659,11 @@ export default {
         } 
         if (actionStatus==='import_limit_not_exceeded'){
           this.$root.$emit('enable-import', true);
+        }
+      } else if (actionName === 'restore' || actionName === 'permanently_delete') {
+        // An action of a Recycle Bin, which tells its user itself: what was restored is listed again.
+        if (actionName === 'restore' && ['done_successfully', 'done_with_errors'].includes(actionStatus)) {
+          this.refreshFiles();
         }
       } else {
         const treatedItems = this.selectedDocuments.filter(file => actionData.treatedItemsIds.includes(file.id));
