@@ -18,9 +18,13 @@
 import './initComponents.js';
 import '../documents-icons-extension/extensions.js';
 import * as recycleBinService from './js/RecycleBinService.js';
+import {init as contributeSettingsEntry} from './extensions.js';
 
 if (!Vue.prototype.$recycleBinService) {
   window.Object.defineProperty(Vue.prototype, '$recycleBinService', {
     value: recycleBinService,
   });
 }
+
+// The labels are loaded before the entry of the settings page is contributed.
+recycleBinService.loadLabels().then(contributeSettingsEntry);
