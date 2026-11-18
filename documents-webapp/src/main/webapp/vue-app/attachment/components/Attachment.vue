@@ -121,6 +121,13 @@ export default {
     openAttachmentsAppDrawer() {
       this.$root.$emit('open-attachments-app-drawer');
     },
+    /**
+     * Reads the configuration a caller opens the drawers with, read again at each opening: the entity, the
+     * drive and folder, the files, whether the files are attached to the entity, readonly and excludedIds.
+     *
+     * @param {Object} config the opening event's configuration
+     * @returns {void}
+     */
     readConfiguration(config) {
       config = config || {};
       this.spaceId = this.getURLQueryParam('spaceId') || config.spaceId || eXo.env.portal.spaceId;
@@ -201,6 +208,11 @@ export default {
           .finally(() => this.endLoadingList());
       }
     },
+    /**
+     * Reloads the entity's files, but the excluded ones.
+     *
+     * @returns {Promise} settled once the files are listed, none without an entity
+     */
     initEntityAttachmentsList() {
       if (this.entityType && this.entityId) {
         return this.$attachmentService.getEntityAttachments(this.entityType, this.entityId).then(attachments => {
