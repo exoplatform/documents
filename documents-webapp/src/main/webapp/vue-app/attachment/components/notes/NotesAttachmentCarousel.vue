@@ -51,6 +51,16 @@ export default {
       type: [String, Number],
       default: null,
     },
+    /** Opens every file in the editor's view mode, even for a viewer who may edit it */
+    readonly: {
+      type: Boolean,
+      default: false,
+    },
+    /** The ids of attachments another view of the entity shows, left out of the cards */
+    excludedIds: {
+      type: Array,
+      default: () => [],
+    },
   },
   data() {
     return {
@@ -61,15 +71,31 @@ export default {
     };
   },
   computed: {
-    displayAttachmentItem() {
-      return this.files.length > 0;
+    /**
+     * Lists the entity's files but the excluded ones, compared as strings.
+     *
+     * @returns {Array} the files shown
+     */
+    shownFiles() {
+      const excludedIds = (this.excludedIds || []).map(String);
+      return excludedIds.length ? (this.files || []).filter(file => !excludedIds.includes(String(file.id))) : this.files || [];
     },
+    /**
+     * Tells whether a card shows: the entity has a file that is not excluded.
+     *
+     * @returns {Boolean} true when a card shows
+     */
+    displayAttachmentItem() {
+      return this.shownFiles.length > 0;
+    },
+    /**
+     * Maps the files shown to the cards' entries: their name, preview, links and how they open.
+     *
+     * @returns {Array} the cards' entries
+     */
     attachments() {
-      if (!this.files) {
-        return [];
-      }
       const attachments = [];
-      this.files.forEach(attachment => {
+      this.shownFiles.forEach(attachment => {
         const mimetype = attachment.mimetype;
         let name = attachment.title;
         const updatedDate = attachment.updated || attachment.created;
@@ -87,7 +113,7 @@ export default {
           filename: name,
           mimetype,
           icon: this.getFileIcon(attachment),
-          editable: this.isFileEditable(attachment),
+          editable: !this.readonly && this.isFileEditable(attachment),
           readable: this.isFileReadable(attachment),
           path: attachment.path,
           updatedDate,

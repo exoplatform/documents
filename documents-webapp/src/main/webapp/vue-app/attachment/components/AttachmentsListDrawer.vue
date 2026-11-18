@@ -17,7 +17,7 @@
     </template>
     <template slot="titleIcons">
       <v-btn
-        v-if="displayOpenAttachmentDrawerButton"
+        v-if="displayOpenAttachmentDrawerButton && !readonly"
         icon
         color="primary"
         @click="openAttachmentsAppDrawer()">
@@ -38,13 +38,14 @@
             class="list-complete-item">
             <attachment-item
               :open-in-editor="openAttachmentsInEditor"
-              :is-file-editable="isFileEditable(attachment)"
-              :is-file-fillable="isFileFillable(attachment)"
+              :is-file-editable="!readonly && isFileEditable(attachment)"
+              :is-file-fillable="!readonly && isFileFillable(attachment)"
               :is-file-readable="isFileReadable(attachment)"
               :allow-to-edit="false"
               :attachment="attachment"
               :attachments="attachments"
-              :allow-to-detach="allowToDetach"
+              :allow-to-detach="allowToDetach && !readonly"
+              :entity-id="readonly ? entityId : ''"
               :can-access="attachment.acl && attachment.acl.canAccess"
               allow-to-preview />
           </span>
@@ -88,6 +89,16 @@ export default {
     displayOpenAttachmentDrawerButton: {
       type: Boolean,
       default: true
+    },
+    /** Lists the attachments only: no add, no detach, no edit nor fill-in */
+    readonly: {
+      type: Boolean,
+      default: false
+    },
+    /** The entity the attachments belong to, which a read-only list tells its items so that they offer no detach */
+    entityId: {
+      type: String,
+      default: ''
     }
   },
   created() {
