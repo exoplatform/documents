@@ -163,8 +163,10 @@ export default {
         }
       }).finally(() => {
         this.isDownloading = false;
-        this.$refs.form.reset();
-        this.$refs.form.resetValidation();
+        if (this.$refs.form) {
+          this.$refs.form.reset();
+          this.$refs.form.resetValidation();
+        }
       });
     },
     toggleShow() {
@@ -196,8 +198,9 @@ export default {
         this.isAccessExpired=resp.isAccessExpired;
         this.documentName=resp.documentName;
         this.documentType=resp.documentType;
+        this.getFileIcon(this.documentType);
         this.loading = false;
-        if (!this.requirePassword) {
+        if (!this.requirePassword && !this.isLinkExpired) {
           this.downloadDocument();
         }
       }, () => {
@@ -207,7 +210,6 @@ export default {
       this.loading = false;
       this.isAccessExpired = true;
     }
-    this.getFileIcon(this.documentType);
   }
 };
 </script>
