@@ -17,6 +17,8 @@
 package org.exoplatform.documents.webdav.plugin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -135,6 +137,31 @@ public class WebDavHttpMethodPluginTest {
     verify(documentWebDavService, never()).getLastModifiedDate(anyString(), any());
   }
 
+  @Test
+  public void testOverwriteIsAllowedWhenTheHeaderIsMissing() {
+    when(request.getHeader("Overwrite")).thenReturn(null);
+
+    assertTrue(plugin.overwrite(request));
+  }
+
+  @Test
+  public void testOverwriteIsAllowedWhenTheHeaderIsT() {
+    when(request.getHeader("Overwrite")).thenReturn("T");
+    assertTrue(plugin.overwrite(request));
+
+    when(request.getHeader("Overwrite")).thenReturn("t");
+    assertTrue(plugin.overwrite(request));
+  }
+
+  @Test
+  public void testOverwriteIsRefusedWhenTheHeaderIsF() {
+    when(request.getHeader("Overwrite")).thenReturn("F");
+    assertFalse(plugin.overwrite(request));
+
+    when(request.getHeader("Overwrite")).thenReturn("f");
+    assertFalse(plugin.overwrite(request));
+  }
+
   private static class TestPlugin extends WebDavHttpMethodPlugin {
 
     public TestPlugin() {
@@ -152,6 +179,10 @@ public class WebDavHttpMethodPluginTest {
 
     public boolean modified(HttpServletRequest httpRequest, String resourcePath, String version) {
       return checkModified(httpRequest, resourcePath, version);
+    }
+
+    public boolean overwrite(HttpServletRequest httpRequest) {
+      return getOverwriteParameter(httpRequest);
     }
 
   }
