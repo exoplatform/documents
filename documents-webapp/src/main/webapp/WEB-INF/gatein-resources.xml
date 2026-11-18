@@ -110,6 +110,30 @@
     </depends>
   </module>
 
+  <!-- The entry of the Recycle Bin in the settings of a space. The space settings
+       page requires the modules of its load-group whose name contains
+       SpaceSettingExtension, and calls their init(). -->
+  <module>
+    <name>DocumentsRecycleBinSpaceSettingExtension</name>
+    <load-group>SpaceSettingExtensions</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsRecycleBinSpaceSettings.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+    <depends>
+      <module>documentsRecycleBin</module>
+    </depends>
+  </module>
+
   <module>
     <name>DocumentsLeftHeaderExtension</name>
     <load-group>documentLeftHeaderGRP</load-group>
