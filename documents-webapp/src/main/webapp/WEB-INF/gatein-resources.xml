@@ -183,6 +183,9 @@
       <depends>
         <module>categoryVueComponents</module>
       </depends>
+      <depends>
+        <module>documentsRecycleBin</module>
+      </depends>
     </module>
   </portlet>
 

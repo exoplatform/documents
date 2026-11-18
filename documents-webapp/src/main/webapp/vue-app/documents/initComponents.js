@@ -18,6 +18,7 @@
 import DocumentsMain from './components/DocumentsMain.vue';
 import DocumentsHeader from './components/header/DocumentsHeader.vue';
 import DocumentsHeaderLeft from './components/header/DocumentsHeaderLeft.vue';
+import DocumentsHeaderMenu from './components/header/DocumentsHeaderMenu.vue';
 import DocumentsAddNewFile from './components/header/actions/DocumentsAddNewFile.vue';
 import DocumentsBody from './components/body/DocumentsBody.vue';
 import DocumentsNoBody from './components/body/DocumentsNoBody.vue';
@@ -109,6 +110,7 @@ const components = {
   'documents-main': DocumentsMain,
   'documents-header': DocumentsHeader,
   'documents-header-left': DocumentsHeaderLeft,
+  'documents-header-menu': DocumentsHeaderMenu,
   'documents-add-new-file': DocumentsAddNewFile,
   'documents-body': DocumentsBody,
   'documents-no-body': DocumentsNoBody,
