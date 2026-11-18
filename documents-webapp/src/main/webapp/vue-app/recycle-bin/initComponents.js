@@ -20,6 +20,7 @@ import RecycleBinToolbar from './components/RecycleBinToolbar.vue';
 import RecycleBinConfirmDialog from './components/RecycleBinConfirmDialog.vue';
 import RecycleBinList from './components/list/RecycleBinList.vue';
 import RecycleBinItem from './components/list/RecycleBinItem.vue';
+import RecycleBinSpaceSettings from './components/settings/RecycleBinSpaceSettings.vue';
 
 const components = {
   'documents-recycle-bin': RecycleBin,
@@ -27,6 +28,7 @@ const components = {
   'documents-recycle-bin-confirm-dialog': RecycleBinConfirmDialog,
   'documents-recycle-bin-list': RecycleBinList,
   'documents-recycle-bin-item': RecycleBinItem,
+  'documents-recycle-bin-space-settings': RecycleBinSpaceSettings,
 };
 
 for (const key in components) {
