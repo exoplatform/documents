@@ -40,6 +40,7 @@ module.exports = {
     documentsFavoriteDrawerExtensions: './src/main/webapp/vue-app/documents-favorite-drawer-extensions/main.js',
     documentsSizeGadget: './src/main/webapp/vue-app/documents-size-gadget/main.js',
     trashManagement: './src/main/webapp/vue-app/trash-management/main.js',
+    documentsRecycleBin: './src/main/webapp/vue-app/recycle-bin/main.js',
     downloadDocumentsPublicAccess: './src/main/webapp/vue-app/download-document/main.js',
     notificationExtension: './src/main/webapp/vue-app/notification-extension/main.js',
     documentsPreviewExtension: './src/main/webapp/vue-app/preview-extension/main.js',
