@@ -275,6 +275,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   }
 
   @Override
+  @Deprecated(since = "7.3.0", forRemoval = true)
   public void restoreFromTrash(String trashNodePath) throws RepositoryException {
     SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
     trashStorage.restoreFromTrash(trashNodePath, sessionProvider);
