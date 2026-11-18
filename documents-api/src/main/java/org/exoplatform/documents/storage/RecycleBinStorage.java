@@ -60,7 +60,7 @@ public interface RecycleBinStorage {
   /**
    * Reads an item of a bin by its id.
    *
-   * @param itemId id of the item in the bin, as {@link RecycleBinItem#getId()}
+   * @param itemId id of the item in the bin, as {@code RecycleBinItem#getId()}
    *          gives it
    * @return the item, null when the id is not one, when no item carries it
    *         or when it names a shortcut trashed with the document it points at
@@ -72,7 +72,7 @@ public interface RecycleBinStorage {
    * Reads the item of a bin a deleted document is, by the id of the document.
    *
    * @param documentId id of the document or folder itself, as
-   *          {@link RecycleBinItem#getDocumentId()} gives it
+   *          {@code RecycleBinItem#getDocumentId()} gives it
    * @return the item, null when no node carries that id, when the node is
    *         not in the trash, when it is held by a deleted folder or when it
    *         is a shortcut trashed with the document it points at
@@ -83,7 +83,7 @@ public interface RecycleBinStorage {
   /**
    * Reads the item of a bin at a path of the trash.
    *
-   * @param path path of a node, as {@link RecycleBinItem#getPath()} gives it
+   * @param path path of a node, as {@code RecycleBinItem#getPath()} gives it
    * @return the item, null when the path is not one of the trash, when no
    *         node is there, when the node is held by a deleted folder or when
    *         it is a shortcut trashed with the document it points at
