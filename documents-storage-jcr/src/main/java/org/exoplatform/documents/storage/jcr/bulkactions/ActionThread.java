@@ -271,38 +271,46 @@ public class ActionThread implements Runnable {
   }
 
   private void deleteItems() {
-    int errors = 0;
-    List<String> treatedItemsIds = new ArrayList<>();
-    for (AbstractNode item : items) {
-      if (checkCanceled()) {
-        break;
+    ConversationState previousState = ConversationState.getCurrent();
+    // The items are moved to the trash as the user deleting them: the
+    // repository records that user as the last one to change each of them.
+    ConversationState.setCurrent(actionData.getIdentity() == null ? null : new ConversationState(actionData.getIdentity()));
+    try {
+      int errors = 0;
+      List<String> treatedItemsIds = new ArrayList<>();
+      for (AbstractNode item : items) {
+        if (checkCanceled()) {
+          break;
+        }
+        try {
+          jCrDeleteFileStorage.deleteDocument(session,
+                                              item.getPath(),
+                                              item.getId(),
+                                              true,
+                                              true,
+                                              0,
+                                              actionData.getIdentity(),
+                                              identityId);
+          actionData.setStatus(ActionStatus.IN_PROGRESS.name());
+          treatedItemsIds.add(item.getId());
+        } catch (PathNotFoundException path) {
+          log.error("The document with this path is not found" + item.getPath(), path);
+          errors++;
+        } catch (Exception e) {
+          log.error("Error when deleting the document" + item.getPath(), e);
+          errors++;
+        }
       }
-      try {
-        jCrDeleteFileStorage.deleteDocument(session,
-                                            item.getPath(),
-                                            item.getId(),
-                                            true,
-                                            true,
-                                            0,
-                                            actionData.getIdentity(),
-                                            identityId);
-        actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-        treatedItemsIds.add(item.getId());
-      } catch (PathNotFoundException path) {
-        log.error("The document with this path is not found" + item.getPath(), path);
-        errors++;
-      } catch (Exception e) {
-        log.error("Error when deleting the document" + item.getPath(), e);
-        errors++;
+      if (errors > 0) {
+        actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
+      } else {
+        actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
       }
+      actionData.setTreatedItemsIds(treatedItemsIds);
+      brodcastEvent();
+    } finally {
+      ConversationState.setCurrent(previousState);
     }
-    if (errors > 0) {
-      actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
-    } else {
-      actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
-    }
-    actionData.setTreatedItemsIds(treatedItemsIds);
-    brodcastEvent();
   }
 
   /**
