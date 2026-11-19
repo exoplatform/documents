@@ -47,6 +47,7 @@ import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,6 +122,16 @@ class TrashStorageMoveToTrashTest {
   @AfterAll
   static void releaseContainerLookups() {
     commonsUtils.close();
+  }
+
+  /**
+   * The marks of the bin are given before a node moves to the trash, never
+   * after in the same save: the cache of the repository would then keep what
+   * the node holds at the paths it had before the move, and refuse its removal.
+   */
+  @AfterEach
+  void noMixinIsChangedAfterAMoveInTheSameSave() {
+    assertEquals(List.of(), jcr.getMarksChangedAfterAMove());
   }
 
   @BeforeEach

@@ -518,20 +518,23 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
     List<String> withOwnPermissions = personalDrive ? findDescendantsWithOwnPermissions(session, itemPath) : List.of();
     Map<String, String[]> snapshot = toRoot ? readPermissionsSnapshot(node) : Map.of();
 
-    Node restored = moveBack(session, itemPath, target.getPath(), name);
+    // The permissions are given back while the item is still in the trash:
+    // the move keeps the ones a node holds of its own, and a change of them
+    // after the move in the same save would leave what the item holds at its
+    // paths in the trash in the cache of the repository.
     if (!snapshot.isEmpty()) {
-      if (restored.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
-        restored.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+      if (node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        node.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
-      ((ExtendedNode) restored).setPermissions(snapshot);
+      ((ExtendedNode) node).setPermissions(snapshot);
     }
     if (personalDrive) {
-      String restoredPath = restored.getPath();
-      removeAdministratorsEntries(restored, owner.getRemoteId());
+      removeAdministratorsEntries(node, owner.getRemoteId());
       for (String relativePath : withOwnPermissions) {
-        removeAdministratorsEntries((Node) session.getItem(restoredPath + relativePath), owner.getRemoteId());
+        removeAdministratorsEntries((Node) session.getItem(itemPath + relativePath), owner.getRemoteId());
       }
     }
+    moveBack(session, itemPath, target.getPath(), name);
     // The paths are walked in descending order, so that moving a shortcut
     // never renumbers a same-name sibling still to move.
     for (Node shortcut : shortcuts.values()) {
@@ -571,14 +574,17 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
     session.save();
   }
 
-  /** Moves a node of the trash under a folder, at the first name free there, and removes its marks. */
-  private Node moveBack(Session session, String path, String targetPath, String name) throws RepositoryException {
+  /**
+   * Removes the marks of a node of the trash, then moves it under a folder,
+   * at the first name free there. Removed after the move in the same save,
+   * the marks would leave what a node whose permissions change with the move
+   * holds at its paths in the trash in the cache of the repository.
+   */
+  private void moveBack(Session session, String path, String targetPath, String name) throws RepositoryException {
     int count = getFreeNameIndex(session, targetPath, name);
+    giveBackNameAndMarks((Node) session.getItem(path), count);
     String destinationPath = getChildPath(targetPath, count == 0 ? name : JCRDocumentsUtil.increaseNameIndex(name, count));
     session.move(path, destinationPath);
-    Node restored = (Node) session.getItem(destinationPath);
-    giveBackNameAndMarks(restored, count);
-    return restored;
   }
 
   /**
