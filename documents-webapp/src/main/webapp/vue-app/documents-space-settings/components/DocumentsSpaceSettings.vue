@@ -89,12 +89,15 @@ export default {
     keepDocumentsInside: false,
   }),
   created() {
-    // not reactive: the saves still to send, in click order; the count of
-    // failed saves, each of which drops the saves queued before it ended; and
-    // the count of clicks, so that a stored value never overwrites a later click
+    // not reactive: the saves still to send, in click order, and their count;
+    // the count of failed saves, each of which drops the saves queued before
+    // it ended; the count of clicks, so that a stored value never overwrites a
+    // later click; and the last stored value of the setting that is confirmed
     this.saveQueue = Promise.resolve();
+    this.pendingSaves = 0;
     this.failedSaves = 0;
     this.clicks = 0;
+    this.storedKeepDocumentsInside = false;
     this.retrieveSettings();
   },
   methods: {
@@ -113,11 +116,11 @@ export default {
     confirmKeepDocumentsInside() {
       return this.saveSetting('keepDocumentsInside', true);
     },
-    // nothing was sent: the toggle shows the value it had before the click,
-    // then the stored values once the saves sent before it have ended, which
-    // may have failed meanwhile
+    // nothing was sent: the toggle shows the last stored value, or, while a
+    // save sent before the click has not ended, the value it had before the
+    // click; then the stored values once those saves have ended
     cancelKeepDocumentsInside() {
-      this.keepDocumentsInside = false;
+      this.keepDocumentsInside = this.pendingSaves ? false : this.storedKeepDocumentsInside;
       return this.readSettingsAfterSaves();
     },
     failKeepDocumentsInside() {
@@ -143,6 +146,7 @@ export default {
     saveSetting(field, value) {
       const failedSaves = this.failedSaves;
       const clicks = ++this.clicks;
+      this.pendingSaves++;
       this.saveQueue = this.saveQueue.then(() => {
         if (failedSaves !== this.failedSaves) {
           return;
@@ -158,7 +162,7 @@ export default {
             this.$root.$emit('alert-message', this.$t(this.errorLabelKey(error)), 'error');
             return this.retrieveSettings();
           });
-      });
+      }).finally(() => this.pendingSaves--);
       return this.saveQueue;
     },
     // clicks: the count of clicks when the settings were read; a later click,
@@ -166,6 +170,7 @@ export default {
     // both settings, so the later click's own answer sets them
     applySettings(settings, clicks) {
       this.canManageSettings = !!settings?.canManageSettings;
+      this.storedKeepDocumentsInside = !!settings?.keepDocumentsInside;
       if (clicks === this.clicks) {
         this.limitAccessManagement = !!settings?.limitAccessManagement;
         this.keepDocumentsInside = !!settings?.keepDocumentsInside;

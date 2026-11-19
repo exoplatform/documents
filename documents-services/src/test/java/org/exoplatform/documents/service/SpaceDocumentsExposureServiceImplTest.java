@@ -213,6 +213,22 @@ class SpaceDocumentsExposureServiceImplTest {
   }
 
   @Test
+  void aLinkReCheckWhoseReadThrowsLeavesItsLinkAsItWasAndFailsTheChange() {
+    exposureStorage.add("a", "A", SPACE_ID, "ownerA", true, false);
+    Doc unreadable = exposureStorage.add("b", "B", SPACE_ID, "ownerB", true, false);
+    long rowA = linkStorage.add("a");
+    long rowB = linkStorage.add("b");
+    linkStorage.failingExists = rowB;
+
+    assertThrows(IllegalStateException.class, () -> service.removePublicLinks(space, true, MANAGER));
+
+    assertFalse(linkStorage.has(rowA));
+    assertTrue(linkStorage.has(rowB));
+    assertTrue(unreadable.everyone);
+    assertFalse(exposureStorage.prepared.contains("b"));
+  }
+
+  @Test
   void aSelectionWhoseReadThrowsFailsTheChangeBeforeAnyRemoval() {
     exposureStorage.add("a", "A", SPACE_ID, "ownerA", true, false);
     long rowA = linkStorage.add("a");
@@ -407,6 +423,8 @@ class SpaceDocumentsExposureServiceImplTest {
 
     long                        nextId  = 10;
 
+    long                        failingExists;
+
     long add(String nodeId) {
       long id = nextId++;
       rows.put(id, nodeId);
@@ -430,6 +448,9 @@ class SpaceDocumentsExposureServiceImplTest {
 
     @Override
     public boolean linkExists(long id) {
+      if (id == failingExists) {
+        throw new IllegalStateException("database unreachable");
+      }
       return rows.containsKey(id);
     }
 
