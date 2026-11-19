@@ -126,6 +126,9 @@ class SpaceDocumentsExposureServiceImplTest {
     assertTrue(linkStorage.has(otherRow));
     assertTrue(otherSpace.everyone);
     assertTrue(unlinked.everyone);
+    // a fresh read only for the links of the space, never for every link of
+    // the platform
+    assertEquals(List.of("linked"), exposureStorage.prepared);
     audit.verify(() -> SpaceSecurityAudit.publicLinkRemoved(SPACE_ID, "linked", "owner1", MANAGER));
     audit.verify(() -> SpaceSecurityAudit.publicLinkRemoved(anyLong(), anyString(), nullable(String.class), anyString()),
                  times(1));
@@ -338,6 +341,8 @@ class SpaceDocumentsExposureServiceImplTest {
 
     int                          sharedOutsideReads;
 
+    final List<String>           prepared       = new ArrayList<>();
+
     Doc add(String id, String name, long spaceId, String owner, boolean everyone, boolean sharedWithOthers) {
       Doc document = new Doc(id, name, spaceId, owner, everyone, sharedWithOthers);
       documents.put(id, document);
@@ -373,6 +378,7 @@ class SpaceDocumentsExposureServiceImplTest {
 
     @Override
     public ExposedDocument prepareLinkRemoval(Space space, String documentId, boolean removeEveryone) {
+      prepared.add(documentId);
       beforePrepare.accept(documentId);
       if (documentId.equals(failingPrepare)) {
         throw new IllegalStateException("unreadable");
