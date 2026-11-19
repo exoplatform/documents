@@ -22,13 +22,13 @@
     persistent
     width="500px"
     max-width="100vw"
-    content-class="uiPopup"
+    content-class="uiPopup layout-drawer"
     @click:outside="cancel"
     @keydown.esc="cancel">
     <v-card
       id="DocumentsKeepInsideConfirmDialog"
       class="elevation-12 transparent">
-      <div class="ignore-vuetify-classes popupHeader ClearFix">
+      <div class="ignore-vuetify-classes popupHeader ClearFix layout-drawer">
         <a
           href="#"
           class="uiIconClose pull-right"
@@ -85,8 +85,9 @@
   </v-dialog>
 </template>
 <script>
-// The shared exo-confirm-dialog renders its message as sanitized HTML, with
-// no slot: the 'See documents' link could not open the list from it
+// The markup, the classes and the modal events of social's exo-confirm-dialog,
+// which renders its message as sanitized HTML with no slot: the 'See
+// documents' link could not open the list from it
 export default {
   props: {
     spaceId: {
@@ -99,6 +100,12 @@ export default {
     loading: false,
     counts: null,
   }),
+  watch: {
+    // as the shared confirm dialog does, for the page's other modal-aware apps
+    dialog() {
+      document.dispatchEvent(new CustomEvent(this.dialog ? 'modalOpened' : 'modalClosed'));
+    },
+  },
   computed: {
     publicLinks() {
       return this.counts?.publicLinks || 0;
