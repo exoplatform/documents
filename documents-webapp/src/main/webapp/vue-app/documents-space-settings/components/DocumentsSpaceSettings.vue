@@ -94,7 +94,7 @@ export default {
     // it ended; the count of clicks, so that a stored value never overwrites a
     // later click; and the last stored value of the setting that is confirmed
     this.saveQueue = Promise.resolve();
-    this.pendingSaves = 0;
+    this.pendingKeepSaves = 0;
     this.failedSaves = 0;
     this.clicks = 0;
     this.storedKeepDocumentsInside = false;
@@ -120,7 +120,7 @@ export default {
     // save sent before the click has not ended, the value it had before the
     // click; then the stored values once those saves have ended
     cancelKeepDocumentsInside() {
-      this.keepDocumentsInside = this.pendingSaves ? false : this.storedKeepDocumentsInside;
+      this.keepDocumentsInside = this.pendingKeepSaves ? false : this.storedKeepDocumentsInside;
       return this.readSettingsAfterSaves();
     },
     failKeepDocumentsInside() {
@@ -146,12 +146,19 @@ export default {
     saveSetting(field, value) {
       const failedSaves = this.failedSaves;
       const clicks = ++this.clicks;
-      this.pendingSaves++;
+      // a save of the confirmed setting is pending until its request answers
+      const keepSave = field === 'keepDocumentsInside';
+      if (keepSave) {
+        this.pendingKeepSaves++;
+      }
+      const settle = () => keepSave && this.pendingKeepSaves--;
       this.saveQueue = this.saveQueue.then(() => {
         if (failedSaves !== this.failedSaves) {
+          settle();
           return;
         }
         return this.$spaceSecuritySettingsService.updateSpaceSecuritySettings(this.spaceId, {[field]: value})
+          .finally(settle)
           .then(settings => {
             this.applySettings(settings, clicks);
             this.$root.$emit('alert-message', this.$t('documents.spaceSettings.saved'), 'success');
@@ -162,7 +169,7 @@ export default {
             this.$root.$emit('alert-message', this.$t(this.errorLabelKey(error)), 'error');
             return this.retrieveSettings();
           });
-      }).finally(() => this.pendingSaves--);
+      });
       return this.saveQueue;
     },
     // clicks: the count of clicks when the settings were read; a later click,
