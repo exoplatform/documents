@@ -17,11 +17,14 @@
 */
 package org.exoplatform.documents.service;
 
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
@@ -74,7 +77,7 @@ public class SpaceDocumentsExposureServiceImpl implements SpaceDocumentsExposure
   public SpaceDocumentsExposure getExposure(long spaceId, String username) throws ObjectNotFoundException, IllegalAccessException {
     Space space = getManagedSpace(spaceId, username);
     return new SpaceDocumentsExposure(getPublicLinkDocuments(space).size(),
-                                      exposureStorage.getSharedOutsideDocuments(space).size());
+                                      exposureStorage.getSharedOutsideDocuments(space, getListingMembership(space)).size());
   }
 
   @Override
@@ -163,6 +166,21 @@ public class SpaceDocumentsExposureServiceImpl implements SpaceDocumentsExposure
                      .forEach(document -> documents.putIfAbsent(document.id(), document));
     } while (links.size() == linksPageSize);
     return documents.values().stream().sorted(NAME_THEN_ID).toList();
+  }
+
+  /**
+   * A listing reads the space's members from the cached space (55210 §4.1),
+   * not from the committed rows a refusal or a removal reads
+   */
+  private Predicate<String> getListingMembership(Space space) {
+    Set<String> members = new HashSet<>();
+    if (space.getMembers() != null) {
+      members.addAll(Arrays.asList(space.getMembers()));
+    }
+    if (space.getManagers() != null) {
+      members.addAll(Arrays.asList(space.getManagers()));
+    }
+    return members::contains;
   }
 
   /**

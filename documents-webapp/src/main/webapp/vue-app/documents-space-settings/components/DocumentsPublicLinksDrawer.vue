@@ -50,6 +50,11 @@
         </v-list-item>
       </v-list>
       <div
+        v-else-if="failed"
+        class="pa-5 text-sub-title">
+        {{ $t('documents.spaceSettings.publicLinks.error') }}
+      </div>
+      <div
         v-else-if="!loading"
         class="pa-5 text-sub-title">
         {{ $t('documents.spaceSettings.publicLinks.empty') }}
@@ -82,6 +87,7 @@ export default {
     documents: [],
     size: 0,
     loading: false,
+    failed: false,
   }),
   computed: {
     hasMore() {
@@ -93,6 +99,7 @@ export default {
     open(size) {
       this.documents = [];
       this.size = size || 0;
+      this.failed = false;
       this.$refs.drawer.open();
       return this.loadPage(0);
     },
@@ -107,8 +114,12 @@ export default {
           const listed = new Set(this.documents.map(document => document.id));
           this.documents.push(...(page?.documents || []).filter(document => !listed.has(document.id)));
           this.size = page?.size || 0;
+          this.failed = false;
         })
-        .catch(() => this.$root.$emit('alert-message', this.$t('documents.spaceSettings.publicLinks.error'), 'error'))
+        .catch(() => {
+          this.failed = true;
+          this.$root.$emit('alert-message', this.$t('documents.spaceSettings.publicLinks.error'), 'error');
+        })
         .finally(() => this.loading = false);
     },
     documentUrl(document) {

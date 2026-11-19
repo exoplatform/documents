@@ -23,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
@@ -32,16 +33,15 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.query.Query;
 
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 import org.exoplatform.documents.model.ExposedDocument;
 import org.exoplatform.documents.storage.SpaceDocumentsExposureStorage;
 import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.util.SpaceAccessClassifier;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
-import org.exoplatform.documents.storage.jcr.util.SpaceAccessClassifier;
 import org.exoplatform.services.cms.documents.security.DocumentSpaceGuard;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.core.ExtendedNode;
@@ -108,7 +108,7 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
   }
 
   @Override
-  public List<ExposedDocument> getSharedOutsideDocuments(Space space) {
+  public List<ExposedDocument> getSharedOutsideDocuments(Space space, Predicate<String> isMember) {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
     try {
       Session session = getSystemSession(sessionProvider);
@@ -120,10 +120,7 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
           driveRootIdentities.addAll(driveRootAccessList.keySet());
         }
       }
-      Set<String> members = new HashSet<>();
-      addAll(members, space.getMembers());
-      addAll(members, space.getManagers());
-      SpaceAccessClassifier classifier = new SpaceAccessClassifier(space.getGroupId(), members::contains, driveRootIdentities);
+      SpaceAccessClassifier classifier = new SpaceAccessClassifier(space.getGroupId(), isMember, driveRootIdentities);
 
       List<ExposedDocument> documents = new ArrayList<>();
       addSharedOutsideDocuments(session, String.format(ACCESS_LISTS_QUERY, driveRootPath), null, classifier, documents);
@@ -239,12 +236,6 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
 
   private static String getOwner(Node node) throws RepositoryException {
     return node.hasProperty(NodeTypeConstants.EXO_OWNER) ? node.getProperty(NodeTypeConstants.EXO_OWNER).getString() : null;
-  }
-
-  private static void addAll(Set<String> set, String[] values) {
-    if (ArrayUtils.isNotEmpty(values)) {
-      set.addAll(List.of(values));
-    }
   }
 
 }

@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -255,13 +256,25 @@ class SpaceDocumentsExposureServiceImplTest {
 
     assertEquals(new SpaceDocumentsExposure(3, 4), before);
     assertEquals(before.publicLinks(), linkedBefore.size());
-    assertEquals(before.sharedOutside(), exposureStorage.getSharedOutsideDocuments(space).size());
+    assertEquals(before.sharedOutside(), exposureStorage.getSharedOutsideDocuments(space, member -> false).size());
 
     service.removePublicLinks(space, true, MANAGER);
 
     assertEquals(new SpaceDocumentsExposure(0, 3), service.getExposure(SPACE_ID, MANAGER));
     assertEquals(Set.of("linkedAndShared", "sharedFolder", "everyoneOnly"),
-                 new HashSet<>(exposureStorage.getSharedOutsideDocuments(space).stream().map(ExposedDocument::id).toList()));
+                 new HashSet<>(exposureStorage.getSharedOutsideDocuments(space, member -> false).stream().map(ExposedDocument::id).toList()));
+  }
+
+  @Test
+  void theSharedOutsideCountReadsTheMembersOfTheCachedSpace() throws Exception {
+    space.setMembers(new String[] { "mary" });
+    space.setManagers(new String[] { "root" });
+
+    service.getExposure(SPACE_ID, MANAGER);
+
+    assertTrue(exposureStorage.membership.test("mary"));
+    assertTrue(exposureStorage.membership.test("root"));
+    assertFalse(exposureStorage.membership.test("paul"));
   }
 
   @Test
@@ -361,6 +374,8 @@ class SpaceDocumentsExposureServiceImplTest {
 
     int                          sharedOutsideReads;
 
+    Predicate<String>            membership;
+
     final List<String>           prepared       = new ArrayList<>();
 
     Doc add(String id, String name, long spaceId, String owner, boolean everyone, boolean sharedWithOthers) {
@@ -386,8 +401,9 @@ class SpaceDocumentsExposureServiceImplTest {
     }
 
     @Override
-    public List<ExposedDocument> getSharedOutsideDocuments(Space space) {
+    public List<ExposedDocument> getSharedOutsideDocuments(Space space, Predicate<String> isMember) {
       sharedOutsideReads++;
+      membership = isMember;
       return documents.values()
                       .stream()
                       .filter(document -> document.spaceId == Long.parseLong(space.getId()))

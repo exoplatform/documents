@@ -23,7 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -35,6 +37,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
@@ -196,7 +199,7 @@ class JCRSpaceDocumentsExposureStorageTest {
     queryResults.put(String.format(JCRSpaceDocumentsExposureStorage.ACCESS_LISTS_QUERY, JCRSpaceDocumentsExposureStorage.QUARANTINE_ROOT),
                      List.of(quarantined));
 
-    List<ExposedDocument> documents = storage.getSharedOutsideDocuments(space);
+    List<ExposedDocument> documents = storage.getSharedOutsideDocuments(space, Set.of("mary", "root")::contains);
 
     assertEquals(List.of("shared", "folder", "trashed", "quarantined"), documents.stream().map(ExposedDocument::id).toList());
     assertTrue(documents.get(1).folder());
@@ -214,7 +217,7 @@ class JCRSpaceDocumentsExposureStorageTest {
                      List.of(administratorsOnly));
     trashHome();
 
-    assertEquals(List.of("admins"), storage.getSharedOutsideDocuments(space).stream().map(ExposedDocument::id).toList());
+    assertEquals(List.of("admins"), storage.getSharedOutsideDocuments(space, Set.of("mary", "root")::contains).stream().map(ExposedDocument::id).toList());
   }
 
   @Test
@@ -222,7 +225,7 @@ class JCRSpaceDocumentsExposureStorageTest {
     driveRoot("*:/spaces/team");
     when(queryManager.createQuery(anyString(), anyString())).thenThrow(new RepositoryException("down"));
 
-    assertThrows(IllegalStateException.class, () -> storage.getSharedOutsideDocuments(space));
+    assertThrows(IllegalStateException.class, () -> storage.getSharedOutsideDocuments(space, Set.of("mary", "root")::contains));
   }
 
   @Test
@@ -263,6 +266,9 @@ class JCRSpaceDocumentsExposureStorageTest {
     order.verify(document).save();
     verify(document, never()).removePermission("owner");
     verify(document, never()).checkout();
+    // 55210 §4.8: through the permission API only, never the raw property nor a cleared list
+    verify(document, never()).clearACL();
+    verify(document, never()).setProperty(eq("exo:permissions"), any(String[].class));
   }
 
   @Test

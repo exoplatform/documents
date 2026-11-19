@@ -19,6 +19,7 @@ package org.exoplatform.documents.storage;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Predicate;
 
 import org.exoplatform.documents.model.ExposedDocument;
 import org.exoplatform.social.core.space.model.Space;
@@ -47,18 +48,23 @@ public interface SpaceDocumentsExposureStorage {
    * Lists the documents and folders of the space, in its drive or trashed or
    * quarantined from it, whose own access list holds at least one entry
    * outside the space. A folder's children that inherit its access list are
-   * not listed; shortcuts are not listed.
+   * not listed; shortcuts are not listed. An entry's place is decided by
+   * {@link org.exoplatform.documents.util.SpaceAccessClassifier}, with the
+   * identities of the access list of the space's drive root.
    *
    * @param space a space
+   * @param isMember tells whether a user is a member of the space, from the
+   *          source the caller's decision reads
    * @return the documents shared outside the space, in no particular order
    * @throws IllegalStateException when the documents cannot be read
    */
-  List<ExposedDocument> getSharedOutsideDocuments(Space space);
+  List<ExposedDocument> getSharedOutsideDocuments(Space space, Predicate<String> isMember);
 
   /**
    * Reads a document again through a fresh system session before its public
-   * link is removed and, when asked, takes the everyone access off it through
-   * its permission API.
+   * link is removed and, when asked, takes the everyone entry off its own
+   * access list through its permission API; a document with no access list of
+   * its own has none to take off.
    *
    * @param space the space the document must still belong to
    * @param documentId the document's identifier

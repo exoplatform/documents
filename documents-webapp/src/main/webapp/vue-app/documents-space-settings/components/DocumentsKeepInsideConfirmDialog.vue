@@ -35,7 +35,7 @@
           :aria-label="$t('documents.spaceSettings.keepInside.confirm.cancel')"
           role="button"
           @click.prevent="cancel"></a>
-        <span class="ignore-vuetify-classes text-title">
+        <span id="DocumentsKeepInsideTitle" class="ignore-vuetify-classes text-title">
           {{ $t('documents.spaceSettings.keepInside.confirm.title') }}
         </span>
       </div>
@@ -43,7 +43,10 @@
         <v-progress-circular indeterminate color="primary" />
       </v-card-text>
       <v-card-text v-else-if="counts" class="text-color">
-        <p v-if="publicLinks" class="mb-2">
+        <p
+          v-if="publicLinks"
+          id="DocumentsKeepInsidePublicLinks"
+          class="mb-2">
           {{ $t('documents.spaceSettings.keepInside.confirm.publicLinks', {0: publicLinks}) }}
           <a
             id="DocumentsKeepInsideSeeDocuments"
@@ -54,13 +57,19 @@
             {{ $t('documents.spaceSettings.keepInside.confirm.seeDocuments') }}
           </a>
         </p>
-        <p v-if="sharedOutside" class="mb-2">
+        <p
+          v-if="sharedOutside"
+          id="DocumentsKeepInsideSharedOutside"
+          class="mb-2">
           {{ $t('documents.spaceSettings.keepInside.confirm.sharedOutside', {0: sharedOutside}) }}
         </p>
-        <p class="mb-2">
+        <p id="DocumentsKeepInsideRestrictions" class="mb-2">
           {{ $t('documents.spaceSettings.keepInside.confirm.restrictions') }}
         </p>
-        <p v-if="publicLinks" class="mb-0 font-weight-bold">
+        <p
+          v-if="publicLinks"
+          id="DocumentsKeepInsideIrreversible"
+          class="mb-0 font-weight-bold">
           {{ $t('documents.spaceSettings.keepInside.confirm.irreversible') }}
         </p>
       </v-card-text>

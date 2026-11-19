@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
 */
-package org.exoplatform.documents.storage.jcr.util;
+package org.exoplatform.documents.util;
 
 import java.util.Collection;
 import java.util.Set;
@@ -29,7 +29,8 @@ import org.apache.commons.lang3.StringUtils;
  * own group (*, manager, member, redactor, publisher), the document's owner, a
  * member of the space, or an identity present on the access list of the
  * space's drive root; every other entry, everyone ({@code any}) included, is
- * outside.
+ * outside. The caller decides where membership is read from: the cached
+ * space for a listing, the committed rows for a refusal or a removal.
  */
 public class SpaceAccessClassifier {
 
