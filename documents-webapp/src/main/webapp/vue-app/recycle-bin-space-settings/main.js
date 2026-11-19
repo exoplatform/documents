@@ -15,17 +15,18 @@
  * along with this program. If not, see <gnu.org/licenses>.
  */
 
-// The entry of the Recycle Bin in the settings of a space, for who manages
-// the space or publishes in it. The page requires this module and calls init().
+// The entry of the Recycle Bin in the settings of a space. The page requires
+// this module and calls init().
+//
+// The entry has no isEnabled: only the managers of a space reach its settings.
+// An asynchronous isEnabled would also be lost when another extension with one
+// registers at the same time, the page then keeping only the last of them.
 export function init() {
   return Vue.prototype.$recycleBinService.loadLabels().then(() => {
     extensionRegistry.registerComponent('SpaceSettings', 'space-settings-components', {
       id: 'documents-recycle-bin-space-settings',
       vueComponent: Vue.options.components['documents-recycle-bin-space-settings'],
       rank: 0,
-      isEnabled: params => Vue.prototype.$spaceService.getSpaceById(params?.spaceId || eXo.env.portal.spaceId)
-        .then(space => !!(space?.isManager || space?.isPublisher))
-        .catch(() => false),
     });
   });
 }
