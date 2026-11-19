@@ -23,6 +23,7 @@ import static org.mockito.Mockito.mock;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -168,6 +169,8 @@ public class FakeJcr {
 
   private final List<String>                          moves            = new ArrayList<>();
 
+  private final List<String>                          changes          = new ArrayList<>();
+
   private Function<String, List<Item>>                queryHandler     = this::findLinks;
 
   private java.util.function.Consumer<Item>           addNodeAction    = added -> {
@@ -287,6 +290,28 @@ public class FakeJcr {
 
   public List<String> getMoves() {
     return moves;
+  }
+
+  /**
+   * The changes of the mixins or the permissions of a node made after the
+   * node moved and before the save that follows. On such a change, the cache
+   * of the repository rewrites what the node holds at the paths it had before
+   * the move, and a later removal of the node is refused.
+   */
+  public List<String> getMarksChangedAfterAMove() {
+    List<String> changedAfterAMove = new ArrayList<>();
+    Set<String> moved = new HashSet<>();
+    for (String change : changes) {
+      String[] parts = change.split(" ");
+      if ("save".equals(parts[0])) {
+        moved.clear();
+      } else if ("move".equals(parts[0])) {
+        moved.add(parts[1]);
+      } else if (moved.contains(parts[1])) {
+        changedAfterAMove.add(change);
+      }
+    }
+    return changedAfterAMove;
   }
 
   /** The users of the sessions that changed a node or moved one. */
@@ -545,6 +570,7 @@ public class FakeJcr {
     source.parent = destinationParent;
     source.name = destinationPath.substring(slash + 1);
     destinationParent.children.add(source);
+    changes.add("move " + source.id);
   }
 
   private void save() throws RepositoryException {
@@ -553,6 +579,7 @@ public class FakeJcr {
       saveFailure = null;
       throw failure;
     }
+    changes.add("save");
     saves++;
     List<String> added = new ArrayList<>(addedSinceSave);
     addedSinceSave.clear();
@@ -634,9 +661,11 @@ public class FakeJcr {
       return !item.mixins.contains(invocation.getArgument(0));
     case "addMixin":
       item.mixins.add(invocation.getArgument(0));
+      changes.add("addMixin " + item.id + " " + invocation.getArgument(0));
       return null;
     case "removeMixin":
       removeMixin(item, invocation.getArgument(0));
+      changes.add("removeMixin " + item.id + " " + invocation.getArgument(0));
       return null;
     case "hasProperty":
       return item.properties.containsKey(invocation.getArgument(0));
@@ -695,6 +724,7 @@ public class FakeJcr {
       return new AccessControlList(item.owner, entries);
     }
     case "setPermissions": {
+      changes.add("setPermissions " + item.id);
       Map<String, String[]> permissions = invocation.getArgument(0);
       item.permissions.clear();
       permissions.forEach((identity, types) -> {
