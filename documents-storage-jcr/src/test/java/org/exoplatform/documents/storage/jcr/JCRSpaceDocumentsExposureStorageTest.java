@@ -23,11 +23,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -221,6 +220,23 @@ class JCRSpaceDocumentsExposureStorageTest {
   }
 
   @Test
+  void sharedOutsideClassifiesUsersWithTheMembershipItIsGivenNotTheSpaceFields() throws Exception {
+    driveRoot("*:/spaces/team");
+    ExtendedNode sharedWithMary = node("mary", DRIVE_ROOT + "/mary.pdf", "nt:file", "owner");
+    accessList(sharedWithMary, "mary");
+    ExtendedNode sharedWithPaul = node("paul", DRIVE_ROOT + "/paul.pdf", "nt:file", "owner");
+    accessList(sharedWithPaul, "paul");
+    queryResults.put(String.format(JCRSpaceDocumentsExposureStorage.ACCESS_LISTS_QUERY, DRIVE_ROOT),
+                     List.of(sharedWithMary, sharedWithPaul));
+    trashHome();
+
+    // the space's own fields list mary, the membership given lists paul
+    List<ExposedDocument> documents = storage.getSharedOutsideDocuments(space, Set.of("paul")::contains);
+
+    assertEquals(List.of("mary"), documents.stream().map(ExposedDocument::id).toList());
+  }
+
+  @Test
   void sharedOutsideFailsWhenTheDocumentsCannotBeRead() throws Exception {
     driveRoot("*:/spaces/team");
     when(queryManager.createQuery(anyString(), anyString())).thenThrow(new RepositoryException("down"));
@@ -266,9 +282,13 @@ class JCRSpaceDocumentsExposureStorageTest {
     order.verify(document).save();
     verify(document, never()).removePermission("owner");
     verify(document, never()).checkout();
-    // 55210 §4.8: through the permission API only, never the raw property nor a cleared list
+    // 55210 §4.8: through the permission API only, never the raw property,
+    // whatever setProperty overload, nor a cleared list
     verify(document, never()).clearACL();
-    verify(document, never()).setProperty(eq("exo:permissions"), any(String[].class));
+    assertTrue(mockingDetails(document).getInvocations()
+                                       .stream()
+                                       .noneMatch(invocation -> "setProperty".equals(invocation.getMethod().getName())
+                                           && "exo:permissions".equals(invocation.getArguments()[0])));
   }
 
   @Test
