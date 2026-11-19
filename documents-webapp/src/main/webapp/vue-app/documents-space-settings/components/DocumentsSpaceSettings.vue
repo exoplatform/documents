@@ -40,7 +40,25 @@
             v-model="limitAccessManagement"
             :aria-label="$t('documents.spaceSettings.limitAccessManagement')"
             class="ma-0"
-            @change="saveLimitAccessManagement" />
+            @change="saveSetting('limitAccessManagement', $event)" />
+        </v-list-item-action>
+      </v-list-item>
+      <v-list-item class="pa-0">
+        <v-list-item-content>
+          <v-list-item-title class="py-1">
+            {{ $t('documents.spaceSettings.keepDocumentsInside') }}
+          </v-list-item-title>
+          <v-list-item-subtitle class="pt-0 pb-1 text-wrap">
+            {{ $t('documents.spaceSettings.keepDocumentsInside.description') }}
+          </v-list-item-subtitle>
+        </v-list-item-content>
+        <v-list-item-action>
+          <v-switch
+            id="DocumentsSpaceSettingKeepDocumentsInside"
+            v-model="keepDocumentsInside"
+            :aria-label="$t('documents.spaceSettings.keepDocumentsInside')"
+            class="ma-0"
+            @change="saveSetting('keepDocumentsInside', $event)" />
         </v-list-item-action>
       </v-list-item>
     </v-list>
@@ -57,6 +75,7 @@ export default {
   data: () => ({
     canManageSettings: false,
     limitAccessManagement: false,
+    keepDocumentsInside: false,
   }),
   created() {
     // not reactive: the saves still to send, in click order; the count of
@@ -74,20 +93,22 @@ export default {
         .then(settings => this.applySettings(settings, clicks))
         .catch(() => this.canManageSettings = false);
     },
-    saveLimitAccessManagement(value) {
+    // field: the setting a toggle changes, sent alone, whichever toggle the
+    // user clicked; both toggles share one queue
+    saveSetting(field, value) {
       const failedSaves = this.failedSaves;
       const clicks = ++this.clicks;
       this.saveQueue = this.saveQueue.then(() => {
         if (failedSaves !== this.failedSaves) {
           return;
         }
-        return this.$spaceSecuritySettingsService.updateSpaceSecuritySettings(this.spaceId, {limitAccessManagement: value})
+        return this.$spaceSecuritySettingsService.updateSpaceSecuritySettings(this.spaceId, {[field]: value})
           .then(settings => {
             this.applySettings(settings, clicks);
             this.$root.$emit('alert-message', this.$t('documents.spaceSettings.saved'), 'success');
           })
           .catch(error => {
-            // the toggle shows the stored value again, unless clicked since
+            // the toggles show the stored values again, unless clicked since
             this.failedSaves++;
             this.$root.$emit('alert-message', this.$t(this.errorLabelKey(error)), 'error');
             return this.retrieveSettings();
@@ -95,12 +116,14 @@ export default {
       });
       return this.saveQueue;
     },
-    // clicks: the count of clicks when the settings were read; a later click
-    // keeps the value the user chose, which its own save stores
+    // clicks: the count of clicks when the settings were read; a later click,
+    // on either toggle, keeps both toggles as they are: every answer carries
+    // both settings, so the later click's own answer sets them
     applySettings(settings, clicks) {
       this.canManageSettings = !!settings?.canManageSettings;
       if (clicks === this.clicks) {
         this.limitAccessManagement = !!settings?.limitAccessManagement;
+        this.keepDocumentsInside = !!settings?.keepDocumentsInside;
       }
     },
     errorLabelKey(error) {
