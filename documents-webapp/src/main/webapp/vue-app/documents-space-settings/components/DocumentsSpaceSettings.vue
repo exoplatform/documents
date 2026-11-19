@@ -58,10 +58,21 @@
             v-model="keepDocumentsInside"
             :aria-label="$t('documents.spaceSettings.keepDocumentsInside')"
             class="ma-0"
-            @change="saveSetting('keepDocumentsInside', $event)" />
+            @change="changeKeepDocumentsInside" />
         </v-list-item-action>
       </v-list-item>
     </v-list>
+    <documents-keep-inside-confirm-dialog
+      ref="keepInsideConfirmDialog"
+      :space-id="spaceId"
+      @confirm="confirmKeepDocumentsInside"
+      @cancel="cancelKeepDocumentsInside"
+      @error="failKeepDocumentsInside"
+      @see-documents="openPublicLinks" />
+    <documents-public-links-drawer
+      ref="publicLinksDrawer"
+      :space-id="spaceId"
+      @closed="$refs.keepInsideConfirmDialog.resume()" />
   </v-card>
 </template>
 <script>
@@ -87,6 +98,33 @@ export default {
     this.retrieveSettings();
   },
   methods: {
+    // turning the setting on removes the space's public links: it is sent only
+    // once the confirmation, which reads their count, is confirmed
+    changeKeepDocumentsInside(value) {
+      if (value) {
+        // the click counts at once: a stored value answered while the
+        // confirmation is open does not turn the toggle off under it
+        this.clicks++;
+        this.$refs.keepInsideConfirmDialog.open();
+      } else {
+        this.saveSetting('keepDocumentsInside', false);
+      }
+    },
+    confirmKeepDocumentsInside() {
+      return this.saveSetting('keepDocumentsInside', true);
+    },
+    // nothing was sent: the toggle shows the value it had before the click
+    cancelKeepDocumentsInside() {
+      this.keepDocumentsInside = false;
+    },
+    failKeepDocumentsInside() {
+      this.keepDocumentsInside = false;
+      this.$root.$emit('alert-message', this.$t('documents.spaceSettings.keepInside.error.countsNotRead'), 'error');
+    },
+    openPublicLinks(count) {
+      this.$refs.keepInsideConfirmDialog.suspend();
+      this.$refs.publicLinksDrawer.open(count);
+    },
     retrieveSettings() {
       const clicks = this.clicks;
       return this.$spaceSecuritySettingsService.getSpaceSecuritySettings(this.spaceId)
@@ -132,6 +170,8 @@ export default {
         return 'documents.spaceSettings.error.notAllowed';
       case 'space.concurrentUpdate':
         return 'documents.spaceSettings.error.concurrentUpdate';
+      case 'space.security.changeNotApplied':
+        return 'documents.spaceSettings.error.changeNotApplied';
       default:
         break;
       }

@@ -16,12 +16,19 @@
  */
 
 import './initComponents.js';
+import '../documents-icons-extension/extensions.js';
 
 import * as spaceSecuritySettingsService from './js/SpaceSecuritySettingsService.js';
+import * as spaceDocumentsExposureService from './js/SpaceDocumentsExposureService.js';
 
 if (!Vue.prototype.$spaceSecuritySettingsService) {
   window.Object.defineProperty(Vue.prototype, '$spaceSecuritySettingsService', {
     value: spaceSecuritySettingsService,
+  });
+}
+if (!Vue.prototype.$spaceDocumentsExposureService) {
+  window.Object.defineProperty(Vue.prototype, '$spaceDocumentsExposureService', {
+    value: spaceDocumentsExposureService,
   });
 }
 
