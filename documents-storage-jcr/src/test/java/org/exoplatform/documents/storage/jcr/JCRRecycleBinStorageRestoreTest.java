@@ -42,6 +42,7 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -125,6 +126,16 @@ class JCRRecycleBinStorageRestoreTest {
   @AfterAll
   static void releaseContainerLookups() {
     commonsUtils.close();
+  }
+
+  /**
+   * The marks and the permissions of a restored node are given back before it
+   * moves, never after in the same save: the cache of the repository would
+   * then keep what the node holds at its paths in the trash.
+   */
+  @AfterEach
+  void noMarkOrPermissionIsChangedAfterAMoveInTheSameSave() {
+    assertEquals(List.of(), jcr.getMarksChangedAfterAMove());
   }
 
   @BeforeEach

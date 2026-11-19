@@ -250,11 +250,9 @@ public class TrashStorageImpl implements TrashStorage {
       Map<String, Node> shortcuts = source.isNodeType(NodeTypeConstants.EXO_SYMLINK) ? null : new TreeMap<>(Comparator.reverseOrder());
       long size = measureItem(source, nodePath, nodeWorkspaceName, trashSession, shortcuts, true);
 
+      markAsBinItem(source);
       Node trashed = moveInto(trashSession, nodePath, destination, source.getName());
       writeRestoreLocation(trashed, restorePath, nodeWorkspaceName, trashId);
-      if (!trashed.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
-        trashed.addMixin(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM);
-      }
       setOrRemoveProperty(trashed, NodeTypeConstants.RECYCLE_BIN_OWNER, ownerId);
       setOrRemoveProperty(trashed, NodeTypeConstants.RESTORE_PARENT_ID, parentId);
       setOrRemoveProperty(trashed, NodeTypeConstants.DELETED_BY, deleter);
@@ -570,17 +568,30 @@ public class TrashStorageImpl implements TrashStorage {
                                    Calendar deletedDate) throws RepositoryException {
     String shortcutPath = shortcut.getPath();
     String parentId = getReferenceableParentId(shortcut);
+    markAsBinItem(shortcut);
     Node trashed = moveInto(trashSession, shortcutPath, destination, shortcut.getName());
     writeRestoreLocation(trashed, fixRestorePath(shortcutPath), workspaceName, java.util.UUID.randomUUID().toString());
-    if (!trashed.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
-      trashed.addMixin(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM);
-    }
     trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_OF, itemTrashId);
     trashed.setProperty(NodeTypeConstants.DELETED_DATE, deletedDate);
     setOrRemoveProperty(trashed, NodeTypeConstants.DELETED_BY, deleter);
     setOrRemoveProperty(trashed, NodeTypeConstants.RESTORE_PARENT_ID, parentId);
     setOrRemoveProperty(trashed, NodeTypeConstants.RECYCLE_BIN_OWNER, null);
     return trashed;
+  }
+
+  /**
+   * Gives a node the mixins of an item of the bin before it is moved to the
+   * trash. Moved and given a mixin in the same save, a node whose permissions
+   * change with the move is rewritten by the cache of the repository with
+   * what it holds at the paths it had before the move, and the removal of the
+   * node is then refused.
+   */
+  private void markAsBinItem(Node node) throws RepositoryException {
+    for (String mixin : List.of(NodeTypeConstants.EXO_RESTORE_LOCATION, NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
+      if (!node.isNodeType(mixin)) {
+        node.addMixin(mixin);
+      }
+    }
   }
 
   private Node moveInto(Session session, String sourcePath, Node destination, String name) throws RepositoryException {
