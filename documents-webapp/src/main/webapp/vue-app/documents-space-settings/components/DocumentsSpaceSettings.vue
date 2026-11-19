@@ -113,13 +113,20 @@ export default {
     confirmKeepDocumentsInside() {
       return this.saveSetting('keepDocumentsInside', true);
     },
-    // nothing was sent: the toggle shows the value it had before the click
+    // nothing was sent: the toggle shows the value it had before the click,
+    // then the stored values once the saves sent before it have ended, which
+    // may have failed meanwhile
     cancelKeepDocumentsInside() {
       this.keepDocumentsInside = false;
+      return this.readSettingsAfterSaves();
     },
     failKeepDocumentsInside() {
-      this.keepDocumentsInside = false;
       this.$root.$emit('alert-message', this.$t('documents.spaceSettings.keepInside.error.countsNotRead'), 'error');
+      return this.cancelKeepDocumentsInside();
+    },
+    readSettingsAfterSaves() {
+      this.saveQueue = this.saveQueue.then(() => this.retrieveSettings());
+      return this.saveQueue;
     },
     openPublicLinks(count) {
       this.$refs.keepInsideConfirmDialog.suspend();

@@ -65,7 +65,8 @@ public interface SpaceDocumentsExposureStorage {
    * @param removeEveryone whether to take the everyone access off the
    *          document
    * @return the document, or null when it no longer exists or no longer
-   *         belongs to the space: then nothing was changed
+   *         belongs to the space: then nothing was changed. A move committed
+   *         after this read is not seen by the caller's next step.
    * @throws IllegalStateException when the document cannot be read or written
    */
   ExposedDocument prepareLinkRemoval(Space space, String documentId, boolean removeEveryone);

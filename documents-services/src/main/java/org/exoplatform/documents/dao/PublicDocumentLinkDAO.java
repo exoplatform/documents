@@ -48,6 +48,12 @@ public interface PublicDocumentLinkDAO extends Repository<PublicDocumentAccessEn
 
   /**
    * @param id a link's identifier
+   * @return true when a link still has this identifier
+   */
+  boolean existsById(Long id);
+
+  /**
+   * @param id a link's identifier
    * @return the count of links deleted: 0 when no link has this identifier
    *         any more
    */

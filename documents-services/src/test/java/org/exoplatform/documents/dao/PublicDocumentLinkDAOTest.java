@@ -18,6 +18,7 @@
 package org.exoplatform.documents.dao;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -115,6 +116,14 @@ class PublicDocumentLinkDAOTest {
     assertEquals(0, publicDocumentLinkDAO.deleteLink(linkIds.get(2)));
 
     assertEquals(List.of(link(0), link(1), link(3), link(4)), publicDocumentLinkDAO.findLinksAfter(0, Limit.of(10)));
+  }
+
+  @Test
+  void existsByIdTellsWhetherTheLinkIsStillThere() {
+    assertTrue(publicDocumentLinkDAO.existsById(linkIds.get(1)));
+    assertEquals(1, publicDocumentLinkDAO.deleteLink(linkIds.get(1)));
+    assertFalse(publicDocumentLinkDAO.existsById(linkIds.get(1)));
+    assertTrue(publicDocumentLinkDAO.existsById(linkIds.get(2)));
   }
 
   private PublicDocumentLink link(int index) {

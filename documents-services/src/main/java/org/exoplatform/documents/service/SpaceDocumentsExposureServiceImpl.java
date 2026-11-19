@@ -124,16 +124,21 @@ public class SpaceDocumentsExposureServiceImpl implements SpaceDocumentsExposure
   }
 
   /**
-   * Reads the document again, takes its everyone access off on a turn-on,
-   * then deletes its link: a document gone or moved out of the space keeps
-   * its link and its everyone access, and a link another actor removed first
-   * is not reported
+   * Checks the link still exists and reads the document again, takes its
+   * everyone access off on a turn-on, then deletes its link: a link another
+   * actor removed first leaves its document as it is and is not reported, a
+   * document gone or moved out of the space keeps its link and its everyone
+   * access. The window that remains is that of one link: a move or a removal
+   * committed between these checks and the deletion.
    */
   private void removePublicLink(long spaceId,
                                 Space space,
                                 PublicDocumentLink link,
                                 boolean documentsKeptInside,
                                 String username) {
+    if (!publicDocumentLinkStorage.linkExists(link.id())) {
+      return;
+    }
     ExposedDocument document = exposureStorage.prepareLinkRemoval(space, link.nodeId(), documentsKeptInside);
     if (document != null && publicDocumentLinkStorage.deleteLink(link.id())) {
       SpaceSecurityAudit.publicLinkRemoved(spaceId, link.nodeId(), document.owner(), username);

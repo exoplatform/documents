@@ -52,6 +52,14 @@ public class PublicDocumentLinkStorage {
 
   /**
    * @param id a link's identifier
+   * @return true when the link has not been deleted
+   */
+  public boolean linkExists(long id) {
+    return publicDocumentLinkDAO.existsById(id);
+  }
+
+  /**
+   * @param id a link's identifier
    * @return true when this call deleted the link, false when no link had this
    *         identifier any more
    */

@@ -166,9 +166,9 @@ class SpaceDocumentsExposureServiceImplTest {
 
   @Test
   void aLinkDeletedByItsOwnerMidRunIsSkippedAndTheWalkReachesTheNextLink() {
-    exposureStorage.add("a", "A", SPACE_ID, "ownerA", false, false);
-    exposureStorage.add("b", "B", SPACE_ID, "ownerB", false, false);
-    exposureStorage.add("c", "C", SPACE_ID, "ownerC", false, false);
+    Doc first = exposureStorage.add("a", "A", SPACE_ID, "ownerA", true, false);
+    Doc revokedByItsOwner = exposureStorage.add("b", "B", SPACE_ID, "ownerB", true, false);
+    Doc next = exposureStorage.add("c", "C", SPACE_ID, "ownerC", true, false);
     long rowA = linkStorage.add("a");
     long rowB = linkStorage.add("b");
     long rowC = linkStorage.add("c");
@@ -182,6 +182,10 @@ class SpaceDocumentsExposureServiceImplTest {
 
     assertTrue(linkStorage.rows.isEmpty());
     assertEquals(List.of(0L, rowB), linkStorage.reads);
+    assertFalse(first.everyone);
+    assertTrue(revokedByItsOwner.everyone);
+    assertFalse(next.everyone);
+    assertFalse(exposureStorage.prepared.contains("b"));
     assertTrue(linkStorage.deleted.containsAll(List.of(rowA, rowC)));
     audit.verify(() -> SpaceSecurityAudit.publicLinkRemoved(SPACE_ID, "a", "ownerA", MANAGER));
     audit.verify(() -> SpaceSecurityAudit.publicLinkRemoved(SPACE_ID, "c", "ownerC", MANAGER));
@@ -422,6 +426,11 @@ class SpaceDocumentsExposureServiceImplTest {
                  .limit(limit)
                  .map(row -> new PublicDocumentLink(row.getKey(), row.getValue()))
                  .toList();
+    }
+
+    @Override
+    public boolean linkExists(long id) {
+      return rows.containsKey(id);
     }
 
     @Override

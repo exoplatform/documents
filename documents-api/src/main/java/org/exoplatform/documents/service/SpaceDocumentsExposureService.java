@@ -59,9 +59,11 @@ public interface SpaceDocumentsExposureService {
    * Removes the public links of the space's documents before the space's
    * "Keep documents inside the space" setting changes, the user's right to
    * change it being already checked. On a turn-on, a document whose link is
-   * removed also loses its everyone access. Each link is read again before its
-   * removal, and logged once removed; a link removed before a failure stays
-   * removed.
+   * removed also loses its everyone access. Each link is checked again, and
+   * its document read again, just before its removal, and logged once
+   * removed; a link removed before a failure stays removed. The window that
+   * remains is that of one link: its document moved out of the space, or the
+   * link removed by another actor, between that check and its deletion.
    *
    * @param space the space whose setting changes
    * @param documentsKeptInside the value about to be stored
