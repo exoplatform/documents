@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.model;
 
+import java.util.List;
+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -70,5 +72,13 @@ public class RecycleBinItem {
 
   /** Id of the folder the item was deleted from, null when not recorded. */
   private String  restoreParentId;
+
+  /**
+   * The names the documents show of the folders of the path the item was
+   * deleted from, one for each of them, from the root of the repository down
+   * to the folder that held it: its title where it is, or where the trash
+   * keeps it, else the name in the path. Null when not read.
+   */
+  private List<String> restoreFolderTitles;
 
 }
