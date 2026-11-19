@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.rest.util;
 
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -69,7 +70,7 @@ public final class RecycleBinEntityBuilder {
     entity.setSize(item.getSize());
     entity.setDeletedDate(item.getDeletedDate());
     entity.setDeletedBy(toUser(item.getDeletedBy(), identityManager));
-    String location = toOriginalLocation(item.getRestorePath());
+    String location = toOriginalLocation(item.getRestorePath(), item.getRestoreFolderTitles());
     entity.setOriginalLocation(location == null ? null : new RecycleBinLocationEntity(location));
     // A folder and a shortcut have no content of their own to open.
     entity.setCanView(viewable && !item.isFolder() && !item.isShortcut());
@@ -85,6 +86,19 @@ public final class RecycleBinEntityBuilder {
    *         drive; null when no path was recorded
    */
   public static String toOriginalLocation(String restorePath) {
+    return toOriginalLocation(restorePath, null);
+  }
+
+  /**
+   * @param restorePath the path an item was deleted from
+   * @param folderTitles the names the documents show of the folders of that
+   *          path, one for each of them from the root of the repository, or
+   *          null when not known
+   * @return the folder it was in, as {@link #toOriginalLocation(String)}
+   *         gives it, each folder of its drive named as the documents show it
+   *         when the names are known
+   */
+  public static String toOriginalLocation(String restorePath, List<String> folderTitles) {
     if (StringUtils.isBlank(restorePath)) {
       return null;
     }
@@ -92,14 +106,30 @@ public final class RecycleBinEntityBuilder {
     String folder = nameIndex <= 0 ? "/" : restorePath.substring(0, nameIndex);
     Matcher userDrive = USER_DRIVE.matcher(folder);
     if (userDrive.matches()) {
-      String inDrive = StringUtils.defaultString(userDrive.group(2));
+      String inDrive = toTitles(folder, StringUtils.defaultString(userDrive.group(2)), folderTitles);
       return PUBLIC_FOLDER.equals(userDrive.group(1)) ? "/" + PUBLIC_FOLDER + inDrive : StringUtils.defaultIfEmpty(inDrive, "/");
     }
     Matcher spaceDrive = SPACE_DRIVE.matcher(folder);
     if (spaceDrive.matches()) {
-      return StringUtils.defaultIfEmpty(spaceDrive.group(1), "/");
+      return StringUtils.defaultIfEmpty(toTitles(folder, StringUtils.defaultString(spaceDrive.group(1)), folderTitles), "/");
     }
     return folder;
+  }
+
+  /**
+   * The folders of a drive a folder lies under, named by their titles: the
+   * last ones of the folder's path, whose titles are the last ones given.
+   */
+  private static String toTitles(String folder, String inDrive, List<String> folderTitles) {
+    String[] names = StringUtils.split(folder, '/');
+    if (inDrive.isEmpty() || folderTitles == null || folderTitles.size() != names.length) {
+      return inDrive;
+    }
+    StringBuilder titled = new StringBuilder();
+    for (int i = names.length - StringUtils.split(inDrive, '/').length; i < names.length; i++) {
+      titled.append('/').append(StringUtils.defaultIfBlank(folderTitles.get(i), names[i]));
+    }
+    return titled.toString();
   }
 
   /**
