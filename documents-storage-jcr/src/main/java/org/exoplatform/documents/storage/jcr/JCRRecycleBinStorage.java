@@ -22,6 +22,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -125,13 +126,61 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
         query.setLimit(filter.getLimit());
       }
       List<RecycleBinItem> items = new ArrayList<>();
+      // The items of a page share most of their folders: each is read once.
+      Map<String, String> folderTitles = new HashMap<>();
+      Session session = getSession(provider);
       for (NodeIterator nodes = query.execute().getNodes(); nodes.hasNext();) {
-        items.add(toItem(nodes.nextNode()));
+        RecycleBinItem item = toItem(nodes.nextNode());
+        item.setRestoreFolderTitles(getRestoreFolderTitles(session, item, folderTitles));
+        items.add(item);
       }
       return items;
     } finally {
       provider.close();
     }
+  }
+
+  /**
+   * The names the documents show of the folders an item was deleted from,
+   * null when they are in another workspace than the trash.
+   */
+  private List<String> getRestoreFolderTitles(Session session,
+                                              RecycleBinItem item,
+                                              Map<String, String> folderTitles) throws RepositoryException {
+    String restorePath = item.getRestorePath();
+    if (StringUtils.isBlank(restorePath)
+        || item.getRestoreWorkspace() != null && !item.getRestoreWorkspace().equals(trashWorkspace)) {
+      return null; // NOSONAR an absent list tells the names were not read
+    }
+    String[] folders = StringUtils.split(getParentPath(restorePath), '/');
+    List<String> titles = new ArrayList<>(folders.length);
+    StringBuilder folderPath = new StringBuilder();
+    for (String folder : folders) {
+      folderPath.append('/').append(folder);
+      String path = folderPath.toString();
+      String title = folderTitles.get(path);
+      if (title == null) {
+        title = StringUtils.defaultIfBlank(readFolderTitle(session, path), folder);
+        folderTitles.put(path, title);
+      }
+      titles.add(title);
+    }
+    return titles;
+  }
+
+  /**
+   * The title of the folder at a path, or of the folder deleted from that path
+   * the trash keeps, null when neither is found.
+   */
+  private String readFolderTitle(Session session, String path) throws RepositoryException {
+    if (session.itemExists(path) && session.getItem(path) instanceof Node folder) {
+      return JCRDocumentsUtil.getTitle(folder);
+    }
+    String statement = selectItems() + " AND " + NodeTypeConstants.RESTORE_PATH + " = '" + path.replace("'", "''") + "'";
+    QueryImpl query = (QueryImpl) session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+    query.setLimit(1);
+    NodeIterator nodes = query.execute().getNodes();
+    return nodes.hasNext() ? JCRDocumentsUtil.getTitle(nodes.nextNode()) : null;
   }
 
   @Override
