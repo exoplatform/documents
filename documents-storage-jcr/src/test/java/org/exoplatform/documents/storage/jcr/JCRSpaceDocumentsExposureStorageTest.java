@@ -267,7 +267,7 @@ class JCRSpaceDocumentsExposureStorageTest {
     when(guard.getDocumentSpace(deadShortcutHere)).thenThrow(new ItemNotFoundException("target gone"));
     ExtendedNode deadShortcutElsewhere = node("deadElsewhere", "/Groups/spaces/other/Documents/shortcut", "exo:symlink", "owner");
     when(guard.getDocumentSpace(deadShortcutElsewhere)).thenThrow(new ItemNotFoundException("target gone"));
-    ExtendedNode siblingDrive = node("sibling", "/Groups/spaces/team2/Documents/shortcut", "exo:symlink", "owner");
+    ExtendedNode siblingDrive = node("sibling", "/Groups/spaces/team/DocumentsArchive/shortcut", "exo:symlink", "owner");
     when(guard.getDocumentSpace(siblingDrive)).thenThrow(new ItemNotFoundException("target gone"));
     ExtendedNode orphanVersion = node("version", "/jcr:system/jcr:versionStorage/a/1/jcr:frozenNode", "nt:frozenNode", "owner");
     when(guard.getDocumentSpace(orphanVersion)).thenThrow(new ItemNotFoundException("document gone"));
