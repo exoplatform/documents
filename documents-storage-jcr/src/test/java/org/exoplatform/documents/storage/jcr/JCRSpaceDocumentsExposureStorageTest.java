@@ -262,6 +262,36 @@ class JCRSpaceDocumentsExposureStorageTest {
   }
 
   @Test
+  void aShortcutOrAVersionWhoseSourceIsGoneIsPlacedByItsOwnPath() throws Exception {
+    ExtendedNode deadShortcutHere = node("deadHere", DRIVE_ROOT + "/folder/shortcut", "exo:symlink", "owner");
+    when(guard.getDocumentSpace(deadShortcutHere)).thenThrow(new ItemNotFoundException("target gone"));
+    ExtendedNode deadShortcutElsewhere = node("deadElsewhere", "/Groups/spaces/other/Documents/shortcut", "exo:symlink", "owner");
+    when(guard.getDocumentSpace(deadShortcutElsewhere)).thenThrow(new ItemNotFoundException("target gone"));
+    ExtendedNode siblingDrive = node("sibling", "/Groups/spaces/team2/Documents/shortcut", "exo:symlink", "owner");
+    when(guard.getDocumentSpace(siblingDrive)).thenThrow(new ItemNotFoundException("target gone"));
+    ExtendedNode orphanVersion = node("version", "/jcr:system/jcr:versionStorage/a/1/jcr:frozenNode", "nt:frozenNode", "owner");
+    when(guard.getDocumentSpace(orphanVersion)).thenThrow(new ItemNotFoundException("document gone"));
+    ExtendedNode live = node("live", DRIVE_ROOT + "/live.pdf", "nt:file", "owner");
+    when(guard.getDocumentSpace(live)).thenReturn(space);
+
+    List<ExposedDocument> documents = storage.getSpaceDocuments(space,
+                                                                List.of("deadHere", "deadElsewhere", "sibling", "version", "live"));
+
+    assertEquals(List.of("deadHere", "live"), documents.stream().map(ExposedDocument::id).toList());
+    assertNotNull(storage.prepareLinkRemoval(space, "deadHere", false));
+    assertNull(storage.prepareLinkRemoval(space, "deadElsewhere", false));
+  }
+
+  @Test
+  void aReadErrorOtherThanAMissingSourceStillFails() throws Exception {
+    ExtendedNode unreadable = node("unreadable", DRIVE_ROOT + "/unreadable.pdf", "nt:file", "owner");
+    when(guard.getDocumentSpace(unreadable)).thenThrow(new RepositoryException("repository down"));
+
+    assertThrows(IllegalStateException.class, () -> storage.getSpaceDocuments(space, List.of("unreadable")));
+    assertThrows(IllegalStateException.class, () -> storage.prepareLinkRemoval(space, "unreadable", true));
+  }
+
+  @Test
   void spaceDocumentsFailsWhenADocumentCannotBeRead() throws Exception {
     when(session.getNodeByIdentifier("broken")).thenThrow(new RepositoryException("broken"));
 

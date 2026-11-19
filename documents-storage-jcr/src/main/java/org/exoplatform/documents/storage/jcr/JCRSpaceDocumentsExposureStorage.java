@@ -49,6 +49,8 @@ import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.social.core.space.model.Space;
 
@@ -72,6 +74,8 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
   public static final String         QUARANTINE_ROOT           = "/Quarantine";
 
   private static final String        DRIVE_FOLDER_NAME         = "Documents";
+
+  private static final Log           LOG                       = ExoLogger.getLogger(JCRSpaceDocumentsExposureStorage.class);
 
   private final RepositoryService    repositoryService;
 
@@ -112,7 +116,7 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
     try {
       Session session = getSystemSession(sessionProvider);
-      String driveRootPath = JCRDocumentsUtil.getGroupsPath(nodeHierarchyCreator) + space.getGroupId() + "/" + DRIVE_FOLDER_NAME;
+      String driveRootPath = getDriveRootPath(space);
       Set<String> driveRootIdentities = new HashSet<>();
       if (session.itemExists(driveRootPath)) {
         Map<String, List<String>> driveRootAccessList = getDocumentSpaceGuard().getAccessList((Node) session.getItem(driveRootPath));
@@ -209,9 +213,29 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
     node.save();
   }
 
+  /**
+   * A node that exists but points to an item that no longer does (a
+   * shortcut's target, a version's document) is placed by its own stored
+   * path: it belongs to the space only when that path lies in the space's
+   * drive. Any other read error is the caller's failure.
+   */
   private boolean belongsToSpace(Node node, Space space) throws RepositoryException {
-    Space documentSpace = getDocumentSpaceGuard().getDocumentSpace(node);
+    Space documentSpace;
+    try {
+      documentSpace = getDocumentSpaceGuard().getDocumentSpace(node);
+    } catch (ItemNotFoundException | PathNotFoundException e) {
+      boolean inSpaceDrive = node.getPath().startsWith(getDriveRootPath(space) + "/");
+      LOG.warn("Node {} points to an item that no longer exists: placed by its own path, {} space {}",
+               ((ExtendedNode) node).getIdentifier(),
+               inSpaceDrive ? "in" : "not in",
+               space.getId());
+      return inSpaceDrive;
+    }
     return documentSpace != null && StringUtils.equals(documentSpace.getId(), space.getId());
+  }
+
+  private String getDriveRootPath(Space space) {
+    return JCRDocumentsUtil.getGroupsPath(nodeHierarchyCreator) + space.getGroupId() + "/" + DRIVE_FOLDER_NAME;
   }
 
   private ExposedDocument toExposedDocument(Node node, String documentId) throws RepositoryException {

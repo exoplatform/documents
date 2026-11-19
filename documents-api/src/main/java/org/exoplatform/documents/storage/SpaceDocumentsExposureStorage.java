@@ -34,7 +34,10 @@ public interface SpaceDocumentsExposureStorage {
 
   /**
    * Keeps, among documents, those that still exist and belong to the space:
-   * stored in its drive, or trashed or quarantined from it.
+   * stored in its drive, or trashed or quarantined from it. A document that
+   * points to an item that no longer exists (a shortcut's target, a version's
+   * document) belongs to the space when its own stored path lies in the
+   * space's drive.
    *
    * @param space a space
    * @param documentIds document identifiers
