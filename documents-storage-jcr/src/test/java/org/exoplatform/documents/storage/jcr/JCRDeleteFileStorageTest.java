@@ -38,6 +38,7 @@ import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.listener.ListenerService;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -61,6 +62,7 @@ import javax.jcr.Session;
 import javax.jcr.nodetype.NodeType;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDeleteFileStorageTest {
@@ -308,6 +310,50 @@ public class JCRDeleteFileStorageTest {
       verify(trashStorage, never()).moveToTrash(any(), any(), anyString());
     } finally {
       JCRDeleteFileStorageImpl.documentsToDeleteQueue.remove("delayed-1");
+      jcrDeleteFileStorage.stop();
+    }
+  }
+
+  @Test
+  public void testDelayedDeleteMovesToTheTrashAsTheDeletingUser() throws Exception {
+    String username = "testuser";
+    String path = "/document/file1";
+    long currentOwnerId = 2;
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    when(identityManager.getIdentity(String.valueOf(currentOwnerId))).thenReturn(currentIdentity);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
+    ExtendedSession session1 = mock(ExtendedSession.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession(Mockito.any(), Mockito.any())).thenReturn(session1);
+    NodeImpl node = Mockito.mock(NodeImpl.class);
+    // The static mocks reach only the thread of the test: the delayed task
+    // finds the node through the session itself.
+    when(session1.itemExists(path)).thenReturn(true);
+    when(session1.getItem(path)).thenReturn(node);
+    when(node.getPath()).thenReturn(path);
+    when(node.isCheckedOut()).thenReturn(true);
+    AtomicReference<String> userOfTheMove = new AtomicReference<>("none");
+    when(trashStorage.moveToTrash(node, sessionProvider, username)).thenAnswer(invocation -> {
+      ConversationState state = ConversationState.getCurrent();
+      userOfTheMove.set(state == null ? null : state.getIdentity().getUserId());
+      return "-1";
+    });
+
+    jcrDeleteFileStorage.start();
+    try {
+      jcrDeleteFileStorage.deleteDocument(path, "delayed-2", false, true, 1, userID, currentOwnerId);
+
+      // The repository records the user the thread acts as as the last one to
+      // change the document: the delayed task acts as the user deleting.
+      verify(trashStorage, timeout(10000)).moveToTrash(node, sessionProvider, username);
+      assertEquals(username, userOfTheMove.get());
+    } finally {
+      JCRDeleteFileStorageImpl.documentsToDeleteQueue.remove("delayed-2");
       jcrDeleteFileStorage.stop();
     }
   }
