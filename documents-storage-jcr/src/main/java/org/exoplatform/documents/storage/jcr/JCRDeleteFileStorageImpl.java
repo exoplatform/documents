@@ -57,6 +57,7 @@ import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.metadata.favorite.FavoriteService;
@@ -207,11 +208,15 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       pendingDeletions.put(documentId, () -> {
         ExoContainerContext.setCurrentContainer(container);
         RequestLifeCycle.begin(container);
+        // The move is made as the user deleting, as it is with no delay: the
+        // repository records that user as the last one to change the document.
+        ConversationState.setCurrent(identity == null ? null : new ConversationState(identity));
         try {
           moveToTrash(finalFolderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash, deletedBy);
         } catch (Exception e) {
           LOG.error("Error when deleting the document with path" + finalFolderPath, e);
         } finally {
+          ConversationState.setCurrent(null);
           RequestLifeCycle.end();
         }
       });
