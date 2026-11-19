@@ -271,6 +271,9 @@ class JCRSpaceDocumentsExposureStorageTest {
     when(guard.getDocumentSpace(siblingDrive)).thenThrow(new ItemNotFoundException("target gone"));
     ExtendedNode orphanVersion = node("version", "/jcr:system/jcr:versionStorage/a/1/jcr:frozenNode", "nt:frozenNode", "owner");
     when(guard.getDocumentSpace(orphanVersion)).thenThrow(new ItemNotFoundException("document gone"));
+    Property frozenPrimaryType = mock(Property.class);
+    when(frozenPrimaryType.getString()).thenReturn("nt:file");
+    when(orphanVersion.getProperty("jcr:frozenPrimaryType")).thenReturn(frozenPrimaryType);
     ExtendedNode live = node("live", DRIVE_ROOT + "/live.pdf", "nt:file", "owner");
     when(guard.getDocumentSpace(live)).thenReturn(space);
 
