@@ -89,12 +89,13 @@ export default {
     keepDocumentsInside: false,
   }),
   created() {
-    // not reactive: the saves still to send, in click order, and their count;
-    // the count of failed saves, each of which drops the saves queued before
-    // it ended; the count of clicks, so that a stored value never overwrites a
-    // later click; and the last stored value of the setting that is confirmed
+    // not reactive: the saves still to send, in click order, and those of the
+    // confirmed setting not answered yet; the count of failed saves, each of
+    // which drops the saves queued before it ended; the count of clicks, so
+    // that a stored value never overwrites a later click; and the last stored
+    // value of the confirmed setting
     this.saveQueue = Promise.resolve();
-    this.pendingKeepSaves = 0;
+    this.keepSaves = [];
     this.failedSaves = 0;
     this.clicks = 0;
     this.storedKeepDocumentsInside = false;
@@ -116,11 +117,12 @@ export default {
     confirmKeepDocumentsInside() {
       return this.saveSetting('keepDocumentsInside', true);
     },
-    // nothing was sent: the toggle shows the last stored value, or, while a
-    // save sent before the click has not ended, the value it had before the
-    // click; then the stored values once those saves have ended
+    // nothing was sent: the toggle shows the value of the last save of this
+    // setting that will still be sent and is not answered yet, else the last
+    // stored value; then the stored values once the queued saves have ended
     cancelKeepDocumentsInside() {
-      this.keepDocumentsInside = this.pendingKeepSaves ? false : this.storedKeepDocumentsInside;
+      const liveSaves = this.keepSaves.filter(save => save.failedSaves === this.failedSaves);
+      this.keepDocumentsInside = liveSaves.length ? liveSaves[liveSaves.length - 1].value : this.storedKeepDocumentsInside;
       return this.readSettingsAfterSaves();
     },
     failKeepDocumentsInside() {
@@ -146,12 +148,17 @@ export default {
     saveSetting(field, value) {
       const failedSaves = this.failedSaves;
       const clicks = ++this.clicks;
-      // a save of the confirmed setting is pending until its request answers
-      const keepSave = field === 'keepDocumentsInside';
+      // a save of the confirmed setting is known until its request answers or
+      // it is dropped; a failure since it was queued dooms it
+      const keepSave = field === 'keepDocumentsInside' ? {failedSaves, value} : null;
       if (keepSave) {
-        this.pendingKeepSaves++;
+        this.keepSaves.push(keepSave);
       }
-      const settle = () => keepSave && this.pendingKeepSaves--;
+      const settle = () => {
+        if (keepSave) {
+          this.keepSaves = this.keepSaves.filter(save => save !== keepSave);
+        }
+      };
       this.saveQueue = this.saveQueue.then(() => {
         if (failedSaves !== this.failedSaves) {
           settle();
