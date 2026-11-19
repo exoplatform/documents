@@ -147,6 +147,47 @@ class JCRRecycleBinStorageTest {
   }
 
   @Test
+  void theFoldersAnItemWasDeletedFromAreNamedAsTheDocumentsShowThem() throws Exception {
+    String drive = "/Users/j___/jo___/joh___/john/Private";
+    jcr.add(drive + "/projets-2026", "nt:folder").set("exo:title", "Projets 2026");
+    // A folder deleted since is named as the trash keeps it.
+    Item archive = jcr.add(JOHN_BIN + "/archive-q1", "nt:folder");
+    archive.mixin("exo:recycleBinItem", "exo:restoreLocation")
+           .set("exo:trashId", ID_2)
+           .set("exo:recycleBinOwner", "7")
+           .set("exo:title", "Archive Q1")
+           .set("exo:restorePath", drive + "/projets-2026/archive-q1")
+           .set("exo:restoreWorkspace", WORKSPACE);
+    item(JOHN_BIN + "/report.docx", ID_1, "7", "report.docx", 1, Calendar.getInstance())
+        .set("exo:restorePath", drive + "/projets-2026/archive-q1/l'equipe/report.docx")
+        .set("exo:restoreWorkspace", WORKSPACE);
+    // In another workspace, the names are not read.
+    item(JOHN_BIN + "/elsewhere.txt", ID_3, "7", "elsewhere.txt", 1, Calendar.getInstance())
+        .set("exo:restorePath", drive + "/projets-2026/elsewhere.txt")
+        .set("exo:restoreWorkspace", "dms-system");
+    jcr.commit();
+
+    List<RecycleBinItem> items = storage.getItems(filter(7));
+
+    // A folder found nowhere keeps its name in the path.
+    assertEquals(List.of("Users", "j___", "jo___", "joh___", "john", "Private", "Projets 2026", "Archive Q1", "l'equipe"),
+                 itemOf(items, ID_1).getRestoreFolderTitles());
+    assertEquals(List.of("Users", "j___", "jo___", "joh___", "john", "Private", "Projets 2026"),
+                 itemOf(items, ID_2).getRestoreFolderTitles());
+    assertNull(itemOf(items, ID_3).getRestoreFolderTitles());
+    List<String> lookups = jcr.getStatements().stream().filter(statement -> statement.contains(" AND exo:restorePath = '")).toList();
+    assertEquals(List.of("SELECT * FROM exo:recycleBinItem WHERE jcr:path LIKE '/Trash/%' AND exo:restorePath = '" + drive
+        + "/projets-2026/archive-q1'",
+                         "SELECT * FROM exo:recycleBinItem WHERE jcr:path LIKE '/Trash/%' AND exo:restorePath = '" + drive
+                             + "/projets-2026/archive-q1/l''equipe'"),
+                 lookups);
+    LocationFactory locationFactory = new LocationFactory(new NamespaceRegistryImpl());
+    for (String statement : lookups) {
+      assertNotNull(JCRSQLQueryBuilder.createQuery(statement, locationFactory, new DefaultQueryNodeFactory()), statement);
+    }
+  }
+
+  @Test
   void anotherDrivesItemsTheShortcutsTrashedWithADocumentAndWhatAFolderHoldsAreNotListed() throws Exception {
     item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
     item("/Trash/Groups/spaces/marketing/theirs.txt", ID_2, "9", "theirs.txt", 1, Calendar.getInstance());
@@ -675,6 +716,10 @@ class JCRRecycleBinStorageTest {
     return items.stream().map(RecycleBinItem::getId).toList();
   }
 
+  private static RecycleBinItem itemOf(List<RecycleBinItem> items, String id) {
+    return items.stream().filter(item -> id.equals(item.getId())).findFirst().orElseThrow();
+  }
+
   private Item item(String path, String trashId, String ownerId, String lowerCasedName, long size, Calendar deletedDate) {
     Item file = jcr.addFile(path, size);
     file.mixin("exo:restoreLocation", "exo:recycleBinItem")
@@ -713,12 +758,15 @@ class JCRRecycleBinStorageTest {
     String before = group(statement, "exo:deletedDate < TIMESTAMP '([^']*)'$");
     String owner = group(statement, "exo:recycleBinOwner = '([^']*)'");
     String id = group(statement, "exo:trashId = '([^']*)'");
+    String quotedRestorePath = group(statement, "exo:restorePath = '((?:[^']|'')*)'");
+    String restorePath = quotedRestorePath == null ? null : quotedRestorePath.replace("''", "'");
     String pattern = group(statement, "exo:recycleBinName LIKE '%(.*)%' ESCAPE '\\\\'");
     String term = pattern == null ? null : pattern.replace("''", "'").replaceAll("\\\\(.)", "$1");
     List<Item> found = new ArrayList<>();
     collect(jcr.at("/Trash"), found);
     found.removeIf(item -> owner != null && !owner.equals(item.get("exo:recycleBinOwner")));
     found.removeIf(item -> id != null && !id.equals(item.get("exo:trashId")));
+    found.removeIf(item -> restorePath != null && !restorePath.equals(item.get("exo:restorePath")));
     found.removeIf(item -> before != null && !(item.get("exo:deletedDate") instanceof Calendar deleted
         && deleted.toInstant().isBefore(OffsetDateTime.parse(before).toInstant())));
     found.removeIf(item -> term != null && !String.valueOf(item.get("exo:recycleBinName")).contains(term));

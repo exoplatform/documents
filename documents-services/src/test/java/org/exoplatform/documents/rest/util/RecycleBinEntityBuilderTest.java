@@ -26,6 +26,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -142,6 +144,33 @@ class RecycleBinEntityBuilderTest {
     assertEquals("/", RecycleBinEntityBuilder.toOriginalLocation("/a.txt"));
     assertNull(RecycleBinEntityBuilder.toOriginalLocation(null));
     assertNull(RecycleBinEntityBuilder.toOriginalLocation(" "));
+  }
+
+  @Test
+  void theFoldersOfTheOriginalLocationAreNamedAsTheDocumentsShowThem() {
+    String inSpace = "/Groups/spaces/sales/Documents/plans_2026/q_1/report.docx";
+    assertEquals("/Plans 2026/Q 1",
+                 RecycleBinEntityBuilder.toOriginalLocation(inSpace,
+                                                            List.of("Groups", "spaces", "sales", "Documents", "Plans 2026", "Q 1")));
+    assertEquals("/Projets 2026",
+                 RecycleBinEntityBuilder.toOriginalLocation("/Users/j___/jo___/joh___/john/Private/projets_2026/a.txt",
+                                                            List.of("Users", "j___", "jo___", "joh___", "john", "Private", "Projets 2026")));
+    // The public folder keeps its name, the folders it holds are named by their titles.
+    assertEquals("/Public/Photos été",
+                 RecycleBinEntityBuilder.toOriginalLocation("/Users/x/Public/photos_ete/a.png",
+                                                            List.of("Users", "x", "Public", "Photos été")));
+    assertEquals("/",
+                 RecycleBinEntityBuilder.toOriginalLocation("/Groups/spaces/sales/Documents/q1.xlsx",
+                                                            List.of("Groups", "spaces", "sales", "Documents")));
+    // A folder with no title keeps its name.
+    assertEquals("/plans_2026/Q 1",
+                 RecycleBinEntityBuilder.toOriginalLocation(inSpace, List.of("Groups", "spaces", "sales", "Documents", " ", "Q 1")));
+    // Names that are not one for each folder of the path, or none, leave the path as it is.
+    assertEquals("/plans_2026/q_1", RecycleBinEntityBuilder.toOriginalLocation(inSpace, List.of("Plans 2026", "Q 1")));
+    assertEquals("/plans_2026/q_1", RecycleBinEntityBuilder.toOriginalLocation(inSpace, null));
+    // In no drive: the folder as it is.
+    assertEquals("/sites/shared", RecycleBinEntityBuilder.toOriginalLocation("/sites/shared/a.txt", List.of("sites", "Shared")));
+    assertNull(RecycleBinEntityBuilder.toOriginalLocation(null, List.of()));
   }
 
   @Test
