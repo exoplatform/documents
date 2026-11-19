@@ -126,6 +126,8 @@ export default {
     documentsBreadcrumbDestination: [],
     documentsBreadcrumbSource: [],
     destinationFolderPath: '',
+    destinationFolderId: null,
+    folder: null,
     currentFolderPath: '',
     spaceDisplayName: eXo.env.portal.spaceDisplayName,
     spaceName: eXo.env.portal.spaceName,
