@@ -203,7 +203,7 @@ export default {
       const folders = path.split('/').filter(folder => folder);
       return {
         folder: folders.length && folders[folders.length - 1] || root,
-        nested: !!folders.length,
+        nested: folders.length > 1,
         path: [root, ...folders].filter(folder => folder).join(' > '),
       };
     },
