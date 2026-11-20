@@ -1607,7 +1607,7 @@ public class DocumentFileRestTest {
   }
 
   @Test
-  public void getPublicAccessLink() {
+  public void getPublicAccessLink() throws IllegalAccessException {
     PublicDocumentAccess publicDocumentAccess = new PublicDocumentAccess();
     publicDocumentAccess.setNodeId("1233");
     publicDocumentAccess.setExpirationDate(new Date());
@@ -1626,6 +1626,12 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     response = documentFileRest1.getPublicAccessLink("1233");
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    when(publicDocumentAccessService.getPublicDocumentAccess("1233")).thenReturn(publicDocumentAccess);
+    response = documentFileRest1.getPublicAccessLink("1233");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNull(response.getEntity());
+    verify(publicDocumentAccessService, never()).getPublicDocumentAccess("1233");
+    when(documentFileService1.hasEditPermissionOnDocument("1233", 1L)).thenReturn(true);
     when(publicDocumentAccessService.getPublicDocumentAccess("1233")).thenReturn(null);
     response = documentFileRest1.getPublicAccessLink("1233");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());

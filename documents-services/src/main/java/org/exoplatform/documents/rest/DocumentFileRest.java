@@ -1455,6 +1455,7 @@ public class DocumentFileRest implements ResourceContainer {
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
           @ApiResponse(responseCode = "400", description = "Invalid query input"),
           @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "No public access link for this node, or the user cannot edit it"),
           @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response getPublicAccessLink(@Parameter(description = "target file node identifier", required = true)
                                       @QueryParam("nodeId") String nodeId) {
@@ -1467,6 +1468,10 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Response.Status.UNAUTHORIZED).build();
     }
     try {
+      // The link's settings, its password included, are shown to whoever may change them, as on create and revoke
+      if (!documentFileService.hasEditPermissionOnDocument(nodeId, userIdentityId)) {
+        return Response.status(Status.NOT_FOUND).build();
+      }
       PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
       if (publicDocumentAccess == null) {
         return Response.status(Status.NOT_FOUND).build();
