@@ -37,6 +37,7 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.search.DocumentTextExtractor;
@@ -124,6 +125,9 @@ public class JCRDocumentFileStorageTest {
   @Mock
   private org.exoplatform.services.cms.documents.DocumentService documentService;
 
+  @Mock
+  private TrashStorage                                   trashStorage;
+
 
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
 
@@ -148,7 +152,8 @@ public class JCRDocumentFileStorageTest {
                                                              identityRegistry,
                                                              activityManager,
                                                              bulkStorageActionService,
-                                                             documentService);
+                                                             documentService,
+                                                             trashStorage);
   }
 
   @Test
@@ -2040,6 +2045,31 @@ public class JCRDocumentFileStorageTest {
     verify(contentNode, never()).hasProperty(NodeTypeConstants.JCR_DATA);
     verify(contentNode, never()).getProperty(NodeTypeConstants.JCR_DATA);
     verify(systemSessionProvider).close();
+  }
+
+  @Test
+  public void aPublicLinkServesNoNodeInTheTrashAndServesItAgainOnceItIsRestored() throws RepositoryException {
+    SessionProvider systemSessionProvider = mockSystemSessionProvider();
+    Session session = systemSessionProvider.getSession("collaboration", repositoryService.getCurrentRepository());
+    NodeImpl node = mock(NodeImpl.class);
+    when(node.getIdentifier()).thenReturn("trashed-1");
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(false);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "trashed-1")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(node)).thenReturn("report.pdf");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toDownloadInfo(node)).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toDownloadItem(node)).thenCallRealMethod();
+    when(trashStorage.isInTrash(node)).thenReturn(true);
+
+    // Answered as a missing node, whose endpoints answer 404, with nothing read
+    assertNull(jcrDocumentFileStorage.getDocumentDownloadInfo("trashed-1"));
+    assertNull(jcrDocumentFileStorage.getDocumentDownloadItem("trashed-1"));
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.toDownloadInfo(node), never());
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.toDownloadItem(node), never());
+
+    // A restore keeps the node's id: the same link serves it again
+    when(trashStorage.isInTrash(node)).thenReturn(false);
+    assertEquals("report.pdf", jcrDocumentFileStorage.getDocumentDownloadInfo("trashed-1").getItemName());
+    assertEquals("report.pdf", jcrDocumentFileStorage.getDocumentDownloadItem("trashed-1").getItemName());
   }
 
   @Test
