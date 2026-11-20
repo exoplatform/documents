@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.storage;
 
+import java.util.List;
+
 /**
  * What a bulk action does to one of its items, named by its id. It is called
  * once per item, on the thread of the bulk action, where the current user is
@@ -32,5 +34,17 @@ public interface BulkItemAction {
    *           with the others and ends with errors
    */
   boolean apply(String itemId) throws Exception; // NOSONAR whatever the operation throws is a failure of the item
+
+  /**
+   * The order the items are acted on in, asked once on the thread of the bulk
+   * action before the first one: the order given, unless an item depends on
+   * another the action treats.
+   *
+   * @param itemIds ids of the items, as the action was given them
+   * @return the same ids, in the order to act on them
+   */
+  default List<String> order(List<String> itemIds) {
+    return itemIds;
+  }
 
 }

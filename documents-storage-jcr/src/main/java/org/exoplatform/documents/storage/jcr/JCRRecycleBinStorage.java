@@ -428,6 +428,10 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
         if (item.getRestorePath() == null) {
           throw new IllegalArgumentException(RecycleBinError.RESTORE_LOCATION_MISSING);
         }
+        String shortcutRefusal = item.isShortcut() ? shortcutRefusal(provider, session, node) : null;
+        if (shortcutRefusal != null) {
+          throw new IllegalArgumentException(shortcutRefusal);
+        }
         if (item.getRestoreWorkspace() != null && !item.getRestoreWorkspace().equals(trashWorkspace)) {
           restoreSession = provider.getSession(item.getRestoreWorkspace(), repositoryService.getCurrentRepository());
           restoreToItsWorkspace(session, restoreSession, checkedCaller, node, item);
@@ -805,6 +809,30 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
   private Session getSession(SessionProvider provider) throws RepositoryException {
     readTrashLocation();
     return provider.getSession(trashWorkspace, repositoryService.getCurrentRepository());
+  }
+
+  /**
+   * Why a shortcut cannot be restored, read in a system session whoever
+   * restores: the code of a node it points at that is in a Recycle Bin, or of
+   * one that is gone, since restored it would open nothing; null while the
+   * node it points at is outside the trash.
+   */
+  private String shortcutRefusal(SessionProvider provider, Session session, Node shortcut) throws RepositoryException {
+    String targetId = getString(shortcut, NodeTypeConstants.EXO_SYMLINK_UUID);
+    if (StringUtils.isBlank(targetId)) {
+      return RecycleBinError.RESTORE_SHORTCUT_TARGET_GONE;
+    }
+    String targetWorkspace = getString(shortcut, NodeTypeConstants.EXO_WORKSPACE);
+    boolean trashWorkspaceTarget = targetWorkspace == null || targetWorkspace.equals(trashWorkspace);
+    Session targetSession = trashWorkspaceTarget ? session
+                                                 : provider.getSession(targetWorkspace, repositoryService.getCurrentRepository());
+    String targetPath;
+    try {
+      targetPath = ((ExtendedSession) targetSession).getNodeByIdentifier(targetId).getPath();
+    } catch (ItemNotFoundException e) {
+      return RecycleBinError.RESTORE_SHORTCUT_TARGET_GONE;
+    }
+    return trashWorkspaceTarget && targetPath.startsWith(trashHome + "/") ? RecycleBinError.RESTORE_SHORTCUT_TARGET_IN_BIN : null;
   }
 
   /** The node of the trash carrying an id, an item or a shortcut trashed with one. */

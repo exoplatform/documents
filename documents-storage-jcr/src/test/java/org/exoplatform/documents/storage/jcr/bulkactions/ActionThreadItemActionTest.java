@@ -115,6 +115,43 @@ class ActionThreadItemActionTest {
   }
 
   @Test
+  void theItemsAreTreatedInTheOrderTheOperationAsksForOrAsGivenWhenItCannotTell() throws Exception {
+    List<String> seen = new ArrayList<>();
+    new ActionThread(service, listener, actionData, List.of("a", "b", "c"), new BulkItemAction() {
+      @Override
+      public boolean apply(String itemId) {
+        return seen.add(itemId);
+      }
+
+      @Override
+      public List<String> order(List<String> itemIds) {
+        // Asked on the thread of the action, as its user.
+        seen.add("order as " + ConversationState.getCurrent().getIdentity().getUserId());
+        return List.of("c", "a", "b");
+      }
+    }).processAction();
+
+    assertEquals(List.of("order as john", "c", "a", "b"), seen);
+    assertEquals(List.of("c", "a", "b"), actionData.getTreatedItemsIds());
+
+    seen.clear();
+    new ActionThread(service, listener, actionData, List.of("a", "b"), new BulkItemAction() {
+      @Override
+      public boolean apply(String itemId) {
+        return seen.add(itemId);
+      }
+
+      @Override
+      public List<String> order(List<String> itemIds) {
+        throw new IllegalStateException("The items cannot be read");
+      }
+    }).processAction();
+
+    assertEquals(List.of("a", "b"), seen);
+    assertEquals("DONE_SUCCESSFULLY", actionData.getStatus());
+  }
+
+  @Test
   void eachItemIsTreatedInTheOrderGivenAsTheUserOfTheActionAndTheEndIsToldOnce() throws Exception {
     List<String> seen = new ArrayList<>();
     BulkItemAction action = itemId -> {
