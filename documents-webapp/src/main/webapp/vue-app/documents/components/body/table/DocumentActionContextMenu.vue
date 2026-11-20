@@ -23,6 +23,7 @@
     class="elevation-2 documentActionMenu layout-drawer">
     <documents-actions-menu
       v-if="show"
+      standalone
       :file="file"
       :current-view="currentView"
       :is-search-result="isSearchResult"
@@ -51,6 +52,7 @@ export default {
     this.$root.$on('selection-documents-list-updated', this.handleUpdateSelected);
     this.$root.$on('set-action-loading', this.closeMenu);
     this.$root.$on('close-file-action-menu', this.closeMenu);
+    this.$root.$on('documents-close-action-menus', this.handlePreventMenu);
   },
   beforeDestroy() {
     this.$root.$off('open-action-context-menu', this.openMenu);
@@ -59,6 +61,7 @@ export default {
     this.$root.$off('prevent-action-context-menu', this.handlePreventMenu);
     this.$root.$off('set-action-loading', this.closeMenu);
     this.$root.$off('close-file-action-menu', this.closeMenu);
+    this.$root.$off('documents-close-action-menus', this.handlePreventMenu);
   },
   computed: {
     isSelected() {

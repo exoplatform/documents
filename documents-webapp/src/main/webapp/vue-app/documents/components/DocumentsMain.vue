@@ -4,139 +4,137 @@
     :class="isMobile ? 'mobile' : ''"
     role="main"
     flat>
-    <v-hover v-model="$root.hover">
-      <div class="application-body" @mouseover="hideOverlay">
+    <div class="application-body" @mouseover="hideOverlay">
+      <div
+        @dragover.prevent
+        @drop.prevent
+        @dragstart.prevent>
+        <documents-header
+          :files-size="files.length"
+          :selected-view="selectedView"
+          :can-add="canAdd"
+          :query="query"
+          :primary-filter="primaryFilter"
+          :file-type="fileType"
+          :after-date="afterDate"
+          :before-date="beforeDate"
+          :min-size="minSize"
+          :max-size="maxSize"
+          :is-mobile="isMobile"
+          :selected-documents="selectedDocuments"
+          @documents-type-view-applied="applyViewType" />
+        <categories-filter
+          v-if="displayCategoriesFilter"
+          v-show="hasDocuments"
+          v-model="$root.selectedCategoryId"
+          :category-depth="$root.categoryDepth"
+          :category-ids="$root.settings.categoryIds"
+          :exclude-category-ids="$root.settings.excludeCategoryIds"
+          :space-id="$root.ownerId"
+          class="full-width border-box-sizing application-background-color application-border application-border-radius py-2 px-4"
+          object-type="document"
+          hide-on-empty />
+        <div v-if="searchResult && !loading && initialized">
+          <documents-no-result-body
+            :is-mobile="isMobile"
+            :show-extend-filter="showExtendFilter"
+            :query="query" />
+        </div>
         <div
-          @dragover.prevent
-          @drop.prevent
-          @dragstart.prevent>
-          <documents-header
-            :files-size="files.length"
-            :selected-view="selectedView"
-            :can-add="canAdd"
+          v-else-if="!filesLoad && selectedView !== 'folder' && !loading && initialized"
+          @drop="dragFile"
+          @dragover="startDrag">
+          <documents-no-body
             :query="query"
+            :can-add="canAdd"
+            :is-mobile="isMobile" />
+        </div>
+        <div
+          v-else
+          @drop="dragFile"
+          @dragover="startDrag">
+          <documents-body
+            v-if="optionsLoaded"
+            :view-extension="selectedViewExtension"
+            :files="files"
+            :groups-sizes="groupsSizes"
+            :page-size="pageSize"
+            :offset="offset"
+            :limit="limit"
+            :has-more="hasMore"
+            :sort-field="sortField"
+            :ascending="ascending"
+            :initialized="initialized"
+            :loading="loading"
+            :query="query"
+            :extended-search="extendedSearch"
+            :show-extend-filter="showExtendFilter"
             :primary-filter="primaryFilter"
             :file-type="fileType"
             :after-date="afterDate"
             :before-date="beforeDate"
             :min-size="minSize"
             :max-size="maxSize"
-            :is-mobile="isMobile"
+            :selected-view="selectedView"
             :selected-documents="selectedDocuments"
-            @documents-type-view-applied="applyViewType" />
-          <categories-filter
-            v-if="displayCategoriesFilter"
-            v-show="hasDocuments"
-            v-model="$root.selectedCategoryId"
-            :category-depth="$root.categoryDepth"
-            :category-ids="$root.settings.categoryIds"
-            :exclude-category-ids="$root.settings.excludeCategoryIds"
-            :space-id="$root.ownerId"
-            class="full-width border-box-sizing application-background-color application-border application-border-radius py-2 px-4"
-            object-type="document"
-            hide-on-empty />
-          <div v-if="searchResult && !loading && initialized">
-            <documents-no-result-body
-              :is-mobile="isMobile"
-              :show-extend-filter="showExtendFilter"
-              :query="query" />
-          </div>
-          <div
-            v-else-if="!filesLoad && selectedView !== 'folder' && !loading && initialized"
-            @drop="dragFile"
-            @dragover="startDrag">
-            <documents-no-body
-              :query="query"
-              :can-add="canAdd"
-              :is-mobile="isMobile" />
-          </div>
-          <div
-            v-else
-            @drop="dragFile"
-            @dragover="startDrag">
-            <documents-body
-              v-if="optionsLoaded"
-              :view-extension="selectedViewExtension"
-              :files="files"
-              :groups-sizes="groupsSizes"
-              :page-size="pageSize"
-              :offset="offset"
-              :limit="limit"
-              :has-more="hasMore"
-              :sort-field="sortField"
-              :ascending="ascending"
-              :initialized="initialized"
-              :loading="loading"
-              :query="query"
-              :extended-search="extendedSearch"
-              :show-extend-filter="showExtendFilter"
-              :primary-filter="primaryFilter"
-              :file-type="fileType"
-              :after-date="afterDate"
-              :before-date="beforeDate"
-              :min-size="minSize"
-              :max-size="maxSize"
-              :selected-view="selectedView"
-              :selected-documents="selectedDocuments"
-              :view-type="viewType"
-              :folder-path="folderPath"
-              :is-mobile="isMobile"
-              class="px-4 no-border" />
-            <exo-document-notification-alerts />
-          </div>
+            :view-type="viewType"
+            :folder-path="folderPath"
+            :is-mobile="isMobile"
+            class="px-4 no-border" />
+          <exo-document-notification-alerts />
         </div>
-      
-        <documents-visibility-drawer :is-mobile="isMobile" />
-        <document-tree-selector-drawer :is-mobile="isMobile" />
-        <documents-advanced-filter-drawer />
-        <documents-download-drawer />
-        <document-import-from-zip-drawer />
-        <attachment-create-document-drawer
-          ref="createDocumentDrawer"
-          mode="drive"
-          :current-drive="createDocDrive"
-          :path-destination-folder="createDocFolderPath"
-          @document-created="onDocumentCreated" />
-        <documents-offline-changes-reminder />
-        <open-in-desktop-credentials-dialog
-          ref="dialog" />
-        <documents-actions-menu-mobile
-          :is-mobile="isMobile"
-          :current-view="selectedView"
-          :is-search-result="isSearchResult" />
-        <documents-filter-menu-mobile
-          :primary-filter="primaryFilter"
-          :query="query"
-          :extended-search="extendedSearch"
-          :is-mobile="isMobile" />
-        <version-history-drawer
-          :can-manage="canManageVersions"
-          :enable-edit-description="true"
-          :versions="versions"
-          :is-loading="isLoadingVersions"
-          :show-load-more="showLoadMoreVersions"
-          :is-mobile="isMobile" 
-          @drawer-closed="versionsDrawerClosed"
-          @open-version="showVersionPreview"
-          @restore-version="restoreVersion"
-          @version-update-description="updateVersionSummary"
-          @load-more="loadMoreVersions"
-          ref="documentVersionHistory" />
-        <document-action-context-menu />
-        <public-document-options-drawer />
-        <category-form-drawer />
-        <documents-add-new-menu-mobile
-          ref="documentAddItemMenu"
-          :selected-view="selectedView"
-          :is-mobile="isMobile" />
-        <v-file-input
-          id="uploadVersionInput"
-          class="d-none"
-          accept="*/*"
-          @change="handleUploadVersion" />
-        <categories-bulk-edit-drawer />
       </div>
-    </v-hover>
+    
+      <documents-visibility-drawer :is-mobile="isMobile" />
+      <document-tree-selector-drawer :is-mobile="isMobile" />
+      <documents-advanced-filter-drawer />
+      <documents-download-drawer />
+      <document-import-from-zip-drawer />
+      <attachment-create-document-drawer
+        ref="createDocumentDrawer"
+        mode="drive"
+        :current-drive="createDocDrive"
+        :path-destination-folder="createDocFolderPath"
+        @document-created="onDocumentCreated" />
+      <documents-offline-changes-reminder />
+      <open-in-desktop-credentials-dialog
+        ref="dialog" />
+      <documents-actions-menu-mobile
+        :is-mobile="isMobile"
+        :current-view="selectedView"
+        :is-search-result="isSearchResult" />
+      <documents-filter-menu-mobile
+        :primary-filter="primaryFilter"
+        :query="query"
+        :extended-search="extendedSearch"
+        :is-mobile="isMobile" />
+      <version-history-drawer
+        :can-manage="canManageVersions"
+        :enable-edit-description="true"
+        :versions="versions"
+        :is-loading="isLoadingVersions"
+        :show-load-more="showLoadMoreVersions"
+        :is-mobile="isMobile" 
+        @drawer-closed="versionsDrawerClosed"
+        @open-version="showVersionPreview"
+        @restore-version="restoreVersion"
+        @version-update-description="updateVersionSummary"
+        @load-more="loadMoreVersions"
+        ref="documentVersionHistory" />
+      <document-action-context-menu />
+      <public-document-options-drawer />
+      <category-form-drawer />
+      <documents-add-new-menu-mobile
+        ref="documentAddItemMenu"
+        :selected-view="selectedView"
+        :is-mobile="isMobile" />
+      <v-file-input
+        id="uploadVersionInput"
+        class="d-none"
+        accept="*/*"
+        @change="handleUploadVersion" />
+      <categories-bulk-edit-drawer />
+    </div>
   </v-app>
 </template>
 <script>
