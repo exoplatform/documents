@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage.jcr;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.jcr.Node;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.Value;
 import javax.jcr.version.Version;
@@ -214,6 +216,30 @@ class VersionRestoreAccessListTest {
     Node restored = reload(document);
     assertTrue(entriesOf(restored).containsAll(Set.of("editor add_node", "editor set_property", "guest read")),
                "the rights given after the version are kept: " + entriesOf(restored));
+  }
+
+  /**
+   * A document has a list of its own or reads its folder's: the restore keeps
+   * either, and never meets an emptied list
+   */
+  @Test
+  void theRepositoryKeepsNoEmptiedListOfItsOwn() throws Exception {
+    Node document = addVersionedFile("never-emptied.txt");
+    document.addMixin("exo:privilegeable");
+    ((ExtendedNode) document).setPermissions(Map.of("*:" + SPACE_GROUP, EDIT, "guest", new String[] { PermissionType.READ }));
+    systemSession.save();
+    try {
+      ((ExtendedNode) document).removePermission("*:" + SPACE_GROUP);
+      ((ExtendedNode) document).removePermission("guest");
+
+      assertTrue(assertThrows(RepositoryException.class, document::save).getMessage().contains("wrong formed ACL"));
+      assertTrue(assertThrows(RepositoryException.class, systemSession::save).getMessage().contains("wrong formed ACL"));
+    } finally {
+      systemSession.refresh(false);
+    }
+    assertEquals(Set.of("*:" + SPACE_GROUP + " read", "*:" + SPACE_GROUP + " add_node", "*:" + SPACE_GROUP + " set_property",
+                        "guest read"),
+                 entriesOf(reload(document)));
   }
 
   private static Node addVersionedFile(String name) throws Exception {
