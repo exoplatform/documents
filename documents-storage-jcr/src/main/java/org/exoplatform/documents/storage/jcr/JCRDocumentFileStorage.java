@@ -2949,9 +2949,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String frozenUuid = Utils.getStringProperty(frozen, NodeTypeConstants.JCR_FROZEN_UUID);
         node = session.getNodeByUUID(frozenUuid);
         if (node != null) {
+          // The restore brings back the version, but the document keeps its
+          // current access list, in the new version too
+          Map<String, String[]> ownPermissions = JCRDocumentsUtil.getOwnPermissions(node);
           node.restore(version, true);
           if (!node.isCheckedOut()) {
             node.checkout();
+          }
+          try {
+            JCRDocumentsUtil.putBackOwnPermissions(manageableRepository, COLLABORATION, node.getUUID(), ownPermissions);
+          } catch (RepositoryException | RuntimeException e) {
+            LOG.error("Version of document {} restored, but its access list could not be kept: check its access",
+                      node.getUUID());
+            throw e;
           }
           Version newVersion = node.checkin();
           versionFileNode = JCRDocumentsUtil.toFileVersion(newVersion, node, identityManager);
