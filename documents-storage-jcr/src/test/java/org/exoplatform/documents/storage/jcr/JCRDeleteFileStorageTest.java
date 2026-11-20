@@ -519,6 +519,8 @@ public class JCRDeleteFileStorageTest {
     javax.jcr.Property restoreWorkspace = mock(javax.jcr.Property.class);
     when(restoreWorkspace.getString()).thenReturn("collaboration");
     when(trashed.getProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(restoreWorkspace);
+    when(trashed.hasProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(true);
+    when(trashed.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(true);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "trashed")).thenReturn(trashed);
     when(trashStorage.isInTrash(trashed)).thenReturn(true);
     // The check runs on a session of mary herself, never on the thread's user
@@ -538,5 +540,55 @@ public class JCRDeleteFileStorageTest {
     doNothing().when(userSession).checkPermission("/Groups/spaces/team/Documents", PermissionType.ADD_NODE);
     jcrDeleteFileStorage.restoreFromTrash("trashed", mary);
     verify(trashStorage).restoreFromTrash("/Trash/report.pdf", sessionProvider);
+  }
+  @Test
+  public void testRestoreFromTrashForAUserRefusesANodeInsideATrashedFolder() throws Exception {
+    org.exoplatform.services.security.Identity mary = new org.exoplatform.services.security.Identity("mary");
+    Node trashHome = mock(Node.class);
+    when(trashStorage.getTrashHomeNode()).thenReturn(trashHome);
+    when(trashHome.getSession()).thenReturn(session);
+
+    // In the trash, but under a trashed folder: only the folder carries the restore location
+    Node nested = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "nested")).thenReturn(nested);
+    when(trashStorage.isInTrash(nested)).thenReturn(true);
+    when(nested.hasProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(false);
+    when(nested.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(false);
+
+    assertThrows(ObjectNotFoundException.class, () -> jcrDeleteFileStorage.restoreFromTrash("nested", mary));
+    verify(nested, never()).getProperty(anyString());
+    verify(trashStorage, never()).restoreFromTrash(anyString(), any());
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.openUserSession(any(), any()), never());
+  }
+
+  @Test
+  public void testRestoreFromTrashForAUserRefusesADocumentReturningToAnotherWorkspace() throws Exception {
+    org.exoplatform.services.security.Identity mary = new org.exoplatform.services.security.Identity("mary");
+    Node trashHome = mock(Node.class);
+    when(trashStorage.getTrashHomeNode()).thenReturn(trashHome);
+    when(trashHome.getSession()).thenReturn(session);
+    when(sessionProviderService.getSystemSessionProvider(null)).thenReturn(sessionProvider);
+
+    Node trashed = mock(Node.class);
+    javax.jcr.Property restorePath = mock(javax.jcr.Property.class);
+    when(restorePath.getString()).thenReturn("/Groups/spaces/team/Documents/report.pdf");
+    when(trashed.getProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(restorePath);
+    javax.jcr.Property restoreWorkspace = mock(javax.jcr.Property.class);
+    when(restoreWorkspace.getString()).thenReturn("dms-system");
+    when(trashed.getProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(restoreWorkspace);
+    when(trashed.hasProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(true);
+    when(trashed.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(true);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "elsewhere")).thenReturn(trashed);
+    when(trashStorage.isInTrash(trashed)).thenReturn(true);
+    // The right check reads the ACL of the user's own workspace, so a document returning to another one is refused
+    Session userSession = mock(Session.class);
+    javax.jcr.Workspace workspace = mock(javax.jcr.Workspace.class);
+    when(workspace.getName()).thenReturn("collaboration");
+    when(userSession.getWorkspace()).thenReturn(workspace);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.openUserSession(repositoryService, mary)).thenReturn(userSession);
+
+    assertThrows(IllegalAccessException.class, () -> jcrDeleteFileStorage.restoreFromTrash("elsewhere", mary));
+    verify(trashStorage, never()).restoreFromTrash(anyString(), any());
+    verify(userSession).logout();
   }
 }
