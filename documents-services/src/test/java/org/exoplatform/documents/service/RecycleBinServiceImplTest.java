@@ -405,6 +405,17 @@ class RecycleBinServiceImplTest {
     assertSame(mine, service.checkCanViewDocument("document-id", "john"));
     assertThrows(IllegalAccessException.class, () -> service.checkCanViewDocument("document-id", "root"));
     assertThrows(ObjectNotFoundException.class, () -> service.checkCanViewDocument("document-id", "john"));
+
+    // A folder and a shortcut have no View action in the bin, even for its holder.
+    RecycleBinItem folder = item(JOHN_ID, 3);
+    folder.setFolder(true);
+    RecycleBinItem shortcut = item(JOHN_ID, 0);
+    shortcut.setShortcut(true);
+    when(storage.getItemOfDocument("document-id")).thenReturn(folder, shortcut);
+    assertEquals(RecycleBinError.ITEM_NOT_FOUND,
+                 assertThrows(ObjectNotFoundException.class, () -> service.checkCanViewDocument("document-id", "john")).getMessage());
+    assertEquals(RecycleBinError.ITEM_NOT_FOUND,
+                 assertThrows(ObjectNotFoundException.class, () -> service.checkCanViewDocument("document-id", "john")).getMessage());
   }
 
   @Test
