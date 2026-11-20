@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
@@ -60,6 +61,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.security.AccessControlException;
 import javax.jcr.AccessDeniedException;
 import javax.jcr.Node;
+import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.nodetype.NodeType;
@@ -415,6 +417,49 @@ public class JCRDeleteFileStorageTest {
   }
 
   @Test
+  public void testAShortcutDeletedGoesToTheRecycleBinOfItsDriveAsItsDeleterDid() throws Exception {
+    String username = "testuser";
+    String path = "/Users/t___/te___/tes___/testuser/Private/Documents/report.docx";
+    long currentOwnerId = 2;
+    ExtendedSession shortcutSession = mock(ExtendedSession.class);
+    NodeImpl shortcut = prepareShortcutToDelete(username, currentOwnerId, shortcutSession, "shortcut-1", path);
+
+    try (MockedStatic<CommonsUtils> commonsUtils = mockStatic(CommonsUtils.class)) {
+      commonsUtils.when(() -> CommonsUtils.getService(JCRDocumentFileStorage.class)).thenReturn(mock(JCRDocumentFileStorage.class));
+      jcrDeleteFileStorage.deleteDocument(shortcutSession, path, "shortcut-1", false, true, 0,
+                                          new org.exoplatform.services.security.Identity(username), currentOwnerId);
+    }
+
+    // Kept in the Recycle Bin as deleted by its deleter, not removed for good
+    verify(trashStorage).moveToTrash(shortcut, sessionProvider, username);
+    verify(shortcut, never()).remove();
+  }
+
+  @Test
+  public void testAShortcutDeletedWithADelayGoesToTheRecycleBinOfItsDrive() throws Exception {
+    String username = "testuser";
+    String path = "/Users/t___/te___/tes___/testuser/Private/Documents/plan.docx";
+    long currentOwnerId = 2;
+    ExtendedSession shortcutSession = mock(ExtendedSession.class);
+    NodeImpl shortcut = prepareShortcutToDelete(username, currentOwnerId, shortcutSession, "shortcut-2", path);
+
+    jcrDeleteFileStorage.start();
+    try {
+      try (MockedStatic<CommonsUtils> commonsUtils = mockStatic(CommonsUtils.class)) {
+        commonsUtils.when(() -> CommonsUtils.getService(JCRDocumentFileStorage.class)).thenReturn(mock(JCRDocumentFileStorage.class));
+        jcrDeleteFileStorage.deleteDocument(shortcutSession, path, "shortcut-2", false, true, 1,
+                                            new org.exoplatform.services.security.Identity(username), currentOwnerId);
+      }
+
+      verify(trashStorage, timeout(10000)).moveToTrash(shortcut, sessionProvider, username);
+      verify(shortcut, never()).remove();
+    } finally {
+      JCRDeleteFileStorageImpl.documentsToDeleteQueue.remove("shortcut-2");
+      jcrDeleteFileStorage.stop();
+    }
+  }
+
+  @Test
   public void testDeleteDocumentSurfacesRemovalRefusal() throws Exception {
     String username = "testuser";
     String path = "/document/file1";
@@ -462,6 +507,36 @@ public class JCRDeleteFileStorageTest {
     // Already in trash: the delete removes the node outright instead of moving it there.
     when(trashStorage.isInTrash(node)).thenReturn(true);
     return node;
+  }
+
+  private NodeImpl prepareShortcutToDelete(String username,
+                                           long userIdentityId,
+                                           Session shortcutSession,
+                                           String shortcutId,
+                                           String path) throws Exception {
+    Identity deleter = new Identity(OrganizationIdentityProvider.NAME, username);
+    deleter.setId(String.valueOf(userIdentityId));
+    when(identityManager.getIdentity(String.valueOf(userIdentityId))).thenReturn(deleter);
+    when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
+
+    NodeImpl shortcut = Mockito.mock(NodeImpl.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(shortcutSession, shortcutId)).thenReturn(shortcut);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(shortcutSession, path)).thenReturn(shortcut);
+    // The static mocks reach only the thread of the test: a delayed deletion
+    // finds the node through the session itself.
+    when(shortcutSession.itemExists(path)).thenReturn(true);
+    when(shortcutSession.getItem(path)).thenReturn(shortcut);
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    NodeType symlinkType = mock(NodeType.class);
+    when(symlinkType.getName()).thenReturn(NodeTypeConstants.EXO_SYMLINK);
+    when(shortcut.getPrimaryNodeType()).thenReturn(symlinkType);
+    when(shortcut.getNodes()).thenReturn(mock(NodeIterator.class));
+    when(shortcut.getPath()).thenReturn(path);
+    when(shortcut.getParent()).thenReturn(mock(NodeImpl.class));
+    when(shortcut.isCheckedOut()).thenReturn(true);
+    when(trashStorage.moveToTrash(shortcut, sessionProvider, username)).thenReturn("trash-" + shortcutId);
+    when(trashStorage.getNodeByTrashId("trash-" + shortcutId)).thenReturn(shortcut);
+    return shortcut;
   }
 
   @Test

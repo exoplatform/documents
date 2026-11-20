@@ -463,6 +463,45 @@ class JCRRecycleBinStorageTest {
   }
 
   @Test
+  void theShortcutsUsersDeletedToWhatAFolderHeldLeaveWithTheFolder() throws Exception {
+    Item folder = jcr.add(JOHN_BIN + "/archive", "nt:folder");
+    folder.mixin("exo:recycleBinItem", "exo:restoreLocation").set("exo:trashId", ID_1).set("exo:recycleBinOwner", "7");
+    Item inside = jcr.addFile(JOHN_BIN + "/archive/Deep/inside.txt", 3);
+    Item outside = jcr.addFile("/Groups/spaces/marketing/Documents/outside.txt", 3);
+    // A shortcut the folder holds leaves with it, as the document it points to.
+    jcr.add(JOHN_BIN + "/archive/Deep/a-link", "exo:symlink").set("exo:uuid", inside.getId());
+    // Deleted by their user before the folder was: items of that user's bin.
+    Item toInside = shortcut("/Trash/Groups/spaces/marketing/inside-link", inside.getId(), ID_2, null);
+    toInside.set("exo:recycleBinOwner", "9").set("exo:recycleBinSize", 0L);
+    Item toOutside = shortcut("/Trash/Groups/spaces/marketing/outside-link", outside.getId(), ID_3, null);
+    toOutside.set("exo:recycleBinOwner", "9").set("exo:recycleBinSize", 0L);
+    Item toNothing = shortcut("/Trash/Groups/spaces/marketing/gone-link", "an-id-of-no-node", ID_4, null);
+    toNothing.set("exo:recycleBinOwner", "9").set("exo:recycleBinSize", 0L);
+    item(JOHN_BIN + "/mine.txt", "55555555-5555-5555-5555-555555555555", "7", "mine.txt", 1, Calendar.getInstance());
+    jcr.commit();
+
+    int before = jcr.getStatements().size();
+    List<RecycleBinItem> removedWithIt = storage.removeItem(ID_1);
+
+    assertEquals(List.of(ID_2), ids(removedWithIt));
+    assertNull(jcr.find(toInside.getId()));
+    assertNotNull(jcr.find(toOutside.getId()));
+    assertNotNull(jcr.find(toNothing.getId()));
+    assertEquals(1, jcr.getSaves());
+    // The shortcuts are looked up for the folder and each node it holds, not inside a document nor for a shortcut.
+    assertEquals(3, linkLookups(before));
+
+    // A document holds no node a shortcut may point at: its removal looks for its own shortcuts only.
+    before = jcr.getStatements().size();
+    storage.removeItem("55555555-5555-5555-5555-555555555555");
+    assertEquals(1, linkLookups(before));
+  }
+
+  private long linkLookups(int from) {
+    return jcr.getStatements().subList(from, jcr.getStatements().size()).stream().filter(s -> s.startsWith("SELECT * FROM exo:symlink ")).count();
+  }
+
+  @Test
   void aShortcutIsRemovedWithoutLookingForShortcutsToIt() throws Exception {
     Item own = shortcut(JOHN_BIN + "/own-link", "a-document", ID_4, null);
     own.set("exo:recycleBinOwner", "7");
@@ -528,10 +567,17 @@ class JCRRecycleBinStorageTest {
   @Test
   void theStatementsOfARemovalAreAcceptedByTheRepositoryParser() throws Exception {
     item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
+    Item folder = jcr.add(JOHN_BIN + "/archive", "nt:folder");
+    folder.mixin("exo:recycleBinItem", "exo:restoreLocation").set("exo:trashId", ID_2).set("exo:recycleBinOwner", "7");
+    jcr.addFile(JOHN_BIN + "/archive/inside.txt", 3);
+    jcr.commit();
 
     storage.removeItem(ID_1);
-
     assertEquals(3, jcr.getStatements().size());
+    // A folder may hold what a shortcut a user deleted points at.
+    storage.removeItem(ID_2);
+    assertEquals(7, jcr.getStatements().size());
+
     LocationFactory locationFactory = new LocationFactory(new NamespaceRegistryImpl());
     for (String statement : jcr.getStatements()) {
       assertNotNull(JCRSQLQueryBuilder.createQuery(statement, locationFactory, new DefaultQueryNodeFactory()), statement);
