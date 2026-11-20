@@ -47,7 +47,7 @@
           v-if="publicLinks"
           id="DocumentsKeepInsidePublicLinks"
           class="mb-2">
-          {{ $t('documents.spaceSettings.keepInside.confirm.publicLinks', {0: publicLinks}) }}
+          {{ publicLinksLine }}
           <a
             id="DocumentsKeepInsideSeeDocuments"
             href="#"
@@ -61,7 +61,7 @@
           v-if="sharedOutside"
           id="DocumentsKeepInsideSharedOutside"
           class="mb-2">
-          {{ $t('documents.spaceSettings.keepInside.confirm.sharedOutside', {0: sharedOutside}) }}
+          {{ sharedOutsideLine }}
         </p>
         <p id="DocumentsKeepInsideRestrictions" class="mb-2">
           {{ $t('documents.spaceSettings.keepInside.confirm.restrictions') }}
@@ -121,6 +121,17 @@ export default {
     },
     sharedOutside() {
       return this.counts?.sharedOutside || 0;
+    },
+    publicLinksLine() {
+      return this.publicLinks === 1
+        ? this.$t('documents.spaceSettings.keepInside.confirm.onePublicLink')
+        : this.$t('documents.spaceSettings.keepInside.confirm.publicLinks', {0: this.publicLinks});
+    },
+    // the documents still shared outside the space once the setting is on
+    sharedOutsideLine() {
+      return this.sharedOutside === 1
+        ? this.$t('documents.spaceSettings.keepInside.confirm.oneSharedOutside')
+        : this.$t('documents.spaceSettings.keepInside.confirm.sharedOutside', {0: this.sharedOutside});
     },
   },
   methods: {

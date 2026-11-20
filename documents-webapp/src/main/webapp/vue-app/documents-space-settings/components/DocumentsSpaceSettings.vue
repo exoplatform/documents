@@ -173,7 +173,7 @@ export default {
           .catch(error => {
             // the toggles show the stored values again, unless clicked since
             this.failedSaves++;
-            this.$root.$emit('alert-message', this.$t(this.errorLabelKey(error)), 'error');
+            this.$root.$emit('alert-message', this.$t(this.errorLabelKey(error, value)), 'error');
             return this.retrieveSettings();
           });
       });
@@ -190,14 +190,19 @@ export default {
         this.keepDocumentsInside = !!settings?.keepDocumentsInside;
       }
     },
-    errorLabelKey(error) {
+    // value: the value the failed save sent. The change not applied is the
+    // keep-inside one, refused when some public links could not be removed,
+    // on a turn-on as on a turn-off: those removed before stay removed
+    errorLabelKey(error, value) {
       switch (error?.code) {
       case 'space.security.notAllowed':
         return 'documents.spaceSettings.error.notAllowed';
       case 'space.concurrentUpdate':
         return 'documents.spaceSettings.error.concurrentUpdate';
       case 'space.security.changeNotApplied':
-        return 'documents.spaceSettings.error.changeNotApplied';
+        return value
+          ? 'documents.spaceSettings.keepInside.error.linksNotRemovedOn'
+          : 'documents.spaceSettings.keepInside.error.linksNotRemovedOff';
       default:
         break;
       }
