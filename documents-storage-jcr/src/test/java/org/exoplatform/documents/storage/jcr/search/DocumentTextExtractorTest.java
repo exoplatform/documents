@@ -221,6 +221,68 @@ class DocumentTextExtractorTest {
     assertEquals(Status.UNSUPPORTED_FORMAT, extractor.extract(DOCUMENT_ID).status());
   }
 
+  /**
+   * A Markdown file uploaded as generic binary, whose name the platform's
+   * table does not know, takes its type from the reader service's registry
+   * and is read (EXO-94846). Mutant: the registry's fallback removed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void resolvesAMarkdownFileStoredAsGenericBinaryFromTheReaderRegistry() throws Exception {
+    storedMimeType("application/octet-stream");
+    when(node.getName()).thenReturn("Supplier agreement - Acme Hosting.md");
+    readerReturning("text/x-web-markdown", "Agreement");
+
+    DocumentTextContent text = extractor.extract(DOCUMENT_ID);
+
+    assertEquals(Status.EXTRACTED, text.status());
+    verify(documentReaderService).getDocumentReader("text/x-web-markdown");
+  }
+
+  /**
+   * A name the registry gives a binary type stays unsupported, read by no
+   * reader: the fallback only names the type, the supported types still
+   * decide (EXO-94846). Mutant: the type check skipped for a registry type.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void keepsAGenericBinaryFileTheRegistryNamesBinaryUnsupported() throws Exception {
+    storedMimeType("application/octet-stream");
+    when(node.getName()).thenReturn("backup.zip");
+
+    assertEquals(Status.UNSUPPORTED_FORMAT, extractor.extract(DOCUMENT_ID).status());
+    verify(documentReaderService, never()).getDocumentReader(any());
+  }
+
+  /**
+   * A stored type other than the generic one is kept, whatever the name says:
+   * the registry is asked only when the stored type says nothing (EXO-94846).
+   * Mutant: the name's type used whatever the stored one.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void keepsAStoredTypeWhateverTheNameSays() throws Exception {
+    storedMimeType("image/png");
+    when(node.getName()).thenReturn("notes.md");
+
+    assertEquals(Status.UNSUPPORTED_FORMAT, extractor.extract(DOCUMENT_ID).status());
+    verify(documentReaderService, never()).getDocumentReader(any());
+  }
+
+  /**
+   * The registry reads a type from the name alone: a Markdown name gives the
+   * Markdown type, an unknown or blank name the generic binary one.
+   */
+  @Test
+  void readsTheTypeOfANameFromTheRegistry() {
+    assertEquals("text/x-web-markdown", DocumentTextExtractor.mimeTypeOfName("NDA template.md"));
+    assertEquals("application/octet-stream", DocumentTextExtractor.mimeTypeOfName("blob"));
+    assertEquals("application/octet-stream", DocumentTextExtractor.mimeTypeOfName(" "));
+  }
+
   @Test
   void supportsTheTypesTheSearchIndexExtractsTheTextOf() {
     assertTrue(extractor.isSupported("text/plain"));
@@ -255,6 +317,34 @@ class DocumentTextExtractorTest {
 
     assertEquals(Status.EXTRACTED, text.status());
     assertEquals("Minutes of the board", text.text().trim());
+  }
+
+  /**
+   * The platform's own reader service reads a Markdown file uploaded as
+   * generic binary, as the rig's « Supplier agreement - Acme Hosting.md »
+   * (EXO-94846). Mutant: the registry's fallback removed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void readsAMarkdownFileWithThePlatformReaderServiceItself() throws Exception {
+    extractor.shutdown();
+    TikaDocumentReaderServiceImpl platformReaderService = new TikaDocumentReaderServiceImpl(mock(ConfigurationManager.class),
+                                                                                            new InitParams());
+    extractor = new DocumentTextExtractor(null, platformReaderService, MAX_SIZE, 1000, 5000) {
+      @Override
+      protected Session openSystemSession() {
+        return session;
+      }
+    };
+    storedMimeType("application/octet-stream");
+    when(node.getName()).thenReturn("Supplier agreement - Acme Hosting.md");
+    when(data.getStream()).thenReturn(new ByteArrayInputStream("# Supplier agreement\n\nAcme hosts our servers.".getBytes(StandardCharsets.UTF_8)));
+
+    DocumentTextContent text = extractor.extract(DOCUMENT_ID);
+
+    assertEquals(Status.EXTRACTED, text.status());
+    assertTrue(text.text().contains("Acme hosts our servers."), text.text());
   }
 
   @Test
