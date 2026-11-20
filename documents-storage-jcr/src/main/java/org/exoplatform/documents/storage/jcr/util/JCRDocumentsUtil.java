@@ -49,6 +49,7 @@ import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.legacy.search.data.SearchResult;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -1212,21 +1213,37 @@ public class JCRDocumentsUtil {
                                                String sourcePath,
                                                String tempFolderPath,
                                                String parentPath) throws Exception {
-    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, parentPath, new HashSet<>());
+    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, parentPath, null, new HashSet<>());
+  }
+
+  /**
+   * Copies the tree under a node as {@link #createTempFilesAndFolders(Node,
+   * String, String, String, String)} does, leaving out every node in the
+   * trash: a shortcut whose target is there brings nothing.
+   *
+   * @param trashStorage tells a node in the trash
+   */
+  public static void createTempFilesAndFolders(Node node,
+                                               String tempFolderPath,
+                                               String parentPath,
+                                               TrashStorage trashStorage) throws Exception {
+    createTempFilesAndFolders(node, "", "", tempFolderPath, parentPath, trashStorage, new HashSet<>());
   }
 
   /**
    * Copies the tree under a node, following shortcuts to their targets.
    * {@code walkPath} holds the identifiers of the nodes on the current branch of
-   * the walk, so a node is walked at most once on any one branch.
+   * the walk, so a node is walked at most once on any one branch. A node in
+   * the trash is left out when {@code trashStorage} is given.
    */
   private static void createTempFilesAndFolders(Node node,
                                                 String symlinkPath,
                                                 String sourcePath,
                                                 String tempFolderPath,
                                                 String parentPath,
+                                                TrashStorage trashStorage,
                                                 Set<String> walkPath) throws Exception {
-    if (node == null) {
+    if (node == null || trashStorage != null && trashStorage.isInTrash(node)) {
       return;
     }
     String nodeId = ((ExtendedNode) node).getIdentifier();
@@ -1244,7 +1261,7 @@ public class JCRDocumentsUtil {
         NodeIterator nodeIterator = node.getNodes();
         while (nodeIterator.hasNext()) {
           Node child = nodeIterator.nextNode();
-          createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentPath, walkPath);
+          createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentPath, trashStorage, walkPath);
         }
       } else {
         if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
@@ -1256,6 +1273,7 @@ public class JCRDocumentsUtil {
                                       getPathWithTitles(sourceNode),
                                       tempFolderPath,
                                       parentPath,
+                                      trashStorage,
                                       walkPath);
           }
         } else {
