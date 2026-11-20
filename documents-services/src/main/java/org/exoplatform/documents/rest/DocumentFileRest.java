@@ -62,6 +62,7 @@ import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.exception.DocumentSharingRefusedException;
@@ -72,21 +73,27 @@ import org.exoplatform.documents.model.DocumentGroupsSize;
 import org.exoplatform.documents.model.DocumentNodeFilter;
 import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DownloadItem;
+import org.exoplatform.documents.model.ExposedDocumentPage;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.model.PublicDocumentInfo;
+import org.exoplatform.documents.model.SpaceDocumentsExposure;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
 import org.exoplatform.documents.rest.model.AbstractNodeEntity;
 import org.exoplatform.documents.rest.model.DocumentsUserSettings;
+import org.exoplatform.documents.rest.model.ExposedDocumentEntity;
+import org.exoplatform.documents.rest.model.ExposedDocumentsEntity;
 import org.exoplatform.documents.rest.model.FileNodeEntity;
 import org.exoplatform.documents.rest.model.NodePermissionEntity;
 import org.exoplatform.documents.rest.model.PublicDocumentAccessOptionsEntity;
+import org.exoplatform.documents.rest.model.SpaceDocumentsExposureEntity;
 import org.exoplatform.documents.rest.model.TrashElementEntity;
 
 import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.rest.util.RestUtils;
 import org.exoplatform.documents.service.DocumentFileService;
 import org.exoplatform.documents.service.ExternalDownloadService;
+import org.exoplatform.documents.service.SpaceDocumentsExposureService;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.documents.webdav.service.DocumentWebDavService;
 import org.exoplatform.portal.rest.CollectionEntity;
@@ -151,6 +158,8 @@ public class DocumentFileRest implements ResourceContainer {
   private final ExternalDownloadService     externalDownloadService;
 
   private final DocumentWebDavService       documentWebDavService;
+
+  private SpaceDocumentsExposureService     spaceDocumentsExposureService;
 
   public DocumentFileRest(DocumentFileService documentFileService, // NOSONAR
                           SpaceService spaceService,
@@ -241,6 +250,85 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (Exception e) {
       LOG.warn("Error retrieving the path of document '{}' in the drive of owner '{}'", documentId, ownerId, e);
       return Response.serverError().entity("error_retrieving_document_path_in_drive").cacheControl(NO_STORE_CACHE_CONTROL).build();
+    }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/space/{spaceId}/exposure")
+  @Operation(summary = "Count what a space's documents expose outside the space", method = "GET", description = "Returns, for a manager of the space, the count of its documents carrying a public link and of its documents and folders, trashed ones included, still shared outside the space once it keeps its documents inside: the everyone entry on the own access list of a document carrying a public link, which turning the setting on takes off with the link, is not counted.")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "401", description = "Unauthenticated user"),
+      @ApiResponse(responseCode = "403", description = "The user does not manage the space"),
+      @ApiResponse(responseCode = "404", description = "Space not found"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getSpaceDocumentsExposure(@Parameter(description = "Space technical identifier", required = true)
+                                            @PathParam("spaceId")
+                                            long spaceId) {
+    try {
+      SpaceDocumentsExposure exposure = getSpaceDocumentsExposureService().getExposure(spaceId, RestUtils.getCurrentUser());
+      return Response.ok(new SpaceDocumentsExposureEntity(exposure.publicLinks(), exposure.sharedOutside()))
+                     .cacheControl(NO_STORE_CACHE_CONTROL)
+                     .build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).entity("space_not_found").cacheControl(NO_STORE_CACHE_CONTROL).build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.FORBIDDEN).entity(e.getMessage()).cacheControl(NO_STORE_CACHE_CONTROL).build();
+    } catch (Exception e) {
+      LOG.warn("Error counting what the documents of space '{}' expose outside the space", spaceId, e);
+      return Response.serverError().entity("error_reading_space_documents_exposure").cacheControl(NO_STORE_CACHE_CONTROL).build();
+    }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @Path("/space/{spaceId}/exposure/publicLinks")
+  @Operation(summary = "List a space's documents carrying a public link", method = "GET", description = "Returns, for a manager of the space, a page of its documents carrying a public link, trashed ones included, sorted by name then identifier, with the size of the whole list.")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "Request fulfilled"),
+      @ApiResponse(responseCode = "400", description = "Invalid offset or limit"),
+      @ApiResponse(responseCode = "401", description = "Unauthenticated user"),
+      @ApiResponse(responseCode = "403", description = "The user does not manage the space"),
+      @ApiResponse(responseCode = "404", description = "Space not found"),
+      @ApiResponse(responseCode = "500", description = "Internal server error"), })
+  public Response getSpacePublicLinkDocuments(@Parameter(description = "Space technical identifier", required = true)
+                                              @PathParam("spaceId")
+                                              long spaceId,
+                                              @Parameter(description = "Index of the first document of the page, from 0")
+                                              @QueryParam("offset")
+                                              @DefaultValue("0")
+                                              int offset,
+                                              @Parameter(description = "Maximum count of documents of the page")
+                                              @QueryParam("limit")
+                                              @DefaultValue("20")
+                                              int limit) {
+    try {
+      ExposedDocumentPage page = getSpaceDocumentsExposureService().getPublicLinkDocuments(spaceId,
+                                                                                         offset,
+                                                                                         limit,
+                                                                                         RestUtils.getCurrentUser());
+      List<ExposedDocumentEntity> documents = page.documents()
+                                                  .stream()
+                                                  .map(document -> new ExposedDocumentEntity(document.id(),
+                                                                                             document.name(),
+                                                                                             document.folder() ? ExposedDocumentEntity.FOLDER_TYPE
+                                                                                                               : document.mimeType()))
+                                                  .toList();
+      return Response.ok(new ExposedDocumentsEntity(documents, page.size(), offset, limit))
+                     .cacheControl(NO_STORE_CACHE_CONTROL)
+                     .build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).entity("space_not_found").cacheControl(NO_STORE_CACHE_CONTROL).build();
+    } catch (IllegalAccessException e) {
+      return Response.status(Status.FORBIDDEN).entity(e.getMessage()).cacheControl(NO_STORE_CACHE_CONTROL).build();
+    } catch (IllegalArgumentException e) {
+      return Response.status(Status.BAD_REQUEST).entity(e.getMessage()).cacheControl(NO_STORE_CACHE_CONTROL).build();
+    } catch (Exception e) {
+      LOG.warn("Error listing the documents of space '{}' carrying a public link", spaceId, e);
+      return Response.serverError().entity("error_reading_space_public_links").cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
   }
 
@@ -2033,4 +2121,12 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
     }
   }
+
+  protected SpaceDocumentsExposureService getSpaceDocumentsExposureService() {
+    if (spaceDocumentsExposureService == null) {
+      spaceDocumentsExposureService = CommonsUtils.getService(SpaceDocumentsExposureService.class);
+    }
+    return spaceDocumentsExposureService;
+  }
+
 }
