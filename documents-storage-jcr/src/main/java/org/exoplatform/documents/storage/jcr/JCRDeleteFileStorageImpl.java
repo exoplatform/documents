@@ -293,16 +293,18 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
     String restorePath = trashNode.getProperty(NodeTypeConstants.RESTORE_PATH).getString();
     String restoreWorkspace = trashNode.getProperty(NodeTypeConstants.RESTORE_WORKSPACE).getString();
     String restoreFolderPath = StringUtils.defaultIfEmpty(StringUtils.substringBeforeLast(restorePath, "/"), "/");
-    // The session acts as the request's user, who is aclIdentity here
-    SessionProvider userSessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity);
+    // A session of aclIdentity itself, whoever the thread's user is
+    Session userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
     try {
-      Session userSession = userSessionProvider.getSession(restoreWorkspace, repositoryService.getCurrentRepository());
+      if (!restoreWorkspace.equals(userSession.getWorkspace().getName())) {
+        throw new IllegalAccessException("Document " + trashNodeId + " returns to another workspace: " + restoreWorkspace);
+      }
       userSession.checkPermission(restoreFolderPath, PermissionType.ADD_NODE);
     } catch (AccessControlException | PathNotFoundException e) {
       throw new IllegalAccessException("User " + aclIdentity.getUserId() + " may not restore document " + trashNodeId
           + " to its folder");
     } finally {
-      userSessionProvider.close();
+      userSession.logout();
     }
     trashStorage.restoreFromTrash(trashNode.getPath(), systemSessionProvider);
   }

@@ -521,16 +521,19 @@ public class JCRDeleteFileStorageTest {
     when(trashed.getProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(restoreWorkspace);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "trashed")).thenReturn(trashed);
     when(trashStorage.isInTrash(trashed)).thenReturn(true);
-    SessionProvider userSessionProvider = mock(SessionProvider.class);
+    // The check runs on a session of mary herself, never on the thread's user
     Session userSession = mock(Session.class);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, mary)).thenReturn(userSessionProvider);
-    when(userSessionProvider.getSession("collaboration", repository)).thenReturn(userSession);
+    javax.jcr.Workspace workspace = mock(javax.jcr.Workspace.class);
+    when(workspace.getName()).thenReturn("collaboration");
+    when(userSession.getWorkspace()).thenReturn(workspace);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.openUserSession(repositoryService, mary)).thenReturn(userSession);
 
     doThrow(new AccessControlException("denied")).when(userSession)
                                                  .checkPermission("/Groups/spaces/team/Documents", PermissionType.ADD_NODE);
     assertThrows(IllegalAccessException.class, () -> jcrDeleteFileStorage.restoreFromTrash("trashed", mary));
     verify(trashStorage, never()).restoreFromTrash(anyString(), any());
-    verify(userSessionProvider).close();
+    verify(userSession).logout();
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getUserSessionProvider(any(), eq(mary)), never());
 
     doNothing().when(userSession).checkPermission("/Groups/spaces/team/Documents", PermissionType.ADD_NODE);
     jcrDeleteFileStorage.restoreFromTrash("trashed", mary);
