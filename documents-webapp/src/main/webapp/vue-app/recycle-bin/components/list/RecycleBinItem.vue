@@ -35,6 +35,15 @@
           <v-icon :color="icon.color" size="22">{{ icon.class }}</v-icon>
         </div>
         <span :title="item.name" class="text-truncate ms-3">{{ item.name }}</span>
+        <template v-if="item.shortcut">
+          <v-icon
+            :title="$t('recycleBin.item.shortcut')"
+            class="recycle-bin-item-shortcut flex-shrink-0 icon-default-color ms-1"
+            size="13">
+            mdi-link-variant
+          </v-icon>
+          <span class="d-sr-only">{{ $t('recycleBin.item.shortcut') }}</span>
+        </template>
       </div>
     </td>
     <td
@@ -185,7 +194,8 @@ export default {
   computed: {
     icon() {
       const icons = this.$documentsIconsExtension?.[0];
-      return icons?.get?.(this.item.folder && 'folder' || this.item.mimeType)
+      // A shortcut shows the icon of what it points to, as in the Documents app.
+      return icons?.get?.((this.item.folder || this.item.targetFolder) && 'folder' || this.item.mimeType)
           || icons?.get?.('file')
           || {class: 'fas fa-file', color: null};
     },

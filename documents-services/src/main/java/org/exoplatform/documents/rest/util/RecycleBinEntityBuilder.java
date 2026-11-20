@@ -66,6 +66,8 @@ public final class RecycleBinEntityBuilder {
     entity.setId(item.getId());
     entity.setName(item.getName());
     entity.setFolder(item.isFolder());
+    entity.setShortcut(item.isShortcut());
+    entity.setTargetFolder(item.isTargetFolder());
     entity.setMimeType(item.getMimeType());
     entity.setSize(item.getSize());
     entity.setDeletedDate(item.getDeletedDate());

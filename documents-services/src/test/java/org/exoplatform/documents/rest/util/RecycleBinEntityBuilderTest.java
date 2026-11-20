@@ -94,8 +94,18 @@ class RecycleBinEntityBuilderTest {
     RecycleBinItem shortcut = item();
     shortcut.setShortcut(true);
     RecycleBinItemEntity shortcutEntity = RecycleBinEntityBuilder.toItemEntity(shortcut, true, identityManager);
+    assertTrue(shortcutEntity.isShortcut());
     assertFalse(shortcutEntity.isCanView());
     assertNull(shortcutEntity.getDocumentId());
+    assertFalse(folderEntity.isShortcut());
+
+    // A shortcut to a folder is shown as one, and stays no folder of its own.
+    shortcut.setTargetFolder(true);
+    RecycleBinItemEntity folderShortcutEntity = RecycleBinEntityBuilder.toItemEntity(shortcut, true, identityManager);
+    assertTrue(folderShortcutEntity.isTargetFolder());
+    assertFalse(folderShortcutEntity.isFolder());
+    assertFalse(folderShortcutEntity.isCanView());
+    assertFalse(shortcutEntity.isTargetFolder());
   }
 
   @Test
