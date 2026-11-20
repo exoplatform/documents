@@ -18,7 +18,7 @@
 %>
 <%@ page import="javax.portlet.PortletPreferences" %>
 <%@ page import="org.exoplatform.portal.localization.LocaleContextInfoUtils" %>
-<%@ page import="org.apache.commons.text.StringEscapeUtils" %>
+<%@ page import="org.exoplatform.documents.utils.DocumentUtils" %>
 
 <%@ taglib uri="http://java.sun.com/portlet_2_0" prefix="portlet" %>
 <portlet:defineObjects/>
@@ -58,7 +58,7 @@
         documentType: '<%=documentType%>',
         spaceIdentityId: '<%=spaceIdentityId%>',
         customHeader: <%=customHeader%>,
-        headerTitle: <%=headerTitle == null ? null : String.format("'%s'", StringEscapeUtils.escapeJava(headerTitle).replace("\\\"", "\"").replace("\\\\\"", "\\\""))%>,
+        headerTitle: <%=DocumentUtils.toScriptStringLiteral(headerTitle)%>,
         displaySeeMore: <%=displaySeeMore%>,
         maxDocumentsToList: <%=maxDocumentsToList%>,
         categoryIds: <%=categoryIds%>,
