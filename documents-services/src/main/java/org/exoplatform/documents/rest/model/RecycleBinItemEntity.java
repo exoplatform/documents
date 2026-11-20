@@ -33,6 +33,12 @@ public class RecycleBinItemEntity {
 
   private boolean          folder;
 
+  /** Whether the item is a shortcut a user deleted, not a document. */
+  private boolean          shortcut;
+
+  /** Whether the item is a shortcut to a folder, shown with a folder's icon. */
+  private boolean          targetFolder;
+
   private String           mimeType;
 
   private long             size;
