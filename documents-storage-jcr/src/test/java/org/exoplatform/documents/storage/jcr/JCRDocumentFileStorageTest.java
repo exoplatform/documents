@@ -1233,6 +1233,30 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
+  public void restoreVersionCreatesNoVersionWhenTheAccessListCannotBeKept() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Version version = mock(Version.class);
+    Node frozen = mock(Node.class);
+    Node node = mock(Node.class);
+    when(session.getNodeByUUID("123")).thenReturn(version);
+    when(version.getNode(NodeTypeConstants.JCR_FROZEN_NODE)).thenReturn(frozen);
+    when(Utils.getStringProperty(frozen, NodeTypeConstants.JCR_FROZEN_UUID)).thenReturn("111");
+    when(session.getNodeByUUID("111")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.putBackOwnPermissions(any(), any(), nullable(String.class), any()))
+                      .thenThrow(new javax.jcr.RepositoryException("refused"));
+
+    assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.restoreVersion("123", "user"));
+    verify(node, never()).checkin();
+  }
+
+  @Test
   public void renameDocument() throws Exception {
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
     Throwable exception = assertThrows(IllegalArgumentException.class,

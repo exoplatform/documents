@@ -1007,6 +1007,69 @@ public class JCRDocumentsUtil {
     return versionFileNode;
   }
 
+  /**
+   * Reads a document's own access list, to put it back after a change that
+   * resets it, such as a version restore
+   *
+   * @param node the document
+   * @return its own permissions by identity, or null when it has no list of
+   *         its own and reads its folder's
+   * @throws RepositoryException when the document can't be read
+   */
+  public static Map<String, String[]> getOwnPermissions(Node node) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+      return null; // NOSONAR null means no list of its own: the repository holds no empty one
+    }
+    return toPermissions((ExtendedNode) node);
+  }
+
+  private static Map<String, String[]> toPermissions(ExtendedNode node) throws RepositoryException {
+    Map<String, List<String>> permissions = new LinkedHashMap<>();
+    for (AccessControlEntry entry : node.getACL().getPermissionEntries()) {
+      permissions.computeIfAbsent(entry.getIdentity(), identity -> new ArrayList<>()).add(entry.getPermission());
+    }
+    Map<String, String[]> permissionsByIdentity = new LinkedHashMap<>();
+    permissions.forEach((identity, types) -> permissionsByIdentity.put(identity, types.toArray(new String[0])));
+    return permissionsByIdentity;
+  }
+
+  /**
+   * Gives a document back the access list read by
+   * {@link #getOwnPermissions(Node)}, through a system session, so that a
+   * user who may edit the document without changing its access can restore it.
+   * The document must be checked out: its mixins may change.
+   *
+   * @param repository the repository holding the document
+   * @param workspace the document's workspace
+   * @param nodeUuid the document's UUID
+   * @param ownPermissions its own permissions, or null when it had no list of
+   *          its own
+   * @throws RepositoryException when the list can't be put back
+   */
+  public static void putBackOwnPermissions(ManageableRepository repository,
+                                           String workspace,
+                                           String nodeUuid,
+                                           Map<String, String[]> ownPermissions) throws RepositoryException {
+    Session systemSession = repository.getSystemSession(workspace);
+    try {
+      ExtendedNode node = (ExtendedNode) systemSession.getNodeByUUID(nodeUuid);
+      if (ownPermissions != null) {
+        if (!node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+          node.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+        }
+        node.setPermissions(ownPermissions);
+      } else if (node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        // Removing the mixin keeps the list in effect: its folder's is set first
+        node.setPermissions(toPermissions((ExtendedNode) node.getParent()));
+        systemSession.save();
+        node.removeMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+      }
+      systemSession.save();
+    } finally {
+      systemSession.logout();
+    }
+  }
+
   public static String increaseNameIndex(String origin, int count) {
     int index = origin.indexOf('.');
     if (index == -1) {
