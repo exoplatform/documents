@@ -71,6 +71,8 @@ import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.attachments.service.AttachmentService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
@@ -101,6 +103,8 @@ import lombok.SneakyThrows;
 @Service
 @Profile("mcp-server")
 public class DocumentMcpTool implements McpToolPlugin {
+
+  private static final Log LOG = ExoLogger.getLogger(DocumentMcpTool.class);
 
   public static final String       FOLDER_URL_FORMAT = "/portal/dw/documents?folderId=%s";
 
@@ -762,16 +766,18 @@ public class DocumentMcpTool implements McpToolPlugin {
    * so the node is resolved from trash (it keeps its id/uuid after the move) and
    * restored to its original location, for a user who may add to that folder.
    */
-  public void undoDeleteDocument(String documentId) throws IllegalAccessException {
+  public void undoDeleteDocument(String documentId) {
     checkDocumentIdParameter(documentId);
     try {
       documentFileService.restoreDocumentFromTrash(documentId, getCurrentUserIdentityId());
-    } catch (ObjectNotFoundException e) {
-      throw new IllegalStateException(("Document %s is not in the trash (it may have been restored or permanently deleted), "
-          + "so it cannot be restored.").formatted(documentId));
+    } catch (ObjectNotFoundException | IllegalAccessException e) {
+      // One answer whether the document is in the trash or not, so that a refusal tells nothing of the trash
+      LOG.debug("Document {} not restored from the trash", documentId, e);
+      throw new IllegalStateException(("Document %s cannot be restored: it is not in the trash, or you may not add "
+          + "to the folder it was deleted from.").formatted(documentId));
     } catch (RepositoryException e) {
-      throw new IllegalStateException(("Could not restore document %s from trash: %s. It may not be in the trash "
-          + "(only documents deleted via delete_document can be restored this way).").formatted(documentId, e.getMessage()));
+      LOG.debug("Could not restore document {} from the trash", documentId, e);
+      throw new IllegalStateException("Could not restore document %s from the trash.".formatted(documentId));
     }
   }
 

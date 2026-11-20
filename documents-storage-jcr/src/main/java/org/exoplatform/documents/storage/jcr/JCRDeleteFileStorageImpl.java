@@ -287,7 +287,9 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                                                                            RepositoryException {
     SessionProvider systemSessionProvider = sessionProviderService.getSystemSessionProvider(null);
     Node trashNode = JCRDocumentsUtil.getNodeByIdentifier(trashStorage.getTrashHomeNode().getSession(), trashNodeId);
-    if (trashNode == null || !trashStorage.isInTrash(trashNode)) {
+    // Only a root of the trash carries its restore location: a node inside a trashed folder returns with that folder
+    if (trashNode == null || !trashStorage.isInTrash(trashNode) || !trashNode.hasProperty(NodeTypeConstants.RESTORE_PATH)
+        || !trashNode.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE)) {
       throw new ObjectNotFoundException("No document " + trashNodeId + " in the trash");
     }
     String restorePath = trashNode.getProperty(NodeTypeConstants.RESTORE_PATH).getString();

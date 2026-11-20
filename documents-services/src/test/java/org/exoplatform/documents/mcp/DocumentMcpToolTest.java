@@ -92,6 +92,9 @@ public class DocumentMcpToolTest {
 
   private static final String            DOCUMENT_ID  = "be0688cd7f00010134384ab7e1b15a48";
 
+  private static final String            UNDO_REFUSED = "Document " + DOCUMENT_ID
+      + " cannot be restored: it is not in the trash, or you may not add to the folder it was deleted from.";
+
   private static final String            FOLDER_ID    = "folder-42";
 
   private DocumentFileService            documentFileService;
@@ -1044,10 +1047,13 @@ public class DocumentMcpToolTest {
 
   @Test
   public void undoDeleteDocumentRefusesAUserWhoMayNotWriteTheFolder() throws Exception {
-    doThrow(new IllegalAccessException("not allowed")).when(documentFileService)
-                                                      .restoreDocumentFromTrash(DOCUMENT_ID, USER_IDENTITY_ID);
+    doThrow(new IllegalAccessException("User mary may not restore document")).when(documentFileService)
+                                                                              .restoreDocumentFromTrash(DOCUMENT_ID,
+                                                                                                        USER_IDENTITY_ID);
 
-    assertThrows(IllegalAccessException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    IllegalStateException refused = assertThrows(IllegalStateException.class,
+                                                 () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    assertEquals(UNDO_REFUSED, refused.getMessage());
   }
 
   @Test
@@ -1055,8 +1061,21 @@ public class DocumentMcpToolTest {
     doThrow(new ObjectNotFoundException("not in trash")).when(documentFileService)
                                                         .restoreDocumentFromTrash(DOCUMENT_ID, USER_IDENTITY_ID);
 
-    // Never silently succeed: a document no longer in trash must surface a clear error.
-    assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    // Never silently succeed, and answer as a refusal does: the answer tells nothing of the trash
+    IllegalStateException notInTrash = assertThrows(IllegalStateException.class,
+                                                    () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    assertEquals(UNDO_REFUSED, notInTrash.getMessage());
+  }
+
+  @Test
+  public void undoDeleteDocumentKeepsTheEngineMessageOutOfItsAnswer() throws Exception {
+    doThrow(new javax.jcr.PathNotFoundException("Property not found exo:restorePath")).when(documentFileService)
+                                                                                    .restoreDocumentFromTrash(DOCUMENT_ID,
+                                                                                                              USER_IDENTITY_ID);
+
+    IllegalStateException failed = assertThrows(IllegalStateException.class,
+                                                () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    assertEquals("Could not restore document " + DOCUMENT_ID + " from the trash.", failed.getMessage());
   }
 
   @Test
