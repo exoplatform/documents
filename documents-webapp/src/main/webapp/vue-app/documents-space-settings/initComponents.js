@@ -16,9 +16,13 @@
  */
 
 import DocumentsSpaceSettings from './components/DocumentsSpaceSettings.vue';
+import DocumentsKeepInsideConfirmDialog from './components/DocumentsKeepInsideConfirmDialog.vue';
+import DocumentsPublicLinksDrawer from './components/DocumentsPublicLinksDrawer.vue';
 
 const components = {
   'documents-space-settings': DocumentsSpaceSettings,
+  'documents-keep-inside-confirm-dialog': DocumentsKeepInsideConfirmDialog,
+  'documents-public-links-drawer': DocumentsPublicLinksDrawer,
 };
 
 for (const key in components) {
