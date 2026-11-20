@@ -196,6 +196,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                              Identity identity,
                              long userIdentityId) throws ObjectNotFoundException, RepositoryException {
     Node nodeToDelete = JCRDocumentsUtil.getNodeByIdentifier(session, documentId);
+    // A shortcut goes to the Recycle Bin of its drive, as a document does.
     boolean isSymlink = nodeToDelete != null && nodeToDelete.isNodeType(NodeTypeConstants.EXO_SYMLINK);
     if (folderPath == null) {
       folderPath = nodeToDelete.getPath();
@@ -212,7 +213,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
         // repository records that user as the last one to change the document.
         ConversationState.setCurrent(identity == null ? null : new ConversationState(identity));
         try {
-          moveToTrash(finalFolderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash, deletedBy);
+          moveToTrash(finalFolderPath, session, userIdentityId, favorite, checkToMoveToTrash, deletedBy);
         } catch (Exception e) {
           LOG.error("Error when deleting the document with path" + finalFolderPath, e);
         } finally {
@@ -223,7 +224,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       documentsToDeleteQueue.put(documentId, String.valueOf(userIdentityId));
       scheduledExecutor.schedule(() -> deletePendingDocument(documentId), delay, TimeUnit.SECONDS);
     } else {
-      moveToTrash(folderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash, deletedBy);
+      moveToTrash(folderPath, session, userIdentityId, favorite, checkToMoveToTrash, deletedBy);
     }
     if (isSymlink) {
       clearSymlinksNavHistory();

@@ -377,6 +377,10 @@ public class RecycleBinServiceImpl implements RecycleBinService {
                                                                                  IllegalAccessException {
     checkCaller(username);
     RecycleBinItem item = getItemOfDocument(documentId);
+    // A folder or a shortcut has no View action in the bin, as its entity says.
+    if (item.isFolder() || item.isShortcut()) {
+      throw new ObjectNotFoundException(RecycleBinError.ITEM_NOT_FOUND);
+    }
     if (!holdsBinOf(item, username)) {
       throw new IllegalAccessException("User " + username + " may not read the deleted document " + documentId);
     }

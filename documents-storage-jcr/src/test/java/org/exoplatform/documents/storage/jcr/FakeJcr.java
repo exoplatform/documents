@@ -681,6 +681,8 @@ public class FakeJcr {
       return node(session, item.parent);
     case "hasNode":
       return child(item, invocation.getArgument(0)) != null;
+    case "hasNodes":
+      return !item.children.isEmpty();
     case "getNode": {
       Item child = child(item, invocation.getArgument(0));
       if (child == null) {

@@ -20,8 +20,10 @@ import java.security.AccessControlException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -278,14 +280,12 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
         // What leaves with the item, by path: a shortcut may be found twice.
         Map<String, Node> shortcuts = new TreeMap<>(Comparator.reverseOrder());
         if (!item.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-          collect(session,
-                  "SELECT * FROM " + NodeTypeConstants.EXO_SYMLINK + " WHERE " + NodeTypeConstants.EXO_SYMLINK_UUID + "='"
-                      + ((ExtendedNode) item).getIdentifier() + "' AND " + NodeTypeConstants.EXO_WORKSPACE + "='"
-                      + trashWorkspace.replace("'", "''") + "'",
-                  itemPath,
-                  shortcuts);
+          collect(session, linksTo(item), itemPath, shortcuts);
         }
         collect(session, selectItems() + " AND " + NodeTypeConstants.RECYCLE_BIN_OF + " = '" + itemId + "'", itemPath, shortcuts);
+        if (JCRDocumentsUtil.isFolder(item)) {
+          collectShortcutsInside(session, item, itemPath, shortcuts);
+        }
         // A shortcut that leaves with the item may be an item of a bin itself:
         // it is read before it is removed, for the caller to count it out. A
         // shortcut outside the trash is in no bin, whatever marks it kept.
@@ -826,6 +826,38 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
         found.put(path, node);
       }
     }
+  }
+
+  /**
+   * Adds the shortcuts to the nodes a folder holds, looked up node by node as
+   * the trash of the folder walked them: the shortcuts users deleted to one of
+   * them are items of their own bins, which the trash of the folder left where
+   * they were, and which would point at nothing once the folder is gone.
+   */
+  private void collectShortcutsInside(Session session, Node folder, String folderPath, Map<String, Node> found) throws RepositoryException {
+    Deque<Node> nodes = new ArrayDeque<>();
+    for (NodeIterator children = folder.getNodes(); children.hasNext();) {
+      nodes.add(children.nextNode());
+    }
+    while (!nodes.isEmpty()) {
+      Node node = nodes.poll();
+      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        continue;
+      }
+      collect(session, linksTo(node), folderPath, found);
+      if (JCRDocumentsUtil.isFolder(node)) {
+        for (NodeIterator children = node.getNodes(); children.hasNext();) {
+          nodes.add(children.nextNode());
+        }
+      }
+    }
+  }
+
+  /** The statement that finds the shortcuts to a node of the trash. */
+  private String linksTo(Node node) throws RepositoryException {
+    return "SELECT * FROM " + NodeTypeConstants.EXO_SYMLINK + " WHERE " + NodeTypeConstants.EXO_SYMLINK_UUID + "='"
+        + ((ExtendedNode) node).getIdentifier() + "' AND " + NodeTypeConstants.EXO_WORKSPACE + "='" + trashWorkspace.replace("'", "''")
+        + "'";
   }
 
   /**
