@@ -487,8 +487,10 @@ class JCRRecycleBinStorageRestoreTest {
   void theEntryOfThePlatformAdministratorsIsRemovedFromTheRecordedPermissionsTooAndKeptInASpace() throws Exception {
     Item mine = binItem(JOHN_BIN + "/a.txt", ID_1, "7", JOHN_ROOT + "/Gone/a.txt", null);
     mine.set("exo:recycleBinPermissions", new String[] { ADMINISTRATORS + " read", "john read" });
+    Item document = jcr.addFile(JOHN_FOLDER + "/plan.docx", 1);
     Item shortcut = jcr.add(JOHN_BIN + "/link", "exo:symlink");
     shortcut.mixin("exo:restoreLocation", "exo:recycleBinItem", "exo:privilegeable")
+            .set("exo:uuid", document.getId())
             .set("exo:trashId", ID_2)
             .set("exo:recycleBinOwner", "7")
             .set("exo:restorePath", JOHN_FOLDER + "/link")
@@ -545,6 +547,38 @@ class JCRRecycleBinStorageRestoreTest {
     assertSame(jcr.find(ofAnotherWorkspace.getId()), jcr.at(SALES_BIN + "/elsewhere"));
     assertEquals(1, jcr.getSaves());
     assertEquals(List.of("mary " + JOHN_FOLDER + " add_node"), jcr.getPermissionChecks());
+  }
+
+  @Test
+  void aShortcutADeleterSentToTheBinIsRestoredOnlyWhileItsDocumentIsOutOfTheTrash() throws Exception {
+    Item live = jcr.addFile(JOHN_FOLDER + "/live.docx", 5);
+    Item trashed = jcr.addFile(SALES_BIN + "/trashed.docx", 5);
+    Item archived = archive.addFile("/Library/book.pdf", 5);
+    Item toLive = deletedShortcut(JOHN_BIN + "/to-live", ID_1, JOHN_FOLDER + "/to-live", live.getId());
+    deletedShortcut(JOHN_BIN + "/to-trashed", ID_2, JOHN_FOLDER + "/to-trashed", trashed.getId());
+    deletedShortcut(JOHN_BIN + "/to-gone", ID_3, JOHN_FOLDER + "/to-gone", "an-id-of-no-node");
+    deletedShortcut(JOHN_BIN + "/to-nothing", "55555555-5555-5555-5555-555555555555", JOHN_FOLDER + "/to-nothing", " ");
+    Item toArchived = deletedShortcut(JOHN_BIN + "/to-archived",
+                                      "44444444-4444-4444-4444-444444444444",
+                                      JOHN_FOLDER + "/to-archived",
+                                      archived.getId());
+    toArchived.set("exo:workspace", "archive");
+    jcr.commit();
+
+    // Restored while its document is in a Recycle Bin, or gone, it would open nothing.
+    assertShortcutRefused(ID_2, RecycleBinError.RESTORE_SHORTCUT_TARGET_IN_BIN);
+    assertShortcutRefused(ID_3, RecycleBinError.RESTORE_SHORTCUT_TARGET_GONE);
+    assertShortcutRefused("55555555-5555-5555-5555-555555555555", RecycleBinError.RESTORE_SHORTCUT_TARGET_GONE);
+    assertNotNull(jcr.at(JOHN_BIN + "/to-trashed"));
+    assertNotNull(jcr.at(JOHN_BIN + "/to-gone"));
+    assertNotNull(jcr.at(JOHN_BIN + "/to-nothing"));
+    assertEquals(0, jcr.getSaves());
+
+    storage.restoreItem(ID_1, MARY, false);
+    storage.restoreItem("44444444-4444-4444-4444-444444444444", MARY, false);
+
+    assertSame(jcr.find(toLive.getId()), jcr.at(JOHN_FOLDER + "/to-live"));
+    assertSame(jcr.find(toArchived.getId()), jcr.at(JOHN_FOLDER + "/to-archived"));
   }
 
   @Test
@@ -672,6 +706,11 @@ class JCRRecycleBinStorageRestoreTest {
     assertEquals(RecycleBinError.RESTORE_TARGET_FORBIDDEN, refusal.getMessage());
   }
 
+  private void assertShortcutRefused(String itemId, String code) {
+    IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class, () -> storage.restoreItem(itemId, MARY, false));
+    assertEquals(code, refusal.getMessage());
+  }
+
   private void assertNotFound(String itemId) {
     ObjectNotFoundException refusal = assertThrows(ObjectNotFoundException.class, () -> storage.restoreItem(itemId, MARY, false));
     assertEquals(RecycleBinError.ITEM_NOT_FOUND, refusal.getMessage());
@@ -716,6 +755,25 @@ class JCRRecycleBinStorageRestoreTest {
     if (parentId != null) {
       link.set("exo:restoreParentId", parentId);
     }
+    jcr.commit();
+    return link;
+  }
+
+  /**
+   * A shortcut a user deleted: an item of the bin of the drive it was in,
+   * pointing at the node of the id given.
+   */
+  private Item deletedShortcut(String path, String trashId, String restorePath, String targetId) {
+    Item link = jcr.add(path, "exo:symlink");
+    link.mixin("exo:restoreLocation", "exo:recycleBinItem")
+        .set("exo:uuid", targetId)
+        .set("exo:workspace", WORKSPACE)
+        .set("exo:trashId", trashId)
+        .set("exo:recycleBinOwner", "7")
+        .set("exo:recycleBinSize", 0L)
+        .set("exo:restorePath", restorePath)
+        .set("exo:restoreWorkspace", WORKSPACE)
+        .set("exo:restoreParentId", johnFolder.getId());
     jcr.commit();
     return link;
   }
