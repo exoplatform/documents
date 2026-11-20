@@ -539,7 +539,8 @@ public interface DocumentFileStorage {
    * Gets a download item of a given document
    *
    * @param documentId document id
-   * @return {@link DownloadItem}
+   * @return {@link DownloadItem}, or null when no document has this id, it is
+   *         in the trash or it cannot be read
    */
   DownloadItem getDocumentDownloadItem(String documentId);
 
@@ -553,7 +554,7 @@ public interface DocumentFileStorage {
    *
    * @param documentId document id
    * @return {@link DownloadItem} without content, or null when no document
-   *         has this id or it cannot be read
+   *         has this id, it is in the trash or it cannot be read
    */
   DownloadItem getDocumentDownloadInfo(String documentId);
 
@@ -565,8 +566,8 @@ public interface DocumentFileStorage {
    * @param folderId folder node id
    * @param aclIdentity the user whose rights the walk applies
    * @return downloaded zip path, or null when the zip cannot be built
-   * @throws ObjectNotFoundException when the user cannot read the folder or no
-   *           node has this id
+   * @throws ObjectNotFoundException when the user cannot read the folder, it
+   *           is in the trash or no node has this id
    */
   String downloadFolder(String folderId, Identity aclIdentity) throws ObjectNotFoundException;
 
@@ -577,8 +578,8 @@ public interface DocumentFileStorage {
    *
    * @param folderId folder node id
    * @param aclIdentity the user whose rights apply
-   * @throws ObjectNotFoundException when the user cannot read the folder or no
-   *           node has this id
+   * @throws ObjectNotFoundException when the user cannot read the folder, it
+   *           is in the trash or no node has this id
    * @throws IllegalStateException when the folder cannot be read for another
    *           reason
    */
