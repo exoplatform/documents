@@ -212,7 +212,7 @@ public class FakeJcr {
       Item child = last ? null : child(parent, segments[i]);
       if (child == null) {
         child = new Item();
-        child.id = "id" + nextId++;
+        child.id = newId();
         child.name = segments[i];
         child.primaryType = last ? primaryType : "nt:unstructured";
         child.parent = parent;
@@ -251,6 +251,11 @@ public class FakeJcr {
       }
     }
     return item;
+  }
+
+  /** An id of its own workspace: a JCR never gives one id to nodes of two workspaces. */
+  private String newId() {
+    return workspaceName + "-id" + nextId++;
   }
 
   /** The node of an id in the current state, null when there is none. */
@@ -701,7 +706,7 @@ public class FakeJcr {
     }
     case "addNode": {
       Item child = new Item();
-      child.id = "id" + nextId++;
+      child.id = newId();
       child.name = invocation.getArgument(0);
       child.primaryType = invocation.getArguments().length > 1 ? invocation.getArgument(1) : "nt:unstructured";
       child.parent = item;

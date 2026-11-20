@@ -34,6 +34,12 @@ public final class RecycleBinError {
   /** Neither the folder the item was deleted from nor a drive to restore it to exists any more. */
   public static final String RESTORE_LOCATION_MISSING = "recycleBin.restore.locationMissing";
 
+  /** The item is a shortcut whose document is in a Recycle Bin: restored, it would open nothing until that document is restored. */
+  public static final String RESTORE_SHORTCUT_TARGET_IN_BIN = "recycleBin.restore.shortcutTargetInBin";
+
+  /** The item is a shortcut whose document no longer exists: restored, it would open nothing. */
+  public static final String RESTORE_SHORTCUT_TARGET_GONE = "recycleBin.restore.shortcutTargetGone";
+
   /** The retention period asked for is outside the bounds a period may take. */
   public static final String RETENTION_INVALID        = "recycleBin.retention.invalid";
 

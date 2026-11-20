@@ -1906,7 +1906,7 @@ public class DocumentFileRest implements ResourceContainer {
   @RolesAllowed("users")
   @Operation(summary = "Restores an item of a Recycle Bin", method = "PUT", description = "Restores an item of a Recycle Bin")
   @ApiResponses(value = { @ApiResponse(responseCode = "204", description = "Request fulfilled"),
-      @ApiResponse(responseCode = "400", description = "No location to restore the item to exists any more"),
+      @ApiResponse(responseCode = "400", description = "No location to restore the item to exists any more, or the item is a shortcut whose document is in a Recycle Bin or no longer exists"),
       @ApiResponse(responseCode = "403", description = "The user does not hold the bin or can add content to no target"),
       @ApiResponse(responseCode = "404", description = "The item is no longer in the bin"), })
   public Response restoreRecycleBinItem(@Parameter(description = "Id of the item in the bin", required = true) @PathParam("id") String id,
