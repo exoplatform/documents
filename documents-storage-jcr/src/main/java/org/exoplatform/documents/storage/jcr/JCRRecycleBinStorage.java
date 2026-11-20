@@ -39,6 +39,8 @@ import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.Value;
+import javax.jcr.nodetype.NoSuchNodeTypeException;
+import javax.jcr.nodetype.NodeType;
 import javax.jcr.query.Query;
 
 import org.apache.commons.lang3.StringUtils;
@@ -948,6 +950,51 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
     };
   }
 
+  /**
+   * Whether a node of the type named is listed as a folder, as the Documents
+   * app lists the target of a shortcut: a folder, or a type extending one. A
+   * type the repository no longer registers, under a namespace it still knows,
+   * is no folder.
+   */
+  private static boolean isFolderType(Session session, String typeName) throws RepositoryException {
+    try {
+      NodeType type = session.getWorkspace().getNodeTypeManager().getNodeType(typeName);
+      return type.isNodeType(NodeTypeConstants.NT_FOLDER) || type.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED);
+    } catch (NoSuchNodeTypeException e) {
+      return false;
+    }
+  }
+
+  /**
+   * Gives a shortcut the type of what it points to, for its icon: as the
+   * shortcut recorded it when it was created; read on the node it points to
+   * when it recorded neither a folder's type nor a mime type, as a duplicated
+   * or pasted shortcut, which records its own type, or one created out of the
+   * Documents app; kept as recorded when that node is gone or in another
+   * workspace.
+   */
+  private static void readTargetType(Node shortcut, RecycleBinItem item) throws RepositoryException {
+    Session session = shortcut.getSession();
+    String targetType = getString(shortcut, NodeTypeConstants.EXO_PRIMARY_TYPE);
+    boolean targetFolder = targetType != null && isFolderType(session, targetType);
+    String mimeType = getString(shortcut, NodeTypeConstants.EXO_FILE_TYPE);
+    String targetWorkspace = getString(shortcut, NodeTypeConstants.EXO_WORKSPACE);
+    if (!targetFolder && StringUtils.isBlank(mimeType)
+        && (targetWorkspace == null || targetWorkspace.equals(session.getWorkspace().getName()))) {
+      try {
+        Node target = ((ExtendedSession) session).getNodeByIdentifier(getString(shortcut, NodeTypeConstants.EXO_SYMLINK_UUID));
+        targetFolder = target.isNodeType(NodeTypeConstants.NT_FOLDER) || target.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED);
+        if (!targetFolder && target.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+          mimeType = getString(target.getNode(NodeTypeConstants.JCR_CONTENT), NodeTypeConstants.JCR_MIME_TYPE);
+        }
+      } catch (ItemNotFoundException e) {
+        // Gone: the recorded values stay.
+      }
+    }
+    item.setTargetFolder(targetFolder);
+    item.setMimeType(StringUtils.isBlank(mimeType) ? null : mimeType);
+  }
+
   private static RecycleBinItem toItem(Node node) throws RepositoryException {
     RecycleBinItem item = new RecycleBinItem();
     item.setId(getString(node, NodeTypeConstants.TRASH_ID));
@@ -958,7 +1005,9 @@ public class JCRRecycleBinStorage implements RecycleBinStorage {
     item.setName(JCRDocumentsUtil.getTitle(node));
     item.setShortcut(node.isNodeType(NodeTypeConstants.EXO_SYMLINK));
     item.setFolder(!item.isShortcut() && JCRDocumentsUtil.isFolder(node));
-    if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+    if (item.isShortcut()) {
+      readTargetType(node, item);
+    } else if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
       item.setMimeType(getString(node.getNode(NodeTypeConstants.JCR_CONTENT), NodeTypeConstants.JCR_MIME_TYPE));
     }
     if (node.hasProperty(NodeTypeConstants.RECYCLE_BIN_SIZE)) {

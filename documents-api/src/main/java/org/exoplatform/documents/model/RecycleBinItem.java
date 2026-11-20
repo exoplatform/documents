@@ -54,6 +54,12 @@ public class RecycleBinItem {
   /** Whether the item is a shortcut to another document. */
   private boolean shortcut;
 
+  /**
+   * Whether the item is a shortcut to a folder: it is shown with a folder's
+   * icon, and is no folder of its own.
+   */
+  private boolean targetFolder;
+
   private String  mimeType;
 
   /** Size in bytes: of a file its content, of a folder the files it holds. */

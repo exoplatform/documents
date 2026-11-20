@@ -43,7 +43,9 @@ import javax.jcr.Property;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.Workspace;
+import javax.jcr.nodetype.NoSuchNodeTypeException;
 import javax.jcr.nodetype.NodeType;
+import javax.jcr.nodetype.NodeTypeManager;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
@@ -482,11 +484,36 @@ public class FakeJcr {
           return null;
         }).when(workspace).clone(anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyBoolean());
         lenient().when(queryManager.createQuery(anyString(), anyString())).thenAnswer(invocation -> query(session, invocation.getArgument(0)));
+        NodeTypeManager nodeTypeManager = mock(NodeTypeManager.class);
+        lenient().when(workspace.getNodeTypeManager()).thenReturn(nodeTypeManager);
+        lenient().when(nodeTypeManager.getNodeType(anyString())).thenAnswer(invocation -> nodeType(invocation.getArgument(0)));
         return workspace;
       } catch (RepositoryException e) {
         throw new IllegalStateException(e);
       }
     });
+  }
+
+  /** The node types the repository knows, with their supertypes. */
+  private final Map<String, Set<String>> nodeTypes = new HashMap<>(Map.of("nt:file", Set.of(),
+                                                                          "nt:folder", Set.of(),
+                                                                          "nt:unstructured", Set.of()));
+
+  /** Makes a node type known to the repository, with the types it extends. */
+  public void declareNodeType(String name, String... supertypes) {
+    nodeTypes.put(name, Set.of(supertypes));
+  }
+
+  private NodeType nodeType(String name) throws NoSuchNodeTypeException {
+    Set<String> supertypes = nodeTypes.get(name);
+    if (supertypes == null) {
+      throw new NoSuchNodeTypeException(name);
+    }
+    NodeType nodeType = mock(NodeType.class);
+    lenient().when(nodeType.getName()).thenReturn(name);
+    lenient().when(nodeType.isNodeType(anyString())).thenAnswer(invocation -> name.equals(invocation.getArgument(0))
+        || supertypes.contains(invocation.getArgument(0)));
+    return nodeType;
   }
 
   private final Map<String, FakeJcr> otherWorkspaces = new HashMap<>();
