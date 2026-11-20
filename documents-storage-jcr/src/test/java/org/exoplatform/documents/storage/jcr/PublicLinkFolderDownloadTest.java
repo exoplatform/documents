@@ -21,6 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -47,6 +50,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.container.StandaloneContainer;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
@@ -101,6 +106,10 @@ class PublicLinkFolderDownloadTest {
 
   private static String                 sharedWithMemberId;
 
+  private static String                 withTrashedTargetId;
+
+  private static String                 toTrashId;
+
   @BeforeAll
   static void setUpRepository() throws Exception {
     RepositoryService repositoryService = startContainer().getComponentInstanceOfType(RepositoryService.class);
@@ -143,11 +152,28 @@ class PublicLinkFolderDownloadTest {
     addShortcut(shared, "other-space.txt", unreadableTarget);
     addShortcut(shared, "readable-target.txt", readableTarget);
     systemSession.save();
+    // the trash, holding a document only mary reads, which a live folder of
+    // space1 links to; and a space1 folder the test sends to the trash
+    Node trash = root.addNode("Trash", "nt:folder");
+    Node trashedOfMember = addFile(trash, "trashed-of-mary.txt", "mary only, in the trash");
+    setPermissions(trashedOfMember, Map.of("mary", PermissionType.ALL));
+    Node withTrashedTarget = space1.addNode("WithTrashedTarget", "nt:folder");
+    addFile(withTrashedTarget, "kept.txt", "every space1 member");
+    Node toTrash = space1.addNode("ToTrash", "nt:folder");
+    setPermissions(toTrash, Map.of("*:/spaces/space1", PermissionType.ALL));
+    addFile(toTrash, "inside.txt", "every space1 member");
+    systemSession.save();
+    addShortcut(withTrashedTarget, "trashed-of-mary.txt", trashedOfMember);
+    systemSession.save();
+    withTrashedTargetId = ((ExtendedNode) withTrashedTarget).getIdentifier();
+    toTrashId = ((ExtendedNode) toTrash).getIdentifier();
     sharedFolderId = ((ExtendedNode) shared).getIdentifier();
     restrictedFolderId = ((ExtendedNode) restricted).getIdentifier();
     sharedWithMemberId = ((ExtendedNode) sharedWithMember).getIdentifier();
 
-    storage = new JCRDocumentFileStorage(null, repositoryService, null, null, null, null, null, null, null, null, null);
+    TrashStorage trashStorage = mock(TrashStorage.class);
+    when(trashStorage.isInTrash(any())).thenAnswer(invocation -> invocation.<Node> getArgument(0).getPath().startsWith("/Trash/"));
+    storage = new JCRDocumentFileStorage(null, repositoryService, null, null, null, null, null, null, null, null, null, trashStorage);
   }
 
   @AfterAll
@@ -252,7 +278,8 @@ class PublicLinkFolderDownloadTest {
     storage.checkFolderReadable(sharedFolderId, MEMBER);
     storage.checkFolderReadable(sharedWithMemberId, MEMBER);
     storage.checkFolderReadable(restrictedFolderId, HOST);
-    assertThrows(ObjectNotFoundException.class, () -> storage.checkFolderReadable(restrictedFolderId, MEMBER));
+    assertEquals("Folder " + restrictedFolderId + " is not readable by the identity whose rights apply",
+                 assertThrows(ObjectNotFoundException.class, () -> storage.checkFolderReadable(restrictedFolderId, MEMBER)).getMessage());
     assertEquals(tempFoldersBefore, tempDownloadFolders(), "the check copies nothing");
   }
 
@@ -269,6 +296,53 @@ class PublicLinkFolderDownloadTest {
       assertTrue(new File(tempFolder, "public.txt").isFile(), "the file is written at its name under the temp folder");
     } finally {
       org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanFiles(tempFolder);
+    }
+  }
+
+  /**
+   * A linked folder in the trash is not found, by the download as by its
+   * check, though its creator still reads it; restored under the same id, it
+   * is served again.
+   */
+  @Test
+  void aTrashedFolderIsNotFoundAndIsServedAgainOnceRestored() throws Exception {
+    systemSession.move("/space1/ToTrash", "/Trash/ToTrash");
+    systemSession.save();
+    try {
+      assertEquals("Folder " + toTrashId + " is in the trash",
+                   assertThrows(ObjectNotFoundException.class, () -> storage.checkFolderReadable(toTrashId, MEMBER)).getMessage());
+      assertEquals("Folder " + toTrashId + " is in the trash",
+                   assertThrows(ObjectNotFoundException.class, () -> storage.downloadFolder(toTrashId, MEMBER)).getMessage());
+    } finally {
+      systemSession.move("/Trash/ToTrash", "/space1/ToTrash");
+      systemSession.save();
+    }
+
+    storage.checkFolderReadable(toTrashId, MEMBER);
+    List<String> entries = zipEntries(storage.downloadFolder(toTrashId, MEMBER));
+    assertTrue(entries.contains("ToTrash/inside.txt"), "served again once restored: " + entries);
+  }
+
+  /**
+   * A shortcut of a live linked folder whose target is in the trash brings
+   * nothing into the link's archive, though the creator reads that target;
+   * the bulk download's walk, in the same user's session, keeps it.
+   */
+  @Test
+  void aShortcutToATrashedDocumentIsLeftOutOfTheLinkArchiveAndKeptByTheBulkWalk() throws Exception {
+    List<String> entries = zipEntries(storage.downloadFolder(withTrashedTargetId, MEMBER));
+    assertTrue(entries.contains("WithTrashedTarget/kept.txt"), "the live content stays: " + entries);
+    assertFalse(entries.contains("WithTrashedTarget/trashed-of-mary.txt"), "the trashed target is left out: " + entries);
+
+    File tempFolder = Files.createTempDirectory("bulk-walk").toFile();
+    org.exoplatform.services.jcr.core.ExtendedSession memberSession = sessionOf(MEMBER);
+    try {
+      Node folder = memberSession.getNodeByIdentifier(withTrashedTargetId);
+      JCRDocumentsUtil.createTempFilesAndFolders(folder, "", "", tempFolder.getPath(), folder.getParent());
+      assertTrue(new File(tempFolder, "WithTrashedTarget/trashed-of-mary.txt").isFile(), "the bulk walk keeps the target");
+    } finally {
+      memberSession.logout();
+      JCRDocumentsUtil.cleanFiles(tempFolder);
     }
   }
 
