@@ -315,9 +315,9 @@ public class ActionThread implements Runnable {
 
   /**
    * Applies the operation of the action to each of its items, in the order
-   * given, as the user the action was started for. An item that is no longer
-   * there is left out, one that fails is counted and the others go on, and a
-   * cancellation leaves the items not yet reached.
+   * the operation asks for, as the user the action was started for. An item
+   * that is no longer there is left out, one that fails is counted and the
+   * others go on, and a cancellation leaves the items not yet reached.
    */
   private void applyItemAction() {
     ConversationState previousState = ConversationState.getCurrent();
@@ -328,7 +328,7 @@ public class ActionThread implements Runnable {
       int errors = 0;
       boolean canceled = false;
       List<String> treatedItemsIds = new ArrayList<>();
-      for (String itemId : itemIds) {
+      for (String itemId : orderedItemIds()) {
         if (ActionStatus.CANCELED.name().equals(actionData.getStatus())) {
           canceled = true;
           break;
@@ -357,6 +357,19 @@ public class ActionThread implements Runnable {
     } finally {
       ConversationState.setCurrent(previousState);
       bulkStorageActionService.releaseActionData(actionData);
+    }
+  }
+
+  /** The items in the order the operation asks for, or as given when it cannot tell. */
+  private List<String> orderedItemIds() {
+    try {
+      return itemAction.order(itemIds);
+    } catch (RuntimeException e) {
+      log.warn("The items of the action {} {} could not be ordered: they are acted on in the order given",
+               actionData.getActionType(),
+               actionData.getActionId(),
+               e);
+      return itemIds;
     }
   }
 

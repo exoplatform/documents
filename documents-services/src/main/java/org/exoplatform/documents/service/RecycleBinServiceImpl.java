@@ -238,18 +238,49 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   public void restoreItems(String actionId, List<String> itemIds, RecycleBinScope scope, String username) throws ObjectNotFoundException,
                                                                                                           IllegalAccessException {
     getOwnerId(scope, username);
-    startBulkAction(actionId, ActionType.RESTORE, checkItemIds(itemIds), username, itemId -> {
-      RecycleBinItem item = getItemAtTurn(itemId, scope, username);
-      if (item == null) {
-        return false;
+    startBulkAction(actionId, ActionType.RESTORE, checkItemIds(itemIds), username, new BulkItemAction() {
+      @Override
+      public boolean apply(String itemId) throws Exception {
+        RecycleBinItem item = getItemAtTurn(itemId, scope, username);
+        if (item == null) {
+          return false;
+        }
+        try {
+          restore(item, username, scope.getType() == RecycleBinScopeType.DRIVE);
+          return true;
+        } catch (ObjectNotFoundException e) {
+          return false;
+        }
       }
-      try {
-        restore(item, username, scope.getType() == RecycleBinScopeType.DRIVE);
-        return true;
-      } catch (ObjectNotFoundException e) {
-        return false;
+
+      @Override
+      public List<String> order(List<String> ids) {
+        return shortcutsLast(ids);
       }
     });
+  }
+
+  /**
+   * The items of a restore with the shortcuts after the other ones: a shortcut
+   * is restored only once its document is out of the bin, which may be restored
+   * in the same action. An item that cannot be read keeps its place, and its
+   * turn tells what became of it.
+   */
+  private List<String> shortcutsLast(List<String> itemIds) {
+    List<String> ordered = new ArrayList<>(itemIds.size());
+    List<String> shortcuts = new ArrayList<>();
+    for (String itemId : itemIds) {
+      RecycleBinItem item;
+      try {
+        item = recycleBinStorage.getItem(itemId);
+      } catch (RepositoryException | RuntimeException e) {
+        LOG.debug("The item {} of the Recycle Bin could not be read to order the restore: it keeps its place", itemId, e);
+        item = null;
+      }
+      (item != null && item.isShortcut() ? shortcuts : ordered).add(itemId);
+    }
+    ordered.addAll(shortcuts);
+    return ordered;
   }
 
   @Override

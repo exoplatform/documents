@@ -914,6 +914,25 @@ class RecycleBinServiceImplTest {
   }
 
   @Test
+  void theShortcutsOfARestoreComeBackAfterTheDocumentsRestoredWithThem() throws Exception {
+    service.restoreItems("17", List.of("shortcut", ITEM_ID, "unreadable", "gone"), RecycleBinScope.user(), "john");
+    BulkItemAction action = started().action();
+    RecycleBinItem shortcut = item(JOHN_ID, 0);
+    shortcut.setShortcut(true);
+    when(storage.getItem("shortcut")).thenReturn(shortcut);
+    when(storage.getItem(ITEM_ID)).thenReturn(item(JOHN_ID, 5));
+    when(storage.getItem("unreadable")).thenThrow(new RepositoryException("The trash cannot be read"));
+
+    // Restored first, the shortcut would be refused while its document is still in the bin.
+    assertEquals(List.of(ITEM_ID, "unreadable", "gone", "shortcut"), action.order(List.of("shortcut", ITEM_ID, "unreadable", "gone")));
+    // A removal does not depend on the order: its items go as given.
+    service.deleteItems("18", List.of("shortcut", ITEM_ID), RecycleBinScope.user(), "john");
+    ArgumentCaptor<BulkItemAction> removal = ArgumentCaptor.forClass(BulkItemAction.class);
+    verify(jcrDeleteFileStorage, times(2)).executeBulkAction(any(), any(), removal.capture());
+    assertEquals(List.of("shortcut", ITEM_ID), removal.getValue().order(List.of("shortcut", ITEM_ID)));
+  }
+
+  @Test
   void severalItemsAreRemovedForGoodAsABulkActionAndWhatAlreadyLeftIsLeftOut() throws Exception {
     service.deleteItems("13", List.of(ITEM_ID, "gone"), RecycleBinScope.user(), "john");
 
