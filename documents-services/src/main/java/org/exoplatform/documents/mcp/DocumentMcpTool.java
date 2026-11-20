@@ -811,6 +811,13 @@ public class DocumentMcpTool implements McpToolPlugin {
       if (RecycleBinError.RESTORE_LOCATION_MISSING.equals(e.getMessage())) {
         throw new IllegalStateException(("Document %s cannot be restored: the folder it was deleted from no longer exists.").formatted(documentId));
       }
+      if (RecycleBinError.RESTORE_SHORTCUT_TARGET_IN_BIN.equals(e.getMessage())) {
+        throw new IllegalStateException(("Shortcut %s cannot be restored while the document it points to is in a Recycle Bin: "
+            + "restore that document first.").formatted(documentId));
+      }
+      if (RecycleBinError.RESTORE_SHORTCUT_TARGET_GONE.equals(e.getMessage())) {
+        throw new IllegalStateException("Shortcut %s cannot be restored: the document it points to no longer exists.".formatted(documentId));
+      }
       throw e;
     }
   }
