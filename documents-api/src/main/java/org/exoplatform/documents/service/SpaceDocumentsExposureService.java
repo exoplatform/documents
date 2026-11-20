@@ -33,7 +33,8 @@ public interface SpaceDocumentsExposureService {
    * @param spaceId a space's identifier
    * @param username the user asking
    * @return the counts of the space's documents carrying a public link and of
-   *         those shared outside the space
+   *         those still shared outside the space once it keeps its documents
+   *         inside, as {@link SpaceDocumentsExposure} states them
    * @throws ObjectNotFoundException when the space does not exist
    * @throws IllegalAccessException when the user may not manage the space
    */

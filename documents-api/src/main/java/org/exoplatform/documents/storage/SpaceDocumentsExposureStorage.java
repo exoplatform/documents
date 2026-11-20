@@ -19,6 +19,7 @@ package org.exoplatform.documents.storage;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import org.exoplatform.documents.model.ExposedDocument;
@@ -26,9 +27,9 @@ import org.exoplatform.social.core.space.model.Space;
 
 /**
  * Reads what a space's documents expose outside the space, and takes the
- * everyone access off a document. Every method reads and writes through a
- * system session, whatever the caller's permissions: the caller checks, before
- * it calls, that the user may manage the space.
+ * everyone entry off a document's own access list. Every method reads and
+ * writes through a system session, whatever the caller's permissions: the
+ * caller checks, before it calls, that the user may manage the space.
  */
 public interface SpaceDocumentsExposureStorage {
 
@@ -58,10 +59,13 @@ public interface SpaceDocumentsExposureStorage {
    * @param space a space
    * @param isMember tells whether a user is a member of the space, from the
    *          source the caller's decision reads
+   * @param everyoneIgnored identifiers of documents whose own everyone entry
+   *          is not counted, the others of their access list still being:
+   *          those the caller is about to take it off
    * @return the documents shared outside the space, in no particular order
    * @throws IllegalStateException when the documents cannot be read
    */
-  List<ExposedDocument> getSharedOutsideDocuments(Space space, Predicate<String> isMember);
+  List<ExposedDocument> getSharedOutsideDocuments(Space space, Predicate<String> isMember, Set<String> everyoneIgnored);
 
   /**
    * Reads a document again through a fresh system session before its public
@@ -71,8 +75,8 @@ public interface SpaceDocumentsExposureStorage {
    *
    * @param space the space the document must still belong to
    * @param documentId the document's identifier
-   * @param removeEveryone whether to take the everyone access off the
-   *          document
+   * @param removeEveryone whether to take the everyone entry off the
+   *          document's own access list
    * @return the document, or null when it no longer exists or no longer
    *         belongs to the space: then nothing was changed. A move committed
    *         after this read is not seen by the caller's next step.

@@ -257,7 +257,7 @@ public class DocumentFileRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @Path("/space/{spaceId}/exposure")
-  @Operation(summary = "Count what a space's documents expose outside the space", method = "GET", description = "Returns, for a manager of the space, the count of its documents carrying a public link and of its documents and folders shared outside the space, trashed ones included.")
+  @Operation(summary = "Count what a space's documents expose outside the space", method = "GET", description = "Returns, for a manager of the space, the count of its documents carrying a public link and of its documents and folders, trashed ones included, still shared outside the space once it keeps its documents inside: the everyone entry on the own access list of a document carrying a public link, which turning the setting on takes off with the link, is not counted.")
   @ApiResponses(value = {
       @ApiResponse(responseCode = "200", description = "Request fulfilled"),
       @ApiResponse(responseCode = "401", description = "Unauthenticated user"),

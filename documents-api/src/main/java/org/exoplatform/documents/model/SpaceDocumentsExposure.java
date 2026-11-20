@@ -21,8 +21,11 @@ package org.exoplatform.documents.model;
  * What a space's documents expose outside the space
  *
  * @param publicLinks the count of the space's documents carrying a public link
- * @param sharedOutside the count of the space's documents and folders with at
- *          least one access entry outside the space
+ * @param sharedOutside the count of the space's documents and folders that keep
+ *          at least one access entry outside the space once it keeps its
+ *          documents inside: the everyone entry on the own access list of a
+ *          document carrying a public link, which the turn-on takes off with
+ *          the link, is not counted
  */
 public record SpaceDocumentsExposure(int publicLinks, int sharedOutside) {
 }

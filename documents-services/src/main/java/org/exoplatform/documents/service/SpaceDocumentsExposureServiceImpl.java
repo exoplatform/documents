@@ -76,8 +76,16 @@ public class SpaceDocumentsExposureServiceImpl implements SpaceDocumentsExposure
   @Override
   public SpaceDocumentsExposure getExposure(long spaceId, String username) throws ObjectNotFoundException, IllegalAccessException {
     Space space = getManagedSpace(spaceId, username);
-    return new SpaceDocumentsExposure(getPublicLinkDocuments(space).size(),
-                                      exposureStorage.getSharedOutsideDocuments(space, getListingMembership(space)).size());
+    List<ExposedDocument> publicLinkDocuments = getPublicLinkDocuments(space);
+    // the turn-on takes the everyone entry off the own access list of each of
+    // these documents with its link, so that entry no longer counts as a share
+    // outside the space
+    Set<String> everyoneTakenOff = publicLinkDocuments.stream().map(ExposedDocument::id).collect(Collectors.toSet());
+    return new SpaceDocumentsExposure(publicLinkDocuments.size(),
+                                      exposureStorage.getSharedOutsideDocuments(space,
+                                                                                getListingMembership(space),
+                                                                                everyoneTakenOff)
+                                                     .size());
   }
 
   @Override
@@ -127,12 +135,12 @@ public class SpaceDocumentsExposureServiceImpl implements SpaceDocumentsExposure
   }
 
   /**
-   * Checks the link still exists and reads the document again, takes its
-   * everyone access off on a turn-on, then deletes its link: a link another
-   * actor removed first leaves its document as it is and is not reported, a
-   * document gone or moved out of the space keeps its link and its everyone
-   * access. The window that remains is that of one link: a move or a removal
-   * committed between these checks and the deletion.
+   * Checks the link still exists and reads the document again, takes the
+   * everyone entry off its own access list on a turn-on, then deletes its
+   * link: a link another actor removed first leaves its document as it is and
+   * is not reported, a document gone or moved out of the space keeps its link
+   * and its everyone access. The window that remains is that of one link: a
+   * move or a removal committed between these checks and the deletion.
    */
   private void removePublicLink(long spaceId,
                                 Space space,

@@ -112,7 +112,7 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
   }
 
   @Override
-  public List<ExposedDocument> getSharedOutsideDocuments(Space space, Predicate<String> isMember) {
+  public List<ExposedDocument> getSharedOutsideDocuments(Space space, Predicate<String> isMember, Set<String> everyoneIgnored) {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
     try {
       Session session = getSystemSession(sessionProvider);
@@ -127,12 +127,27 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
       SpaceAccessClassifier classifier = new SpaceAccessClassifier(space.getGroupId(), isMember, driveRootIdentities);
 
       List<ExposedDocument> documents = new ArrayList<>();
-      addSharedOutsideDocuments(session, String.format(ACCESS_LISTS_QUERY, driveRootPath), null, classifier, documents);
+      addSharedOutsideDocuments(session,
+                                String.format(ACCESS_LISTS_QUERY, driveRootPath),
+                                null,
+                                classifier,
+                                everyoneIgnored,
+                                documents);
       Node trashHome = trashStorage.getTrashHomeNode();
       if (trashHome != null) {
-        addSharedOutsideDocuments(session, String.format(ACCESS_LISTS_QUERY, trashHome.getPath()), space, classifier, documents);
+        addSharedOutsideDocuments(session,
+                                  String.format(ACCESS_LISTS_QUERY, trashHome.getPath()),
+                                  space,
+                                  classifier,
+                                  everyoneIgnored,
+                                  documents);
       }
-      addSharedOutsideDocuments(session, String.format(ACCESS_LISTS_QUERY, QUARANTINE_ROOT), space, classifier, documents);
+      addSharedOutsideDocuments(session,
+                                String.format(ACCESS_LISTS_QUERY, QUARANTINE_ROOT),
+                                space,
+                                classifier,
+                                everyoneIgnored,
+                                documents);
       return documents;
     } catch (RepositoryException e) {
       throw new IllegalStateException("The documents shared outside space " + space.getId() + " could not be read", e);
@@ -174,11 +189,14 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
    * @param belongingSpace when not null, a listed node is kept only when it
    *          resolves to this space: the trash and the quarantine hold every
    *          space's documents
+   * @param everyoneIgnored the documents whose own everyone entry is not
+   *          counted
    */
   private void addSharedOutsideDocuments(Session session,
                                          String statement,
                                          Space belongingSpace,
                                          SpaceAccessClassifier classifier,
+                                         Set<String> everyoneIgnored,
                                          List<ExposedDocument> documents) throws RepositoryException {
     Query query = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
     NodeIterator nodes = query.execute().getNodes();
@@ -189,9 +207,16 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
         continue;
       }
       Map<String, List<String>> accessList = getDocumentSpaceGuard().getAccessList(node);
-      String owner = getOwner(node);
-      if (accessList != null && classifier.hasOutsideEntry(accessList.keySet(), owner)) {
-        documents.add(toExposedDocument(node, ((ExtendedNode) node).getIdentifier()));
+      if (accessList == null) {
+        continue;
+      }
+      String documentId = ((ExtendedNode) node).getIdentifier();
+      Collection<String> identities = accessList.keySet();
+      if (everyoneIgnored.contains(documentId)) {
+        identities = identities.stream().filter(identity -> !IdentityConstants.ANY.equals(identity)).toList();
+      }
+      if (classifier.hasOutsideEntry(identities, getOwner(node))) {
+        documents.add(toExposedDocument(node, documentId));
       }
     }
   }

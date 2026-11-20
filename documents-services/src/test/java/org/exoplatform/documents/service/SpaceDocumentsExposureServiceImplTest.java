@@ -241,28 +241,36 @@ class SpaceDocumentsExposureServiceImplTest {
   }
 
   @Test
-  void theCountsSummarizeTheListsAndActivationTakesTheEveryoneLinkedDocumentOutOfBoth() throws Exception {
+  void theSharedOutsideCountIsWhatStaysSharedOnceTheSettingIsOn() throws Exception {
     exposureStorage.add("linkedAndShared", "Linked and shared", SPACE_ID, "o", false, true);
     exposureStorage.add("everyoneAndLinked", "Everyone and linked", SPACE_ID, "o", true, false);
     exposureStorage.add("sharedFolder", "Shared folder", SPACE_ID, "o", false, true);
     exposureStorage.add("everyoneOnly", "Everyone only", SPACE_ID, "o", true, false);
     exposureStorage.add("linkedOnly", "Linked only", SPACE_ID, "o", false, false);
+    exposureStorage.add("otherSpaceEveryoneAndLinked", "Other space", OTHER_SPACE_ID, "o", true, false);
     linkStorage.add("linkedAndShared");
     linkStorage.add("everyoneAndLinked");
     linkStorage.add("linkedOnly");
+    linkStorage.add("otherSpaceEveryoneAndLinked");
 
     SpaceDocumentsExposure before = service.getExposure(SPACE_ID, MANAGER);
     ExposedDocumentPage linkedBefore = service.getPublicLinkDocuments(SPACE_ID, 0, 10, MANAGER);
 
-    assertEquals(new SpaceDocumentsExposure(3, 4), before);
+    // the linked document shared only with everyone is not counted: the
+    // turn-on takes the everyone entry off its own access list with its link
+    assertEquals(new SpaceDocumentsExposure(3, 3), before);
     assertEquals(before.publicLinks(), linkedBefore.size());
-    assertEquals(before.sharedOutside(), exposureStorage.getSharedOutsideDocuments(space, member -> false).size());
+    assertEquals(Set.of("linkedAndShared", "everyoneAndLinked", "linkedOnly"), exposureStorage.everyoneIgnored);
 
     service.removePublicLinks(space, true, MANAGER);
 
+    Set<String> sharedOnceOn = new HashSet<>(exposureStorage.getSharedOutsideDocuments(space, member -> false, Set.of())
+                                                            .stream()
+                                                            .map(ExposedDocument::id)
+                                                            .toList());
+    assertEquals(Set.of("linkedAndShared", "sharedFolder", "everyoneOnly"), sharedOnceOn);
+    assertEquals(before.sharedOutside(), sharedOnceOn.size());
     assertEquals(new SpaceDocumentsExposure(0, 3), service.getExposure(SPACE_ID, MANAGER));
-    assertEquals(Set.of("linkedAndShared", "sharedFolder", "everyoneOnly"),
-                 new HashSet<>(exposureStorage.getSharedOutsideDocuments(space, member -> false).stream().map(ExposedDocument::id).toList()));
   }
 
   @Test
@@ -376,6 +384,8 @@ class SpaceDocumentsExposureServiceImplTest {
 
     Predicate<String>            membership;
 
+    Set<String>                  everyoneIgnored;
+
     final List<String>           prepared       = new ArrayList<>();
 
     Doc add(String id, String name, long spaceId, String owner, boolean everyone, boolean sharedWithOthers) {
@@ -401,13 +411,15 @@ class SpaceDocumentsExposureServiceImplTest {
     }
 
     @Override
-    public List<ExposedDocument> getSharedOutsideDocuments(Space space, Predicate<String> isMember) {
+    public List<ExposedDocument> getSharedOutsideDocuments(Space space, Predicate<String> isMember, Set<String> everyoneIgnored) {
       sharedOutsideReads++;
       membership = isMember;
+      this.everyoneIgnored = everyoneIgnored;
       return documents.values()
                       .stream()
                       .filter(document -> document.spaceId == Long.parseLong(space.getId()))
-                      .filter(document -> document.everyone || document.sharedWithOthers)
+                      .filter(document -> document.sharedWithOthers
+                          || (document.everyone && !everyoneIgnored.contains(document.id)))
                       .map(Doc::toExposedDocument)
                       .toList();
     }

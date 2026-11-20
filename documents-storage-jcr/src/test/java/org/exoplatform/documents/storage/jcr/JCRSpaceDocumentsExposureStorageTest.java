@@ -198,7 +198,7 @@ class JCRSpaceDocumentsExposureStorageTest {
     queryResults.put(String.format(JCRSpaceDocumentsExposureStorage.ACCESS_LISTS_QUERY, JCRSpaceDocumentsExposureStorage.QUARANTINE_ROOT),
                      List.of(quarantined));
 
-    List<ExposedDocument> documents = storage.getSharedOutsideDocuments(space, Set.of("mary", "root")::contains);
+    List<ExposedDocument> documents = storage.getSharedOutsideDocuments(space, Set.of("mary", "root")::contains, Set.of());
 
     assertEquals(List.of("shared", "folder", "trashed", "quarantined"), documents.stream().map(ExposedDocument::id).toList());
     assertTrue(documents.get(1).folder());
@@ -216,7 +216,7 @@ class JCRSpaceDocumentsExposureStorageTest {
                      List.of(administratorsOnly));
     trashHome();
 
-    assertEquals(List.of("admins"), storage.getSharedOutsideDocuments(space, Set.of("mary", "root")::contains).stream().map(ExposedDocument::id).toList());
+    assertEquals(List.of("admins"), storage.getSharedOutsideDocuments(space, Set.of("mary", "root")::contains, Set.of()).stream().map(ExposedDocument::id).toList());
   }
 
   @Test
@@ -231,9 +231,46 @@ class JCRSpaceDocumentsExposureStorageTest {
     trashHome();
 
     // the space's own fields list mary, the membership given lists paul
-    List<ExposedDocument> documents = storage.getSharedOutsideDocuments(space, Set.of("paul")::contains);
+    List<ExposedDocument> documents = storage.getSharedOutsideDocuments(space, Set.of("paul")::contains, Set.of());
 
     assertEquals(List.of("mary"), documents.stream().map(ExposedDocument::id).toList());
+  }
+
+  @Test
+  void sharedOutsideDoesNotCountTheEveryoneEntryOfTheDocumentsItIsGiven() throws Exception {
+    driveRoot("*:/spaces/team");
+    ExtendedNode everyoneOnlyGiven = node("everyoneOnlyGiven", DRIVE_ROOT + "/a.pdf", "nt:file", "owner");
+    accessList(everyoneOnlyGiven, "manager:/spaces/team", "owner", "any");
+    ExtendedNode everyoneOnlyNotGiven = node("everyoneOnlyNotGiven", DRIVE_ROOT + "/b.pdf", "nt:file", "owner");
+    accessList(everyoneOnlyNotGiven, "manager:/spaces/team", "any");
+    ExtendedNode everyoneAndPaulGiven = node("everyoneAndPaulGiven", DRIVE_ROOT + "/c.pdf", "nt:file", "owner");
+    accessList(everyoneAndPaulGiven, "any", "paul");
+    ExtendedNode everyoneFolderGiven = node("everyoneFolderGiven", DRIVE_ROOT + "/folder", "nt:folder", "owner");
+    accessList(everyoneFolderGiven, "*:/spaces/team", "any");
+    queryResults.put(String.format(JCRSpaceDocumentsExposureStorage.ACCESS_LISTS_QUERY, DRIVE_ROOT),
+                     List.of(everyoneOnlyGiven, everyoneOnlyNotGiven, everyoneAndPaulGiven, everyoneFolderGiven));
+    trashHome();
+    ExtendedNode trashedEveryoneOnlyGiven = node("trashedGiven", TRASH_HOME + "/d.pdf", "nt:file", "owner");
+    accessList(trashedEveryoneOnlyGiven, "any");
+    when(guard.getDocumentSpace(trashedEveryoneOnlyGiven)).thenReturn(space);
+    queryResults.put(String.format(JCRSpaceDocumentsExposureStorage.ACCESS_LISTS_QUERY, TRASH_HOME), List.of(trashedEveryoneOnlyGiven));
+    ExtendedNode quarantinedEveryoneOnlyGiven = node("quarantinedGiven", "/Quarantine/e.pdf", "nt:file", "owner");
+    accessList(quarantinedEveryoneOnlyGiven, "any");
+    when(guard.getDocumentSpace(quarantinedEveryoneOnlyGiven)).thenReturn(space);
+    queryResults.put(String.format(JCRSpaceDocumentsExposureStorage.ACCESS_LISTS_QUERY, JCRSpaceDocumentsExposureStorage.QUARANTINE_ROOT),
+                     List.of(quarantinedEveryoneOnlyGiven));
+
+    List<ExposedDocument> documents = storage.getSharedOutsideDocuments(space,
+                                                                        Set.of("mary", "root")::contains,
+                                                                        Set.of("everyoneOnlyGiven",
+                                                                               "everyoneAndPaulGiven",
+                                                                               "everyoneFolderGiven",
+                                                                               "trashedGiven",
+                                                                               "quarantinedGiven"));
+
+    // a given document keeps its other outside entries; one not given keeps
+    // its everyone entry
+    assertEquals(List.of("everyoneOnlyNotGiven", "everyoneAndPaulGiven"), documents.stream().map(ExposedDocument::id).toList());
   }
 
   @Test
@@ -241,7 +278,7 @@ class JCRSpaceDocumentsExposureStorageTest {
     driveRoot("*:/spaces/team");
     when(queryManager.createQuery(anyString(), anyString())).thenThrow(new RepositoryException("down"));
 
-    assertThrows(IllegalStateException.class, () -> storage.getSharedOutsideDocuments(space, Set.of("mary", "root")::contains));
+    assertThrows(IllegalStateException.class, () -> storage.getSharedOutsideDocuments(space, Set.of("mary", "root")::contains, Set.of()));
   }
 
   @Test
