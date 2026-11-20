@@ -302,7 +302,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
         throw new IllegalAccessException("Document " + trashNodeId + " returns to another workspace: " + restoreWorkspace);
       }
       userSession.checkPermission(restoreFolderPath, PermissionType.ADD_NODE);
-    } catch (AccessControlException | PathNotFoundException e) {
+    } catch (AccessControlException e) {
       throw new IllegalAccessException("User " + aclIdentity.getUserId() + " may not restore document " + trashNodeId
           + " to its folder");
     } finally {

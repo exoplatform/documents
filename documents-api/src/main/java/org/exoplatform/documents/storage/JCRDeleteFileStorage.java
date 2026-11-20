@@ -116,10 +116,10 @@ public interface JCRDeleteFileStorage {
    * @param trashNodeId technical identifier of the document in the trash
    * @param aclIdentity the request's user, who must be allowed to add to the
    *          folder the document returns to
-   * @throws ObjectNotFoundException if no document with this identifier lies in
-   *           the trash
+   * @throws ObjectNotFoundException if no document with this identifier is a
+   *           root of the trash
    * @throws IllegalAccessException if the user may not add to the folder the
-   *           document returns to
+   *           document returns to, or it returns to another workspace
    * @throws RepositoryException if an error occurs during the restoration
    */
   void restoreFromTrash(String trashNodeId, Identity aclIdentity) throws ObjectNotFoundException,

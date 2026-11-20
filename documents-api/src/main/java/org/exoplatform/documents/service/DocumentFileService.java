@@ -642,9 +642,10 @@ public interface DocumentFileService {
    * @param documentId technical identifier of the document in the trash
    * @param userIdentityId identity id of the request's user, who must be
    *          allowed to add to the folder the document returns to
-   * @throws ObjectNotFoundException if no document with this identifier lies in
-   *           the trash
-   * @throws IllegalAccessException if the user may not add to that folder
+   * @throws ObjectNotFoundException if no document with this identifier is a
+   *           root of the trash
+   * @throws IllegalAccessException if the user may not add to that folder, the
+   *           document returns to another workspace, or the user is unknown
    * @throws RepositoryException if an error occurs during the restoration
    */
   void restoreDocumentFromTrash(String documentId, long userIdentityId) throws ObjectNotFoundException,

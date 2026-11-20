@@ -541,6 +541,7 @@ public class JCRDeleteFileStorageTest {
     jcrDeleteFileStorage.restoreFromTrash("trashed", mary);
     verify(trashStorage).restoreFromTrash("/Trash/report.pdf", sessionProvider);
   }
+
   @Test
   public void testRestoreFromTrashForAUserRefusesANodeInsideATrashedFolder() throws Exception {
     org.exoplatform.services.security.Identity mary = new org.exoplatform.services.security.Identity("mary");
@@ -557,6 +558,25 @@ public class JCRDeleteFileStorageTest {
 
     assertThrows(ObjectNotFoundException.class, () -> jcrDeleteFileStorage.restoreFromTrash("nested", mary));
     verify(nested, never()).getProperty(anyString());
+
+    // Each of the two restore properties is needed
+    Node noWorkspace = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "noWorkspace")).thenReturn(noWorkspace);
+    when(trashStorage.isInTrash(noWorkspace)).thenReturn(true);
+    when(noWorkspace.hasProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(true);
+    when(noWorkspace.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(false);
+    assertThrows(ObjectNotFoundException.class, () -> jcrDeleteFileStorage.restoreFromTrash("noWorkspace", mary));
+
+    Node noPath = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "noPath")).thenReturn(noPath);
+    when(trashStorage.isInTrash(noPath)).thenReturn(true);
+    when(noPath.hasProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(false);
+    when(noPath.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(true);
+    assertThrows(ObjectNotFoundException.class, () -> jcrDeleteFileStorage.restoreFromTrash("noPath", mary));
+
+    // An unknown identifier
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "unknown")).thenReturn(null);
+    assertThrows(ObjectNotFoundException.class, () -> jcrDeleteFileStorage.restoreFromTrash("unknown", mary));
     verify(trashStorage, never()).restoreFromTrash(anyString(), any());
     JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.openUserSession(any(), any()), never());
   }
