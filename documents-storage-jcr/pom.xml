@@ -74,5 +74,38 @@
   </dependencies>
   <build>
     <finalName>documents-storage-jcr</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <executions>
+          <!-- A test class that starts a container of the kernel runs in a JVM of its own:
+               the kernel accepts one top container per JVM, and a mock-based test class run
+               before it may have started the root container already (loading PortalContainer,
+               or looking up the current container, does). A -Dtest selection bypasses this
+               split: the classes it selects run in both executions, so the container test is
+               selected on its own. -->
+          <execution>
+            <id>default-test</id>
+            <configuration>
+              <excludes>
+                <exclude>**/PublicLinkFolderDownloadTest.java</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+          <execution>
+            <id>container-tests</id>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>**/PublicLinkFolderDownloadTest.java</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
 </project>
