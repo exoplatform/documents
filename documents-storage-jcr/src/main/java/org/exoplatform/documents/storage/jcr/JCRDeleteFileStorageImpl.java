@@ -273,7 +273,38 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   @Override
   public void restoreFromTrash(String trashNodePath) throws RepositoryException {
     SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-    trashStorage.restoreFromTrash(trashNodePath, sessionProvider);
+    Node trashNode = JCRDocumentsUtil.getNodeByPath(trashStorage.getTrashHomeNode().getSession(), trashNodePath);
+    // Only a node of the trash is restored: a quarantined node carries a restore path too
+    if (trashNode == null || !trashStorage.isInTrash(trashNode)) {
+      throw new ItemNotFoundException("No node exists in trash with path " + trashNodePath);
+    }
+    trashStorage.restoreFromTrash(trashNode.getPath(), sessionProvider);
+  }
+
+  @Override
+  public void restoreFromTrash(String trashNodeId, Identity aclIdentity) throws ObjectNotFoundException,
+                                                                           IllegalAccessException,
+                                                                           RepositoryException {
+    SessionProvider systemSessionProvider = sessionProviderService.getSystemSessionProvider(null);
+    Node trashNode = JCRDocumentsUtil.getNodeByIdentifier(trashStorage.getTrashHomeNode().getSession(), trashNodeId);
+    if (trashNode == null || !trashStorage.isInTrash(trashNode)) {
+      throw new ObjectNotFoundException("No document " + trashNodeId + " in the trash");
+    }
+    String restorePath = trashNode.getProperty(NodeTypeConstants.RESTORE_PATH).getString();
+    String restoreWorkspace = trashNode.getProperty(NodeTypeConstants.RESTORE_WORKSPACE).getString();
+    String restoreFolderPath = StringUtils.defaultIfEmpty(StringUtils.substringBeforeLast(restorePath, "/"), "/");
+    // The session acts as the request's user, who is aclIdentity here
+    SessionProvider userSessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity);
+    try {
+      Session userSession = userSessionProvider.getSession(restoreWorkspace, repositoryService.getCurrentRepository());
+      userSession.checkPermission(restoreFolderPath, PermissionType.ADD_NODE);
+    } catch (AccessControlException | PathNotFoundException e) {
+      throw new IllegalAccessException("User " + aclIdentity.getUserId() + " may not restore document " + trashNodeId
+          + " to its folder");
+    } finally {
+      userSessionProvider.close();
+    }
+    trashStorage.restoreFromTrash(trashNode.getPath(), systemSessionProvider);
   }
 
   @Override

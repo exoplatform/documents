@@ -29,6 +29,7 @@ import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionServic
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
+import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.config.RepositoryEntry;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ExtendedSession;
@@ -58,6 +59,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.security.AccessControlException;
 import javax.jcr.AccessDeniedException;
+import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -471,4 +473,67 @@ public class JCRDeleteFileStorageTest {
     verify(node).remove();
   }
 
+  @Test
+  public void testRestoreFromTrashByPathRefusesANodeOutsideTheTrash() throws Exception {
+    Node trashHome = mock(Node.class);
+    when(trashStorage.getTrashHomeNode()).thenReturn(trashHome);
+    when(trashHome.getSession()).thenReturn(session);
+    Node quarantined = mock(Node.class);
+    when(quarantined.getPath()).thenReturn("/Quarantine/report.pdf");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session, "/Quarantine/report.pdf")).thenReturn(quarantined);
+    when(trashStorage.isInTrash(quarantined)).thenReturn(false);
+
+    assertThrows(ItemNotFoundException.class, () -> jcrDeleteFileStorage.restoreFromTrash("/Quarantine/report.pdf"));
+    verify(trashStorage, never()).restoreFromTrash(anyString(), any());
+
+    Node trashed = mock(Node.class);
+    when(trashed.getPath()).thenReturn("/Trash/report.pdf");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session, "/Trash/report.pdf")).thenReturn(trashed);
+    when(trashStorage.isInTrash(trashed)).thenReturn(true);
+    when(sessionProviderService.getSystemSessionProvider(null)).thenReturn(sessionProvider);
+
+    jcrDeleteFileStorage.restoreFromTrash("/Trash/report.pdf");
+    verify(trashStorage).restoreFromTrash("/Trash/report.pdf", sessionProvider);
+  }
+
+  @Test
+  public void testRestoreFromTrashForAUserRequiresTheRightToAddToTheFolder() throws Exception {
+    org.exoplatform.services.security.Identity mary = new org.exoplatform.services.security.Identity("mary");
+    Node trashHome = mock(Node.class);
+    when(trashStorage.getTrashHomeNode()).thenReturn(trashHome);
+    when(trashHome.getSession()).thenReturn(session);
+    when(sessionProviderService.getSystemSessionProvider(null)).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+
+    // Not in the trash: a quarantined node carries a restore path too
+    Node quarantined = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "quarantined")).thenReturn(quarantined);
+    when(trashStorage.isInTrash(quarantined)).thenReturn(false);
+    assertThrows(ObjectNotFoundException.class, () -> jcrDeleteFileStorage.restoreFromTrash("quarantined", mary));
+
+    Node trashed = mock(Node.class);
+    when(trashed.getPath()).thenReturn("/Trash/report.pdf");
+    javax.jcr.Property restorePath = mock(javax.jcr.Property.class);
+    when(restorePath.getString()).thenReturn("/Groups/spaces/team/Documents/report.pdf");
+    when(trashed.getProperty(NodeTypeConstants.RESTORE_PATH)).thenReturn(restorePath);
+    javax.jcr.Property restoreWorkspace = mock(javax.jcr.Property.class);
+    when(restoreWorkspace.getString()).thenReturn("collaboration");
+    when(trashed.getProperty(NodeTypeConstants.RESTORE_WORKSPACE)).thenReturn(restoreWorkspace);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "trashed")).thenReturn(trashed);
+    when(trashStorage.isInTrash(trashed)).thenReturn(true);
+    SessionProvider userSessionProvider = mock(SessionProvider.class);
+    Session userSession = mock(Session.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, mary)).thenReturn(userSessionProvider);
+    when(userSessionProvider.getSession("collaboration", repository)).thenReturn(userSession);
+
+    doThrow(new AccessControlException("denied")).when(userSession)
+                                                 .checkPermission("/Groups/spaces/team/Documents", PermissionType.ADD_NODE);
+    assertThrows(IllegalAccessException.class, () -> jcrDeleteFileStorage.restoreFromTrash("trashed", mary));
+    verify(trashStorage, never()).restoreFromTrash(anyString(), any());
+    verify(userSessionProvider).close();
+
+    doNothing().when(userSession).checkPermission("/Groups/spaces/team/Documents", PermissionType.ADD_NODE);
+    jcrDeleteFileStorage.restoreFromTrash("trashed", mary);
+    verify(trashStorage).restoreFromTrash("/Trash/report.pdf", sessionProvider);
+  }
 }

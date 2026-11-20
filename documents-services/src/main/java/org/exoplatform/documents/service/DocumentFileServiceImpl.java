@@ -842,6 +842,13 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public void restoreDocumentFromTrash(String documentId, long userIdentityId) throws ObjectNotFoundException,
+                                                                                IllegalAccessException,
+                                                                                RepositoryException {
+    jcrDeleteFileStorage.restoreFromTrash(documentId, getAclUserIdentity(userIdentityId));
+  }
+
+  @Override
   public void deleteDocumentPermanently(String documentPath) throws ObjectNotFoundException, RepositoryException {
     jcrDeleteFileStorage.deleteDocumentPermanently(documentPath);
   }

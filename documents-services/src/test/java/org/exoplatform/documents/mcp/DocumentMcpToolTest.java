@@ -1031,31 +1031,29 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void undoDeleteDocumentRestoresFromTrash() throws Exception {
+  public void undoDeleteDocumentRestoresFromTrashAsTheCurrentUser() throws Exception {
     // After an immediate delete the node lives in trash but keeps its id; undo must
-    // actually restore it from trash (the delayed-delete cancel path is a no-op).
-    FileNode trashed = fileNode(DOCUMENT_ID, "application/pdf");
-    trashed.setPath("/Trash/report.pdf");
-    // The trashed node must be resolved through the SYSTEM-session overload
-    // (getDocumentById(id)), not the user-session one: trash lives under a system
-    // session and a regular user session cannot read the trashed node.
-    when(documentFileService.getDocumentById(DOCUMENT_ID)).thenReturn(trashed);
-
+    // actually restore it from trash (the delayed-delete cancel path is a no-op),
+    // with the rights of the user who asks.
     documentMcpTool.undoDeleteDocument(DOCUMENT_ID);
 
-    verify(documentFileService).restoreDocumentFromTrash(eq("/Trash/report.pdf"));
-    // It must use the system-session overload, NOT the user-session one (which would
-    // false-negative on a trashed node).
-    verify(documentFileService).getDocumentById(DOCUMENT_ID);
-    verify(documentFileService, never()).getDocumentById(DOCUMENT_ID, USERNAME);
-    // It must NOT rely on the no-op delayed-delete cancel.
+    verify(documentFileService).restoreDocumentFromTrash(DOCUMENT_ID, USER_IDENTITY_ID);
+    verify(documentFileService, never()).restoreDocumentFromTrash(anyString());
     verify(documentFileService, never()).undoDeleteDocument(anyString(), anyLong());
   }
 
   @Test
-  public void undoDeleteDocumentNotFoundFails() throws Exception {
-    // The system-session overload returns null when the node is genuinely gone.
-    when(documentFileService.getDocumentById(DOCUMENT_ID)).thenReturn(null);
+  public void undoDeleteDocumentRefusesAUserWhoMayNotWriteTheFolder() throws Exception {
+    doThrow(new IllegalAccessException("not allowed")).when(documentFileService)
+                                                      .restoreDocumentFromTrash(DOCUMENT_ID, USER_IDENTITY_ID);
+
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+  }
+
+  @Test
+  public void undoDeleteDocumentNotInTrashFails() throws Exception {
+    doThrow(new ObjectNotFoundException("not in trash")).when(documentFileService)
+                                                        .restoreDocumentFromTrash(DOCUMENT_ID, USER_IDENTITY_ID);
 
     // Never silently succeed: a document no longer in trash must surface a clear error.
     assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
