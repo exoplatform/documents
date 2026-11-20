@@ -135,7 +135,8 @@ public interface RecycleBinService {
    * @param documentId id of the deleted document itself
    * @param username who wants to read
    * @return the item
-   * @throws ObjectNotFoundException when the document is no item of a bin
+   * @throws ObjectNotFoundException when the document is no item of a bin, or
+   *           is a folder or a shortcut, which have no View action in a bin
    * @throws IllegalAccessException when the user may not read it
    */
   RecycleBinItem checkCanViewDocument(String documentId, String username) throws ObjectNotFoundException, IllegalAccessException;
