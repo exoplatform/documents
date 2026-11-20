@@ -104,8 +104,6 @@ import lombok.SneakyThrows;
 @Profile("mcp-server")
 public class DocumentMcpTool implements McpToolPlugin {
 
-  private static final Log LOG = ExoLogger.getLogger(DocumentMcpTool.class);
-
   public static final String       FOLDER_URL_FORMAT = "/portal/dw/documents?folderId=%s";
 
   public static final String       FILE_URL_FORMAT   = "/portal/dw/documents?documentPreviewId=%s";
@@ -117,6 +115,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * shareable link (<code>{origin}/{containerName}/download-document/{nodeId}</code>).
    */
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
+
+  private static final Log                LOG                = ExoLogger.getLogger(DocumentMcpTool.class);
 
   /**
    * Same password policy DocumentFileRest applies to public-link passwords

@@ -301,7 +301,7 @@ class PublicLinkFolderDownloadTest {
     return names;
   }
 
-  private static StandaloneContainer startContainer() throws Exception {
+  static StandaloneContainer startContainer() throws Exception {
     StandaloneContainer.addConfigurationURL(PublicLinkFolderDownloadTest.class.getResource("/jcr-acl/configuration.xml")
                                                                               .toString());
     if (System.getProperty("java.security.auth.login.config") == null) {
@@ -336,7 +336,7 @@ class PublicLinkFolderDownloadTest {
     }
   }
 
-  private static void setPermissions(Node node, Map<String, String[]> permissions) throws Exception {
+  static void setPermissions(Node node, Map<String, String[]> permissions) throws Exception {
     node.addMixin("exo:privilegeable");
     ((ExtendedNode) node).setPermissions(permissions);
   }
