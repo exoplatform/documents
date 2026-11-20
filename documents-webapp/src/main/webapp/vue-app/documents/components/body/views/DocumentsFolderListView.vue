@@ -65,26 +65,45 @@
                 :disabled="selectAll"
                 open-on-hover
                 bottom>
-                <template #activator="{ on, attrs }">
-                  <v-simple-checkbox
-                    v-model="selectAll"
-                    v-on="on"
-                    v-bind="attrs"
-                    :indeterminate="false"
-                    color="primary"
-                    :class="!$root.driveView && (showSelectAll || hoverTable) ? 'visible': 'invisible'"
-                    class="mt-auto"
-                    @mouseover="showSelectAllInputOnHover"
-                    @mouseleave="hideSelectAllInputOnHover"
-                    @click="selectAllDocuments" />
+                <template #activator="{ on }">
+                  <span class="hover-reveal-parent d-inline-block">
+                    <v-simple-checkbox
+                      v-model="selectAll"
+                      v-on="on"
+                      :indeterminate="false"
+                      :aria-checked="selectAll ? 'true' : 'false'"
+                      :aria-label="$t('documents.multiSelection.selectAll.element.label')"
+                      :class="!$root.driveView && (showSelectAll || hoverTable) ? 'visible': 'hover-reveal'"
+                      color="primary"
+                      class="mt-auto"
+                      role="checkbox"
+                      tabindex="0"
+                      @keydown.space.prevent="$event.currentTarget.click()"
+                      @mouseover="showSelectAllInputOnHover"
+                      @mouseleave="hideSelectAllInputOnHover"
+                      @click="selectAllDocuments" />
+                  </span>
                 </template>
                 {{ $t('documents.multiSelection.selectAll.element.tooltip.message') }}
               </v-tooltip>
             </template>
-            <template #[`header.name`]>
+            <template
+              v-for="column in extendedCells"
+              #[`header.${column.value}`]="{ header }">
+              <button
+                v-if="header.sortable && header.text && !isMobile"
+                :id="column.value === 'name' ? 'headerName' : null"
+                :key="column.value"
+                :aria-label="sortLabel(header)"
+                type="button"
+                class="btn-reset">
+                {{ header.text }}
+              </button>
               <span
-                id="headerName">
-                {{ $t('documents.label.name') }}
+                v-else
+                :id="column.value === 'name' ? 'headerName' : null"
+                :key="column.value">
+                {{ header.text }}
               </span>
             </template>
             <template
@@ -96,6 +115,7 @@
                   v-slot="{ hover }"
                   :key="item.id">
                   <tr
+                    class="hover-reveal-parent"
                     :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
                     :data-fileId="item.id"
                     :data-isFolder="item.folder? 'true': 'false'"
@@ -283,6 +303,9 @@ export default {
     isXScreen() {
       return this.$vuetify.breakpoint.width < 600;
     },
+    tableLabel() {
+      return this.$t('documents.table.label', {0: this.items.length});
+    },
     showSelectAll() {
       return this.selectedDocuments && this.selectedDocuments.length || this.showSelectAllInput;
     },
@@ -337,6 +360,9 @@ export default {
     }
   },
   watch: {
+    tableLabel() {
+      this.$nextTick(this.nameTable);
+    },
     options() {
       if (!this.initialized) {
         return;
@@ -366,6 +392,7 @@ export default {
   mounted(){
     this.$documentsUtils.injectSortTooltip(this.$t('documents.sort.tooltip'),'tooltip-marker');
     DocumentsDraggable.invoke('folderView', 'breadcrumb-list-items');
+    this.nameTable();
   },
   beforeDestroy() {
     this.$root.$off('documents-filter', this.updateFilter);
@@ -375,6 +402,10 @@ export default {
     this.$root.$off('documents-file-name-edit', this.setEditName);
   },
   methods: {
+    // v-data-table renders its <table> inside a wrapper and gives it no name
+    nameTable() {
+      this.$refs.dataTable?.$el?.querySelector?.('table')?.setAttribute('aria-label', this.tableLabel);
+    },
     setEditName(value) {
       this.editName = value;
     },
@@ -414,6 +445,20 @@ export default {
     },
     hideSelectionInput(file) {
       this.$root.$emit('hide-selection-input', file);
+    },
+    // The header cell gets the click but no focus in this Vuetify version: the button inside it, which takes the
+    // focus, is named as Vuetify names the cell, with the sort state and what Enter does, in the user's language. A
+    // column sorted in descending order is sorted ascending again on Enter, never left unsorted: the options watcher
+    // sorts the view again when Vuetify empties its sort
+    sortLabel(header) {
+      const text = key => this.$vuetify.lang.t(`$vuetify.dataTable.ariaLabel.${key}`);
+      const index = (this.options?.sortBy || []).indexOf(header.value);
+      if (index < 0) {
+        return `${header.text}: ${text('sortNone')} ${text('activateAscending')}`;
+      }
+      return this.options.sortDesc?.[index]
+        ? `${header.text}: ${text('sortDescending')} ${text('activateAscending')}`
+        : `${header.text}: ${text('sortAscending')} ${text('activateDescending')}`;
     },
     customSort: function (items, sortBy, isDesc) {
       if (this.$root.driveView) {

@@ -26,6 +26,7 @@
       offset-y>
       <template #activator="{ on, attrs }">
         <v-btn
+          :aria-label="`${selectionsLength} ${$t('document.multiSelection.selected.elements.label')}`"
           class="btn btn-primary primary"
           v-bind="attrs"
           v-on="!isMobile && on"
@@ -33,6 +34,7 @@
           <v-icon
             class="me-1 dark-grey-color"
             size="13"
+            aria-hidden="true"
             dark>
             fas fa-ellipsis-v
           </v-icon>
@@ -82,6 +84,7 @@ export default {
   }),
 
   created() {
+    this.$root.$on('documents-close-action-menus', this.closeActionMenu);
     $(document).on('mousedown', () => {
       if (this.addMenu || this.selectionsMenu) {
         window.setTimeout(() => {
@@ -106,6 +109,7 @@ export default {
     });
   },
   beforeDestroy() {
+    this.$root.$off('documents-close-action-menus', this.closeActionMenu);
     this.$root.$off('reset-selections', this.handleResetSelections);
     this.$root.$off('set-action-loading', this.setActionLoading);
   },
@@ -113,6 +117,10 @@ export default {
     document.removeEventListener('entity-attachments-updated', this.refreshFilesList);
   },
   methods: {
+    // sent by an actions menu entry activated with Enter, which fires no DOM click to close this menu
+    closeActionMenu() {
+      this.selectionsMenu = false;
+    },
     setActionLoading(status, action) {
       this.actionLoading = status;
       this.actionLoadingMessage = this.$t(`document.multiple.${action}.action.message`);

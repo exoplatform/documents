@@ -24,11 +24,11 @@
       content-class="documentActionMenu application-menu layout-drawer"
       offset-x
       close-on-click>
-      <template #activator="{ on, attrs }">
+      <template #activator="{ on }">
         <document-action-item
-          v-bind="attrs"
           v-on="on"
           :icon="icon"
+          :expanded="menuDisplayed"
           :label=" $t(labelKey)"
           is-group
           @click="menuDisplayed = true" />
@@ -101,8 +101,15 @@ export default {
         }, this.waitTimeUntilCloseMenu);
       }
     });
+    this.$root.$on('documents-close-action-menus', this.closeMenu);
+  },
+  beforeDestroy() {
+    this.$root.$off('documents-close-action-menus', this.closeMenu);
   },
   methods: {
+    closeMenu() {
+      this.menuDisplayed = false;
+    },
     disableLeftClick(event) {
       if (event.button === 2) {
         event.preventDefault();

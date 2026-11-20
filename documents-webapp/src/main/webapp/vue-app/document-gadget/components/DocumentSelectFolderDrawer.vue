@@ -31,15 +31,20 @@
           :open.sync="open"
           :load-children="fetchChildren"
           :expand-icon="rootExpandIcon"
+          :aria-label="$t('documents.tree.title')"
           class="custom-tree"
           item-key="id"
+          role="list"
           activatable
           open-on-click>
           <template #prepend="{ item }">
-            <v-radio :value="item.id" color="primary" />
+            <v-radio
+              :value="item.id"
+              :aria-label="item.name"
+              color="primary" />
           </template>
           <template #label="{ item }">
-            {{ item.name }}
+            <span v-tree-node="$t('documents.tree.subFoldersOf', {0: item.name})">{{ item.name }}</span>
           </template>
         </v-treeview>
       </v-radio-group>

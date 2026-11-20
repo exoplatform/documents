@@ -64,13 +64,23 @@
           :open.sync="openLevel"
           :load-children="fetchChildren"
           :items="items"
+          :aria-label="$t('documents.tree.title')"
           class="treeView-item my-2"
           item-key="name"
+          role="list"
           hoverable
           activatable
           transition>
           <template #label="{ item }">
-            <div class="d-flex clickable" @click="getDestination(item)">
+            <div
+              v-tree-node="$t('documents.tree.subFoldersOf', {0: item.name})"
+              class="d-flex clickable"
+              :aria-current="destinationFolderId && destinationFolderId === item.id ? 'true' : null"
+              role="button"
+              tabindex="0"
+              @click="getDestination(item)"
+              @keydown.enter.prevent="$event.currentTarget.click()"
+              @keydown.space.prevent="$event.currentTarget.click()">
               <v-icon size="24" class="primary--text">
                 {{ 'fas fa-folder' }}
               </v-icon>
@@ -116,6 +126,8 @@ export default {
     documentsBreadcrumbDestination: [],
     documentsBreadcrumbSource: [],
     destinationFolderPath: '',
+    destinationFolderId: null,
+    folder: null,
     currentFolderPath: '',
     spaceDisplayName: eXo.env.portal.spaceDisplayName,
     spaceName: eXo.env.portal.spaceName,
