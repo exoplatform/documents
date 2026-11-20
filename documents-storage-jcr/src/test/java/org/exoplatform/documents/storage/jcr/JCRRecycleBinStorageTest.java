@@ -311,6 +311,100 @@ class JCRRecycleBinStorageTest {
   }
 
   @Test
+  void aDeletedShortcutCarriesTheTypeOfWhatItPointsTo() throws Exception {
+    // As a shortcut created in the Documents app records it.
+    shortcut(JOHN_BIN + "/to-pdf", "a-pdf", ID_1, null).set("exo:recycleBinOwner", "7")
+                                                       .set("exo:primaryType", "nt:file")
+                                                       .set("exo:fileType", "application/pdf");
+    shortcut(JOHN_BIN + "/to-folder", "a-folder", ID_2, null).set("exo:recycleBinOwner", "7").set("exo:primaryType", "nt:folder");
+    shortcut(JOHN_BIN + "/to-space-folder", "a-space-folder", ID_3, null).set("exo:recycleBinOwner", "7")
+                                                                         .set("exo:primaryType", "nt:unstructured");
+    // A type extending a folder's is listed as a folder by the Documents app too.
+    jcr.declareNodeType("exo:webContent", "nt:unstructured");
+    String toWebContent = "55555555-5555-5555-5555-555555555555";
+    shortcut(JOHN_BIN + "/to-web-content", "a-web-content", toWebContent, null).set("exo:recycleBinOwner", "7")
+                                                                               .set("exo:primaryType", "exo:webContent")
+                                                                               .set("exo:fileType", "");
+    // Recorded no mime type, to a document gone since: a document's icon.
+    shortcut(JOHN_BIN + "/legacy", "a-document", ID_4, null).set("exo:recycleBinOwner", "7").set("exo:primaryType", "nt:file");
+    // To a node of a type the repository no longer knows, under a prefix it still knows.
+    String toUnknownType = "66666666-6666-6666-6666-666666666666";
+    shortcut(JOHN_BIN + "/to-unknown", "an-unknown", toUnknownType, null).set("exo:recycleBinOwner", "7")
+                                                                         .set("exo:primaryType", "exo:removedType");
+    jcr.commit();
+
+    RecycleBinItem toPdf = storage.getItem(ID_1);
+    assertEquals("application/pdf", toPdf.getMimeType());
+    assertFalse(toPdf.isTargetFolder());
+    for (String id : List.of(ID_2, ID_3, toWebContent)) {
+      RecycleBinItem toFolder = storage.getItem(id);
+      assertTrue(toFolder.isTargetFolder(), id);
+      // Shown as a folder, it stays a shortcut: no folder of its own.
+      assertFalse(toFolder.isFolder(), id);
+      assertTrue(toFolder.isShortcut(), id);
+    }
+    RecycleBinItem legacy = storage.getItem(ID_4);
+    assertNull(legacy.getMimeType());
+    assertFalse(legacy.isTargetFolder());
+    assertFalse(storage.getItem(toUnknownType).isTargetFolder());
+  }
+
+  @Test
+  void aShortcutThatRecordedNoTypeOfWhatItPointsToIsShownAsTheNodeItPointsTo() throws Exception {
+    Item folder = jcr.add("/Groups/spaces/marketing/Documents/Plans", "nt:folder");
+    Item pdf = jcr.addFile("/Groups/spaces/marketing/Documents/plan.pdf", 3);
+    jcr.at("/Groups/spaces/marketing/Documents/plan.pdf/jcr:content").set("jcr:mimeType", "application/pdf");
+    Item text = jcr.addFile("/Groups/spaces/marketing/Documents/notes.txt", 3);
+    jcr.at("/Groups/spaces/marketing/Documents/notes.txt/jcr:content").set("jcr:mimeType", "text/plain");
+    // Duplicated or pasted in the Documents app: it records its own type and no mime type.
+    shortcut(JOHN_BIN + "/copy-to-folder", folder.getId(), ID_1, null).set("exo:recycleBinOwner", "7").set("exo:workspace", WORKSPACE)
+                                                                      .set("exo:primaryType", "exo:symlink");
+    shortcut(JOHN_BIN + "/copy-to-pdf", pdf.getId(), ID_2, null).set("exo:recycleBinOwner", "7")
+                                                                .set("exo:workspace", WORKSPACE)
+                                                                .set("exo:primaryType", "exo:symlink");
+    Item spaceFolder = jcr.add("/Groups/spaces/marketing/Documents/Shared", "nt:unstructured");
+    String toSpaceFolder = "77777777-7777-7777-7777-777777777777";
+    shortcut(JOHN_BIN + "/copy-to-space-folder", spaceFolder.getId(), toSpaceFolder, null).set("exo:recycleBinOwner", "7").set("exo:workspace", WORKSPACE)
+                                                                                          .set("exo:primaryType", "exo:symlink");
+    // Created out of the Documents app: the type of a document, no mime type.
+    shortcut(JOHN_BIN + "/elsewhere-to-pdf", pdf.getId(), ID_3, null).set("exo:recycleBinOwner", "7")
+                                                                     .set("exo:workspace", WORKSPACE)
+                                                                     .set("exo:primaryType", "nt:file");
+    // To a node gone since, and to one of another workspace: as recorded.
+    shortcut(JOHN_BIN + "/copy-to-gone", "an-id-of-no-node", ID_4, null).set("exo:recycleBinOwner", "7")
+                                                                         .set("exo:primaryType", "exo:symlink");
+    String toOtherWorkspace = "55555555-5555-5555-5555-555555555555";
+    shortcut(JOHN_BIN + "/copy-to-archive", folder.getId(), toOtherWorkspace, null).set("exo:recycleBinOwner", "7")
+                                                                                   .set("exo:primaryType", "exo:symlink")
+                                                                                   .set("exo:workspace", "archive");
+    // What a shortcut recorded is not read again on the node it points to.
+    String recorded = "66666666-6666-6666-6666-666666666666";
+    shortcut(JOHN_BIN + "/recorded", text.getId(), recorded, null).set("exo:recycleBinOwner", "7")
+                                                                  .set("exo:primaryType", "nt:file")
+                                                                  .set("exo:fileType", "application/pdf");
+    String recordedFolder = "99999999-9999-9999-9999-999999999999";
+    shortcut(JOHN_BIN + "/recorded-folder", text.getId(), recordedFolder, null).set("exo:recycleBinOwner", "7")
+                                                                               .set("exo:primaryType", "nt:folder")
+                                                                               .set("exo:fileType", "");
+    jcr.commit();
+
+    assertTrue(storage.getItem(ID_1).isTargetFolder());
+    assertFalse(storage.getItem(ID_1).isFolder());
+    assertEquals("application/pdf", storage.getItem(ID_2).getMimeType());
+    assertFalse(storage.getItem(ID_2).isTargetFolder());
+    assertEquals("application/pdf", storage.getItem(ID_3).getMimeType());
+    assertTrue(storage.getItem(toSpaceFolder).isTargetFolder());
+    for (String id : List.of(ID_4, toOtherWorkspace)) {
+      assertFalse(storage.getItem(id).isTargetFolder(), id);
+      assertNull(storage.getItem(id).getMimeType(), id);
+    }
+    assertEquals("application/pdf", storage.getItem(recorded).getMimeType());
+    // A folder's recorded type, with the empty mime type it records, is not read again either.
+    assertTrue(storage.getItem(recordedFolder).isTargetFolder());
+    assertNull(storage.getItem(recordedFolder).getMimeType());
+  }
+
+  @Test
   void aDeletedDocumentIsReadAsTheItemItIsByItsOwnId() throws Exception {
     Item file = item(JOHN_BIN + "/mine.txt", ID_1, "7", "mine.txt", 1, Calendar.getInstance());
     Item folder = jcr.add(JOHN_BIN + "/archive", "nt:folder");
