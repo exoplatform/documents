@@ -58,10 +58,21 @@
             v-model="keepDocumentsInside"
             :aria-label="$t('documents.spaceSettings.keepDocumentsInside')"
             class="ma-0"
-            @change="saveSetting('keepDocumentsInside', $event)" />
+            @change="changeKeepDocumentsInside" />
         </v-list-item-action>
       </v-list-item>
     </v-list>
+    <documents-keep-inside-confirm-dialog
+      ref="keepInsideConfirmDialog"
+      :space-id="spaceId"
+      @confirm="confirmKeepDocumentsInside"
+      @cancel="cancelKeepDocumentsInside"
+      @error="failKeepDocumentsInside"
+      @see-documents="openPublicLinks" />
+    <documents-public-links-drawer
+      ref="publicLinksDrawer"
+      :space-id="spaceId"
+      @closed="$refs.keepInsideConfirmDialog.resume()" />
   </v-card>
 </template>
 <script>
@@ -78,15 +89,54 @@ export default {
     keepDocumentsInside: false,
   }),
   created() {
-    // not reactive: the saves still to send, in click order; the count of
-    // failed saves, each of which drops the saves queued before it ended; and
-    // the count of clicks, so that a stored value never overwrites a later click
+    // not reactive: the saves still to send, in click order, and those of the
+    // confirmed setting not answered yet; the count of failed saves, each of
+    // which drops the saves queued before it ended; the count of clicks, so
+    // that a stored value never overwrites a later click; and the last stored
+    // value of the confirmed setting
     this.saveQueue = Promise.resolve();
+    this.keepSaves = [];
     this.failedSaves = 0;
     this.clicks = 0;
+    this.storedKeepDocumentsInside = false;
     this.retrieveSettings();
   },
   methods: {
+    // turning the setting on removes the space's public links: it is sent only
+    // once the confirmation, which reads their count, is confirmed
+    changeKeepDocumentsInside(value) {
+      if (value) {
+        // the click counts at once: a stored value answered while the
+        // confirmation is open does not turn the toggle off under it
+        this.clicks++;
+        this.$refs.keepInsideConfirmDialog.open();
+      } else {
+        this.saveSetting('keepDocumentsInside', false);
+      }
+    },
+    confirmKeepDocumentsInside() {
+      return this.saveSetting('keepDocumentsInside', true);
+    },
+    // nothing was sent: the toggle shows the value of the last save of this
+    // setting that will still be sent and is not answered yet, else the last
+    // stored value; then the stored values once the queued saves have ended
+    cancelKeepDocumentsInside() {
+      const liveSaves = this.keepSaves.filter(save => save.failedSaves === this.failedSaves);
+      this.keepDocumentsInside = liveSaves.length ? liveSaves[liveSaves.length - 1].value : this.storedKeepDocumentsInside;
+      return this.readSettingsAfterSaves();
+    },
+    failKeepDocumentsInside() {
+      this.$root.$emit('alert-message', this.$t('documents.spaceSettings.keepInside.error.countsNotRead'), 'error');
+      return this.cancelKeepDocumentsInside();
+    },
+    readSettingsAfterSaves() {
+      this.saveQueue = this.saveQueue.then(() => this.retrieveSettings());
+      return this.saveQueue;
+    },
+    openPublicLinks(count) {
+      this.$refs.keepInsideConfirmDialog.suspend();
+      this.$refs.publicLinksDrawer.open(count);
+    },
     retrieveSettings() {
       const clicks = this.clicks;
       return this.$spaceSecuritySettingsService.getSpaceSecuritySettings(this.spaceId)
@@ -98,11 +148,24 @@ export default {
     saveSetting(field, value) {
       const failedSaves = this.failedSaves;
       const clicks = ++this.clicks;
+      // a save of the confirmed setting is known until its request answers or
+      // it is dropped; a failure since it was queued dooms it
+      const keepSave = field === 'keepDocumentsInside' ? {failedSaves, value} : null;
+      if (keepSave) {
+        this.keepSaves.push(keepSave);
+      }
+      const settle = () => {
+        if (keepSave) {
+          this.keepSaves = this.keepSaves.filter(save => save !== keepSave);
+        }
+      };
       this.saveQueue = this.saveQueue.then(() => {
         if (failedSaves !== this.failedSaves) {
+          settle();
           return;
         }
         return this.$spaceSecuritySettingsService.updateSpaceSecuritySettings(this.spaceId, {[field]: value})
+          .finally(settle)
           .then(settings => {
             this.applySettings(settings, clicks);
             this.$root.$emit('alert-message', this.$t('documents.spaceSettings.saved'), 'success');
@@ -110,7 +173,7 @@ export default {
           .catch(error => {
             // the toggles show the stored values again, unless clicked since
             this.failedSaves++;
-            this.$root.$emit('alert-message', this.$t(this.errorLabelKey(error)), 'error');
+            this.$root.$emit('alert-message', this.$t(this.errorLabelKey(error, value)), 'error');
             return this.retrieveSettings();
           });
       });
@@ -121,17 +184,25 @@ export default {
     // both settings, so the later click's own answer sets them
     applySettings(settings, clicks) {
       this.canManageSettings = !!settings?.canManageSettings;
+      this.storedKeepDocumentsInside = !!settings?.keepDocumentsInside;
       if (clicks === this.clicks) {
         this.limitAccessManagement = !!settings?.limitAccessManagement;
         this.keepDocumentsInside = !!settings?.keepDocumentsInside;
       }
     },
-    errorLabelKey(error) {
+    // value: the value the failed save sent. The change not applied is the
+    // keep-inside one, refused when some public links could not be removed,
+    // on a turn-on as on a turn-off: those removed before stay removed
+    errorLabelKey(error, value) {
       switch (error?.code) {
       case 'space.security.notAllowed':
         return 'documents.spaceSettings.error.notAllowed';
       case 'space.concurrentUpdate':
         return 'documents.spaceSettings.error.concurrentUpdate';
+      case 'space.security.changeNotApplied':
+        return value
+          ? 'documents.spaceSettings.keepInside.error.linksNotRemovedOn'
+          : 'documents.spaceSettings.keepInside.error.linksNotRemovedOff';
       default:
         break;
       }
