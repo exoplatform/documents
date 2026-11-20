@@ -1624,23 +1624,29 @@ public class DocumentFileRestTest {
     mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(0L, 1L);
     Response response = documentFileRest1.getPublicAccessLink(null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+    assertTrue(String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
     response = documentFileRest1.getPublicAccessLink("1233");
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertTrue(String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
     when(publicDocumentAccessService.getPublicDocumentAccess("1233")).thenReturn(publicDocumentAccess);
     response = documentFileRest1.getPublicAccessLink("1233");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertTrue(String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
     assertNull(response.getEntity());
     verify(publicDocumentAccessService, never()).getPublicDocumentAccess("1233");
     when(documentFileService1.hasEditPermissionOnDocument("1233", 1L)).thenReturn(true);
     when(publicDocumentAccessService.getPublicDocumentAccess("1233")).thenReturn(null);
     response = documentFileRest1.getPublicAccessLink("1233");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertTrue(String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
     when(publicDocumentAccessService.getPublicDocumentAccess("1233")).thenReturn(publicDocumentAccess);
     response = documentFileRest1.getPublicAccessLink("1233");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertTrue(String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
     when(publicDocumentAccessService.getPublicDocumentAccess("1233")).thenThrow(new RuntimeException());
     response = documentFileRest1.getPublicAccessLink("1233");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+    assertTrue(String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
   }
 
   @Test
