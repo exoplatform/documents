@@ -1038,8 +1038,9 @@ export default {
       });
     },
     // Returns an existing child folder by name, creating it when missing.
+    // Hidden folders are looked up too: the space's 'Activity Stream Documents' folder is hidden, and a lookup that misses it creates a visible duplicate.
     ensureFolder(ownerId, parentFolderId, folderPath, name) {
-      const filter = {ownerId, listingType: 'FOLDER', sortField: 'name', ascending: true, favorites: false};
+      const filter = {ownerId, listingType: 'FOLDER', sortField: 'name', ascending: true, favorites: false, showHiddenFiles: true};
       if (parentFolderId) {
         filter.parentFolderId = parentFolderId;
       }
