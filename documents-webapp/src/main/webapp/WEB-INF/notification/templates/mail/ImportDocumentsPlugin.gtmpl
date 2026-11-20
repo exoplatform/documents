@@ -17,7 +17,7 @@
 *
 */
 %>
-<table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#ffffff" align="center" style="width:100%;overflow-wrap:anywhere;word-break:break-word;background-color: #ffffff; font-size: 15px;color: #1d2327;line-height: 1.7;font-family: ${io.meeds.portal.mail.EmailLayout.fontStack()};" dir="${io.meeds.portal.mail.EmailLayout.dir(_ctx.language)}">
+<table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#ffffff" align="center" style="width:100%;overflow-wrap:anywhere;word-break:break-word;background-color: #ffffff; font-size: 15px;color: #1d2327;line-height: 1.7;font-family: ${io.meeds.portal.mail.util.EmailLayout.fontStack()};" dir="${io.meeds.portal.mail.util.EmailLayout.dir(_ctx.language)}">
     <%
       _templateContext.put("header_title", _ctx.appRes("Notification.subject.ImportDocumentsPlugin"));
       _ctx.include("war:/notification/templates/mail/NotificationHeader.gtmpl", _templateContext);
@@ -29,28 +29,28 @@
                     <td bgcolor="#ffffff" style="background-color: #ffffff;">
                         <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#ffffff" style="background-color: #ffffff; color: #1d2327;line-height: 1.7;">
                             <tr>
-                                <td align="${io.meeds.portal.mail.EmailLayout.start(_ctx.language)}" bgcolor="#ffffff" style="background-color: #ffffff;padding: 30px 0 10px 0;">
-                                    <p style="margin: 0 0 14px; font-size: 15px; color: #1d2327; font-family: ${io.meeds.portal.mail.EmailLayout.fontStack()};" dir="auto"><%=_ctx.appRes("Notification.label.SayHello")%> $FIRST_NAME,</p>
+                                <td align="${io.meeds.portal.mail.util.EmailLayout.start(_ctx.language)}" bgcolor="#ffffff" style="background-color: #ffffff;padding: 30px 0 10px 0;">
+                                    <p style="margin: 0 0 14px; font-size: 15px; color: #1d2327; font-family: ${io.meeds.portal.mail.util.EmailLayout.fontStack()};" dir="auto"><%=_ctx.appRes("Notification.label.SayHello")%> $FIRST_NAME,</p>
                                     <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#ffffff" align="center" style="background-color: #ffffff; font-size: 15px;color: #1d2327;line-height: 1.7;">
                                         <tbody>
                                         <tr>
-                                            <td align="${io.meeds.portal.mail.EmailLayout.start(_ctx.language)}" style="padding: 0;">
+                                            <td align="${io.meeds.portal.mail.util.EmailLayout.start(_ctx.language)}" style="padding: 0;">
                                                 <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#ffffff" align="center" style="width: 100%; background-color: #ffffff; font-size: 15px; color: #1d2327;line-height: 1.7;">
                                                     <tr>
                                                         <!--[if mso]>
-                                                        <td width="64" align="${io.meeds.portal.mail.EmailLayout.start(_ctx.language)}" valign="top" bgcolor="#ffffff" style="vertical-align: top; background-color: #ffffff; ">
+                                                        <td width="64" align="${io.meeds.portal.mail.util.EmailLayout.start(_ctx.language)}" valign="top" bgcolor="#ffffff" style="vertical-align: top; background-color: #ffffff; ">
                                                             <img width="44" height="44" style="margin-top: 2px; border-radius: 50%;" src="$AVATAR" alt="$USER" />
                                                         </td>
                                                         <![endif]-->
-                                                        <td width="64" align="${io.meeds.portal.mail.EmailLayout.start(_ctx.language)}" valign="top" bgcolor="#ffffff" style="mso-hide:all; vertical-align: top; background-color: #ffffff; ">
+                                                        <td width="64" align="${io.meeds.portal.mail.util.EmailLayout.start(_ctx.language)}" valign="top" bgcolor="#ffffff" style="mso-hide:all; vertical-align: top; background-color: #ffffff; ">
                                                             <img width="44" height="44" style="margin-top: 2px; border-radius: 50%;" src="$AVATAR" alt="$USER" />
                                                         </td>
-                                                        <td align="${io.meeds.portal.mail.EmailLayout.start(_ctx.language)}" bgcolor="#ffffff" style="background-color: #ffffff; padding: 0 0; vertical-align: top;">
+                                                        <td align="${io.meeds.portal.mail.util.EmailLayout.start(_ctx.language)}" bgcolor="#ffffff" style="background-color: #ffffff; padding: 0 0; vertical-align: top;">
 
                                                             <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#ffffff" align="center" style="margin:0 0 10px; width: 100%; background-color: #ffffff; font-size: 15px; color: #1d2327;line-height: 1.7;">
                                                                 <tr>
-                                                                    <td align="${io.meeds.portal.mail.EmailLayout.start(_ctx.language)}" valign="top" bgcolor="#ffffff" style="vertical-align: top; background-color: #ffffff; padding: 0;">
-                                                                        <p style="margin:0; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.EmailLayout.fontStack()};" dir="auto">
+                                                                    <td align="${io.meeds.portal.mail.util.EmailLayout.start(_ctx.language)}" valign="top" bgcolor="#ffffff" style="vertical-align: top; background-color: #ffffff; padding: 0;">
+                                                                        <p style="margin:0; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.util.EmailLayout.fontStack()};" dir="auto">
                                                                             <%=_ctx.appRes("Notification.import.mail.message")%><br>
                                                                                 <%=_ctx.appRes("Notification.import.mail.message1",DURATION)%><br>
                                                                                 <%=_ctx.appRes("Notification.import.mail.message2",TOTAL_NUMBER)%>
@@ -60,17 +60,17 @@
                                                                 </tr>
                                                                 <tr>
 
-                                                                    <td align="${io.meeds.portal.mail.EmailLayout.start(_ctx.language)}" valign="top" bgcolor="#ffffff" style="vertical-align: top; background-color: #ffffff; padding: 0;">
+                                                                    <td align="${io.meeds.portal.mail.util.EmailLayout.start(_ctx.language)}" valign="top" bgcolor="#ffffff" style="vertical-align: top; background-color: #ffffff; padding: 0;">
                                                                         
                                                                     </td>
                                                                 </tr>
                                                             </table>
-<div dir="${io.meeds.portal.mail.EmailLayout.dir(_ctx.language)}" style="margin: 20px 0 8px 0;">
-                                                                            <%=io.meeds.portal.mail.EmailLayout.actionLink(_ctx.appRes("Notification.label.openFolder"), "$FOLDER_URL", true)%>
+<div dir="${io.meeds.portal.mail.util.EmailLayout.dir(_ctx.language)}" style="margin: 20px 0 8px 0;">
+                                                                            <%=io.meeds.portal.mail.util.EmailLayout.actionLink(_ctx.appRes("Notification.label.openFolder"), "$FOLDER_URL", true)%>
                                                                         </div>
 
 															<% if (FILES_CREATED != "") { %>
-															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.EmailLayout.fontStack()};" dir="auto">
+															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.util.EmailLayout.fontStack()};" dir="auto">
                                                                 <strong><%=_ctx.appRes("Notification.import.mail.title.created")%></strong>:<br>
                                                                 <ul>
                                                                 $FILES_CREATED
@@ -78,7 +78,7 @@
                                                             </p>
 															<% } %>
 															<% if (FILES_DUPLICATED != "") { %>
-															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.EmailLayout.fontStack()};" dir="auto">
+															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.util.EmailLayout.fontStack()};" dir="auto">
                                                                 <strong><%=_ctx.appRes("Notification.import.mail.title.duplicated")%></strong>:<br>
                                                                 <ul>
                                                                 $FILES_DUPLICATED
@@ -86,7 +86,7 @@
                                                             </p>
 															<% } %>
 															<% if (FILES_UPDATED != "") { %>
-															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.EmailLayout.fontStack()};" dir="auto">
+															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.util.EmailLayout.fontStack()};" dir="auto">
                                                                 <strong><%=_ctx.appRes("Notification.import.mail.title.updated")%></strong>:<br>
                                                                 <ul>
                                                                 $FILES_UPDATED
@@ -94,7 +94,7 @@
                                                             </p>
 															<% } %>
 															<% if (FILES_IGNORED != "") { %>
-															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.EmailLayout.fontStack()};" dir="auto">
+															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.util.EmailLayout.fontStack()};" dir="auto">
                                                                 <strong><%=_ctx.appRes("Notification.import.mail.title.ignored")%></strong>:<br>
                                                                 <ul>
                                                                 $FILES_IGNORED
@@ -102,7 +102,7 @@
                                                             </p>
 															<% } %>
 															<% if (FILES_FAILED != "") { %>
-															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.EmailLayout.fontStack()};" dir="auto">
+															  <p style="margin:0 0 14px; color:#1d2327; line-height:1.7; font-size:15px; font-family: ${io.meeds.portal.mail.util.EmailLayout.fontStack()};" dir="auto">
                                                                 <strong><%=_ctx.appRes("Notification.import.mail.title.failed")%></strong>:<br>
                                                                 <ul>
                                                                 $FILES_FAILED
@@ -117,7 +117,7 @@
                                         </tr>
                                         </tbody>
                                     </table>
-                                    <p style="margin:28px 0 0 0; color: #5d676d;font-size: 13px;font-family: ${io.meeds.portal.mail.EmailLayout.fontStack()}"><%=io.meeds.portal.mail.EmailLayout.linkStyled(_ctx.appRes("Notification.label.footer", "" + FOOTER_LINK))%></p>
+                                    <p style="margin:28px 0 0 0; color: #5d676d;font-size: 13px;font-family: ${io.meeds.portal.mail.util.EmailLayout.fontStack()}"><%=io.meeds.portal.mail.util.EmailLayout.linkStyled(_ctx.appRes("Notification.label.footer", "" + FOOTER_LINK))%></p>
                                 </td>
                             </tr>
                         </table>
