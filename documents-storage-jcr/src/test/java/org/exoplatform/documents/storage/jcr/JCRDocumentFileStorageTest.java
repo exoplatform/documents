@@ -3273,7 +3273,7 @@ public class JCRDocumentFileStorageTest {
 
     assertEquals(0, jcrDocumentFileStorage.getDownloadZipBytes(7, "alice").length);
 
-    // the path is still set but the download thread already deleted the file (cancelled or failed archive)
+    // the path is still set but the download thread already deleted the file (a cancelled download)
     ActionData deletedFile = new ActionData();
     deletedFile.setActionId("8");
     deletedFile.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());

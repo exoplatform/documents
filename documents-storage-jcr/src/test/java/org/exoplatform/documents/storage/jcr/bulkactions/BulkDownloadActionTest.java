@@ -336,6 +336,28 @@ class BulkDownloadActionTest {
   }
 
   @Test
+  void noArchiveIsBuiltForADownloadWhoseCopiesFailed() throws Exception {
+    ActionData download = startDownload("7", "alice");
+    FileNode item = new FileNode();
+    item.setId("1");
+    ActionThread thread = newThread(download, List.of(item));
+    Node node = mock(Node.class);
+    when(node.getParent()).thenReturn(mock(Node.class));
+    Set<String> before = archivesInTempDirectory();
+
+    try (MockedStatic<JCRDocumentsUtil> util = mockStatic(JCRDocumentsUtil.class, CALLS_REAL_METHODS)) {
+      util.when(() -> JCRDocumentsUtil.getNodeByIdentifier(any(), anyString())).thenReturn(node);
+      util.when(() -> JCRDocumentsUtil.createFile(any(Node.class), anyString(), anyString(), anyString(), any(Node.class)))
+          .thenThrow(new IOException("cannot copy the document"));
+      thread.processAction();
+    }
+
+    assertEquals(ActionStatus.FAILED.name(), download.getStatus());
+    assertNull(download.getDownloadZipPath());
+    assertEquals(before, archivesInTempDirectory());
+  }
+
+  @Test
   void theTemporaryCopiesOfADownloadWhoseArchiveCannotBeBuiltAreDeleted() throws Exception {
     ActionData download = startDownload("7", "alice");
     FileNode item = new FileNode();

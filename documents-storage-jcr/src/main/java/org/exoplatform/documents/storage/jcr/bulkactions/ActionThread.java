@@ -561,18 +561,22 @@ public class ActionThread implements Runnable {
         actionData.setStatus(ActionStatus.FAILED.name());
       }
 
-      try {
-        zipPath = Files.createTempFile(Path.of(System.getProperty(TEMP_DIRECTORY_PATH)), ZIP_PREFIX, ZIP_EXTENSION).toString();
-        JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
-        File zipped = new File(zipPath);
-        actionData.setDownloadZipPath(zipped.getPath());
-        archiveHandedOver = true;
-      } catch (Exception e) {
-        log.error("Error when creating zip file", e);
-        actionData.setStatus(ActionStatus.FAILED.name());
-        if (zipPath != null) {
-          deleteFile(new File(zipPath));
-          zipPath = null;
+      // no archive is built from copies that failed or were cancelled: nothing would fetch it
+      String copyStatus = actionData.getStatus();
+      if (!ActionStatus.FAILED.name().equals(copyStatus) && !ActionStatus.CANCELED.name().equals(copyStatus)) {
+        try {
+          zipPath = Files.createTempFile(Path.of(System.getProperty(TEMP_DIRECTORY_PATH)), ZIP_PREFIX, ZIP_EXTENSION).toString();
+          JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
+          File zipped = new File(zipPath);
+          actionData.setDownloadZipPath(zipped.getPath());
+          archiveHandedOver = true;
+        } catch (Exception e) {
+          log.error("Error when creating zip file", e);
+          actionData.setStatus(ActionStatus.FAILED.name());
+          if (zipPath != null) {
+            deleteFile(new File(zipPath));
+            zipPath = null;
+          }
         }
       }
     } finally {
