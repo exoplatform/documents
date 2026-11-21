@@ -23,9 +23,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,12 +52,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 import org.exoplatform.container.ExoContainer;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionStatus;
 import org.exoplatform.documents.model.ActionType;
+import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Identity;
 
@@ -307,6 +313,22 @@ class BulkDownloadActionTest {
     runAction(current);
     assertNotNull(current.getDownloadZipPath());
     assertTrue(Files.exists(Path.of(current.getDownloadZipPath())));
+  }
+
+  @Test
+  void anArchiveThatCannotBeBuiltIsDeleted() throws Exception {
+    ActionData download = startDownload("7", "alice");
+    Set<String> before = archivesInTempDirectory();
+
+    try (MockedStatic<JCRDocumentsUtil> util = mockStatic(JCRDocumentsUtil.class, CALLS_REAL_METHODS)) {
+      util.when(() -> JCRDocumentsUtil.zipFiles(anyString(), anyString()))
+          .thenThrow(new IOException("cannot build the archive"));
+      runAction(download);
+    }
+
+    assertEquals(ActionStatus.FAILED.name(), download.getStatus());
+    assertNull(download.getDownloadZipPath());
+    assertEquals(before, archivesInTempDirectory());
   }
 
   @SuppressWarnings("unchecked")
