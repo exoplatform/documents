@@ -118,6 +118,18 @@ class BulkDownloadActionTest {
     assertNull(alicesDownload.getDownloadZipPath());
   }
 
+  @Test
+  void aNewActionRunsItsOwnTypeWhenTheSameUserHasAnOlderActionWithTheSameId() throws Exception {
+    ActionData olderDelete = startAction("7", "alice", ActionType.DELETE);
+    ActionData newDownload = startDownload("7", "alice");
+
+    runAction(newDownload);
+
+    assertEquals(ActionStatus.DONE_SUCCESSFULLY.name(), newDownload.getStatus());
+    assertNotNull(newDownload.getDownloadZipPath());
+    assertEquals(ActionStatus.STARTED.name(), olderDelete.getStatus());
+  }
+
   private ActionData startDownload(String actionId, String userId) {
     return startAction(actionId, userId, ActionType.DOWNLOAD);
   }

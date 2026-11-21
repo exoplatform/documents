@@ -188,7 +188,6 @@ public class ActionThread implements Runnable {
   }
 
   public void processAction() throws RepositoryException {
-    actionData = bulkStorageActionService.getActionData(actionData.getActionId(), actionData.getIdentity().getUserId());
     if (actionData.getActionType().equals(ActionType.DELETE.name())) {
       actionData.setStatus(ActionStatus.IN_PROGRESS.name());
       deleteItems();
@@ -478,7 +477,6 @@ public class ActionThread implements Runnable {
   }
   
   private boolean checkCanceled() {
-    actionData = bulkStorageActionService.getActionData(actionData.getActionId(), actionData.getIdentity().getUserId());
     if (actionData.getStatus().equals(ActionStatus.CANCELED.name())) {
       brodcastEvent();
       return true;
