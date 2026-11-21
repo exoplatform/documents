@@ -1455,27 +1455,32 @@ public class DocumentFileRest implements ResourceContainer {
   @ApiResponses(value = { @ApiResponse(responseCode = "200", description = "Request fulfilled"),
           @ApiResponse(responseCode = "400", description = "Invalid query input"),
           @ApiResponse(responseCode = "401", description = "Unauthorized operation"),
+          @ApiResponse(responseCode = "404", description = "No public access link for this node, or the user cannot edit it"),
           @ApiResponse(responseCode = "500", description = "Internal server error"), })
   public Response getPublicAccessLink(@Parameter(description = "target file node identifier", required = true)
                                       @QueryParam("nodeId") String nodeId) {
 
     if (StringUtils.isBlank(nodeId)) {
-      return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").build();
+      return Response.status(Status.BAD_REQUEST).entity("node id is mandatory").cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
     long userIdentityId = RestUtils.getCurrentUserIdentityId(identityManager);
     if (userIdentityId == 0) {
-      return Response.status(Response.Status.UNAUTHORIZED).build();
+      return Response.status(Response.Status.UNAUTHORIZED).cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
     try {
+      // The link's settings, its password included, are shown to whoever may change them, as on create and revoke
+      if (!documentFileService.hasEditPermissionOnDocument(nodeId, userIdentityId)) {
+        return Response.status(Status.NOT_FOUND).cacheControl(NO_STORE_CACHE_CONTROL).build();
+      }
       PublicDocumentAccess publicDocumentAccess = publicDocumentAccessService.getPublicDocumentAccess(nodeId);
       if (publicDocumentAccess == null) {
-        return Response.status(Status.NOT_FOUND).build();
+        return Response.status(Status.NOT_FOUND).cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
-      return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccess)).build();
+      return Response.ok(EntityBuilder.toPublicDocumentAccessEntity(publicDocumentAccess)).cacheControl(NO_STORE_CACHE_CONTROL).build();
 
     } catch (Exception e) {
       LOG.error("Error while getting public access link for document: {}", nodeId, e);
-      return Response.serverError().build();
+      return Response.serverError().cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
   }
 
