@@ -2300,6 +2300,65 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
+  public void getBiggestDocumentsDeletedOwnerThrowsObjectNotFound() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = stubDeletedOwnerRootNode();
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.getBiggestDocuments(1L, aclIdentity, 0, 10));
+  }
+
+  @Test
+  public void renameDocumentDeletedOwnerThrowsObjectNotFound() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = stubDeletedOwnerRootNode();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle("title")).thenReturn(true);
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.renameDocument(1L, null, "title", aclIdentity));
+  }
+
+  @Test
+  public void setDocumentVisibilityDeletedOwnerThrowsObjectNotFound() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = stubDeletedOwnerRootNode();
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.setDocumentVisibility(1L, null, true, aclIdentity));
+  }
+
+  @Test
+  public void duplicateDocumentDeletedOwnerThrowsObjectNotFound() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = stubDeletedOwnerRootNode();
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.duplicateDocument(1L, null, "copy", aclIdentity));
+  }
+
+  @Test
+  public void moveDocumentDeletedOwnerThrowsObjectNotFound() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = stubDeletedOwnerRootNode();
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.moveDocument(1L, null, "/dest", aclIdentity, null));
+  }
+
+  private org.exoplatform.services.security.Identity stubDeletedOwnerRootNode() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    when(aclIdentity.getUserId()).thenReturn("user");
+    Identity ownerIdentity = mock(Identity.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(mock(ManageableRepository.class));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    when(identityManager.getIdentity("1")).thenReturn(ownerIdentity);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                       nodeHierarchyCreator,
+                                                                       "user",
+                                                                       ownerIdentity,
+                                                                       sessionProvider))
+                      .thenThrow(new ObjectNotFoundException("not found"));
+    return aclIdentity;
+  }
+
+  @Test
   public void unShareDocumetTest() throws RepositoryException{
     Session systemSession = mock(Session.class);
     Identity identity = mock(Identity.class);

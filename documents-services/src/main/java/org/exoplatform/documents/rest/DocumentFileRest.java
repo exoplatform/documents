@@ -724,6 +724,8 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(HTTPStatus.CONFLICT).entity(e.getExistingObject())
                                                  .type(MediaType.APPLICATION_JSON)
                                                  .build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(HTTPStatus.NOT_FOUND).build();
     } catch (Exception ex) {
       LOG.warn("Failed to move Document", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
@@ -853,6 +855,8 @@ public class DocumentFileRest implements ResourceContainer {
         } catch (ObjectAlreadyExistsException ex) {
           LOG.warn("Document with same name already exists", ex);
           return Response.status(HTTPStatus.CONFLICT).build();
+        } catch (ObjectNotFoundException ex) {
+          return Response.status(HTTPStatus.NOT_FOUND).build();
         } catch (Exception ex) {
           LOG.warn("Failed to rename Document", ex);
           return Response.status(HTTPStatus.INTERNAL_ERROR).build();
@@ -883,6 +887,8 @@ public class DocumentFileRest implements ResourceContainer {
           return Response.ok().build();
         } catch (AccessDeniedException e) {
           return Response.status(HTTPStatus.UNAUTHORIZED).build();
+        } catch (ObjectNotFoundException ex) {
+          return Response.status(HTTPStatus.NOT_FOUND).build();
         } catch (Exception ex) {
           LOG.warn("Failed to update document visibility", ex);
           return Response.status(HTTPStatus.INTERNAL_ERROR).build();
@@ -1359,6 +1365,8 @@ public class DocumentFileRest implements ResourceContainer {
                                                                                        Long.parseLong(currentUserIdentity.getId()));
 
       return Response.ok(documentEntities).build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(Status.NOT_FOUND).build();
     } catch (Exception e) {
       LOG.error("Error retrieving documents size", e);
       return Response.serverError().entity(e.getMessage()).build();

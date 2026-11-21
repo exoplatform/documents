@@ -178,7 +178,7 @@ public interface DocumentFileStorage {
    * @param hidden the hidden value
    * @param aclIdentity user Identuty
    */
-    void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, Identity aclIdentity) throws ObjectAlreadyExistsException;
+    void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, Identity aclIdentity) throws ObjectAlreadyExistsException, ObjectNotFoundException;
 
     /**
    * Duplicate the given node.
