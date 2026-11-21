@@ -1060,6 +1060,7 @@ public class DocumentFileRestTest {
     when(documentFileStorage.getDownloadZipBytes(123456, username)).thenReturn(new byte[0]);
     Response response = documentFileRest.getDownloadZip(123456);
     assertEquals(Response.Status.GONE.getStatusCode(), response.getStatus());
+    assertTrue(((javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control")).isNoStore());
     when(documentFileStorage.getDownloadZipBytes(123456, username)).thenReturn(new byte[10]);
     response = documentFileRest.getDownloadZip(123456);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());

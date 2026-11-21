@@ -1038,7 +1038,7 @@ public class DocumentFileRest implements ResourceContainer {
       byte[] filesBytes = documentFileService.getDownloadZipBytes(actionId,
               currentUserIdentity.getRemoteId());
       if (filesBytes.length == 0) {
-        return Response.status(Status.GONE).build();
+        return Response.status(Status.GONE).cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
       return Response.ok(filesBytes)
                      .type("application/zip")
@@ -1047,7 +1047,7 @@ public class DocumentFileRest implements ResourceContainer {
                      .build();
     } catch (Exception ex) {
       LOG.warn("Failed to get download file ", ex);
-      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+      return Response.status(HTTPStatus.INTERNAL_ERROR).cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
   }
 
