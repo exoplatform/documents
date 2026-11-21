@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -358,6 +359,61 @@ class BulkDownloadActionTest {
   }
 
   @Test
+  void aReplacedDownloadWhoseCopiesFailedStaysSilentAndKeepsNoArchive() throws Exception {
+    ActionData replaced = startDownload("7", "alice");
+    ActionData current = startDownload("7", "alice");
+    FileNode item = new FileNode();
+    item.setId("1");
+    Node node = mock(Node.class);
+    when(node.getParent()).thenReturn(mock(Node.class));
+    ListenerService listener = mock(ListenerService.class);
+    // the status is read when the event is sent: the action is mutable
+    List<String> broadcastStatuses = new ArrayList<>();
+    doAnswer(invocation -> {
+      broadcastStatuses.add(((ActionData) invocation.getArgument(2)).getStatus());
+      return null;
+    }).when(listener).broadcast(anyString(), any(), any());
+    Set<String> before = archivesInTempDirectory();
+
+    try (MockedStatic<JCRDocumentsUtil> util = mockStatic(JCRDocumentsUtil.class, CALLS_REAL_METHODS)) {
+      util.when(() -> JCRDocumentsUtil.getNodeByIdentifier(any(), anyString())).thenReturn(node);
+      util.when(() -> JCRDocumentsUtil.createFile(any(Node.class), anyString(), anyString(), anyString(), any(Node.class)))
+          .thenThrow(new IOException("cannot copy the document"));
+      newThread(replaced, List.of(item), listener).processAction();
+    }
+
+    assertFalse(broadcastStatuses.contains(ActionStatus.FAILED.name()));
+    assertNull(replaced.getDownloadZipPath());
+    assertEquals(before, archivesInTempDirectory());
+    assertEquals(ActionStatus.STARTED.name(), current.getStatus());
+  }
+
+  @Test
+  void noArchiveIsBuiltForADownloadCancelledDuringItsCopies() throws Exception {
+    ActionData download = startDownload("7", "alice");
+    FileNode item = new FileNode();
+    item.setId("1");
+    ActionThread thread = newThread(download, List.of(item));
+    Node node = mock(Node.class);
+    when(node.getParent()).thenReturn(mock(Node.class));
+    Set<String> before = archivesInTempDirectory();
+
+    try (MockedStatic<JCRDocumentsUtil> util = mockStatic(JCRDocumentsUtil.class, CALLS_REAL_METHODS)) {
+      util.when(() -> JCRDocumentsUtil.getNodeByIdentifier(any(), anyString())).thenReturn(node);
+      util.when(() -> JCRDocumentsUtil.createFile(any(Node.class), anyString(), anyString(), anyString(), any(Node.class)))
+          .thenAnswer(invocation -> {
+            download.setStatus(ActionStatus.CANCELED.name());
+            return null;
+          });
+      thread.processAction();
+    }
+
+    assertEquals(ActionStatus.CANCELED.name(), download.getStatus());
+    assertNull(download.getDownloadZipPath());
+    assertEquals(before, archivesInTempDirectory());
+  }
+
+  @Test
   void theTemporaryCopiesOfADownloadWhoseArchiveCannotBeBuiltAreDeleted() throws Exception {
     ActionData download = startDownload("7", "alice");
     FileNode item = new FileNode();
@@ -448,10 +504,14 @@ class BulkDownloadActionTest {
   }
 
   private ActionThread newThread(ActionData action, List<AbstractNode> items) {
+    return newThread(action, items, mock(ListenerService.class));
+  }
+
+  private ActionThread newThread(ActionData action, List<AbstractNode> items, ListenerService listenerService) {
     return new ActionThread(null,
                      null,
                      service,
-                     mock(ListenerService.class),
+                     listenerService,
                      null,
                      action,
                      null,

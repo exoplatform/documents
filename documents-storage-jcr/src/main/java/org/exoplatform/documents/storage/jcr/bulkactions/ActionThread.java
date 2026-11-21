@@ -593,9 +593,12 @@ public class ActionThread implements Runnable {
       }
       return;
     }
-    if (zipPath != null && !bulkStorageActionService.isListed(actionData)) {
-      // the archive of a replaced download is deleted
-      bulkStorageActionService.discardDownloadArchive(actionData);
+    if (!bulkStorageActionService.isListed(actionData)) {
+      // a replaced download that was not cancelled and is replaced before this check ends
+      // silently: its archive, when built, is deleted and it sends no event
+      if (zipPath != null) {
+        bulkStorageActionService.discardDownloadArchive(actionData);
+      }
       return;
     }
     if (!actionData.getStatus().equals(ActionStatus.FAILED.name())) {
