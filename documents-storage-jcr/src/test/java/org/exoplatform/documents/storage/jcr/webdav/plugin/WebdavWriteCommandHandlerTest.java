@@ -758,11 +758,7 @@ public class WebdavWriteCommandHandlerTest {
   }
 
   /**
-   * A dot name padded with a blank the repository accepts in a node name
-   * ({@code StringUtils.strip} removes it, {@code LocationFactory} keeps it)
-   * reaches {@code removeExistingTarget}, which refuses it with a 403. The
-   * technical name is the one the real {@code PathCommandHandler} returns:
-   * it only encodes {@code | [ ] *} and {@code :}.
+   * A move or copy onto a dot name padded with blanks is refused with a 403.
    */
   @Test
   @SneakyThrows
@@ -788,9 +784,8 @@ public class WebdavWriteCommandHandlerTest {
   }
 
   /**
-   * A dot name padded with an ASCII space never gets that far: the repository
-   * refuses it as a node name, so the request ends with a 400 before any
-   * existing target is touched.
+   * A move or copy onto a dot name padded with spaces is refused with a 400
+   * and leaves any existing target untouched.
    */
   @Test
   @SneakyThrows

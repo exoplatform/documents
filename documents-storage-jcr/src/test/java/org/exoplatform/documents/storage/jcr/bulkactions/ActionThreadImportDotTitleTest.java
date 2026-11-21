@@ -72,10 +72,9 @@ class ActionThreadImportDotTitleTest {
   }
 
   /**
-   * A blank that {@code StringUtils.strip} removes and the repository accepts
-   * in a node name (here U+2003) lets a dot title through to the folder and
-   * file title sites: only the entry check stops it. An entry padded with an
-   * ASCII space is left out as well; it would otherwise fail on its node name.
+   * Entries whose folder or file title is "." or ".." once the surrounding
+   * blanks are removed are left out of the import and listed as ignored,
+   * whatever blank pads them.
    */
   @Test
   void createItemsLeavesOutEntriesTitledWithDotsPaddedWithAcceptedBlanks() throws Exception {
