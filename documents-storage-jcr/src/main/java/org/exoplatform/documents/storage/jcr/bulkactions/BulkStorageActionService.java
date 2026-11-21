@@ -17,9 +17,9 @@
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -60,7 +60,7 @@ public class BulkStorageActionService implements Startable {
 
   private long                          DEFAULT_ZIP_UPLOAD_LIMIT    = 3000;
 
-  private static final List<ActionData> actionList = new ArrayList<>();
+  private static final List<ActionData> actionList = new CopyOnWriteArrayList<>();
 
   public void executeBulkAction(Session session,
                                 DocumentFileStorage documentFileStorage,
@@ -73,12 +73,17 @@ public class BulkStorageActionService implements Startable {
                                 Map<String,Object> params,
                                 long authenticatedUserId) {
     actionData.setStatus(ActionStatus.STARTED.name());
-    // an action identifier is unique per user in the list: the older entries are replaced,
-    // the threads of those keep working on their own ActionData
-    actionList.removeIf(older -> older.getActionId() != null && older.getActionId().equals(actionData.getActionId())
-        && older.getIdentity() != null && actionData.getIdentity() != null
-        && older.getIdentity().getUserId().equals(actionData.getIdentity().getUserId()));
-    actionList.add(actionData);
+    // an action identifier is unique per user in the list: the older entries are replaced
+    // (the threads of those keep working on their own ActionData), but a running import,
+    // whose size counts in the uploads limit, stays. The list is a copy-on-write one, read
+    // on snapshots by every thread, and the replacement is made one start at a time.
+    synchronized (actionList) {
+      actionList.removeIf(older -> !ActionType.IMPORT_ZIP.name().equals(older.getActionType())
+          && older.getActionId() != null && older.getActionId().equals(actionData.getActionId())
+          && older.getIdentity() != null && actionData.getIdentity() != null
+          && older.getIdentity().getUserId().equals(actionData.getIdentity().getUserId()));
+      actionList.add(actionData);
+    }
     checkTotalUplaodsLimit(actionData.getIdentity(), true);
     bulkActionThreadPool.execute(new ActionThread(documentFileStorage,
                                                   jcrDeleteFileStorage,

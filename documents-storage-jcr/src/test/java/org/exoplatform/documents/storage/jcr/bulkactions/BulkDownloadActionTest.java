@@ -166,6 +166,52 @@ class BulkDownloadActionTest {
     assertSame(newer, service.getActionData("7", "alice"));
   }
 
+  @Test
+  void aRunningImportKeepsItsEntryWhenAnotherActionOfTheUserHasTheSameId() throws Exception {
+    ActionData alicesImport = startAction("7", "alice", ActionType.IMPORT_ZIP);
+    ActionData alicesDownload = startDownload("7", "alice");
+
+    assertTrue(listedActions().stream().anyMatch(a -> a == alicesImport));
+    assertTrue(listedActions().stream().anyMatch(a -> a == alicesDownload));
+    assertSame(alicesDownload, service.getActionData("7", "alice"));
+  }
+
+  @Test
+  void concurrentStartsAndRemovalsLeaveOneEntryPerUserAndId() throws Exception {
+    int threads = 4;
+    ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(threads + 1);
+    try {
+      for (int round = 100; round < 160; round++) {
+        String id = String.valueOf(round);
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<?>> running = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+          ActionData action = newAction(id, "alice", ActionType.DELETE);
+          actions.add(action);
+          running.add(executor.submit(() -> {
+            go.await();
+            service.executeBulkAction(null, null, null, null, null, Collections.emptyList(), action, null,
+                                      Collections.emptyMap(), 1L);
+            return null;
+          }));
+        }
+        ActionData other = startAction("1", "bob", ActionType.DELETE);
+        running.add(executor.submit(() -> {
+          go.await();
+          service.removeActionData(other);
+          return null;
+        }));
+        go.countDown();
+        for (java.util.concurrent.Future<?> future : running) {
+          future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        assertEquals(1, listedActions().stream().filter(a -> id.equals(a.getActionId())).count());
+      }
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
   @SuppressWarnings("unchecked")
   private List<ActionData> listedActions() throws Exception {
     Field list = BulkStorageActionService.class.getDeclaredField("actionList");
@@ -177,11 +223,16 @@ class BulkDownloadActionTest {
     return startAction(actionId, userId, ActionType.DOWNLOAD);
   }
 
-  private ActionData startAction(String actionId, String userId, ActionType actionType) {
+  private ActionData newAction(String actionId, String userId, ActionType actionType) {
     ActionData action = new ActionData();
     action.setActionId(actionId);
     action.setActionType(actionType.name());
     action.setIdentity(new Identity(userId));
+    return action;
+  }
+
+  private ActionData startAction(String actionId, String userId, ActionType actionType) {
+    ActionData action = newAction(actionId, userId, actionType);
     actions.add(action);
     service.executeBulkAction(null,
                               null,
