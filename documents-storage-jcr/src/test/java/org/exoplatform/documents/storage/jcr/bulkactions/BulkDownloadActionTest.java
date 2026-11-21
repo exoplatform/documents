@@ -130,6 +130,19 @@ class BulkDownloadActionTest {
     assertEquals(ActionStatus.STARTED.name(), olderDelete.getStatus());
   }
 
+  @Test
+  void theNewestActionOfTheUserIsTheOneFoundForCancelAndFetch() throws Exception {
+    ActionData olderDownload = startDownload("7", "alice");
+    ActionData newDownload = startDownload("7", "alice");
+
+    assertSame(newDownload, service.getActionData("7", "alice"));
+
+    runAction(newDownload);
+    assertEquals(ActionStatus.DONE_SUCCESSFULLY.name(), service.getActionData("7", "alice").getStatus());
+    assertNotNull(service.getActionData("7", "alice").getDownloadZipPath());
+    assertEquals(ActionStatus.STARTED.name(), olderDownload.getStatus());
+  }
+
   private ActionData startDownload(String actionId, String userId) {
     return startAction(actionId, userId, ActionType.DOWNLOAD);
   }

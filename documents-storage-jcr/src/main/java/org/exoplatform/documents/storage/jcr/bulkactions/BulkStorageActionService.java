@@ -122,13 +122,13 @@ public class BulkStorageActionService implements Startable {
   /**
    * @param id the action's identifier
    * @param userId the user who started the action
-   * @return the action with this identifier started by this user, or null
+   * @return the most recent action with this identifier started by this user, or null
    */
   public ActionData getActionData(String id, String userId) {
     return actionList.stream()
                      .filter(resource -> id.equals(resource.getActionId()) && resource.getIdentity() != null
                          && resource.getIdentity().getUserId().equals(userId))
-                     .findFirst()
+                     .reduce((older, newer) -> newer)
                      .orElse(null);
   }
 
