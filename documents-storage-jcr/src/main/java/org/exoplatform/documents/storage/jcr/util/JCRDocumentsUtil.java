@@ -24,6 +24,7 @@ import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.JCR_L
 
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -904,6 +905,10 @@ public class JCRDocumentsUtil {
     if (StringUtils.isBlank(FilenameUtils.getBaseName(name))) {
       return false;
     }
+    String strippedName = StringUtils.strip(name);
+    if (".".equals(strippedName) || "..".equals(strippedName)) {
+      return false;
+    }
     Pattern regex = Pattern.compile("[<\\\\>:\"/|?*]");
     Matcher matcher = regex.matcher(name);
     return !matcher.find();
@@ -1099,27 +1104,27 @@ public class JCRDocumentsUtil {
     if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
       String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
       Node sourceNode = getNodeByIdentifier(node.getSession(), sourceID);
-      if (sourceNode != null) {
-        createFile(sourceNode, getPathWithTitles(node), getPathWithTitles(sourceNode), tempFolderPath, parentPath);
+      String shortcutPath = getDownloadPath(node, symlinkPath, sourcePath);
+      if (sourceNode != null && shortcutPath == null) {
+        LOG.warn("Shortcut {} left out of the download: its path is not a path in the download folder", node.getPath());
+      } else if (sourceNode != null) {
+        createFile(sourceNode, shortcutPath, getPathWithTitles(sourceNode), tempFolderPath, parentPath);
       }
       return;
     }
-    Node jrcNode = node.getNode("jcr:content");
-    InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
-    String path = "";
-    String nodePath = getPathWithTitles(node);
-    if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
-      nodePath = symlinkPath + nodePath.replace(sourcePath, "");
+    Path filePath = toTempFolderPath(tempFolderPath, getRelativePath(node, symlinkPath, sourcePath, parentPath));
+    if (filePath == null) {
+      LOG.warn("Document {} left out of the download: its path is not a path in the download folder", node.getPath());
+      return;
     }
-    path = tempFolderPath + nodePath.replace(parentPath, "");
-    File file = new File(path);
-    try (OutputStream outputStream = new FileOutputStream(file)) {
+    Node jrcNode = node.getNode("jcr:content");
+    try (InputStream inputStream = jrcNode.getProperty("jcr:data").getStream();
+         OutputStream outputStream = new FileOutputStream(filePath.toFile())) {
       byte[] buffer = new byte[1024];
       int length;
       while ((length = inputStream.read(buffer)) > 0) {
         outputStream.write(buffer, 0, length);
       }
-      inputStream.close();
     }
   }
 
@@ -1164,20 +1169,25 @@ public class JCRDocumentsUtil {
                                                String sourcePath,
                                                String tempFolderPath,
                                                String parentPath) throws Exception {
-    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, parentPath, new HashSet<>());
+    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, parentPath, new HashSet<>(), new HashSet<>());
   }
 
   /**
    * Copies the tree under a node, following shortcuts to their targets.
    * {@code walkPath} holds the identifiers of the nodes on the current branch of
    * the walk, so a node is walked at most once on any one branch.
+   * {@code nestedTargets} holds the identifiers of the own targets of the
+   * shortcuts met inside another shortcut's target: each one is copied once for
+   * each downloaded folder, at the place of the first such shortcut that has a
+   * place in the download.
    */
   private static void createTempFilesAndFolders(Node node,
                                                 String symlinkPath,
                                                 String sourcePath,
                                                 String tempFolderPath,
                                                 String parentPath,
-                                                Set<String> walkPath) throws Exception {
+                                                Set<String> walkPath,
+                                                Set<String> nestedTargets) throws Exception {
     if (node == null) {
       return;
     }
@@ -1187,28 +1197,36 @@ public class JCRDocumentsUtil {
     }
     try {
       if (JCRDocumentsUtil.isFolder(node)) {
-        String nodePath = getPathWithTitles(node);
-        if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
-          nodePath = symlinkPath + nodePath.replace(sourcePath, "");
+        Path folderPath = toTempFolderPath(tempFolderPath, getRelativePath(node, symlinkPath, sourcePath, parentPath));
+        if (folderPath == null) {
+          LOG.warn("Folder {} left out of the download: its path is not a path in the download folder", node.getPath());
+          return;
         }
-        String path = tempFolderPath + nodePath.replace(parentPath, "");
-        Files.createDirectories(Paths.get(path));
+        Files.createDirectories(folderPath);
         NodeIterator nodeIterator = node.getNodes();
         while (nodeIterator.hasNext()) {
           Node child = nodeIterator.nextNode();
-          createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentPath, walkPath);
+          createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentPath, walkPath, nestedTargets);
         }
       } else {
         if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(node.getSession(), sourceID);
-          if (sourceNode != null) {
+          String shortcutPath = getDownloadPath(node, symlinkPath, sourcePath);
+          if (sourceNode == null) {
+            return;
+          } else if (toTempFolderPath(tempFolderPath, shortcutPath == null ? null : stripLeadingPath(shortcutPath, parentPath)) == null) {
+            LOG.warn("Shortcut {} left out of the download: its path is not a path in the download folder", node.getPath());
+          } else if (isInShortcutTarget(node, symlinkPath, sourcePath) && !nestedTargets.add(sourceID)) {
+            LOG.warn("Shortcut {} left out of the download: its target is already in the download", node.getPath());
+          } else {
             createTempFilesAndFolders(sourceNode,
-                                      getPathWithTitles(node),
+                                      shortcutPath,
                                       getPathWithTitles(sourceNode),
                                       tempFolderPath,
                                       parentPath,
-                                      walkPath);
+                                      walkPath,
+                                      nestedTargets);
           }
         } else {
           createFile(node, symlinkPath, sourcePath, tempFolderPath, parentPath);
@@ -1218,6 +1236,72 @@ public class JCRDocumentsUtil {
       walkPath.remove(nodeId);
     }
   }
+  /**
+   * @return true when the node lies inside the target folder of the shortcut
+   *         that led to it, false when it is in the downloaded tree itself or
+   *         is that shortcut's target
+   */
+  private static boolean isInShortcutTarget(Node node, String symlinkPath, String sourcePath) throws RepositoryException {
+    return StringUtils.isNotEmpty(symlinkPath) && !StringUtils.equals(getPathWithTitles(node), sourcePath);
+  }
+
+  /**
+   * @return the node's titles path in the download, less the downloaded
+   *         folder's parent; null when that parent's path does not lead it
+   */
+  private static String getRelativePath(Node node, String symlinkPath, String sourcePath, String parentPath) {
+    String nodePath = getDownloadPath(node, symlinkPath, sourcePath);
+    return nodePath == null ? null : stripLeadingPath(nodePath, parentPath);
+  }
+
+  /**
+   * @return the node's titles path, placed under the shortcut that led to it,
+   *         if any; null when the shortcut's target path does not lead the
+   *         node's
+   */
+  private static String getDownloadPath(Node node, String symlinkPath, String sourcePath) {
+    String nodePath = getPathWithTitles(node);
+    if (StringUtils.isNotEmpty(symlinkPath) || StringUtils.isNotEmpty(sourcePath)) {
+      String targetPath = stripLeadingPath(nodePath, sourcePath);
+      nodePath = targetPath == null ? null : symlinkPath + targetPath;
+    }
+    return nodePath;
+  }
+
+  private static String stripLeadingPath(String path, String leadingPath) {
+    if (StringUtils.isEmpty(leadingPath)) {
+      return path;
+    } else if (path.equals(leadingPath)) {
+      return "";
+    } else {
+      return path.startsWith(leadingPath + "/") ? path.substring(leadingPath.length()) : null;
+    }
+  }
+
+  /**
+   * @param relativePath the copied item's titles path in the download
+   * @return the copied item's path, or null when one of its titles is blank,
+   *         "." or "..", or when it is not below the download folder: each item
+   *         keeps its own place in the download
+   */
+  private static Path toTempFolderPath(String tempFolderPath, String relativePath) {
+    if (relativePath == null) {
+      return null;
+    }
+    String[] titles = relativePath.split("/", -1);
+    for (int i = 0; i < titles.length; i++) {
+      String strippedTitle = titles[i].strip();
+      // the path starts with a separator, but for a folder read without its parent
+      boolean leadingSeparator = i == 0 && titles[i].isEmpty();
+      if ((strippedTitle.isEmpty() && !leadingSeparator) || ".".equals(strippedTitle) || "..".equals(strippedTitle)) {
+        return null;
+      }
+    }
+    Path tempFolder = Paths.get(tempFolderPath).toAbsolutePath().normalize();
+    Path itemPath = Paths.get(tempFolderPath + relativePath).toAbsolutePath().normalize();
+    return itemPath.startsWith(tempFolder) && !itemPath.equals(tempFolder) ? itemPath : null;
+  }
+
   public static void cleanFiles(File file) {
     File[] files = file.listFiles();
     if (files != null) {
