@@ -212,6 +212,39 @@ class BulkDownloadActionTest {
     }
   }
 
+  @Test
+  void aStartWaitingBetweenTheRemovalAndTheAddCannotLetAnotherStartInterleave() throws Exception {
+    java.util.concurrent.CountDownLatch parked = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch secondDone = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.atomic.AtomicBoolean firstCall = new java.util.concurrent.atomic.AtomicBoolean(true);
+    service.afterEarlierEntriesRemoved = () -> {
+      if (firstCall.compareAndSet(true, false)) {
+        parked.countDown();
+        try {
+          // a second start can only complete here when nothing makes it wait for this one
+          secondDone.await(1, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    };
+    ActionData first = newAction("7", "alice", ActionType.DELETE);
+    ActionData second = newAction("7", "alice", ActionType.DELETE);
+    actions.add(first);
+    actions.add(second);
+    Thread firstStarter = new Thread(() -> service.executeBulkAction(null, null, null, null, null, Collections.emptyList(),
+                                                                     first, null, Collections.emptyMap(), 1L));
+    firstStarter.start();
+    assertTrue(parked.await(10, java.util.concurrent.TimeUnit.SECONDS));
+
+    service.executeBulkAction(null, null, null, null, null, Collections.emptyList(), second, null, Collections.emptyMap(), 1L);
+    secondDone.countDown();
+    firstStarter.join(10000);
+
+    assertEquals(1, listedActions().stream().filter(a -> "7".equals(a.getActionId())).count());
+    assertSame(second, service.getActionData("7", "alice"));
+  }
+
   @SuppressWarnings("unchecked")
   private List<ActionData> listedActions() throws Exception {
     Field list = BulkStorageActionService.class.getDeclaredField("actionList");

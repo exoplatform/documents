@@ -60,6 +60,10 @@ public class BulkStorageActionService implements Startable {
 
   private long                          DEFAULT_ZIP_UPLOAD_LIMIT    = 3000;
 
+  // test hook, run between the removal of the earlier entries and the add of the new one
+  Runnable                              afterEarlierEntriesRemoved  = () -> {
+                                                                    };
+
   private static final List<ActionData> actionList = new CopyOnWriteArrayList<>();
 
   public void executeBulkAction(Session session,
@@ -82,6 +86,7 @@ public class BulkStorageActionService implements Startable {
           && older.getActionId() != null && older.getActionId().equals(actionData.getActionId())
           && older.getIdentity() != null && actionData.getIdentity() != null
           && older.getIdentity().getUserId().equals(actionData.getIdentity().getUserId()));
+      afterEarlierEntriesRemoved.run();
       actionList.add(actionData);
     }
     checkTotalUplaodsLimit(actionData.getIdentity(), true);
