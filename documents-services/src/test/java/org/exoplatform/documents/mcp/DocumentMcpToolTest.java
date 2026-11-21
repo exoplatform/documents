@@ -2915,10 +2915,11 @@ public class DocumentMcpToolTest {
 
   /**
    * search_documents with updated_since and no query searches the files
-   * changed since then, the most recent first; with neither, it is refused
-   * before the search runs.
+   * changed since then, the most recent first; with neither, it searches the
+   * folder's files with no date, the most recent first, rather than refusing
+   * (EXO-94927).
    * Mutants: the date not set on the filter, the sort not set or ascending,
-   * the query still required, the refusal dropped.
+   * the query still required, a date set with none given.
    *
    * @throws Exception never
    */
@@ -2937,9 +2938,57 @@ public class DocumentMcpToolTest {
         && filter.getSortField() == org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE
         && !filter.isAscending()
         && FOLDER_ID.equals(filter.getParentFolderId())), eq(currentIdentity), anyInt(), anyInt());
-    assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.searchDocuments(" ", null, null, FOLDER_ID, null, null, null, null));
-    verify(documentFileService, Mockito.times(1)).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+    assertEquals(1, documentMcpTool.searchDocuments(" ", null, null, FOLDER_ID, null, null, null, null).size());
+    verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> filter.getAfterDate() == null
+        && filter.getSortField() == org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE
+        && !filter.isAscending()
+        && FOLDER_ID.equals(filter.getParentFolderId())), eq(currentIdentity), anyInt(), anyInt());
+    verify(documentFileService, Mockito.times(2)).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                                         any(),
+                                                         anyInt(),
+                                                         anyInt());
+  }
+
+  /**
+   * search_documents given only a space and a limit, as the space-activity
+   * summary asks, lists that space's files, the most recent first, with no
+   * date and the limit asked (EXO-94927); a query keeps the search's own
+   * relevance order, and a space the user can't view is still refused before
+   * any search.
+   * Mutants: the refusal kept, the sort not set or ascending, the newest-first
+   * sort applied to a query, the space not set as the owner, the view check
+   * dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsWithOnlyASpaceListsItsFilesMostRecentFirst() throws Exception {
+    Space space = new Space();
+    space.setId(String.valueOf(SPACE_ID));
+    space.setPrettyName("engineering");
+    when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(space);
+    when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(true);
+    when(identityManager.getOrCreateSpaceIdentity("engineering")).thenReturn(new org.exoplatform.social.core.identity.model.Identity("306"));
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                    eq(currentIdentity),
+                                    anyInt(),
+                                    anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
+
+    assertEquals(1, documentMcpTool.searchDocuments(null, SPACE_ID, null, null, null, 3, null, null).size());
+
+    verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> (filter.getQuery() == null || filter.getQuery().isBlank())
+        && filter.getAfterDate() == null
+        && filter.getSortField() == org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE
+        && !filter.isAscending()
+        && Long.valueOf(306L).equals(filter.getOwnerId())), eq(currentIdentity), anyInt(), eq(3));
+
+    documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, 3, null, null);
+    verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> "report".equals(filter.getQuery())
+        && filter.getSortField() == null), eq(currentIdentity), anyInt(), eq(3));
+
+    when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(false);
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.searchDocuments(null, SPACE_ID, null, null, null, 3, null, null));
+    verify(documentFileService, Mockito.times(2)).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
                                                          any(),
                                                          anyInt(),
                                                          anyInt());

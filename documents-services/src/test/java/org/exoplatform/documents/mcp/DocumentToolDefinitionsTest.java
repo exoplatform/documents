@@ -17,6 +17,7 @@
 package org.exoplatform.documents.mcp;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -25,11 +26,15 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -81,6 +86,91 @@ public class DocumentToolDefinitionsTest {
     });
     assertTrue(definitions.get("upload_document").getInputSchema().contains("\"upload_id\""));
     assertTrue(definitions.get("add_document_version").getInputSchema().contains("\"upload_id\""));
+  }
+
+  /**
+   * search_documents says that with neither a query nor updated_since it lists
+   * the scope's files, the most recent first, and its query is optional with
+   * no condition (EXO-94927). A booted instance takes that text through
+   * mcp-server's upgrade digests: the module's upgrades file lists every text
+   * search_documents shipped before, from platform-private-distributions,
+   * where the tool was first defined, then from this module, and never the
+   * current one.
+   * Mutants: the sentence removed, the query still said to need a date, the
+   * head's former digest removed, an earlier digest removed, the current
+   * digest listed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsListsTheScopesRecentFilesAndReplacesItsShippedTexts() throws Exception {
+    JsonMapper mapper = JsonMapper.builder().build();
+    JsonNode search = null;
+    for (JsonNode tool : mapper.readTree(resource("ai-tool-definitions.json")).get("tools")) {
+      if ("search_documents".equals(tool.get("name").asString())) {
+        search = tool;
+      }
+    }
+    assertNotNull(search);
+    String description = search.get("description").asString();
+    assertTrue(description,
+               description.contains("With neither a query nor updated_since, lists the scope's files, the most recent first."));
+    String query = search.get("input_schema").get("properties").get("query").get("description").asString();
+    assertEquals("Full-text search query string. Optional: without it, the files of the scope are listed, the most recent first.",
+                 query);
+
+    Set<String> replaced = new HashSet<>();
+    for (JsonNode tool : mapper.readTree(resource("ai-tool-definition-upgrades.json")).get("tools")) {
+      if ("search_documents".equals(tool.get("name").asString())) {
+        tool.get("replaced_definitions").forEach(digest -> replaced.add(digest.asString()));
+      }
+    }
+    // the digests (jq -jcS '{description, input_schema}' | shasum -a 256) of the texts shipped before EXO-94927:
+    // platform-private-distributions 802222172, be1c40ded, df8b620d9, then documents 1f2c6b805, 013bdd00b, 20a7fdc8e
+    List.of("aca16da632490d85676cbb47daeb88715e3a0758ad03867a569cf1d0fcee6780",
+            "ba02168dd192a9c68dac9dacec8afce8c65db5c8db6c2f235abd0704918c1d6b",
+            "730825e85b8df00014dc003f120adba652889f62289b65a8c11d7dcda04c90b2",
+            "d3e347ce117f582a0b63507483bbf334ebe715ef520c28bdb90dfda20f034110",
+            "6439b74c3301e63f39ddc5048f4398b82bd66f11ea9c1b40d560254b6046e2ea",
+            "3355a37e4de74828f7eaff2175d0341678c39488228055daf31dbb93c45a024c")
+        .forEach(digest -> assertTrue(digest + " not in " + replaced, replaced.contains(digest)));
+    Map<String, Object> current = new TreeMap<>();
+    current.put("description", description);
+    current.put("input_schema", sorted(mapper.treeToValue(search.get("input_schema"), Object.class)));
+    String digest = HexFormat.of()
+                             .formatHex(MessageDigest.getInstance("SHA-256")
+                                                     .digest(mapper.writeValueAsString(current).getBytes(StandardCharsets.UTF_8)));
+    assertFalse("the current text replaces nothing: " + digest, replaced.contains(digest));
+  }
+
+  /**
+   * Gives a JSON value its keys in sorted order at every level, as
+   * {@code jq -S} prints them.
+   *
+   * @param value a value read from JSON
+   * @return the same value, every object a sorted map
+   */
+  private static Object sorted(Object value) {
+    if (value instanceof Map<?, ?> map) {
+      Map<String, Object> sortedMap = new TreeMap<>();
+      map.forEach((key, child) -> sortedMap.put(String.valueOf(key), sorted(child)));
+      return sortedMap;
+    } else if (value instanceof List<?> list) {
+      return list.stream().map(DocumentToolDefinitionsTest::sorted).toList();
+    }
+    return value;
+  }
+
+  /**
+   * Opens one of the module's shipped resources.
+   *
+   * @param name the resource's name
+   * @return its content
+   * @throws Exception when it can't be read
+   */
+  private static java.io.InputStream resource(String name) throws Exception {
+    URL classes = DocumentMcpTool.class.getProtectionDomain().getCodeSource().getLocation();
+    return new java.io.FileInputStream(new File(new File(classes.toURI()), name));
   }
 
   /**

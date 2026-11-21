@@ -1336,9 +1336,11 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Searches the documents the user can read, optionally in one space, given
-   * by its id or by its name (at most one of them), or under one folder.
+   * by its id or by its name (at most one of them), or under one folder. With
+   * neither a query nor a date, it lists the files of that scope, the most
+   * recent first.
    *
-   * @param query the full-text query
+   * @param query the full-text query, blank for none
    * @param spaceId the space to search in, null for none
    * @param spaceName the name of the space to search in, blank for none
    * @param parentFolderId the folder to search under, which wins over the
@@ -1353,8 +1355,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    *           of the user carries the name
    * @throws IllegalAccessException when the user can't view the space
    * @throws IllegalArgumentException when both a space id and a name are
-   *           given, several of the user's spaces carry the name, the date
-   *           can't be read, or neither a query nor a date is given
+   *           given, several of the user's spaces carry the name, or the
+   *           date can't be read
    */
   public List<DocumentFileModel> searchDocuments(String query,
                                                  Long spaceId,
@@ -1365,9 +1367,6 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                  Boolean isFavorites,
                                                  String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
     Long updatedSinceTime = parseUpdatedSince(updatedSince);
-    if (StringUtils.isBlank(query) && updatedSinceTime == null) {
-      throw new IllegalArgumentException("Pass a 'query', or 'updated_since' to list the files changed since a date.");
-    }
     DocumentTimelineFilter filter = new DocumentTimelineFilter();
     filter.setQuery(query);
     if (isFavorites != null && isFavorites.booleanValue()) {
@@ -1375,6 +1374,8 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
     if (updatedSinceTime != null) {
       filter.setAfterDate(updatedSinceTime);
+    }
+    if (updatedSinceTime != null || StringUtils.isBlank(query)) {
       filter.setSortField(DocumentSortField.MODIFIED_DATE);
       filter.setAscending(false);
     }
