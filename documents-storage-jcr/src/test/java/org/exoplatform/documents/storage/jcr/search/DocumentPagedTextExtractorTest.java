@@ -262,6 +262,27 @@ class DocumentPagedTextExtractorTest {
   }
 
   /**
+   * A Markdown file uploaded as generic binary, as the rig's « NDA
+   * template.md », is read part by part, its type taken from the reader
+   * service's registry (EXO-94846). Mutant: the registry's fallback removed,
+   * the file refused as an unsupported format.
+   *
+   * @throws Exception never
+   */
+  @Test
+  void readsAMarkdownFileStoredAsGenericBinary() throws Exception {
+    AdvancedDocumentReader reader = mock(AdvancedDocumentReader.class);
+    when(reader.getContentAsReader(any())).thenAnswer(invocation -> new StringReader("# NDA template"));
+    when(documentReaderService.getDocumentReader("text/x-web-markdown")).thenReturn(reader);
+    storeFile(DOCUMENT_ID, "NDA template.md", "application/octet-stream", "# NDA template".getBytes(StandardCharsets.UTF_8), 1L);
+
+    DocumentTextPage page = extractor.getPage(DOCUMENT_ID, 0, 50);
+
+    assertEquals(Status.EXTRACTED, page.status());
+    assertEquals("# NDA template", page.text());
+  }
+
+  /**
    * A file over the largest size is refused without being read, a type no
    * reader handles is refused, and a document that isn't a file says so.
    * Mutants: the size check dropped or after the copy, the type check
