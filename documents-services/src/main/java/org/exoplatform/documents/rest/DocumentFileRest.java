@@ -768,6 +768,8 @@ public class DocumentFileRest implements ResourceContainer {
     } catch (ObjectAlreadyExistsException e) {
       LOG.warn("Folder with same name already exists", e);
       return Response.status(HTTPStatus.CONFLICT).build();
+    } catch (ObjectNotFoundException e) {
+      return Response.status(HTTPStatus.NOT_FOUND).build();
     } catch (Exception ex) {
       LOG.warn("Failed to create Folder", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();
@@ -803,6 +805,8 @@ public class DocumentFileRest implements ResourceContainer {
     }
     try {
         return Response.ok(documentFileService.getNewName(ownerId, parentid, folderPath, name)).build();
+      } catch (ObjectNotFoundException e) {
+        return Response.status(HTTPStatus.NOT_FOUND).build();
       } catch (Exception ex) {
         LOG.warn("Failed to propose new Folder name", ex);
         return Response.status(HTTPStatus.INTERNAL_ERROR).build();

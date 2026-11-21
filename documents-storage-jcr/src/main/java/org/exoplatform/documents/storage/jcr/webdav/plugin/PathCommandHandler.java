@@ -200,7 +200,7 @@ public class PathCommandHandler {
   @Cacheable(WEBDAV_IDENTITY_JCR_PATH_CACHE_NAME)
   public String getIdentityBaseJcrPath(long identityId) {
     Identity identity = identityManager.getIdentity(identityId);
-    if (identity == null) {
+    if (identity == null || identity.isDeleted()) {
       throw new WebDavException(HttpStatus.SC_NOT_FOUND,
                                 String.format("Identity with id %s not found", identityId));
     } else if (identity.isUser()) {

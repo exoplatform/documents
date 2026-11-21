@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -193,6 +194,16 @@ public class PathCommandHandlerTest {
   public void testGetIdentityBaseJcrPathByWebDavPathNoIdentity() {
     when(identityManager.getIdentity(123L)).thenReturn(null);
     handler.getIdentityBaseJcrPath(IDENTITY_PATH);
+  }
+
+  @Test
+  public void testGetIdentityBaseJcrPathDeletedUserResolvesNoDrive() throws Exception {
+    mockUserIdentity(123L);
+    when(identity.isDeleted()).thenReturn(true);
+
+    assertThrows(WebDavException.class, () -> handler.getIdentityBaseJcrPath(IDENTITY_PATH));
+
+    verify(nodeHierarchyCreator, never()).getUserNode(any(SessionProvider.class), anyString());
   }
 
   @Test

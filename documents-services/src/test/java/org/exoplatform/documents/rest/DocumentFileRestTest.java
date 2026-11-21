@@ -1219,6 +1219,13 @@ public class DocumentFileRestTest {
   }
 
   @Test
+  public void getNewNameOwnerNotFound() throws ObjectNotFoundException, ObjectAlreadyExistsException, IllegalAccessException {
+    when(documentFileService.getNewName(1L, "123", "path", "test")).thenThrow(new ObjectNotFoundException("not found"));
+    Response response = documentFileRest.getNewName("123", "path", 1L, "test");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+  }
+
+  @Test
   public void updateDocumentDescription() throws IllegalAccessException, RepositoryException {
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
