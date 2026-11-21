@@ -35,11 +35,15 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.security.AccessControlException;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import javax.jcr.Node;
 import javax.jcr.Property;
 import javax.jcr.lock.Lock;
+import javax.xml.namespace.QName;
 import javax.jcr.version.Version;
 
 import org.junit.AfterClass;
@@ -55,7 +59,10 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
+import org.exoplatform.common.http.HTTPStatus;
 import org.exoplatform.documents.webdav.model.WebDavException;
+import org.exoplatform.documents.webdav.model.WebDavItemProperty;
+import org.exoplatform.documents.webdav.model.constant.PropertyConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
@@ -697,6 +704,56 @@ public class WebdavWriteCommandHandlerTest {
     NodeImpl resolvedNode = org.mockito.Mockito.mock(NodeImpl.class);
     when(resolvedNode.getPath()).thenReturn(nodePath);
     when(session.getItem(resolvedPath)).thenReturn(resolvedNode);
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCreateFolderNamedWithDotsIsRefused() {
+    for (String name : new String[] { ".", "..", " .. " }) {
+      when(pathCommandHandler.getLastVisibleSegment(anyString())).thenReturn(name);
+      assertStatus(403, () -> handler.createFolder(session, WEBDAV_FILE_PATH, Collections.emptyList()));
+    }
+    verify(parentNode, never()).addNode(anyString(), anyString());
+    verify(session, never()).save();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testSaveFileNamedWithDotsIsRefused() {
+    for (String name : new String[] { ".", "..", " .. " }) {
+      when(pathCommandHandler.getLastVisibleSegment(anyString())).thenReturn(name);
+      assertStatus(403,
+                   () -> handler.saveFile(session,
+                                          WEBDAV_FILE_PATH,
+                                          "text/plain",
+                                          Collections.emptyList(),
+                                          new ByteArrayInputStream("data".getBytes())));
+    }
+    verify(parentNode, never()).addNode(anyString(), anyString());
+    verify(session, never()).save();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testSavePropertiesRefusesTitleNamedWithDots() {
+    when(pathCommandHandler.resolveToJcrPath(eq(session), eq(WEBDAV_FILE_PATH))).thenReturn(JCR_PATH);
+    QName titleName = new QName("http://www.exoplatform.com/jcr/exo/1.0", "title", "exo");
+    for (String title : new String[] { ".", "..", " .. " }) {
+      Map<String, Collection<WebDavItemProperty>> result =
+                                                         handler.saveProperties(session,
+                                                                                WEBDAV_FILE_PATH,
+                                                                                List.of(new WebDavItemProperty(titleName, title)),
+                                                                                Collections.emptyList());
+      assertEquals(Collections.singleton(PropertyConstants.getStatusDescription(HTTPStatus.FORBIDDEN)), result.keySet());
+    }
+    verify(node, never()).setProperty(eq("exo:title"), anyString());
+    Map<String, Collection<WebDavItemProperty>> result =
+                                                       handler.saveProperties(session,
+                                                                              WEBDAV_FILE_PATH,
+                                                                              List.of(new WebDavItemProperty(titleName,
+                                                                                                             "..txt")),
+                                                                              Collections.emptyList());
+    assertFalse(result.containsKey(PropertyConstants.getStatusDescription(HTTPStatus.FORBIDDEN)));
   }
 
   @SneakyThrows
