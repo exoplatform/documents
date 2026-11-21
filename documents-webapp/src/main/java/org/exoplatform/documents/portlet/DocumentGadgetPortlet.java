@@ -18,6 +18,8 @@ package org.exoplatform.documents.portlet;
 
 import java.io.IOException;
 import java.util.Enumeration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import javax.portlet.ActionRequest;
 import javax.portlet.ActionResponse;
@@ -30,6 +32,8 @@ import javax.portlet.RenderResponse;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.container.ExoContainerContext;
+import org.exoplatform.services.security.ConversationState;
+import org.exoplatform.services.security.Identity;
 
 import io.meeds.social.portlet.CMSPortlet;
 import io.meeds.social.translation.service.TranslationService;
@@ -64,16 +68,31 @@ public class DocumentGadgetPortlet extends CMSPortlet {
   @Override
   public void processAction(ActionRequest request, ActionResponse response) throws IOException, PortletException {
     PortletPreferences preferences = request.getPreferences();
+    String settingName = preferences.getValue(NAME, null);
+    if (StringUtils.isBlank(settingName) || !canEdit(settingName, getCurrentIdentity())) {
+      throw new PortletException("User is not allowed to save settings");
+    }
+    Map<String, String> settings = new LinkedHashMap<>();
     Enumeration<String> parameterNames = request.getParameterNames();
     while (parameterNames.hasMoreElements()) {
       String name = parameterNames.nextElement();
-      if (StringUtils.equals(name, "action") || StringUtils.contains(name, "portal:")) {
+      if (!DocumentGadgetSettings.isKnown(name)) {
         continue;
       }
       String value = request.getParameter(name);
-      preferences.setValue(name, value);
+      if (!DocumentGadgetSettings.isValid(name, value)) {
+        throw new PortletException("Invalid value for setting " + name);
+      }
+      settings.put(name, value);
+    }
+    for (Map.Entry<String, String> setting : settings.entrySet()) {
+      preferences.setValue(setting.getKey(), setting.getValue());
     }
     preferences.store();
+  }
+
+  private Identity getCurrentIdentity() {
+    return ConversationState.getCurrent() == null ? null : ConversationState.getCurrent().getIdentity();
   }
 
   public TranslationService getTranslationService() {
