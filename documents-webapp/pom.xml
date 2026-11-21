@@ -8,6 +8,9 @@
   <artifactId>documents-webapp</artifactId>
   <packaging>war</packaging>
   <name>eXo Documents - Application</name>
+  <properties>
+    <exo.test.coverage.ratio>0.69</exo.test.coverage.ratio>
+  </properties>
   <dependencies>
     <dependency>
       <groupId>io.meeds.social</groupId>
