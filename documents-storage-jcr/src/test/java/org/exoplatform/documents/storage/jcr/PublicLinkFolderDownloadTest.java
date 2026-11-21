@@ -25,13 +25,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Collections;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -103,7 +100,7 @@ class PublicLinkFolderDownloadTest {
 
   @BeforeAll
   static void setUpRepository() throws Exception {
-    RepositoryService repositoryService = startContainer().getComponentInstanceOfType(RepositoryService.class);
+    RepositoryService repositoryService = JcrAclTestContainer.start().getComponentInstanceOfType(RepositoryService.class);
     ManageableRepository repository = repositoryService.getDefaultRepository();
     repositoryService.setCurrentRepositoryName(repository.getConfiguration().getName());
     systemSession = repository.getSystemSession(repository.getConfiguration().getDefaultWorkspaceName());
@@ -299,41 +296,6 @@ class PublicLinkFolderDownloadTest {
       Files.deleteIfExists(new File(zipPath).toPath());
     }
     return names;
-  }
-
-  private static StandaloneContainer startContainer() throws Exception {
-    StandaloneContainer.addConfigurationURL(PublicLinkFolderDownloadTest.class.getResource("/jcr-acl/configuration.xml")
-                                                                              .toString());
-    if (System.getProperty("java.security.auth.login.config") == null) {
-      File login = File.createTempFile("login", ".conf");
-      login.deleteOnExit();
-      Files.writeString(login.toPath(), "exo-domain { org.exoplatform.services.security.jaas.DefaultLoginModule required; };");
-      System.setProperty("java.security.auth.login.config", login.getAbsolutePath());
-    }
-    // Only the kernel's and the JCR's own configurations: the test classpath
-    // carries other modules' ones, which need services this test does not start
-    ClassLoader parent = Thread.currentThread().getContextClassLoader();
-    ClassLoader filtering = new ClassLoader(parent) {
-      @Override
-      public Enumeration<URL> getResources(String name) throws IOException {
-        if ("conf/configuration.xml".equals(name) || "conf/portal/configuration.xml".equals(name)) {
-          List<URL> kept = new ArrayList<>();
-          for (URL url : Collections.list(super.getResources(name))) {
-            if (url.toString().contains("exo.kernel.component.common") || url.toString().contains("exo.jcr.component.core")) {
-              kept.add(url);
-            }
-          }
-          return Collections.enumeration(kept);
-        }
-        return super.getResources(name);
-      }
-    };
-    Thread.currentThread().setContextClassLoader(filtering);
-    try {
-      return StandaloneContainer.getInstance();
-    } finally {
-      Thread.currentThread().setContextClassLoader(parent);
-    }
   }
 
   private static void setPermissions(Node node, Map<String, String[]> permissions) throws Exception {
