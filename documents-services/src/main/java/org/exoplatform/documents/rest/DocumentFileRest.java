@@ -1042,6 +1042,7 @@ public class DocumentFileRest implements ResourceContainer {
       }
       return Response.ok(filesBytes)
                      .type("application/zip")
+                     .cacheControl(NO_STORE_CACHE_CONTROL)
                      .header("Content-Disposition", "attachment; filename=\"documents_Download" + new Date().getTime() + ".zip\"")
                      .build();
     } catch (Exception ex) {
