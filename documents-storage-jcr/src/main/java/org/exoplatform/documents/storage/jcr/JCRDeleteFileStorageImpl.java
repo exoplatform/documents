@@ -273,7 +273,42 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
   @Override
   public void restoreFromTrash(String trashNodePath) throws RepositoryException {
     SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-    trashStorage.restoreFromTrash(trashNodePath, sessionProvider);
+    Node trashNode = JCRDocumentsUtil.getNodeByPath(trashStorage.getTrashHomeNode().getSession(), trashNodePath);
+    // Only a node of the trash is restored: a quarantined node carries a restore path too
+    if (trashNode == null || !trashStorage.isInTrash(trashNode)) {
+      throw new ItemNotFoundException("No node exists in trash with path " + trashNodePath);
+    }
+    trashStorage.restoreFromTrash(trashNode.getPath(), sessionProvider);
+  }
+
+  @Override
+  public void restoreFromTrash(String trashNodeId, Identity aclIdentity) throws ObjectNotFoundException,
+                                                                           IllegalAccessException,
+                                                                           RepositoryException {
+    SessionProvider systemSessionProvider = sessionProviderService.getSystemSessionProvider(null);
+    Node trashNode = JCRDocumentsUtil.getNodeByIdentifier(trashStorage.getTrashHomeNode().getSession(), trashNodeId);
+    // Only a root of the trash carries its restore location: a node inside a trashed folder returns with that folder
+    if (trashNode == null || !trashStorage.isInTrash(trashNode) || !trashNode.hasProperty(NodeTypeConstants.RESTORE_PATH)
+        || !trashNode.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE)) {
+      throw new ObjectNotFoundException("No document " + trashNodeId + " in the trash");
+    }
+    String restorePath = trashNode.getProperty(NodeTypeConstants.RESTORE_PATH).getString();
+    String restoreWorkspace = trashNode.getProperty(NodeTypeConstants.RESTORE_WORKSPACE).getString();
+    String restoreFolderPath = StringUtils.defaultIfEmpty(StringUtils.substringBeforeLast(restorePath, "/"), "/");
+    // A session of aclIdentity itself, whoever the thread's user is
+    Session userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
+    try {
+      if (!restoreWorkspace.equals(userSession.getWorkspace().getName())) {
+        throw new IllegalAccessException("Document " + trashNodeId + " returns to another workspace: " + restoreWorkspace);
+      }
+      userSession.checkPermission(restoreFolderPath, PermissionType.ADD_NODE);
+    } catch (AccessControlException e) {
+      throw new IllegalAccessException("User " + aclIdentity.getUserId() + " may not restore document " + trashNodeId
+          + " to its folder");
+    } finally {
+      userSession.logout();
+    }
+    trashStorage.restoreFromTrash(trashNode.getPath(), systemSessionProvider);
   }
 
   @Override
