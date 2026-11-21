@@ -143,6 +143,36 @@ class BulkDownloadActionTest {
     assertEquals(ActionStatus.STARTED.name(), olderDownload.getStatus());
   }
 
+  @Test
+  void aNewActionReplacesTheEarlierEntriesOfTheSameUserAndIdWhateverTheirType() throws Exception {
+    ActionData alicesDownload = startDownload("7", "alice");
+    ActionData bobsDownload = startDownload("7", "bob");
+    ActionData alicesDelete = startAction("7", "alice", ActionType.DELETE);
+
+    List<ActionData> listed = listedActions();
+    assertEquals(2, listed.stream().filter(a -> a == alicesDelete || a == bobsDownload).count());
+    assertTrue(listed.stream().noneMatch(a -> a == alicesDownload));
+    assertSame(alicesDelete, service.getActionData("7", "alice"));
+    assertSame(bobsDownload, service.getActionData("7", "bob"));
+  }
+
+  @Test
+  void theOlderActionRemovingItselfKeepsTheNewerEqualEntry() throws Exception {
+    ActionData older = startDownload("7", "alice");
+    ActionData newer = startDownload("7", "alice");
+
+    service.removeActionData(older);
+
+    assertSame(newer, service.getActionData("7", "alice"));
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<ActionData> listedActions() throws Exception {
+    Field list = BulkStorageActionService.class.getDeclaredField("actionList");
+    list.setAccessible(true);
+    return new ArrayList<>((List<ActionData>) list.get(null));
+  }
+
   private ActionData startDownload(String actionId, String userId) {
     return startAction(actionId, userId, ActionType.DOWNLOAD);
   }

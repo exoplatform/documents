@@ -73,6 +73,11 @@ public class BulkStorageActionService implements Startable {
                                 Map<String,Object> params,
                                 long authenticatedUserId) {
     actionData.setStatus(ActionStatus.STARTED.name());
+    // an action identifier is unique per user in the list: the older entries are replaced,
+    // the threads of those keep working on their own ActionData
+    actionList.removeIf(older -> older.getActionId() != null && older.getActionId().equals(actionData.getActionId())
+        && older.getIdentity() != null && actionData.getIdentity() != null
+        && older.getIdentity().getUserId().equals(actionData.getIdentity().getUserId()));
     actionList.add(actionData);
     checkTotalUplaodsLimit(actionData.getIdentity(), true);
     bulkActionThreadPool.execute(new ActionThread(documentFileStorage,
@@ -133,7 +138,8 @@ public class BulkStorageActionService implements Startable {
   }
 
   public void removeActionData(ActionData actionData) {
-    actionList.remove(actionData);
+    // by instance: ActionData compares by value and an equal entry of a newer action must stay
+    actionList.removeIf(entry -> entry == actionData);
     checkTotalUplaodsLimit(actionData.getIdentity(), true);
   }
 
