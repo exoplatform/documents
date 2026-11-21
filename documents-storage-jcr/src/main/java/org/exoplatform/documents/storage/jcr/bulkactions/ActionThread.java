@@ -538,42 +538,49 @@ public class ActionThread implements Runnable {
     try {
       tempFolderPath = Files.createTempDirectory(BulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
 
-    boolean hasFolders = items.stream().anyMatch(AbstractNode::isFolder);
-    brodcastEvent();
-    try {
-      for (Node node : nodes) {
-        if (checkCanceled()) {
-          File folder = new File(tempFolderPath);
-          cleanFiles(folder);
-          break;
-        }
-        parentNode = node.getParent();
-        if (hasFolders) {
-          JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentNode);
-        } else {
-          JCRDocumentsUtil.createFile(node, "", "", tempFolderPath, parentNode);
-        }
-
-      }
-    } catch (Exception e) {
-      log.error("Error when creating temp files for download", e);
-      actionData.setStatus(ActionStatus.FAILED.name());
-    }
-
     String zipPath = null;
+    boolean archiveHandedOver = false;
     try {
-      zipPath = Files.createTempFile(Path.of(System.getProperty(TEMP_DIRECTORY_PATH)), ZIP_PREFIX, ZIP_EXTENSION).toString();
-      JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
-      File zipped = new File(zipPath);
-      actionData.setDownloadZipPath(zipped.getPath());
-      File folder = new File(tempFolderPath);
-      cleanFiles(folder);
-    } catch (Exception e) {
-      log.error("Error when creating zip file", e);
-      actionData.setStatus(ActionStatus.FAILED.name());
-      if (zipPath != null) {
+      boolean hasFolders = items.stream().anyMatch(AbstractNode::isFolder);
+      brodcastEvent();
+      try {
+        for (Node node : nodes) {
+          if (checkCanceled()) {
+            break;
+          }
+          parentNode = node.getParent();
+          if (hasFolders) {
+            JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentNode);
+          } else {
+            JCRDocumentsUtil.createFile(node, "", "", tempFolderPath, parentNode);
+          }
+
+        }
+      } catch (Exception e) {
+        log.error("Error when creating temp files for download", e);
+        actionData.setStatus(ActionStatus.FAILED.name());
+      }
+
+      try {
+        zipPath = Files.createTempFile(Path.of(System.getProperty(TEMP_DIRECTORY_PATH)), ZIP_PREFIX, ZIP_EXTENSION).toString();
+        JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
+        File zipped = new File(zipPath);
+        actionData.setDownloadZipPath(zipped.getPath());
+        archiveHandedOver = true;
+      } catch (Exception e) {
+        log.error("Error when creating zip file", e);
+        actionData.setStatus(ActionStatus.FAILED.name());
+        if (zipPath != null) {
+          deleteFile(new File(zipPath));
+          zipPath = null;
+        }
+      }
+    } finally {
+      // whatever ends the build, an Error included, the copies of the documents are removed
+      // and so is an archive that was not handed over
+      cleanFiles(new File(tempFolderPath));
+      if (zipPath != null && !archiveHandedOver) {
         deleteFile(new File(zipPath));
-        zipPath = null;
       }
     }
     if (checkCanceled()) {

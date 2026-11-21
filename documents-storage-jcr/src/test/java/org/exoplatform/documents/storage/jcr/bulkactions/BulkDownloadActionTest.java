@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
@@ -46,6 +47,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import javax.jcr.Node;
 import javax.jcr.Session;
 
 import org.junit.jupiter.api.AfterEach;
@@ -58,7 +60,9 @@ import org.exoplatform.container.ExoContainer;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionStatus;
+import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.ActionType;
+import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.security.Identity;
@@ -331,6 +335,45 @@ class BulkDownloadActionTest {
     assertEquals(before, archivesInTempDirectory());
   }
 
+  @Test
+  void theTemporaryCopiesOfADownloadWhoseArchiveCannotBeBuiltAreDeleted() throws Exception {
+    ActionData download = startDownload("7", "alice");
+    FileNode item = new FileNode();
+    item.setId("1");
+    ActionThread thread = newThread(download, List.of(item));
+    Node node = mock(Node.class);
+    when(node.getParent()).thenReturn(mock(Node.class));
+    AtomicBoolean copiesWritten = new AtomicBoolean();
+
+    try (MockedStatic<JCRDocumentsUtil> util = mockStatic(JCRDocumentsUtil.class, CALLS_REAL_METHODS)) {
+      util.when(() -> JCRDocumentsUtil.getNodeByIdentifier(any(), anyString())).thenReturn(node);
+      // a copy at the root of the download folder and one in a sub-folder
+      util.when(() -> JCRDocumentsUtil.createFile(any(Node.class), anyString(), anyString(), anyString(), any(Node.class)))
+          .thenAnswer(invocation -> {
+            Path folder = Path.of((String) invocation.getArgument(3));
+            Files.writeString(folder.resolve("copy.txt"), "content");
+            Files.createDirectories(folder.resolve("sub"));
+            Files.writeString(folder.resolve("sub").resolve("copy.txt"), "content");
+            return null;
+          });
+      util.when(() -> JCRDocumentsUtil.zipFiles(anyString(), anyString())).thenAnswer(invocation -> {
+        Path folder = Path.of((String) invocation.getArgument(1));
+        copiesWritten.set(Files.exists(folder.resolve("copy.txt")) && Files.exists(folder.resolve("sub").resolve("copy.txt")));
+        throw new IOException("cannot build the archive");
+      });
+      thread.processAction();
+    }
+
+    // the copies existed when the archive failed, so the folder was not empty
+    assertTrue(copiesWritten.get());
+    // the folder is created by Files.createTempDirectory, which may not follow the test's tmpdir
+    Field folder = ActionThread.class.getDeclaredField("tempFolderPath");
+    folder.setAccessible(true);
+    String tempFolderPath = (String) folder.get(thread);
+    assertNotNull(tempFolderPath);
+    assertFalse(Files.exists(Path.of(tempFolderPath)));
+  }
+
   @SuppressWarnings("unchecked")
   private List<ActionData> listedActions() throws Exception {
     Field list = BulkStorageActionService.class.getDeclaredField("actionList");
@@ -379,7 +422,11 @@ class BulkDownloadActionTest {
   }
 
   private void runAction(ActionData action) throws Exception {
-    new ActionThread(null,
+    newThread(action, Collections.emptyList()).processAction();
+  }
+
+  private ActionThread newThread(ActionData action, List<AbstractNode> items) {
+    return new ActionThread(null,
                      null,
                      service,
                      mock(ListenerService.class),
@@ -388,7 +435,7 @@ class BulkDownloadActionTest {
                      null,
                      Collections.emptyMap(),
                      mock(Session.class),
-                     Collections.emptyList(),
-                     1L).processAction();
+                     items,
+                     1L);
   }
 }
