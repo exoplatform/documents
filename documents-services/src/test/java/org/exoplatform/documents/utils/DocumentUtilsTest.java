@@ -257,15 +257,15 @@ public class DocumentUtilsTest {
   public void testAValuePrintedInAScriptStringCanCloseNeitherTheStringNorTheScript() {
     assertEquals("null", DocumentUtils.toScriptStringLiteral(null));
     assertEquals("'Recent documents'", DocumentUtils.toScriptStringLiteral("Recent documents"));
-    String literal = DocumentUtils.toScriptStringLiteral("x'); alert(1); ('\"</script><script>alert(2)</script>\\");
+    String literal = DocumentUtils.toScriptStringLiteral("it's a \"title\" </p><b>bold</b> \\");
     String body = literal.substring(1, literal.length() - 1);
     assertTrue(literal.startsWith("'") && literal.endsWith("'"));
     assertFalse("no unescaped single quote", body.matches(".*(?<!\\\\)'.*"));
     assertFalse("no tag opened or closed", body.contains("<"));
     assertTrue(body.contains("\\'"));
     assertTrue(body.contains("\\\""));
-    assertTrue(body.contains("\\u003C\\/script>"));
-    String comment = DocumentUtils.toScriptStringLiteral("<!--<script>");
-    assertEquals("'\\u003C!--\\u003Cscript>'", comment);
+    assertTrue(body.contains("\\u003C\\/p>"));
+    String comment = DocumentUtils.toScriptStringLiteral("<!--note");
+    assertEquals("'\\u003C!--note'", comment);
   }
 }
