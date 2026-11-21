@@ -26,6 +26,7 @@ import java.net.URLDecoder;
 import java.security.AccessControlException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -3180,10 +3181,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   public byte[] getDownloadZipBytes(int actionId, String userName) throws IOException {
     ActionData actionData = bulkStorageActionService.getActionData(String.valueOf(actionId), userName);
-    if (actionData != null && actionData.getDownloadZipPath() != null) {
-      File zipped = new File(actionData.getDownloadZipPath());
-      byte[] filesBytes = FileUtils.readFileToByteArray(zipped);
-      Files.delete(Path.of(actionData.getDownloadZipPath()));
+    String zipPath = actionData == null ? null : actionData.takeDownloadZipPath();
+    if (zipPath != null) {
+      byte[] filesBytes;
+      try {
+        filesBytes = FileUtils.readFileToByteArray(new File(zipPath));
+      } catch (NoSuchFileException | FileNotFoundException e) {
+        return new byte[0];
+      } finally {
+        Files.deleteIfExists(Path.of(zipPath));
+      }
       if (actionData.getStatus().equals(ActionStatus.CANCELED.name())) {
         try {
           listenerService.broadcast("bulk_actions_document_event", actionData.getIdentity(), actionData);

@@ -486,7 +486,7 @@ public class ActionThread implements Runnable {
   
   private void deleteFile(File file) {
     try {
-      Files.delete(file.toPath());
+      Files.deleteIfExists(file.toPath());
     } catch (IOException e) {
       log.error("Error while deleting file", e);
     }
@@ -580,6 +580,11 @@ public class ActionThread implements Runnable {
       if (zipPath != null) {
         deleteFile(new File(zipPath));
       }
+      return;
+    }
+    if (zipPath != null && !bulkStorageActionService.isListed(actionData)) {
+      // the archive of a replaced download is deleted
+      bulkStorageActionService.discardDownloadArchive(actionData);
       return;
     }
     if (!actionData.getStatus().equals(ActionStatus.FAILED.name())) {

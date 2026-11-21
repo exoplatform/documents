@@ -3260,6 +3260,48 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
+  public void getDownloadZipBytesAnswersNoArchiveWhenItWasDiscardedBeforeTheRead() throws Exception {
+    File archive = File.createTempFile("downloadzip", ".zip");
+    ActionData discarded = new ActionData();
+    discarded.setActionId("7");
+    discarded.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
+    discarded.setDownloadZipPath(archive.getPath());
+    when(bulkStorageActionService.getActionData("7", "alice")).thenReturn(discarded);
+    // what a replacing request does: the path is taken, the file deleted
+    assertEquals(archive.getPath(), discarded.takeDownloadZipPath());
+    java.nio.file.Files.deleteIfExists(archive.toPath());
+
+    assertEquals(0, jcrDocumentFileStorage.getDownloadZipBytes(7, "alice").length);
+
+    // the path is still set but the download thread already deleted the file (cancelled or failed archive)
+    ActionData deletedFile = new ActionData();
+    deletedFile.setActionId("8");
+    deletedFile.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
+    deletedFile.setDownloadZipPath(archive.getPath());
+    when(bulkStorageActionService.getActionData("8", "alice")).thenReturn(deletedFile);
+
+    assertEquals(0, jcrDocumentFileStorage.getDownloadZipBytes(8, "alice").length);
+    verify(bulkStorageActionService, never()).removeActionData(any());
+  }
+
+  @Test
+  public void getDownloadZipBytesDiscardsTheArchiveItCannotRead() throws Exception {
+    // a directory cannot be read as an archive: an IOException other than a missing file
+    java.nio.file.Path unreadable = java.nio.file.Files.createTempDirectory("downloadzip");
+    ActionData download = new ActionData();
+    download.setActionId("7");
+    download.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
+    download.setDownloadZipPath(unreadable.toString());
+    when(bulkStorageActionService.getActionData("7", "alice")).thenReturn(download);
+
+    assertThrows(IOException.class, () -> jcrDocumentFileStorage.getDownloadZipBytes(7, "alice"));
+
+    assertFalse(java.nio.file.Files.exists(unreadable));
+    assertEquals(0, jcrDocumentFileStorage.getDownloadZipBytes(7, "alice").length);
+    verify(bulkStorageActionService, never()).removeActionData(any());
+  }
+
+  @Test
   public void getDownloadZipBytesAnswersNoArchiveWhileItIsBuilt() throws Exception {
     ActionData alicesDownload = new ActionData();
     alicesDownload.setActionId("7");

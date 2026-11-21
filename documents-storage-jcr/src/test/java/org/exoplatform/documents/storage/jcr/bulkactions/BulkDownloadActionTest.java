@@ -17,12 +17,14 @@
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.nio.file.Files;
@@ -30,14 +32,25 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.jcr.Session;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import org.exoplatform.container.ExoContainer;
+import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionStatus;
 import org.exoplatform.documents.model.ActionType;
@@ -50,8 +63,23 @@ class BulkDownloadActionTest {
 
   private final List<ActionData>   actions = new ArrayList<>();
 
+  @TempDir
+  Path                         tempDir;
+
+  private String                   previousTempDirectory;
+
+  private ExoContainer             container;
+
   @BeforeEach
   void setUp() throws Exception {
+    previousTempDirectory = System.getProperty("java.io.tmpdir");
+    // the archives of the tests are created here, nothing else shares this directory
+    System.setProperty("java.io.tmpdir", tempDir.toString());
+    // held by the test: the context does not keep a mock alive, and a collected one makes the
+    // lookups fall back to the root container
+    container = mock(ExoContainer.class);
+    when(container.getComponentInstanceOfType(ListenerService.class)).thenReturn(mock(ListenerService.class));
+    bindContainer();
     service = new BulkStorageActionService();
     // the threads are run by the tests themselves
     Field pool = BulkStorageActionService.class.getDeclaredField("bulkActionThreadPool");
@@ -63,10 +91,9 @@ class BulkDownloadActionTest {
   void tearDown() throws Exception {
     for (ActionData action : actions) {
       service.removeActionData(action);
-      if (action.getDownloadZipPath() != null) {
-        Files.deleteIfExists(Path.of(action.getDownloadZipPath()));
-      }
     }
+    System.setProperty("java.io.tmpdir", previousTempDirectory);
+    ExoContainerContext.setCurrentContainer(null);
   }
 
   @Test
@@ -179,16 +206,17 @@ class BulkDownloadActionTest {
   @Test
   void concurrentStartsAndRemovalsLeaveOneEntryPerUserAndId() throws Exception {
     int threads = 4;
-    ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(threads + 1);
+    ExecutorService executor = Executors.newFixedThreadPool(threads + 1);
     try {
       for (int round = 100; round < 160; round++) {
         String id = String.valueOf(round);
-        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
-        List<java.util.concurrent.Future<?>> running = new ArrayList<>();
+        CountDownLatch go = new CountDownLatch(1);
+        List<Future<?>> running = new ArrayList<>();
         for (int i = 0; i < threads; i++) {
           ActionData action = newAction(id, "alice", ActionType.DELETE);
           actions.add(action);
           running.add(executor.submit(() -> {
+            bindContainer();
             go.await();
             service.executeBulkAction(null, null, null, null, null, Collections.emptyList(), action, null,
                                       Collections.emptyMap(), 1L);
@@ -197,13 +225,14 @@ class BulkDownloadActionTest {
         }
         ActionData other = startAction("1", "bob", ActionType.DELETE);
         running.add(executor.submit(() -> {
+          bindContainer();
           go.await();
           service.removeActionData(other);
           return null;
         }));
         go.countDown();
-        for (java.util.concurrent.Future<?> future : running) {
-          future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        for (Future<?> future : running) {
+          future.get(30, TimeUnit.SECONDS);
         }
         assertEquals(1, listedActions().stream().filter(a -> id.equals(a.getActionId())).count());
       }
@@ -214,15 +243,15 @@ class BulkDownloadActionTest {
 
   @Test
   void aStartWaitingBetweenTheRemovalAndTheAddCannotLetAnotherStartInterleave() throws Exception {
-    java.util.concurrent.CountDownLatch parked = new java.util.concurrent.CountDownLatch(1);
-    java.util.concurrent.CountDownLatch secondDone = new java.util.concurrent.CountDownLatch(1);
-    java.util.concurrent.atomic.AtomicBoolean firstCall = new java.util.concurrent.atomic.AtomicBoolean(true);
+    CountDownLatch parked = new CountDownLatch(1);
+    CountDownLatch secondDone = new CountDownLatch(1);
+    AtomicBoolean firstCall = new AtomicBoolean(true);
     service.afterEarlierEntriesRemoved = () -> {
       if (firstCall.compareAndSet(true, false)) {
         parked.countDown();
         try {
           // a second start can only complete here when nothing makes it wait for this one
-          secondDone.await(1, java.util.concurrent.TimeUnit.SECONDS);
+          secondDone.await(1, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
@@ -232,10 +261,13 @@ class BulkDownloadActionTest {
     ActionData second = newAction("7", "alice", ActionType.DELETE);
     actions.add(first);
     actions.add(second);
-    Thread firstStarter = new Thread(() -> service.executeBulkAction(null, null, null, null, null, Collections.emptyList(),
-                                                                     first, null, Collections.emptyMap(), 1L));
+    Thread firstStarter = new Thread(() -> {
+      bindContainer();
+      service.executeBulkAction(null, null, null, null, null, Collections.emptyList(),
+                                                                     first, null, Collections.emptyMap(), 1L);
+    });
     firstStarter.start();
-    assertTrue(parked.await(10, java.util.concurrent.TimeUnit.SECONDS));
+    assertTrue(parked.await(10, TimeUnit.SECONDS));
 
     service.executeBulkAction(null, null, null, null, null, Collections.emptyList(), second, null, Collections.emptyMap(), 1L);
     secondDone.countDown();
@@ -243,6 +275,38 @@ class BulkDownloadActionTest {
 
     assertEquals(1, listedActions().stream().filter(a -> "7".equals(a.getActionId())).count());
     assertSame(second, service.getActionData("7", "alice"));
+  }
+
+  @Test
+  void aReplacedDownloadDoesNotKeepItsArchive() throws Exception {
+    ActionData replaced = startDownload("7", "alice");
+    ActionData current = startDownload("7", "alice");
+    Set<String> before = archivesInTempDirectory();
+
+    runAction(replaced);
+
+    assertNull(replaced.getDownloadZipPath());
+    assertEquals(before, archivesInTempDirectory());
+
+    runAction(current);
+    assertNotNull(current.getDownloadZipPath());
+    assertTrue(Files.exists(Path.of(current.getDownloadZipPath())));
+  }
+
+  @Test
+  void aDownloadReplacedAfterItsArchiveIsFinishedDoesNotKeepItsArchive() throws Exception {
+    ActionData finished = startDownload("7", "alice");
+    runAction(finished);
+    Path finishedArchive = Path.of(finished.getDownloadZipPath());
+    assertTrue(Files.exists(finishedArchive));
+
+    ActionData current = startDownload("7", "alice");
+
+    assertNull(finished.getDownloadZipPath());
+    assertFalse(Files.exists(finishedArchive));
+    runAction(current);
+    assertNotNull(current.getDownloadZipPath());
+    assertTrue(Files.exists(Path.of(current.getDownloadZipPath())));
   }
 
   @SuppressWarnings("unchecked")
@@ -254,6 +318,18 @@ class BulkDownloadActionTest {
 
   private ActionData startDownload(String actionId, String userId) {
     return startAction(actionId, userId, ActionType.DOWNLOAD);
+  }
+
+  private Set<String> archivesInTempDirectory() throws Exception {
+    try (Stream<Path> files = Files.list(tempDir)) {
+      return files.map(path -> path.getFileName().toString())
+                  .filter(name -> name.startsWith("downloadzip") && name.endsWith(".zip"))
+                  .collect(Collectors.toSet());
+    }
+  }
+
+  private void bindContainer() {
+    ExoContainerContext.setCurrentContainer(container);
   }
 
   private ActionData newAction(String actionId, String userId, ActionType actionType) {
