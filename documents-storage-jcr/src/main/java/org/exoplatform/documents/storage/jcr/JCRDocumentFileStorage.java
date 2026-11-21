@@ -3179,15 +3179,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   public byte[] getDownloadZipBytes(int actionId, String userName) throws IOException {
-    ActionData actionData = bulkStorageActionService.getActionDataById(String.valueOf(actionId));
-    if (actionData != null) {
-      if (!actionData.getIdentity().getUserId().equals(userName)) {
-        throw new IOException("Current user is not allowed to get zip file");
-      }
+    ActionData actionData = bulkStorageActionService.getActionData(String.valueOf(actionId), userName);
+    if (actionData != null && actionData.getDownloadZipPath() != null) {
       File zipped = new File(actionData.getDownloadZipPath());
       byte[] filesBytes = FileUtils.readFileToByteArray(zipped);
       Files.delete(Path.of(actionData.getDownloadZipPath()));
-      actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
       if (actionData.getStatus().equals(ActionStatus.CANCELED.name())) {
         try {
           listenerService.broadcast("bulk_actions_document_event", actionData.getIdentity(), actionData);
@@ -3203,9 +3199,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   public void cancelBulkAction(String actionId, String userName) throws IOException {
-    ActionData actionData = bulkStorageActionService.getActionDataById(actionId);
-    if (!actionData.getIdentity().getUserId().equals(userName)) {
-      throw new IOException("Current user is not allowed to cancel the download action");
+    ActionData actionData = bulkStorageActionService.getActionData(actionId, userName);
+    if (actionData == null) {
+      throw new IOException("No action of the current user has this identifier");
     }
     actionData.setStatus(ActionStatus.CANCELED.name());
   }

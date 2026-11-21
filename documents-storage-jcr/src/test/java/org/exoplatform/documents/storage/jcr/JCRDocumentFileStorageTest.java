@@ -3240,4 +3240,47 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(destination)).thenReturn(true);
     return destination;
   }
+
+  @Test
+  public void getDownloadZipBytesReadsOnlyTheCallersOwnArchive() throws Exception {
+    File archive = File.createTempFile("downloadzip", ".zip");
+    java.nio.file.Files.writeString(archive.toPath(), "alice");
+    ActionData alicesDownload = new ActionData();
+    alicesDownload.setActionId("7");
+    alicesDownload.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
+    alicesDownload.setDownloadZipPath(archive.getPath());
+    when(bulkStorageActionService.getActionData("7", "alice")).thenReturn(alicesDownload);
+
+    assertEquals(0, jcrDocumentFileStorage.getDownloadZipBytes(7, "bob").length);
+    assertTrue(archive.exists());
+
+    assertEquals("alice", new String(jcrDocumentFileStorage.getDownloadZipBytes(7, "alice")));
+    assertFalse(archive.exists());
+    verify(bulkStorageActionService).removeActionData(alicesDownload);
+  }
+
+  @Test
+  public void getDownloadZipBytesAnswersNoArchiveWhileItIsBuilt() throws Exception {
+    ActionData alicesDownload = new ActionData();
+    alicesDownload.setActionId("7");
+    alicesDownload.setStatus(ActionStatus.STARTED.name());
+    when(bulkStorageActionService.getActionData("7", "alice")).thenReturn(alicesDownload);
+
+    assertEquals(0, jcrDocumentFileStorage.getDownloadZipBytes(7, "alice").length);
+    verify(bulkStorageActionService, never()).removeActionData(any());
+  }
+
+  @Test
+  public void cancelBulkActionCancelsOnlyTheCallersOwnAction() throws Exception {
+    ActionData alicesDownload = new ActionData();
+    alicesDownload.setActionId("7");
+    alicesDownload.setStatus(ActionStatus.STARTED.name());
+    when(bulkStorageActionService.getActionData("7", "alice")).thenReturn(alicesDownload);
+
+    assertThrows(IOException.class, () -> jcrDocumentFileStorage.cancelBulkAction("7", "bob"));
+    assertEquals(ActionStatus.STARTED.name(), alicesDownload.getStatus());
+
+    jcrDocumentFileStorage.cancelBulkAction("7", "alice");
+    assertEquals(ActionStatus.CANCELED.name(), alicesDownload.getStatus());
+  }
 }
