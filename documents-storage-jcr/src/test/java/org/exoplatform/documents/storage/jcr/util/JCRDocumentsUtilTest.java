@@ -678,30 +678,30 @@ public class JCRDocumentsUtilTest {
   }
 
   /**
-   * A folder whose titles would take the copy out of the download folder is
-   * left out, with what it holds, and the rest of the folder is copied.
+   * A folder titled ".." is left out of the download, with what it holds, and
+   * the rest of the folder is copied.
    */
   @Test(timeout = 30000)
   public void createTempFilesAndFoldersKeepsEveryCopyInTheDownloadFolder() throws Exception {
     ExtendedNode documents = folderNode("documentsId", "Documents", null);
     ExtendedNode folderA = folderNode("aId", "A", documents);
     ExtendedNode fileA = fileNode("fId", "kept.txt", folderA);
-    ExtendedNode up = folderNode("upId", "..", folderA);
-    ExtendedNode upAgain = folderNode("upAgainId", "..", up);
-    ExtendedNode outside = folderNode("outsideId", "outside", upAgain);
-    ExtendedNode escaped = fileNode("eId", "escaped.txt", outside);
-    childrenOf(folderA, fileA, up);
-    childrenOf(up, upAgain);
-    childrenOf(upAgain, outside);
-    childrenOf(outside, escaped);
+    ExtendedNode dotsOne = folderNode("dotsOneId", "..", folderA);
+    ExtendedNode dotsTwo = folderNode("dotsTwoId", "..", dotsOne);
+    ExtendedNode deep = folderNode("deepId", "deep", dotsTwo);
+    ExtendedNode dotTitled = fileNode("eId", "dot-title.txt", deep);
+    childrenOf(folderA, fileA, dotsOne);
+    childrenOf(dotsOne, dotsTwo);
+    childrenOf(dotsTwo, deep);
+    childrenOf(deep, dotTitled);
 
-    Path parentFolder = Files.createTempDirectory("escape-test");
+    Path parentFolder = Files.createTempDirectory("dot-title-test");
     Path tempFolder = Files.createDirectory(parentFolder.resolve("download"));
     try {
       JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
       assertEquals(Set.of("download/A/kept.txt"), filesUnder(parentFolder));
       try (Stream<Path> entries = Files.list(parentFolder)) {
-        assertEquals("no folder is created outside the download folder",
+        assertEquals("the download folder is the only entry next to its parent",
                      List.of(tempFolder),
                      entries.toList());
       }
@@ -927,19 +927,18 @@ public class JCRDocumentsUtilTest {
   }
 
   /**
-   * A file whose title holds a path out of the download folder is left out of a
-   * download of files.
+   * A file whose title starts with ".." is left out of a download of files.
    */
   @Test
   public void createFileKeepsTheCopyInTheDownloadFolder() throws Exception {
     ExtendedNode documents = folderNode("documentsId", "Documents", null);
-    ExtendedNode escaped = fileNode("eId", "../escaped.txt", documents);
+    ExtendedNode dotTitled = fileNode("eId", "../dot-title.txt", documents);
     ExtendedNode kept = fileNode("fId", "kept.txt", documents);
 
-    Path parentFolder = Files.createTempDirectory("escape-test");
+    Path parentFolder = Files.createTempDirectory("dot-title-test");
     Path tempFolder = Files.createDirectory(parentFolder.resolve("download"));
     try {
-      JCRDocumentsUtil.createFile(escaped, "", "", tempFolder.toString(), documents);
+      JCRDocumentsUtil.createFile(dotTitled, "", "", tempFolder.toString(), documents);
       JCRDocumentsUtil.createFile(kept, "", "", tempFolder.toString(), documents);
       assertEquals(Set.of("download/kept.txt"), filesUnder(parentFolder));
     } finally {
