@@ -38,6 +38,9 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.metadata.TikaMetadataKeys;
+import org.apache.tika.mime.MimeTypes;
 
 import org.exoplatform.commons.utils.MimeTypeResolver;
 import org.exoplatform.commons.utils.PropertyManager;
@@ -103,6 +106,12 @@ public class DocumentTextExtractor {
   private static final String GENERIC_MIME_TYPE          = "application/octet-stream";
 
   private static final MimeTypeResolver MIME_TYPE_RESOLVER = new MimeTypeResolver();
+
+  /**
+   * The type registry the platform's reader service parses with, which knows
+   * file names the platform's own table lacks, such as a Markdown file's .md.
+   */
+  private static final MimeTypes        TIKA_MIME_TYPES    = MimeTypes.getDefaultMimeTypes();
 
   private final RepositoryService     repositoryService;
 
@@ -253,7 +262,11 @@ public class DocumentTextExtractor {
   /**
    * The type of a file: the stored one, unless it says nothing (absent, or the
    * generic binary type a mail part is often declared with), in which case it is
-   * resolved from the file name the way the platform does for an upload.
+   * resolved from the file name the way the platform does for an upload, then,
+   * when the platform's table does not know the name either, from the type
+   * registry of the reader service that parses it: a Markdown file uploaded as
+   * generic binary is read as the text it is (EXO-94846). Which types are read
+   * stays {@link #isSupported(String)}'s.
    *
    * @param node the file node
    * @param content its content node
@@ -266,8 +279,33 @@ public class DocumentTextExtractor {
         : null;
     if (StringUtils.isBlank(mimeType) || GENERIC_MIME_TYPE.equalsIgnoreCase(mimeType.trim())) {
       mimeType = MIME_TYPE_RESOLVER.getMimeType(node.getName());
+      if (StringUtils.isBlank(mimeType) || GENERIC_MIME_TYPE.equalsIgnoreCase(mimeType.trim())) {
+        mimeType = mimeTypeOfName(node.getName());
+      }
     }
     return StringUtils.trimToEmpty(mimeType);
+  }
+
+  /**
+   * The type Tika's registry gives a file name, read from the name alone,
+   * never from the content.
+   *
+   * @param name the file name
+   * @return its type, the generic binary type when the name says nothing
+   */
+  static String mimeTypeOfName(String name) {
+    if (StringUtils.isBlank(name)) {
+      return GENERIC_MIME_TYPE;
+    }
+    Metadata metadata = new Metadata();
+    metadata.set(TikaMetadataKeys.RESOURCE_NAME_KEY, name);
+    try {
+      // with no stream, the registry matches the name's glob only
+      return TIKA_MIME_TYPES.detect(null, metadata).toString();
+    } catch (IOException e) {
+      LOG.debug("The type of file name {} could not be read", name, e);
+      return GENERIC_MIME_TYPE;
+    }
   }
 
   /**
