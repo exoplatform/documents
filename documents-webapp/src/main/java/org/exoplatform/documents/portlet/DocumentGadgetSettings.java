@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -39,7 +40,13 @@ public final class DocumentGadgetSettings {
 
   private static final Pattern                      FOLDER_ID              = Pattern.compile("[A-Za-z0-9-]{1,64}");
 
-  private static final Pattern                      URL_PATH               = Pattern.compile("/[A-Za-z0-9._~%/-]{0,498}");
+  private static final int                          MAX_URL_LENGTH         = 2000;
+
+  private static final Pattern                      URL_SCHEME             = Pattern.compile("^([A-Za-z][A-Za-z0-9+.-]*):");
+
+  private static final Pattern                      URL_IGNORED_CHARACTERS = Pattern.compile("[\\t\\n\\r]");
+
+  private static final Pattern                      URL_LEADING_CHARACTERS = Pattern.compile("^[\\x00-\\x20]+");
 
   private static final int                          MAX_DOCUMENTS_TO_LIST  = 100;
 
@@ -129,8 +136,17 @@ public final class DocumentGadgetSettings {
   }
 
   private static boolean isDriveUrl(String value) {
-    return value.isEmpty()
-           || URL_PATH.matcher(value).matches() && !value.startsWith("//") && !value.contains("..");
+    if (value.isEmpty()) {
+      return true;
+    }
+    if (value.length() > MAX_URL_LENGTH) {
+      return false;
+    }
+    // read the scheme as a browser does: tabs and line breaks dropped, leading spaces and controls ignored
+    String link = URL_LEADING_CHARACTERS.matcher(URL_IGNORED_CHARACTERS.matcher(value).replaceAll("")).replaceFirst("");
+    Matcher scheme = URL_SCHEME.matcher(link);
+    // a link with no scheme stays as typed; one that names a scheme must be a web link
+    return !scheme.find() || "http".equalsIgnoreCase(scheme.group(1)) || "https".equalsIgnoreCase(scheme.group(1));
   }
 
 }

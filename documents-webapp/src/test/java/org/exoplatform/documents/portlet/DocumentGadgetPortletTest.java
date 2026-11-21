@@ -142,7 +142,7 @@ class DocumentGadgetPortletTest {
     canEdit = true;
     String[][] malformed = {
       { "viewOptions", "grid" },
-      { "documentType", "x'+alert(1)+'" },
+      { "documentType", "recent'Document" },
       { "maxDocumentsToList", "abc" },
       { "maxDocumentsToList", "101" },
       { "maxDocumentsToList", "-1" },
@@ -152,17 +152,20 @@ class DocumentGadgetPortletTest {
       { "opensInSameTab", "true;" },
       { "categoryIds", "not json" },
       { "categoryIds", "{\"a\":1}" },
-      { "categoryIds", "[\"1\",\"`+alert(1)+`\"]" },
+      { "categoryIds", "[\"1\",\"a`b\"]" },
       { "categoryIds", "[1] trailing" },
       { "categoryIds", "[[1]]" },
       { "excludeCategoryIds", "[\"a\"]" },
       { "excludeCategoryIds", "\"[]\"" },
-      { "selectedFoldersId", "');alert(1);('" },
+      { "selectedFoldersId", "ab'cd" },
       { "spaceIdentityId", "12a" },
-      { "driveUrl", "javascript:alert(1)" },
-      { "driveUrl", "//evil.example/x" },
-      { "driveUrl", "/a/../b" },
-      { "driveUrl", "/a'b" },
+      { "driveUrl", "ftp://example.com/drive" },
+      { "driveUrl", "Mailto:someone@example.com" },
+      { "driveUrl", "data:text/plain,x" },
+      { "driveUrl", " ftp:x" },
+      { "driveUrl", "f\ttp:x" },
+      { "driveUrl", "\u0001data:text/plain,x" },
+      { "driveUrl", "httpsx:example" },
     };
     for (String[] entry : malformed) {
       Map<String, String> settings = validSettings();
@@ -183,5 +186,14 @@ class DocumentGadgetPortletTest {
     assertEquals("cards", DocumentGadgetSettings.valueOrDefault("viewOptions", "cards", "list"));
     assertFalse(DocumentGadgetSettings.isValid("viewOptions", null));
     assertTrue(DocumentGadgetSettings.isValid("driveUrl", ""));
+    // the drive link field is free text: a path with a query and an external web link stay accepted
+    assertTrue(DocumentGadgetSettings.isValid("driveUrl", "/portal/s/12/documents?folderId=ab-12"));
+    assertTrue(DocumentGadgetSettings.isValid("driveUrl", "https://intranet.example.com/drive"));
+    assertTrue(DocumentGadgetSettings.isValid("driveUrl", "HTTP://intranet.example.com/a b|c"));
+    assertTrue(DocumentGadgetSettings.isValid("driveUrl", "/portal/dw/drive?folder=My Folder"));
+    assertTrue(DocumentGadgetSettings.isValid("driveUrl", "intranet.example.com/drive"));
+    assertTrue(DocumentGadgetSettings.isValid("driveUrl", "10.0.0.5:8080/drive"));
+    assertTrue(DocumentGadgetSettings.isValid("driveUrl", "My Folder:Reports"));
+    assertTrue(DocumentGadgetSettings.isValid("driveUrl", " https://intranet.example.com/drive"));
   }
 }
