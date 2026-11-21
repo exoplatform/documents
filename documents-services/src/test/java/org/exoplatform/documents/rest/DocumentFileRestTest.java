@@ -1067,6 +1067,10 @@ public class DocumentFileRestTest {
     javax.ws.rs.core.CacheControl zipCacheControl = (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
     assertTrue(zipCacheControl.isNoStore());
     assertTrue(zipCacheControl.isPrivate());
+    when(documentFileStorage.getDownloadZipBytes(123456, username)).thenThrow(new IOException("failure"));
+    response = documentFileRest.getDownloadZip(123456);
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+    assertTrue(((javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control")).isNoStore());
   }
 
   @Test
