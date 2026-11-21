@@ -133,6 +133,7 @@ public class WebdavWriteCommandHandler {
                            String webDavPath,
                            List<String> mixinTypes) {
     checkNotRoot(webDavPath);
+    checkNotDotName(webDavPath);
     String parentJcrPath = pathCommandHandler.resolveToJcrPath(session, getParentWebDavPath(webDavPath));
     String visibleName = pathCommandHandler.getLastVisibleSegment(webDavPath);
     String technicalName = pathCommandHandler.allocateTechnicalName(session, parentJcrPath, visibleName);
@@ -155,6 +156,7 @@ public class WebdavWriteCommandHandler {
                        List<String> mixinTypes,
                        InputStream inputStream) {
     checkNotRoot(webDavPath);
+    checkNotDotName(webDavPath);
     String jcrPath = null;
     Node node = null;
     try {
@@ -539,6 +541,18 @@ public class WebdavWriteCommandHandler {
     }
   }
 
+  private void checkNotDotName(String webDavPath) throws WebDavException {
+    if (isDotName(pathCommandHandler.getLastVisibleSegment(webDavPath))) {
+      throw new WebDavException(HttpStatus.SC_FORBIDDEN,
+                                String.format("Resource with path '%s' can't be written", webDavPath));
+    }
+  }
+
+  private static boolean isDotName(String name) {
+    String strippedName = StringUtils.strip(name);
+    return ".".equals(strippedName) || "..".equals(strippedName);
+  }
+
   private void checkNotIdentityRoot(String webDavPath) throws WebDavException {
     if (pathCommandHandler.isIdentityRootWebDavPath(webDavPath)) {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN,
@@ -634,6 +648,10 @@ public class WebdavWriteCommandHandler {
     String propertyName = WebDavNamespaceContext.createName(property.getName());
     if (READ_ONLY_PROPS.contains(property.getName())) {
       return getStatusDescription(HTTPStatus.CONFLICT);
+    }
+
+    if (EXO_TITLE.equals(propertyName) && isDotName(property.getValue())) {
+      return getStatusDescription(HTTPStatus.FORBIDDEN);
     }
 
     try {
