@@ -188,7 +188,7 @@ public class ActionThread implements Runnable {
   }
 
   public void processAction() throws RepositoryException {
-    actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
+    actionData = bulkStorageActionService.getActionData(actionData.getActionId(), actionData.getIdentity().getUserId());
     if (actionData.getActionType().equals(ActionType.DELETE.name())) {
       actionData.setStatus(ActionStatus.IN_PROGRESS.name());
       deleteItems();
@@ -478,7 +478,7 @@ public class ActionThread implements Runnable {
   }
   
   private boolean checkCanceled() {
-    actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
+    actionData = bulkStorageActionService.getActionData(actionData.getActionId(), actionData.getIdentity().getUserId());
     if (actionData.getStatus().equals(ActionStatus.CANCELED.name())) {
       brodcastEvent();
       return true;
@@ -562,9 +562,9 @@ public class ActionThread implements Runnable {
       actionData.setStatus(ActionStatus.FAILED.name());
     }
 
-    String zipName = ZIP_PREFIX + actionData.getActionId() + ZIP_EXTENSION;
-    String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
+    String zipPath = null;
     try {
+      zipPath = Files.createTempFile(Path.of(System.getProperty(TEMP_DIRECTORY_PATH)), ZIP_PREFIX, ZIP_EXTENSION).toString();
       JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
       File zipped = new File(zipPath);
       actionData.setDownloadZipPath(zipped.getPath());
@@ -573,10 +573,15 @@ public class ActionThread implements Runnable {
     } catch (Exception e) {
       log.error("Error when creating zip file", e);
       actionData.setStatus(ActionStatus.FAILED.name());
+      if (zipPath != null) {
+        deleteFile(new File(zipPath));
+        zipPath = null;
+      }
     }
     if (checkCanceled()) {
-      File zip = new File(zipPath);
-      deleteFile(zip);
+      if (zipPath != null) {
+        deleteFile(new File(zipPath));
+      }
       return;
     }
     if (!actionData.getStatus().equals(ActionStatus.FAILED.name())) {

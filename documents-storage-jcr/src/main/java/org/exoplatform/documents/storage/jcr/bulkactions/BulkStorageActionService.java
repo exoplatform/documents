@@ -119,8 +119,17 @@ public class BulkStorageActionService implements Startable {
     return true;
   }
 
-  public ActionData getActionDataById(String id) {
-    return actionList.stream().filter(resource -> id.equals(resource.getActionId())).findFirst().orElse(null);
+  /**
+   * @param id the action's identifier
+   * @param userId the user who started the action
+   * @return the action with this identifier started by this user, or null
+   */
+  public ActionData getActionData(String id, String userId) {
+    return actionList.stream()
+                     .filter(resource -> id.equals(resource.getActionId()) && resource.getIdentity() != null
+                         && resource.getIdentity().getUserId().equals(userId))
+                     .findFirst()
+                     .orElse(null);
   }
 
   public void removeActionData(ActionData actionData) {
