@@ -1105,6 +1105,46 @@ public class JCRDocumentsUtil {
     }
   }
 
+  /**
+   * Tells whether putting the access lists back adds or removes the
+   * private-access mixin on the document or on a node below it, which needs
+   * the document to be checked out
+   *
+   * @param repository the repository holding the document
+   * @param workspace the document's workspace
+   * @param nodeUuid the document's UUID
+   * @param ownPermissions the document's own permissions to put back, or null
+   * @param descendantsPermissions the permissions of the nodes below it, by node
+   *          id
+   * @return true when a mixin has to change
+   * @throws RepositoryException when a node can't be read
+   */
+  public static boolean needsMixinChange(ManageableRepository repository,
+                                         String workspace,
+                                         String nodeUuid,
+                                         Map<String, String[]> ownPermissions,
+                                         Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
+    Session systemSession = repository.getSystemSession(workspace);
+    try {
+      if (systemSession.getNodeByUUID(nodeUuid).isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE) != (ownPermissions != null)) {
+        return true;
+      }
+      for (String descendantId : descendantsPermissions.keySet()) {
+        try {
+          if (!((ExtendedSession) systemSession).getNodeByIdentifier(descendantId)
+                                                .isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+            return true;
+          }
+        } catch (ItemNotFoundException e) {
+          // the restore did not bring this node back
+        }
+      }
+      return false;
+    } finally {
+      systemSession.logout();
+    }
+  }
+
   private static void putBackDescendantsPermissions(Session systemSession,
                                                     Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
     for (Map.Entry<String, Map<String, String[]>> descendant : descendantsPermissions.entrySet()) {

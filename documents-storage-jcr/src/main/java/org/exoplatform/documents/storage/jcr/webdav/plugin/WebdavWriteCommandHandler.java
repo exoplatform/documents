@@ -404,18 +404,9 @@ public class WebdavWriteCommandHandler {
   /**
    * Puts back the access lists read before a restore, through a system
    * session. The restored document is checked in: it is checked out, and
-   * checked in again, only when its private-access mixin has to be added or
-   * removed, which a checked-in node refuses.
+   * checked in again, only when the private-access mixin has to be added or
+   * removed on it or on a node below it, which a checked-in node refuses.
    */
-  private boolean hasOwnPermissions(ManageableRepository repository, String workspace, String uuid) throws RepositoryException {
-    Session systemSession = repository.getSystemSession(workspace);
-    try {
-      return systemSession.getNodeByUUID(uuid).isNodeType(EXO_PRIVILEGEABLE);
-    } finally {
-      systemSession.logout();
-    }
-  }
-
   @SneakyThrows
   private void keepAccessLists(Session session,
                                Node node,
@@ -426,7 +417,11 @@ public class WebdavWriteCommandHandler {
       ManageableRepository repository = repositoryService.getDefaultRepository();
       String workspace = session.getWorkspace().getName();
       // The restore changed the mixins that the user's session still holds
-      boolean mixinChange = hasOwnPermissions(repository, workspace, uuid) != (ownPermissions != null);
+      boolean mixinChange = JCRDocumentsUtil.needsMixinChange(repository,
+                                                              workspace,
+                                                              uuid,
+                                                              ownPermissions,
+                                                              descendantsPermissions);
       session.refresh(false);
       if (mixinChange) {
         node.checkout();

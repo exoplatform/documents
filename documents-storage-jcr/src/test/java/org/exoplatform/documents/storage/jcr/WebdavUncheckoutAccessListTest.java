@@ -221,6 +221,24 @@ class WebdavUncheckoutAccessListTest {
   }
 
   @Test
+  void aListOfItsOwnGainedBelowAFolderAfterTheCheckoutIsKeptWhenTheCheckoutIsCancelled() throws Exception {
+    Node versionedFolder = addVersionedFolder("gained-below");
+    Node child = addFile(versionedFolder, "child.txt");
+    systemSession.save();
+    versionedFolder.checkin();
+    versionedFolder.checkout();
+    child.addMixin("exo:privilegeable");
+    ((ExtendedNode) child).setPermissions(Map.of(GROUP, EDIT_REMOVE, "guest", READ));
+    systemSession.save();
+
+    handler.uncheckout(userSession, "/uncheckoutSpace/gained-below");
+
+    Node cancelled = reload(versionedFolder);
+    assertTrue(entriesOf(cancelled.getNode("child.txt")).contains("guest read"));
+    assertFalse(cancelled.isCheckedOut());
+  }
+
+  @Test
   void aFileBelowAFolderKeepsItsListWhenTheCheckoutOfTheFolderIsCancelled() throws Exception {
     Node versionedFolder = addVersionedFolder("untouched-below");
     Node child = addFileWithList(versionedFolder, "child.txt", Map.of(GROUP, EDIT_REMOVE, "member", READ));

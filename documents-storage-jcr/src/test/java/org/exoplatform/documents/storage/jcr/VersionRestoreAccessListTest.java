@@ -273,6 +273,26 @@ class VersionRestoreAccessListTest {
   }
 
   @Test
+  void aListOfItsOwnGainedBelowAFolderAfterTheVersionIsKeptByTheRestore() throws Exception {
+    Node versionedFolder = addVersionedFolder("gained-below");
+    Node child = versionedFolder.addNode("child.txt", "nt:file");
+    Node resource = child.addNode("jcr:content", "nt:resource");
+    resource.setProperty("jcr:mimeType", "text/plain");
+    resource.setProperty("jcr:lastModified", Calendar.getInstance());
+    resource.setProperty("jcr:data", new ByteArrayInputStream("c".getBytes(StandardCharsets.UTF_8)));
+    systemSession.save();
+    Version firstVersion = versionedFolder.checkin();
+    versionedFolder.checkout();
+    child.addMixin("exo:privilegeable");
+    ((ExtendedNode) child).setPermissions(Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "guest", READ));
+    systemSession.save();
+
+    storage.restoreVersion(firstVersion.getUUID(), EDITOR.getUserId());
+
+    assertTrue(entriesOf(reload(versionedFolder).getNode("child.txt")).contains("guest read"));
+  }
+
+  @Test
   void aFileBelowAFolderKeepsItsListWhenAVersionOfTheFolderIsRestored() throws Exception {
     Node versionedFolder = addVersionedFolder("untouched-below");
     Node child = addFileWithList(versionedFolder, "child.txt", Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "member", READ));
