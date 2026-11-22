@@ -204,4 +204,62 @@ public class PublicDocumentAccessServiceImplTest {
     publicDocumentAccessService.revokeDocumentPublicAccess("123");
     verify(publicDocumentAccessStorage, times(1)).removePublicDocumentAccess("123");
   }
+
+  private void givenLinkWithoutPassword(String documentId) {
+    PublicDocumentAccess publicDocumentAccess = new PublicDocumentAccess();
+    publicDocumentAccess.setNodeId(documentId);
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId)).thenReturn(publicDocumentAccess);
+    when(documentFileStorage.getDocumentDownloadInfo(documentId)).thenReturn(new DownloadItem(documentId, "document.pdf", null, null));
+  }
+
+  @Test
+  public void linkOfADocumentInTheTrashHasNoPublicDocumentInfo() {
+    givenLinkWithoutPassword("123");
+    when(documentFileStorage.isDocumentInTrash("123")).thenReturn(true);
+
+    assertThrows(ObjectNotFoundException.class, () -> publicDocumentAccessService.getPublicDocumentInfo("123"));
+    verify(documentFileStorage, never()).getDocumentDownloadInfo("123");
+  }
+
+  @Test
+  public void linkOfADocumentInTheTrashIsReportedAsExpiredAndInvalid() {
+    givenLinkWithoutPassword("123");
+    when(documentFileStorage.isDocumentInTrash("123")).thenReturn(true);
+
+    assertTrue(publicDocumentAccessService.isPublicDocumentAccessExpired("123"));
+    assertFalse(publicDocumentAccessService.isDocumentPublicAccessValid("123", null));
+  }
+
+  @Test
+  public void linkIsActiveAgainOnceItsDocumentIsRestored() throws ObjectNotFoundException {
+    givenLinkWithoutPassword("123");
+    when(documentFileStorage.isDocumentInTrash("123")).thenReturn(true, false);
+
+    assertTrue(publicDocumentAccessService.isPublicDocumentAccessExpired("123"));
+    assertFalse(publicDocumentAccessService.isPublicDocumentAccessExpired("123"));
+    assertTrue(publicDocumentAccessService.isDocumentPublicAccessValid("123", null));
+    assertEquals("document.pdf", publicDocumentAccessService.getPublicDocumentInfo("123").getDocumentName());
+    verify(publicDocumentAccessStorage, never()).removePublicDocumentAccess(anyString());
+  }
+
+  @Test
+  public void linkOfADocumentOutsideTheTrashIsUnchanged() throws ObjectNotFoundException {
+    givenLinkWithoutPassword("123");
+    when(documentFileStorage.isDocumentInTrash("123")).thenReturn(false);
+
+    assertFalse(publicDocumentAccessService.isPublicDocumentAccessExpired("123"));
+    assertTrue(publicDocumentAccessService.isDocumentPublicAccessValid("123", null));
+    PublicDocumentInfo info = publicDocumentAccessService.getPublicDocumentInfo("123");
+    assertEquals("document.pdf", info.getDocumentName());
+    assertFalse(info.isAccessExpired());
+  }
+
+  @Test
+  public void linkOwnerStillReadsTheLinkOfADocumentInTheTrash() {
+    givenLinkWithoutPassword("123");
+    when(documentFileStorage.isDocumentInTrash("123")).thenReturn(true);
+
+    assertNotNull(publicDocumentAccessService.getPublicDocumentAccess("123"));
+    assertTrue(publicDocumentAccessService.hasDocumentPublicAccess("123"));
+  }
 }

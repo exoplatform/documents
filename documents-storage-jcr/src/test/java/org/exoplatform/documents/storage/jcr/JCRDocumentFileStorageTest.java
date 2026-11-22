@@ -149,7 +149,8 @@ public class JCRDocumentFileStorageTest {
                                                              identityRegistry,
                                                              activityManager,
                                                              bulkStorageActionService,
-                                                             documentService);
+                                                             documentService,
+                                                             null);
     // countNodeAccessList reads the owner rule from JCRDocumentsUtil, which this class mocks statically
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isAclOwner(any(), any(), any())).thenCallRealMethod();
   }
@@ -2244,10 +2245,12 @@ public class JCRDocumentFileStorageTest {
       assertFalse("a zip that was not built is deleted", new File(zipPath[0]).exists());
       JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.cleanFiles(any(File.class)));
 
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.zipFiles(anyString(), anyString())).thenAnswer(invocation -> null);
       JCR_DOCUMENTS_UTIL.clearInvocations();
-      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.createTempFilesAndFolders(eq(node), anyString(), anyString(), anyString(), anyString()))
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.createTempFilesAndFolders(eq(node), anyString(), anyString(), anyString(), nullable(String.class), any()))
                         .thenThrow(new RepositoryException("unreadable child"));
       assertNull(jcrDocumentFileStorage.downloadFolder("failing", identity));
+      JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.zipFiles(anyString(), anyString()), never());
       JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.cleanFiles(any(File.class)));
     } finally {
       JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.zipFiles(anyString(), anyString())).thenAnswer(invocation -> null);

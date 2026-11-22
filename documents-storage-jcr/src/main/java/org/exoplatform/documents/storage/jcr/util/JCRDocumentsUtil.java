@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1200,7 +1201,30 @@ public class JCRDocumentsUtil {
                                                String sourcePath,
                                                String tempFolderPath,
                                                String parentPath) throws Exception {
-    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, parentPath, new HashSet<>(), new HashSet<>());
+    createTempFilesAndFolders(node, symlinkPath, sourcePath, tempFolderPath, parentPath, null);
+  }
+
+  /**
+   * Same as {@link #createTempFilesAndFolders(Node, String, String, String, String)},
+   * leaving out the shortcuts whose target satisfies {@code skipTarget}.
+   *
+   * @param skipTarget tests the target of a shortcut met in the walk, a target
+   *          it accepts is not copied; null skips none
+   */
+  public static void createTempFilesAndFolders(Node node,
+                                               String symlinkPath,
+                                               String sourcePath,
+                                               String tempFolderPath,
+                                               String parentPath,
+                                               Predicate<Node> skipTarget) throws Exception {
+    createTempFilesAndFolders(node,
+                              symlinkPath,
+                              sourcePath,
+                              tempFolderPath,
+                              parentPath,
+                              new HashSet<>(),
+                              new HashSet<>(),
+                              skipTarget);
   }
 
   /**
@@ -1210,7 +1234,8 @@ public class JCRDocumentsUtil {
    * {@code nestedTargets} holds the identifiers of the own targets of the
    * shortcuts met inside another shortcut's target: each one is copied once for
    * each downloaded folder, at the place of the first such shortcut that has a
-   * place in the download.
+   * place in the download. A shortcut whose target {@code skipTarget} accepts
+   * is left out.
    */
   private static void createTempFilesAndFolders(Node node,
                                                 String symlinkPath,
@@ -1218,7 +1243,8 @@ public class JCRDocumentsUtil {
                                                 String tempFolderPath,
                                                 String parentPath,
                                                 Set<String> walkPath,
-                                                Set<String> nestedTargets) throws Exception {
+                                                Set<String> nestedTargets,
+                                                Predicate<Node> skipTarget) throws Exception {
     if (node == null) {
       return;
     }
@@ -1237,14 +1263,14 @@ public class JCRDocumentsUtil {
         NodeIterator nodeIterator = node.getNodes();
         while (nodeIterator.hasNext()) {
           Node child = nodeIterator.nextNode();
-          createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentPath, walkPath, nestedTargets);
+          createTempFilesAndFolders(child, symlinkPath, sourcePath, tempFolderPath, parentPath, walkPath, nestedTargets, skipTarget);
         }
       } else {
         if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
           String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
           Node sourceNode = JCRDocumentsUtil.getNodeByIdentifier(node.getSession(), sourceID);
           String shortcutPath = getDownloadPath(node, symlinkPath, sourcePath);
-          if (sourceNode == null) {
+          if (sourceNode == null || (skipTarget != null && skipTarget.test(sourceNode))) {
             return;
           } else if (toTempFolderPath(tempFolderPath, getRelativePath(node, symlinkPath, sourcePath, parentPath)) == null) {
             LOG.warn("Shortcut {} left out of the download: its path is not a path in the download folder", node.getPath());
@@ -1257,7 +1283,8 @@ public class JCRDocumentsUtil {
                                       tempFolderPath,
                                       parentPath,
                                       walkPath,
-                                      nestedTargets);
+                                      nestedTargets,
+                                      skipTarget);
           }
         } else {
           createFile(node, symlinkPath, sourcePath, tempFolderPath, parentPath);

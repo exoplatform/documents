@@ -10,6 +10,8 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
@@ -193,5 +195,32 @@ public class ExternalDownloadServiceImplTest {
     org.exoplatform.services.security.Identity creatorAclIdentity = new org.exoplatform.services.security.Identity("mary");
     when(documentFileService.getAclUserIdentity("mary")).thenReturn(creatorAclIdentity);
     return creatorAclIdentity;
+  }
+
+  @Test
+  public void downloadOfADocumentInTheTrashIsNotFound() throws Exception {
+    org.exoplatform.services.security.Identity creatorAclIdentity = mockLinkCreator(true, false);
+    File zip = File.createTempFile("download", ".zip");
+    zip.deleteOnExit();
+    when(documentFileStorage.downloadFolder(FOLDER_ID, creatorAclIdentity)).thenReturn(zip.getAbsolutePath());
+    when(documentFileStorage.isDocumentInTrash(FOLDER_ID)).thenReturn(true);
+
+    assertNull(externalDownloadService.getDocumentDownloadItem(FOLDER_ID));
+    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.checkDocumentDownload(FOLDER_ID));
+    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.downloadZippedFolder(FOLDER_ID));
+    verify(documentFileStorage, never()).getDocumentDownloadItem(anyString());
+    verify(documentFileStorage, never()).getDocumentDownloadInfo(anyString());
+    verify(documentFileStorage, never()).downloadFolder(anyString(), nullable(org.exoplatform.services.security.Identity.class));
+  }
+
+  @Test
+  public void downloadOfADocumentOutsideTheTrashIsUnchanged() throws Exception {
+    when(documentFileStorage.isDocumentInTrash(FOLDER_ID)).thenReturn(false);
+    DownloadItem item = new DownloadItem(FOLDER_ID, "document.pdf", new ByteArrayOutputStream(), "application/pdf");
+    when(documentFileStorage.getDocumentDownloadItem(FOLDER_ID)).thenReturn(item);
+    when(documentFileStorage.getDocumentDownloadInfo(FOLDER_ID)).thenReturn(item);
+
+    assertSame(item, externalDownloadService.getDocumentDownloadItem(FOLDER_ID));
+    externalDownloadService.checkDocumentDownload(FOLDER_ID);
   }
 }
