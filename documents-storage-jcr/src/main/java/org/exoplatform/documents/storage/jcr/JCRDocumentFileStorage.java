@@ -51,6 +51,7 @@ import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.commons.utils.IOUtil;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
@@ -164,6 +165,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final DocumentService                     documentService;
 
+  private final TrashStorage                        trashStorage;
+
   /** Files of this many MB or larger are not read to extract their text on the fly. */
   public static final String                        TEXT_EXTRACTION_MAX_SIZE_MB_PROPERTY     =
                                                                                          "exo.documents.textExtraction.maxFileSizeMb";
@@ -258,7 +261,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                 IdentityRegistry identityRegistry,
                                 ActivityManager activityManager,
                                 BulkStorageActionService bulkStorageActionService,
-                                DocumentService documentService) {
+                                DocumentService documentService,
+                                TrashStorage trashStorage) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.repositoryService = repositoryService;
@@ -270,6 +274,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     this.activityManager = activityManager;
     this.bulkStorageActionService = bulkStorageActionService;
     this.documentService = documentService;
+    this.trashStorage = trashStorage;
   }
 
   @Override
@@ -3326,6 +3331,43 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return getDownloadItem(documentId, false);
   }
 
+  @Override
+  public boolean isDocumentInTrash(String documentId) {
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = SessionProvider.createSystemProvider();
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node node;
+      try {
+        node = ((ExtendedSession) systemSession).getNodeByIdentifier(documentId);
+      } catch (ItemNotFoundException e) {
+        return false;
+      }
+      return trashStorage.isInTrash(node);
+    } catch (Exception e) {
+      LOG.error("Error while checking whether document {} is in the trash", documentId, e);
+      return true;
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * Whether a node is in the trash, true when that cannot be told: a public
+   * archive leaves out what it cannot prove is out of the trash.
+   */
+  private boolean isInTrashFailClosed(Node node) {
+    try {
+      return trashStorage.isInTrash(node);
+    } catch (RepositoryException e) {
+      LOG.error("Error while checking whether a shortcut target is in the trash", e);
+      return true;
+    }
+  }
+
   private DownloadItem getDownloadItem(String documentId, boolean withContent) {
     SessionProvider sessionProvider = null;
     try {
@@ -3425,7 +3467,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parentPath = "";
         walkFolderPath = tempFolderPath + "/";
       }
-      JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", walkFolderPath, parentPath);
+      // A shortcut whose target is in the trash is left out: the archive is
+      // only built for a public link, which must not give a trashed document
+      JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", walkFolderPath, parentPath, this::isInTrashFailClosed);
       zip = Files.createTempFile(ZIP_PREFIX, ZIP_EXTENSION); // NOSONAR
       zipFiles(zip.toString(), tempFolderPath);
       built = true;

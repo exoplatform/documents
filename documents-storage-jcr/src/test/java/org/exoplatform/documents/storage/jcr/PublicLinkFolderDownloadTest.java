@@ -34,10 +34,12 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import javax.jcr.Node;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
 import org.junit.jupiter.api.AfterAll;
@@ -45,9 +47,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.container.StandaloneContainer;
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
@@ -91,7 +96,19 @@ class PublicLinkFolderDownloadTest {
                                                                          List.of(new MembershipEntry("/spaces/space2",
                                                                                                      "member")));
 
+  /** The trash home the tests move documents to, created and removed by them. */
+  private static final String           TRASH_HOME        = "/Trash";
+
+  private static RepositoryService      repositoryService;
+
   private static Session                systemSession;
+
+  /**
+   * Stands in for {@code TrashStorageImpl}, whose {@code isInTrash} is a prefix
+   * test on the trash home: a node is in the trash when its path is under
+   * {@link #TRASH_HOME}.
+   */
+  private static TrashStorage           trashStorage;
 
   private static JCRDocumentFileStorage storage;
 
@@ -103,7 +120,10 @@ class PublicLinkFolderDownloadTest {
 
   @BeforeAll
   static void setUpRepository() throws Exception {
-    RepositoryService repositoryService = startContainer().getComponentInstanceOfType(RepositoryService.class);
+    repositoryService = startContainer().getComponentInstanceOfType(RepositoryService.class);
+    trashStorage = Mockito.mock(TrashStorage.class);
+    Mockito.when(trashStorage.isInTrash(ArgumentMatchers.any(Node.class)))
+           .thenAnswer(invocation -> ((Node) invocation.getArgument(0)).getPath().startsWith(TRASH_HOME + "/"));
     ManageableRepository repository = repositoryService.getDefaultRepository();
     repositoryService.setCurrentRepositoryName(repository.getConfiguration().getName());
     systemSession = repository.getSystemSession(repository.getConfiguration().getDefaultWorkspaceName());
@@ -147,7 +167,7 @@ class PublicLinkFolderDownloadTest {
     restrictedFolderId = ((ExtendedNode) restricted).getIdentifier();
     sharedWithMemberId = ((ExtendedNode) sharedWithMember).getIdentifier();
 
-    storage = new JCRDocumentFileStorage(null, repositoryService, null, null, null, null, null, null, null, null, null);
+    storage = new JCRDocumentFileStorage(null, repositoryService, null, null, null, null, null, null, null, null, null, trashStorage);
   }
 
   @AfterAll
@@ -339,6 +359,99 @@ class PublicLinkFolderDownloadTest {
   private static void setPermissions(Node node, Map<String, String[]> permissions) throws Exception {
     node.addMixin("exo:privilegeable");
     ((ExtendedNode) node).setPermissions(permissions);
+  }
+
+  /** A document moved to the trash is reported so, and no longer once it is restored. */
+  @Test
+  void aDocumentIsInTheTrashOnlyWhileItLivesUnderTheTrashHome() throws Exception {
+    Node root = systemSession.getRootNode();
+    boolean trashHomeCreated = !root.hasNode("Trash");
+    Node trashHome = trashHomeCreated ? root.addNode("Trash", "nt:folder") : root.getNode("Trash");
+    Node document = addFile(root, "trash-check.txt", "content");
+    systemSession.save();
+    String documentId = ((ExtendedNode) document).getIdentifier();
+    try {
+      assertFalse(storage.isDocumentInTrash(documentId));
+
+      systemSession.move("/trash-check.txt", trashHome.getPath() + "/trash-check.txt");
+      systemSession.save();
+      assertTrue(storage.isDocumentInTrash(documentId));
+
+      systemSession.move(TRASH_HOME + "/trash-check.txt", "/trash-check.txt");
+      systemSession.save();
+      assertFalse(storage.isDocumentInTrash(documentId));
+    } finally {
+      removeIfExists("/trash-check.txt", TRASH_HOME + "/trash-check.txt");
+      if (trashHomeCreated) {
+        removeIfExists(TRASH_HOME);
+      }
+    }
+  }
+
+  /** No document has the id: nothing is trashed, which is not a failure to tell. */
+  @Test
+  void anIdNoDocumentHasIsNotInTheTrash() {
+    assertFalse(storage.isDocumentInTrash(UUID.randomUUID().toString()));
+  }
+
+  /** A failure to tell closes the access: the document is reported as trashed. */
+  @Test
+  void aFailureToTellWhetherTheDocumentIsInTheTrashReportsItAsTrashed() throws Exception {
+    TrashStorage failingTrashStorage = Mockito.mock(TrashStorage.class);
+    Mockito.when(failingTrashStorage.isInTrash(ArgumentMatchers.any(Node.class))).thenThrow(new RepositoryException("down"));
+    JCRDocumentFileStorage failingStorage =
+                                          new JCRDocumentFileStorage(null, repositoryService, null, null, null, null, null, null, null, null, null, failingTrashStorage);
+
+    assertTrue(failingStorage.isDocumentInTrash(sharedFolderId));
+  }
+
+  /**
+   * A public folder archive leaves out a shortcut whose target is in the
+   * trash, and holds it again once the target is restored.
+   */
+  @Test
+  void aShortcutToATrashedDocumentIsLeftOutOfThePublicArchiveUntilItIsRestored() throws Exception {
+    Node root = systemSession.getRootNode();
+    boolean trashHomeCreated = !root.hasNode("Trash");
+    Node trashHome = trashHomeCreated ? root.addNode("Trash", "nt:folder") : root.getNode("Trash");
+    // readable by the members, so that only the trash can leave the target out
+    setPermissions(trashHome, Map.of("*:/spaces/space1", PermissionType.ALL));
+    Node space1 = root.getNode("space1");
+    Node folder = space1.addNode("WithShortcuts", "nt:folder");
+    Node target = addFile(space1.getNode("Elsewhere"), "to-trash.txt", "trashed then restored");
+    systemSession.save();
+    addShortcut(folder, "to-trash-link.txt", target);
+    systemSession.save();
+    String folderId = ((ExtendedNode) folder).getIdentifier();
+    try {
+      assertTrue(zipEntries(storage.downloadFolder(folderId, MEMBER)).contains("WithShortcuts/to-trash-link.txt"),
+                 "the fixture: the shortcut's target is archived while it lives");
+
+      systemSession.move("/space1/Elsewhere/to-trash.txt", TRASH_HOME + "/to-trash.txt");
+      systemSession.save();
+      List<String> trashedEntries = zipEntries(storage.downloadFolder(folderId, MEMBER));
+      assertFalse(trashedEntries.stream().anyMatch(entry -> entry.contains("to-trash")),
+                  "a shortcut to a trashed document is left out: " + trashedEntries);
+
+      systemSession.move(TRASH_HOME + "/to-trash.txt", "/space1/Elsewhere/to-trash.txt");
+      systemSession.save();
+      assertTrue(zipEntries(storage.downloadFolder(folderId, MEMBER)).contains("WithShortcuts/to-trash-link.txt"),
+                 "the restored target is archived again");
+    } finally {
+      removeIfExists("/space1/WithShortcuts", "/space1/Elsewhere/to-trash.txt", TRASH_HOME + "/to-trash.txt");
+      if (trashHomeCreated) {
+        removeIfExists(TRASH_HOME);
+      }
+    }
+  }
+
+  private static void removeIfExists(String... paths) throws Exception {
+    for (String path : paths) {
+      if (systemSession.itemExists(path)) {
+        systemSession.getItem(path).remove();
+      }
+    }
+    systemSession.save();
   }
 
   private static Node addFile(Node parent, String name, String content) throws Exception {

@@ -58,6 +58,9 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
     if (documentId == null) {
       throw new IllegalArgumentException("document id is mandatory");
     }
+    if (documentFileStorage.isDocumentInTrash(documentId)) {
+      return null;
+    }
     return documentFileStorage.getDocumentDownloadItem(documentId);
   }
 
@@ -68,6 +71,9 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
   public InputStream downloadZippedFolder(String folderId) throws IOException, ObjectNotFoundException {
     if (folderId == null) {
       throw new IllegalArgumentException("folder id is mandatory");
+    }
+    if (documentFileStorage.isDocumentInTrash(folderId)) {
+      throw new ObjectNotFoundException("No document has id " + folderId);
     }
     org.exoplatform.services.security.Identity creatorAclIdentity = getLinkCreatorAclIdentity(folderId);
     String downloadPath = documentFileStorage.downloadFolder(folderId, creatorAclIdentity);
@@ -99,6 +105,9 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
   public void checkDocumentDownload(String documentId) throws ObjectNotFoundException {
     if (documentId == null) {
       throw new IllegalArgumentException("document id is mandatory");
+    }
+    if (documentFileStorage.isDocumentInTrash(documentId)) {
+      throw new ObjectNotFoundException("No document has id " + documentId);
     }
     DownloadItem downloadInfo = documentFileStorage.getDocumentDownloadInfo(documentId);
     if (downloadInfo == null) {

@@ -558,6 +558,21 @@ public interface DocumentFileStorage {
   DownloadItem getDocumentDownloadInfo(String documentId);
 
   /**
+   * Checks whether a given document is in the trash, whatever the caller's
+   * permissions. A document whose state cannot be determined is reported as
+   * in the trash, so that a caller closing an access on trashed documents
+   * keeps it closed. It answers for any id: a caller serving a public link
+   * checks that the link exists first, so that the answer does not tell
+   * whether an arbitrary id is trashed.
+   *
+   * @param documentId document id
+   * @return true when the document is in the trash, or when this cannot be
+   *         determined; false when it is outside the trash or no document has
+   *         this id
+   */
+  boolean isDocumentInTrash(String documentId);
+
+  /**
    * Download a zipped folder, walked with the rights of the given user: the
    * children and the shortcut targets this user cannot read are left out of
    * the zip
