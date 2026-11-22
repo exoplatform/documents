@@ -310,13 +310,13 @@
     {
       "name": "search_documents",
       "title": "Search for files",
-      "description": "Searches for documents matching the specified query and optional filters. With updated_since, returns the files changed since that date, the most recent first, with or without a query: use it to keep a folder in sync instead of opening each document. It searches the whole tree under the folder or the space, files only, as the search index holds them (a change can take a moment to show). Each file says whether you can edit or delete it (can_edit, can_delete); a shortcut the search finds is answered as its target, with the target's id and rights.",
+      "description": "Searches for documents matching the specified query and optional filters. With neither a query nor updated_since, lists the scope's files, the most recent first. With updated_since, returns the files changed since that date, the most recent first, with or without a query: use it to keep a folder in sync instead of opening each document. It searches the whole tree under the folder or the space, files only, as the search index holds them (a change can take a moment to show). Each file says whether you can edit or delete it (can_edit, can_delete); a shortcut the search finds is answered as its target, with the target's id and rights.",
       "input_schema": {
         "type": "object",
         "properties": {
           "query": {
             "type": "string",
-            "description": "Full-text search query string. Optional when you pass updated_since."
+            "description": "Full-text search query string. Optional: without it, the files of the scope are listed, the most recent first."
           },
           "updated_since": {
             "type": "string",
