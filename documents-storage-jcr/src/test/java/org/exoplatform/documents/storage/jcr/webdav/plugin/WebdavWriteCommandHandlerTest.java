@@ -738,4 +738,20 @@ public class WebdavWriteCommandHandlerTest {
     assertEquals(status, exception.getHttpError());
     return exception;
   }
+
+  @Test
+  @SneakyThrows
+  public void testDeleteClosesTheSessionProviderItBuilds() {
+    when(session.getUserState()).thenReturn(conversationState);
+    when(node.getPath()).thenReturn(JCR_PATH);
+    doNothing().when(node).checkPermission(PermissionType.REMOVE);
+
+    try (org.mockito.MockedConstruction<SessionProvider> providers = org.mockito.Mockito.mockConstruction(SessionProvider.class)) {
+      handler.delete(session, JCR_PATH);
+
+      assertEquals(1, providers.constructed().size());
+      verify(trashStorage).moveToTrash(eq(node), eq(providers.constructed().get(0)));
+      verify(providers.constructed().get(0)).close();
+    }
+  }
 }
