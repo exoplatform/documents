@@ -74,6 +74,12 @@ class VersionRestoreAccessListTest {
   private static final String[]         EDIT        = new String[] { PermissionType.READ, PermissionType.ADD_NODE,
       PermissionType.SET_PROPERTY };
 
+  /** The rights that also let the restore replace a file below a folder */
+  private static final String[]         EDIT_REMOVE = new String[] { PermissionType.READ, PermissionType.ADD_NODE,
+      PermissionType.SET_PROPERTY, PermissionType.REMOVE };
+
+  private static final String[]         READ        = new String[] { PermissionType.READ };
+
   private static Session                systemSession;
 
   private static Node                   folder;
@@ -240,6 +246,62 @@ class VersionRestoreAccessListTest {
     assertEquals(Set.of("*:" + SPACE_GROUP + " read", "*:" + SPACE_GROUP + " add_node", "*:" + SPACE_GROUP + " set_property",
                         "guest read"),
                  entriesOf(reload(document)));
+  }
+
+  @Test
+  void aShareRevokedBelowAFolderAfterTheVersionIsNotGivenBackByTheRestore() throws Exception {
+    Node versionedFolder = addVersionedFolder("revoked-below");
+    Node child = addFileWithList(versionedFolder, "child.txt", Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "member", READ));
+    Node deeper = addFileWithList(versionedFolder.addNode("sub", "nt:folder"),
+                                  "deeper.txt",
+                                  Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "member", READ));
+    Version firstVersion = versionedFolder.checkin();
+    versionedFolder.checkout();
+    ((ExtendedNode) child).setPermissions(Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "guest", READ));
+    ((ExtendedNode) deeper).setPermissions(Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "guest", READ));
+    systemSession.save();
+
+    storage.restoreVersion(firstVersion.getUUID(), EDITOR.getUserId());
+
+    Node restored = reload(versionedFolder);
+    Set<String> childEntries = entriesOf(restored.getNode("child.txt"));
+    Set<String> deeperEntries = entriesOf(restored.getNode("sub/deeper.txt"));
+    assertFalse(childEntries.contains("member read"), "the revoked share stays revoked: " + childEntries);
+    assertTrue(childEntries.contains("guest read"));
+    assertFalse(deeperEntries.contains("member read"), "the revoked share stays revoked below: " + deeperEntries);
+    assertTrue(deeperEntries.contains("guest read"));
+  }
+
+  @Test
+  void aFileBelowAFolderKeepsItsListWhenAVersionOfTheFolderIsRestored() throws Exception {
+    Node versionedFolder = addVersionedFolder("untouched-below");
+    Node child = addFileWithList(versionedFolder, "child.txt", Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "member", READ));
+    Version firstVersion = versionedFolder.checkin();
+    versionedFolder.checkout();
+    Set<String> before = entriesOf(child);
+
+    storage.restoreVersion(firstVersion.getUUID(), EDITOR.getUserId());
+
+    assertEquals(before, entriesOf(reload(versionedFolder).getNode("child.txt")));
+  }
+
+  private static Node addVersionedFolder(String name) throws Exception {
+    Node versionedFolder = folder.addNode(name, "nt:folder");
+    versionedFolder.addMixin("mix:versionable");
+    systemSession.save();
+    return versionedFolder;
+  }
+
+  private static Node addFileWithList(Node parent, String name, Map<String, String[]> permissions) throws Exception {
+    Node file = parent.addNode(name, "nt:file");
+    Node resource = file.addNode("jcr:content", "nt:resource");
+    resource.setProperty("jcr:mimeType", "text/plain");
+    resource.setProperty("jcr:lastModified", Calendar.getInstance());
+    resource.setProperty("jcr:data", new ByteArrayInputStream(name.getBytes(StandardCharsets.UTF_8)));
+    file.addMixin("exo:privilegeable");
+    ((ExtendedNode) file).setPermissions(permissions);
+    systemSession.save();
+    return file;
   }
 
   private static Node addVersionedFile(String name) throws Exception {

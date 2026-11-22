@@ -1249,7 +1249,7 @@ public class JCRDocumentFileStorageTest {
     when(version.getNode(NodeTypeConstants.JCR_FROZEN_NODE)).thenReturn(frozen);
     when(Utils.getStringProperty(frozen, NodeTypeConstants.JCR_FROZEN_UUID)).thenReturn("111");
     when(session.getNodeByUUID("111")).thenReturn(node);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.putBackOwnPermissions(any(), any(), nullable(String.class), any()))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.putBackOwnPermissions(any(), any(), nullable(String.class), any(), any()))
                       .thenThrow(new javax.jcr.RepositoryException("refused"));
 
     assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.restoreVersion("123", "user"));

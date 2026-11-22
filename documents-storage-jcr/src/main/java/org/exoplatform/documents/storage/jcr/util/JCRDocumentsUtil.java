@@ -1023,6 +1023,37 @@ public class JCRDocumentsUtil {
     return toPermissions((ExtendedNode) node);
   }
 
+  /**
+   * Reads the own access list of every node below a document that a restore
+   * of the document brings back with it, to put them back as well. The walk
+   * goes down through the non-versionable nodes only, since a versionable
+   * node keeps its own history and is not touched by the restore.
+   *
+   * @param node the document
+   * @return the own permissions by identity of those nodes, by node id
+   * @throws RepositoryException when a node can't be read
+   */
+  public static Map<String, Map<String, String[]>> getDescendantsOwnPermissions(Node node) throws RepositoryException {
+    Map<String, Map<String, String[]>> descendants = new LinkedHashMap<>();
+    collectDescendantsOwnPermissions(node, descendants);
+    return descendants;
+  }
+
+  private static void collectDescendantsOwnPermissions(Node node,
+                                                       Map<String, Map<String, String[]>> descendants) throws RepositoryException {
+    NodeIterator children = node.getNodes();
+    while (children.hasNext()) {
+      Node child = children.nextNode();
+      if (child.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
+        continue;
+      }
+      if (child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        descendants.put(((ExtendedNode) child).getIdentifier(), toPermissions((ExtendedNode) child));
+      }
+      collectDescendantsOwnPermissions(child, descendants);
+    }
+  }
+
   private static Map<String, String[]> toPermissions(ExtendedNode node) throws RepositoryException {
     Map<String, List<String>> permissions = new LinkedHashMap<>();
     for (AccessControlEntry entry : node.getACL().getPermissionEntries()) {
@@ -1044,14 +1075,18 @@ public class JCRDocumentsUtil {
    * @param nodeUuid the document's UUID
    * @param ownPermissions its own permissions, or null when it had no list of
    *          its own
+   * @param descendantsPermissions the own permissions of the nodes below it, by
+   *          node id, as read by {@link #getDescendantsOwnPermissions(Node)}
    * @throws RepositoryException when the list can't be put back
    */
   public static void putBackOwnPermissions(ManageableRepository repository,
                                            String workspace,
                                            String nodeUuid,
-                                           Map<String, String[]> ownPermissions) throws RepositoryException {
+                                           Map<String, String[]> ownPermissions,
+                                           Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
     Session systemSession = repository.getSystemSession(workspace);
     try {
+      putBackDescendantsPermissions(systemSession, descendantsPermissions);
       ExtendedNode node = (ExtendedNode) systemSession.getNodeByUUID(nodeUuid);
       if (ownPermissions != null) {
         if (!node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
@@ -1067,6 +1102,22 @@ public class JCRDocumentsUtil {
       systemSession.save();
     } finally {
       systemSession.logout();
+    }
+  }
+
+  private static void putBackDescendantsPermissions(Session systemSession,
+                                                    Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
+    for (Map.Entry<String, Map<String, String[]>> descendant : descendantsPermissions.entrySet()) {
+      ExtendedNode child;
+      try {
+        child = (ExtendedNode) ((ExtendedSession) systemSession).getNodeByIdentifier(descendant.getKey());
+      } catch (ItemNotFoundException e) {
+        continue; // the restore did not bring this node back
+      }
+      if (!child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        child.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+      }
+      child.setPermissions(descendant.getValue());
     }
   }
 
