@@ -1150,26 +1150,37 @@ public class JCRDocumentsUtil {
 
   private static void putBackDescendantsPermissions(Session systemSession,
                                                     Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
+    // The lists are put back first and saved once: a node that reads its
+    // folder's list only sees a list changed in this session after a save
     for (Map.Entry<String, Map<String, String[]>> descendant : descendantsPermissions.entrySet()) {
-      ExtendedNode child;
-      try {
-        child = (ExtendedNode) ((ExtendedSession) systemSession).getNodeByIdentifier(descendant.getKey());
-      } catch (ItemNotFoundException e) {
-        continue; // the restore did not bring this node back
-      }
-      if (descendant.getValue() == null) {
-        if (child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
-          // Removing the mixin keeps the list in effect: its folder's is set first
-          child.setPermissions(toPermissions((ExtendedNode) child.getParent()));
-          systemSession.save();
-          child.removeMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
-        }
-        continue;
+      ExtendedNode child = findNode(systemSession, descendant.getKey());
+      if (child == null || descendant.getValue() == null) {
+        continue; // the restore did not bring this node back, or it has no list to put back
       }
       if (!child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         child.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
       child.setPermissions(descendant.getValue());
+    }
+    systemSession.save();
+    // Then the lists that are gone are removed, parents first, each removal saved
+    for (Map.Entry<String, Map<String, String[]>> descendant : descendantsPermissions.entrySet()) {
+      ExtendedNode child = findNode(systemSession, descendant.getKey());
+      if (child != null && descendant.getValue() == null && child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        // Removing the mixin keeps the list in effect: its folder's is set first
+        child.setPermissions(toPermissions((ExtendedNode) child.getParent()));
+        systemSession.save();
+        child.removeMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+        systemSession.save();
+      }
+    }
+  }
+
+  private static ExtendedNode findNode(Session systemSession, String nodeId) throws RepositoryException {
+    try {
+      return (ExtendedNode) ((ExtendedSession) systemSession).getNodeByIdentifier(nodeId);
+    } catch (ItemNotFoundException e) {
+      return null;
     }
   }
 

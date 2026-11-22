@@ -313,6 +313,27 @@ class VersionRestoreAccessListTest {
   }
 
   @Test
+  void aListRemovedBelowAFolderThatReadsAChangedListStaysRemovedWhenTheVersionIsRestored() throws Exception {
+    Node versionedFolder = addVersionedFolder("stale-parent");
+    Node changed = addFolderWithList(versionedFolder, "changed", Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "bob", READ));
+    Node inheriting = changed.addNode("inheriting", "nt:folder");
+    Node removed = addFileWithList(inheriting, "removed.txt", Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "bob", READ));
+    Version firstVersion = versionedFolder.checkin();
+    versionedFolder.checkout();
+    ((ExtendedNode) changed).setPermissions(Map.of("*:" + SPACE_GROUP, EDIT_REMOVE));
+    removed.removeMixin("exo:privilegeable");
+    systemSession.save();
+
+    storage.restoreVersion(firstVersion.getUUID(), EDITOR.getUserId());
+
+    Node restored = reload(versionedFolder);
+    Node restoredRemoved = restored.getNode("changed/inheriting/removed.txt");
+    assertFalse(restoredRemoved.isNodeType("exo:privilegeable"));
+    assertFalse(entriesOf(restoredRemoved).contains("bob read"), "the revoked share stays revoked: " + entriesOf(restoredRemoved));
+    assertEquals(entriesOf(restored.getNode("changed")), entriesOf(restoredRemoved));
+  }
+
+  @Test
   void aFileBelowAFolderKeepsItsListWhenAVersionOfTheFolderIsRestored() throws Exception {
     Node versionedFolder = addVersionedFolder("untouched-below");
     Node child = addFileWithList(versionedFolder, "child.txt", Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "member", READ));
@@ -330,6 +351,14 @@ class VersionRestoreAccessListTest {
     versionedFolder.addMixin("mix:versionable");
     systemSession.save();
     return versionedFolder;
+  }
+
+  private static Node addFolderWithList(Node parent, String name, Map<String, String[]> permissions) throws Exception {
+    Node subFolder = parent.addNode(name, "nt:folder");
+    subFolder.addMixin("exo:privilegeable");
+    ((ExtendedNode) subFolder).setPermissions(permissions);
+    systemSession.save();
+    return subFolder;
   }
 
   private static Node addFileWithList(Node parent, String name, Map<String, String[]> permissions) throws Exception {

@@ -260,6 +260,28 @@ class WebdavUncheckoutAccessListTest {
   }
 
   @Test
+  void aListRemovedBelowAFolderThatReadsAChangedListStaysRemovedWhenTheCheckoutIsCancelled() throws Exception {
+    Node versionedFolder = addVersionedFolder("stale-parent");
+    Node changed = addFolderWithList(versionedFolder, "changed", Map.of(GROUP, EDIT_REMOVE, "bob", READ));
+    Node inheriting = changed.addNode("inheriting", "nt:folder");
+    Node removed = addFileWithList(inheriting, "removed.txt", Map.of(GROUP, EDIT_REMOVE, "bob", READ));
+    versionedFolder.checkin();
+    versionedFolder.checkout();
+    ((ExtendedNode) changed).setPermissions(Map.of(GROUP, EDIT_REMOVE));
+    removed.removeMixin("exo:privilegeable");
+    systemSession.save();
+
+    handler.uncheckout(userSession, "/uncheckoutSpace/stale-parent");
+
+    Node cancelled = reload(versionedFolder);
+    Node cancelledRemoved = cancelled.getNode("changed/inheriting/removed.txt");
+    assertFalse(cancelledRemoved.isNodeType("exo:privilegeable"));
+    assertFalse(entriesOf(cancelledRemoved).contains("bob read"), "the revoked share stays revoked: " + entriesOf(cancelledRemoved));
+    assertEquals(entriesOf(cancelled.getNode("changed")), entriesOf(cancelledRemoved));
+    assertFalse(cancelled.isCheckedOut());
+  }
+
+  @Test
   void aFileBelowAFolderKeepsItsListWhenTheCheckoutOfTheFolderIsCancelled() throws Exception {
     Node versionedFolder = addVersionedFolder("untouched-below");
     Node child = addFileWithList(versionedFolder, "child.txt", Map.of(GROUP, EDIT_REMOVE, "member", READ));
@@ -277,6 +299,14 @@ class WebdavUncheckoutAccessListTest {
     versionedFolder.addMixin("mix:versionable");
     systemSession.save();
     return versionedFolder;
+  }
+
+  private static Node addFolderWithList(Node parent, String name, Map<String, String[]> permissions) throws Exception {
+    Node subFolder = parent.addNode(name, "nt:folder");
+    subFolder.addMixin("exo:privilegeable");
+    ((ExtendedNode) subFolder).setPermissions(permissions);
+    systemSession.save();
+    return subFolder;
   }
 
   private static Node addFileWithList(Node parent, String name, Map<String, String[]> permissions) throws Exception {
