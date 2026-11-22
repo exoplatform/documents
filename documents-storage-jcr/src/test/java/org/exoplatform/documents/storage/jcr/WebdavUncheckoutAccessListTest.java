@@ -239,6 +239,27 @@ class WebdavUncheckoutAccessListTest {
   }
 
   @Test
+  void aListOfItsOwnRemovedBelowAFolderAfterTheCheckoutStaysRemovedWhenTheCheckoutIsCancelled() throws Exception {
+    Node versionedFolder = addVersionedFolder("removed-below");
+    versionedFolder.addMixin("exo:privilegeable");
+    ((ExtendedNode) versionedFolder).setPermissions(Map.of(GROUP, EDIT_REMOVE));
+    systemSession.save();
+    Node child = addFileWithList(versionedFolder, "child.txt", Map.of(GROUP, EDIT_REMOVE, "member", READ));
+    versionedFolder.checkin();
+    versionedFolder.checkout();
+    child.removeMixin("exo:privilegeable");
+    systemSession.save();
+
+    handler.uncheckout(userSession, "/uncheckoutSpace/removed-below");
+
+    Node cancelled = reload(versionedFolder);
+    Node cancelledChild = cancelled.getNode("child.txt");
+    assertFalse(cancelledChild.isNodeType("exo:privilegeable"), "the list of its own is not brought back");
+    assertEquals(entriesOf(cancelled), entriesOf(cancelledChild));
+    assertFalse(cancelled.isCheckedOut());
+  }
+
+  @Test
   void aFileBelowAFolderKeepsItsListWhenTheCheckoutOfTheFolderIsCancelled() throws Exception {
     Node versionedFolder = addVersionedFolder("untouched-below");
     Node child = addFileWithList(versionedFolder, "child.txt", Map.of(GROUP, EDIT_REMOVE, "member", READ));

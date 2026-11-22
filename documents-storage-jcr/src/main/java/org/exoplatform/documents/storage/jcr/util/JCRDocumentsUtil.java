@@ -1025,12 +1025,14 @@ public class JCRDocumentsUtil {
 
   /**
    * Reads the own access list of every node below a document that a restore
-   * of the document brings back with it, to put them back as well. The walk
-   * goes down through the non-versionable nodes only, since a versionable
-   * node keeps its own history and is not touched by the restore.
+   * of the document brings back with it, to put them back as well, parents
+   * before their children. The walk goes down through the non-versionable
+   * nodes only, since a versionable node keeps its own history and is not
+   * touched by the restore.
    *
    * @param node the document
-   * @return the own permissions by identity of those nodes, by node id
+   * @return the own permissions by identity of those nodes, by node id, null
+   *         for a node that has no list of its own
    * @throws RepositoryException when a node can't be read
    */
   public static Map<String, Map<String, String[]>> getDescendantsOwnPermissions(Node node) throws RepositoryException {
@@ -1047,9 +1049,7 @@ public class JCRDocumentsUtil {
       if (child.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
         continue;
       }
-      if (child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
-        descendants.put(((ExtendedNode) child).getIdentifier(), toPermissions((ExtendedNode) child));
-      }
+      descendants.put(((ExtendedNode) child).getIdentifier(), getOwnPermissions(child));
       collectDescendantsOwnPermissions(child, descendants);
     }
   }
@@ -1086,7 +1086,6 @@ public class JCRDocumentsUtil {
                                            Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
     Session systemSession = repository.getSystemSession(workspace);
     try {
-      putBackDescendantsPermissions(systemSession, descendantsPermissions);
       ExtendedNode node = (ExtendedNode) systemSession.getNodeByUUID(nodeUuid);
       if (ownPermissions != null) {
         if (!node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
@@ -1099,6 +1098,9 @@ public class JCRDocumentsUtil {
         systemSession.save();
         node.removeMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
+      systemSession.save();
+      // After the document's own list: a node that reads its folder's list reads the one just put back
+      putBackDescendantsPermissions(systemSession, descendantsPermissions);
       systemSession.save();
     } finally {
       systemSession.logout();
@@ -1131,8 +1133,9 @@ public class JCRDocumentsUtil {
       }
       for (String descendantId : descendantsPermissions.keySet()) {
         try {
-          if (!((ExtendedSession) systemSession).getNodeByIdentifier(descendantId)
-                                                .isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+          boolean hasOwnList = ((ExtendedSession) systemSession).getNodeByIdentifier(descendantId)
+                                                                .isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE);
+          if (hasOwnList != (descendantsPermissions.get(descendantId) != null)) {
             return true;
           }
         } catch (ItemNotFoundException e) {
@@ -1153,6 +1156,15 @@ public class JCRDocumentsUtil {
         child = (ExtendedNode) ((ExtendedSession) systemSession).getNodeByIdentifier(descendant.getKey());
       } catch (ItemNotFoundException e) {
         continue; // the restore did not bring this node back
+      }
+      if (descendant.getValue() == null) {
+        if (child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+          // Removing the mixin keeps the list in effect: its folder's is set first
+          child.setPermissions(toPermissions((ExtendedNode) child.getParent()));
+          systemSession.save();
+          child.removeMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+        }
+        continue;
       }
       if (!child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         child.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);

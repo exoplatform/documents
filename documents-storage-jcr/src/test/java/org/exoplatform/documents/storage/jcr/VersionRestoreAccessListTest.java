@@ -293,6 +293,26 @@ class VersionRestoreAccessListTest {
   }
 
   @Test
+  void aListOfItsOwnRemovedBelowAFolderAfterTheVersionStaysRemovedWhenTheVersionIsRestored() throws Exception {
+    Node versionedFolder = addVersionedFolder("removed-below");
+    versionedFolder.addMixin("exo:privilegeable");
+    ((ExtendedNode) versionedFolder).setPermissions(Map.of("*:" + SPACE_GROUP, EDIT_REMOVE));
+    systemSession.save();
+    Node child = addFileWithList(versionedFolder, "child.txt", Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "member", READ));
+    Version firstVersion = versionedFolder.checkin();
+    versionedFolder.checkout();
+    child.removeMixin("exo:privilegeable");
+    systemSession.save();
+
+    storage.restoreVersion(firstVersion.getUUID(), EDITOR.getUserId());
+
+    Node restored = reload(versionedFolder);
+    Node restoredChild = restored.getNode("child.txt");
+    assertFalse(restoredChild.isNodeType("exo:privilegeable"), "the list of its own is not brought back");
+    assertEquals(entriesOf(restored), entriesOf(restoredChild));
+  }
+
+  @Test
   void aFileBelowAFolderKeepsItsListWhenAVersionOfTheFolderIsRestored() throws Exception {
     Node versionedFolder = addVersionedFolder("untouched-below");
     Node child = addFileWithList(versionedFolder, "child.txt", Map.of("*:" + SPACE_GROUP, EDIT_REMOVE, "member", READ));
