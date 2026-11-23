@@ -488,6 +488,113 @@ public class DocumentMcpToolTest {
     assertEquals(DOCUMENT_ID, model.getId());
   }
 
+  /**
+   * A document named where its id is expected (EXO-95034): « Summarize
+   * zz-8416-form.pdf » passed the file's name as document_id, the lookup
+   * found nothing, and the assistant told the user the file did not exist.
+   * The error now says the value is not an id and to find the id with a
+   * search tool, which ai reads as a lookup failure to recover from by a
+   * search. Mutants: the storage's error kept for a name; « search tool » or
+   * « not an id » dropped from the message.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentByIdGivenANameSaysToSearchForIt() throws Exception {
+    for (String name : List.of("zz-8416-form.pdf", "workflow", "folder:workflow", "Private/workflow")) {
+      when(documentFileService.getDocumentById(name, USERNAME)).thenThrow(new ObjectNotFoundException("Node with id " + name
+          + " not found"));
+
+      ObjectNotFoundException error = assertThrows(ObjectNotFoundException.class, () -> documentMcpTool.getDocumentById(name));
+
+      assertTrue(error.getMessage(), error.getMessage().startsWith("'" + name + "' is not an id, so no document was found with it"));
+      assertTrue(error.getMessage(), error.getMessage().contains("with a search tool first: a file with search_documents and its name as query"));
+      assertTrue(error.getMessage(), error.getMessage().contains("When several match, name them and ask which one is meant"));
+    }
+  }
+
+  /**
+   * An id-shaped value that finds nothing keeps the storage's error: the
+   * document is gone or the id is wrong, and a search would not help. The 32
+   * characters of an eXo JCR id, and the 36 of a UUID, are id-shaped.
+   * Mutant: every not-found error turned into the name's.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentByIdGivenAnUnknownIdKeepsTheStorageError() throws Exception {
+    for (String id : List.of(DOCUMENT_ID, "00exo0jcr0root0uuid0000000000000", "3f2504e0-4f89-11d3-9a0c-0305e82c3301")) {
+      when(documentFileService.getDocumentById(id, USERNAME)).thenThrow(new ObjectNotFoundException("Node with id " + id + " not found"));
+
+      ObjectNotFoundException error = assertThrows(ObjectNotFoundException.class, () -> documentMcpTool.getDocumentById(id));
+
+      assertEquals("Node with id " + id + " not found", error.getMessage());
+    }
+  }
+
+  /**
+   * The content, the rights and the outline of a named document say the
+   * same, as every read through the document lookup does. Mutant: one of
+   * them reading the storage directly.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void everyDocumentReadGivenANameSaysToSearchForIt() throws Exception {
+    String name = "zz-8416-form.pdf";
+    when(documentFileService.getDocumentById(name, USERNAME)).thenThrow(new ObjectNotFoundException("Node with id " + name + " not found"));
+
+    for (ThrowingRunnable read : List.<ThrowingRunnable> of(() -> documentMcpTool.getDocumentContentById(name),
+                                                           () -> documentMcpTool.getDocumentPermissions(name),
+                                                           () -> documentMcpTool.getDocumentOutline(name),
+                                                           () -> documentMcpTool.getFolderBreadcrumb(name))) {
+      ObjectNotFoundException error = assertThrows(ObjectNotFoundException.class, read);
+      assertTrue(error.getMessage(), error.getMessage().contains("is not an id") && error.getMessage().contains("search tool"));
+    }
+    verify(documentFileService, never()).getFileTextContent(name);
+  }
+
+  /**
+   * A folder listing given a folder's name lists nothing rather than failing,
+   * so a named folder was answered as an empty one (EXO-95034): a value not
+   * shaped as an id is looked up first, and a name no document has fails as
+   * a lookup does, before any listing. Mutant: the lookup before the
+   * listings removed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFolderListingGivenANameSaysToSearchForIt() throws Exception {
+    String name = "workflow";
+    when(documentFileService.getDocumentById(name, USERNAME)).thenThrow(new ObjectNotFoundException("Node with id " + name + " not found"));
+
+    for (ThrowingRunnable listing : List.<ThrowingRunnable> of(() -> documentMcpTool.listFolderChildren(name, null, null, null),
+                                                              () -> documentMcpTool.listFolderChildren(name, null, null, "2026-11-23"),
+                                                              () -> documentMcpTool.getDocumentsByFolderId(name, null, null, null, null),
+                                                              () -> documentMcpTool.getFolderTree(name, null))) {
+      ObjectNotFoundException error = assertThrows(ObjectNotFoundException.class, listing);
+      assertTrue(error.getMessage(), error.getMessage().startsWith("'workflow' is not an id"));
+    }
+    verify(documentFileService, never()).getFolderChildNodes(any(), anyInt(), anyInt(), anyLong());
+    verify(documentFileService, never()).getFullTreeData(anyLong(), anyString(), any(), anyLong(), anyBoolean(), anyBoolean());
+  }
+
+  /**
+   * An id-shaped folder id is listed with no lookup first: the check costs
+   * nothing on the calls the tools make with the ids they returned. Mutant:
+   * every folder id looked up.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFolderListingGivenAnIdLooksNothingUpFirst() throws Exception {
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(folderNode(DOCUMENT_ID)));
+
+    documentMcpTool.listFolderChildren(DOCUMENT_ID, null, null, null);
+
+    verify(documentFileService, never()).getDocumentById(anyString(), anyString());
+  }
+
   @Test
   public void getDocumentByIdWithBlankIdFails() {
     assertThrows(IllegalArgumentException.class, () -> documentMcpTool.getDocumentById("  "));

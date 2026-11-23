@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import javax.jcr.RepositoryException;
 
@@ -254,6 +255,22 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                    "No folder has the id %s. Use only a document_id a tool returned (create_folder, get_root_folder_for_user, get_root_folder_by_space, get_documents_by_folder_id), never a composed one. To create nested folders, call create_folder once with their path in 'name', such as 'Finances/Factures/Entrantes', under a folder that exists.";
 
   /** The refusal of an unknown space id, saying how to find the space. */
+  /**
+   * The shape of a node id: eXo JCR's 32 characters (lowercase hex, or the
+   * letters of a system node's), or a UUID's 36 with its dashes (EXO-95034).
+   * A value of another shape is a name, never an id.
+   */
+  private static final Pattern     NODE_ID_SHAPE          = Pattern.compile("[0-9A-Za-z-]{32,36}");
+
+  /**
+   * The error of a lookup given a name where an id is expected (EXO-95034):
+   * it says "not an id" and "not found", which ai reads as a lookup failure,
+   * and "search tool", on which ai asks the model once more to search before
+   * answering ({@code IdRecoveryRetryAdvisor}).
+   */
+  static final String              MSG_NAME_IS_NOT_AN_ID  =
+                                                         "'%s' is not an id, so no document was found with it: an id is a value a tool returned, never a name. Find the document's id with a search tool first: a file with search_documents and its name as query (without space_id or parent_folder_id, it searches every document you can read); a folder from get_root_folder_for_user or get_root_folder_by_space, then get_folder_tree, by its name. When several match, name them and ask which one is meant; when none does, say what you searched.";
+
   private static final String      MSG_SPACE_NOT_FOUND    =
                                                           "Space with id %s doesn't exist. Pass space_name (the space's name) or find it with get_my_spaces.";
 
@@ -674,6 +691,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                     Integer offset,
                                                     Integer limit) throws ObjectNotFoundException,
                                                                    IllegalAccessException {
+    checkFolderIsNotAName(folderId);
     int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
     if (size == 0) {
       // a negative limit; the storage reads every child when given none
@@ -713,7 +731,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   public DocumentModel getDocumentById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
-    AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
+    AbstractNode document = lookUpDocument(documentId);
     DocumentModel model = toDocumentModel(document);
     if (!StringUtils.equals(documentId, document.getId())) {
       // a shortcut resolves to its target: deleting the shortcut removes only the shortcut
@@ -1424,6 +1442,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                 Integer limit,
                                                 String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
     checkFolderIdParameter(folderId);
+    checkFolderIsNotAName(folderId);
     Long updatedSinceTime = parseUpdatedSince(updatedSince);
     int first = Math.max(getInteger(offset, DEFAULT_OFFSET), 0);
     int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
@@ -1470,7 +1489,7 @@ public class DocumentMcpTool implements McpToolPlugin {
   public DocumentPermissionsModel getDocumentPermissions(String documentId) throws ObjectNotFoundException,
                                                                             IllegalAccessException {
     checkDocumentIdParameter(documentId);
-    AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
+    AbstractNode document = lookUpDocument(documentId);
     if (document == null) {
       throw new ObjectNotFoundException("No document has the id %s.".formatted(documentId));
     }
@@ -1511,6 +1530,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                    Boolean withChildren) throws ObjectNotFoundException,
                                                                          IllegalAccessException {
     checkFolderIdParameter(folderId);
+    checkFolderIsNotAName(folderId);
     List<FullTreeItem> tree = documentFileService.getFullTreeData(getOwnerId(folderId),
                                                                   folderId,
                                                                   null,
@@ -2808,13 +2828,79 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * @param documentId the document id, checked not blank
+   * @return the document, as the current user reads it
+   * @throws IllegalAccessException when the user can't read it
+   * @throws ObjectNotFoundException when it doesn't exist, saying how to find
+   *           its id when a name was given
+   */
   private AbstractNode checkCanAccessDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
-    return documentFileService.getDocumentById(documentId, getCurrentUserName());
+    return lookUpDocument(documentId);
   }
 
+  /**
+   * @param documentId the document id
+   * @return the document, as the current user reads it
+   * @throws IllegalAccessException when the user can't read it
+   * @throws ObjectNotFoundException when it doesn't exist, saying how to find
+   *           its id when a name was given
+   */
   private AbstractNode getNode(String documentId) throws IllegalAccessException, ObjectNotFoundException {
-    return documentFileService.getDocumentById(documentId, getCurrentUserName());
+    return lookUpDocument(documentId);
+  }
+
+  /**
+   * Reads a document by its id as the current user. A lookup that finds
+   * nothing for a value that is not shaped as an id was given a name
+   * (EXO-95034): its error says so and how to find the id, so that the model
+   * searches instead of telling the user the document doesn't exist. A
+   * lookup that succeeds, or fails for an id-shaped value, is unchanged.
+   *
+   * @param documentId the document id
+   * @return the document
+   * @throws IllegalAccessException when the user can't read it
+   * @throws ObjectNotFoundException when it doesn't exist
+   */
+  private AbstractNode lookUpDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+    try {
+      return documentFileService.getDocumentById(documentId, getCurrentUserName());
+    } catch (ObjectNotFoundException e) {
+      throw nameOrNotFound(documentId, e);
+    }
+  }
+
+  /**
+   * A folder listing given an unknown folder id lists nothing rather than
+   * failing, so a folder named where its id is expected (EXO-95034) would be
+   * answered as an empty folder: a value not shaped as an id is first looked
+   * up, which fails with the error of {@link #lookUpDocument(String)} when no
+   * document has it. An id-shaped value is not looked up.
+   *
+   * @param folderId the folder id
+   * @throws IllegalAccessException when the user can't read that document
+   * @throws ObjectNotFoundException when the value is not shaped as an id and
+   *           no document has it
+   */
+  private void checkFolderIsNotAName(String folderId) throws IllegalAccessException, ObjectNotFoundException {
+    if (StringUtils.isNotBlank(folderId) && !NODE_ID_SHAPE.matcher(folderId).matches()) {
+      lookUpDocument(folderId);
+    }
+  }
+
+  /**
+   * @param value the value given as an id
+   * @param notFound the storage's not-found error
+   * @return the error to raise: one saying that the value is a name and how
+   *         to find the id, when the value is not shaped as an id; the
+   *         storage's error otherwise
+   */
+  static ObjectNotFoundException nameOrNotFound(String value, ObjectNotFoundException notFound) {
+    if (value == null || NODE_ID_SHAPE.matcher(value).matches()) {
+      return notFound;
+    }
+    return new ObjectNotFoundException(MSG_NAME_IS_NOT_AN_ID.formatted(value));
   }
 
   /**
