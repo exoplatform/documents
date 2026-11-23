@@ -417,6 +417,30 @@
       "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32" }
     },
     {
+      "name": "get_document_access",
+      "title": "Get who has access to a DMS folder or file",
+      "description": "Tells who can view or edit a folder or a file, as Documents' Manage access shows it: visibility (specific_collaborators, all_space_members, anyone or collaborators_and_public_link), all_space_members_can_edit, owner, and collaborators, each a user, a space or a group by name with edit or view access. Refused, with the reason and no list, unless you may manage the document's access: you must be able to edit it, and it must not be a shortcut (ask about shortcut_target_id), a cloud drive folder, a news article's attachments or, in a space, a node the platform created; nor while document sharing is suspended. For your own rights, use get_document_permissions.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the folder or the file."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32" }
+    },
+    {
       "name": "get_folder_breadcrumb",
       "title": "Get DMS folder breadcrumb",
       "description": "Returns the ancestor path (breadcrumb, from the drive root down to the folder) of a folder. Call get_documents_by_folder_id first to get a folder_id.",

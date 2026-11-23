@@ -50,8 +50,14 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.api.settings.SettingService;
+import org.exoplatform.commons.api.settings.SettingValue;
+import org.exoplatform.commons.api.settings.data.Context;
+import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
+import org.exoplatform.documents.mcp.model.DocumentAccessModel;
+import org.exoplatform.documents.mcp.model.DocumentCollaboratorModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
@@ -140,6 +146,10 @@ public class DocumentMcpToolTest {
 
   private FavoriteService                favoriteService;
 
+  private UserACL                        userAcl;
+
+  private SettingService                 settingService;
+
   private Identity                       currentIdentity;
 
   private DocumentMcpTool                documentMcpTool;
@@ -158,7 +168,8 @@ public class DocumentMcpToolTest {
     spaceService = Mockito.mock(SpaceService.class);
     TranslationService translationService = Mockito.mock(TranslationService.class);
     ProfilePropertyService profilePropertyService = Mockito.mock(ProfilePropertyService.class);
-    UserACL userAcl = Mockito.mock(UserACL.class);
+    userAcl = Mockito.mock(UserACL.class);
+    settingService = Mockito.mock(SettingService.class);
     UserPortalConfigService portalConfigService = Mockito.mock(UserPortalConfigService.class);
     uploadService = Mockito.mock(UploadService.class);
     publicDocumentAccessService = Mockito.mock(PublicDocumentAccessService.class);
@@ -183,7 +194,8 @@ public class DocumentMcpToolTest {
                                           portalConfigService,
                                           uploadService,
                                           publicDocumentAccessService,
-                                          favoriteService) {
+                                          favoriteService,
+                                          settingService) {
       @Override
       public Identity getCurrentUserAclIdentity() {
         return currentIdentity;
@@ -423,7 +435,8 @@ public class DocumentMcpToolTest {
                                                    Mockito.mock(UserPortalConfigService.class),
                                                    Mockito.mock(UploadService.class),
                                                    publicDocumentAccessService,
-                                                   favoriteService);
+                                                   favoriteService,
+                                                   settingService);
     ActingIdentity limited = ActingIdentity.agent("agent-docs", "DOCS", Origin.PROPOSAL, 7L);
     ActingIdentity unlimited = ActingIdentity.person(USERNAME, Origin.CHAT);
     try (MockedStatic<McpToolUtils> mocked = Mockito.mockStatic(McpToolUtils.class)) {
@@ -3225,6 +3238,212 @@ public class DocumentMcpToolTest {
     IllegalArgumentException error = assertThrows(IllegalArgumentException.class, call);
     assertTrue(error.getMessage(), error.getMessage().contains("shortcut-id is a shortcut to the folder " + FOLDER_ID));
     assertTrue(error.getMessage(), error.getMessage().contains(argumentName));
+  }
+
+  /**
+   * get_document_access lists who has access as the « Manage access » drawer
+   * does (EXO-95034), from the drawer's own builder: a full grant, stored as
+   * one entry per permission type, is one edit row; a read entry is a view
+   * row; a space is one row by its display name, a group by its label; the
+   * creator who holds edit is the owner, out of the rows; names only, never
+   * an id, a username or an email. Mutants: edit winning over view removed;
+   * the creator kept in the rows; an id or a username returned.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessListsTheDrawerRowsByNameOnly() throws Exception {
+    FolderNode folder = accessFolder("/Users/j___/john/Private/workflow");
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
+    org.exoplatform.social.core.space.model.Space space = new org.exoplatform.social.core.space.model.Space();
+    space.setDisplayName("F2 Support");
+    when(spaceService.getSpaceByPrettyName("f2_support")).thenReturn(space);
+
+    DocumentAccessModel access = documentMcpTool.getDocumentAccess(FOLDER_ID);
+
+    assertEquals(FOLDER_ID, access.getId());
+    assertTrue(access.isFolder());
+    assertEquals("specific_collaborators", access.getVisibility());
+    assertEquals("John Owner", access.getOwner());
+    assertEquals(List.of(new DocumentCollaboratorModel("Alice Martin", "user", "edit"),
+                         new DocumentCollaboratorModel("Bob Reader", "user", "view"),
+                         new DocumentCollaboratorModel("F2 Support", "space", "edit"),
+                         new DocumentCollaboratorModel("Human resources", "group", "view")),
+                 access.getCollaborators());
+    assertEquals(List.of("name", "type", "access"),
+                 java.util.Arrays.stream(DocumentCollaboratorModel.class.getDeclaredFields())
+                                 .filter(field -> !java.lang.reflect.Modifier.isStatic(field.getModifiers()))
+                                 .map(java.lang.reflect.Field::getName)
+                                 .toList());
+  }
+
+  /**
+   * A document the user can't read is refused as every read is, and nothing
+   * of its access is read. Mutant: the lookup's refusal swallowed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessRefusesADocumentTheUserCantRead() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenThrow(new IllegalAccessException("Node with id folder-42 not accessible to user testuser1"));
+
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.getDocumentAccess(FOLDER_ID));
+    verify(publicDocumentAccessService, never()).hasDocumentPublicAccess(anyString());
+  }
+
+  /**
+   * A shortcut gets no « Manage access » in Documents: its access is its
+   * target's, which the refusal names. Mutant: the shortcut answered with
+   * its target's list.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessRefusesAShortcut() throws Exception {
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(accessFolder("/documents/workflow"));
+
+    assertRefused(() -> documentMcpTool.getDocumentAccess("shortcut-id"), "shortcut_target_id " + FOLDER_ID);
+  }
+
+  /**
+   * While an administrator suspends document sharing, Documents offers no
+   * « Manage access ». Mutant: the setting not read.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessRefusesWhileSharingIsSuspended() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(accessFolder("/documents/workflow"));
+    when(settingService.get(Context.GLOBAL.id("sharedDocumentStatus"),
+                            Scope.APPLICATION.id("sharedDocumentStatus"),
+                            "exo:sharedDocumentStatus")).thenReturn((SettingValue) SettingValue.create("true"));
+
+    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "suspended document sharing");
+  }
+
+  /**
+   * A connected cloud drive folder gets no « Manage access ». Mutant: the
+   * cloud drive check removed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessRefusesACloudDriveFolder() throws Exception {
+    FolderNode folder = accessFolder("/documents/drive");
+    folder.setCloudDriveFolder(true);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
+
+    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "cloud drive folder");
+  }
+
+  /**
+   * A reader who can't edit the document sees no list in Documents, only
+   * its sharing sign: refused, with the edit right the repository checks.
+   * Mutant: the edit check removed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessRefusesAUserWhoCantEdit() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(accessFolder("/documents/workflow"));
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "you can't edit it");
+  }
+
+  /**
+   * A node the platform created in a space gets « Manage access » for an
+   * administrator only. Mutants: the system creator check removed; an
+   * administrator refused too.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessGivesASpaceSystemNodeToAnAdministratorOnly() throws Exception {
+    FolderNode folder = accessFolder("/Groups/spaces/f2_support/Documents/Shared");
+    folder.setCreatorUserName("__system");
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
+
+    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "only an administrator manages its access");
+
+    when(userAcl.isAdministrator(currentIdentity)).thenReturn(true);
+    assertNotNull(documentMcpTool.getDocumentAccess(FOLDER_ID));
+  }
+
+  /**
+   * A news article's attachments get no « Manage access ». Mutant: the news
+   * attachments check removed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessRefusesANewsAttachment() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(accessFolder("/Groups/spaces/f2_support/News Attachments/x"));
+
+    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "news article's attachments");
+  }
+
+  /**
+   * @param call a get_document_access call
+   * @param reason a part of the reason it must give
+   * @throws Exception never
+   */
+  private void assertRefused(ThrowingRunnable call, String reason) throws Exception {
+    IllegalAccessException error = assertThrows(IllegalAccessException.class, call);
+    assertTrue(error.getMessage(), error.getMessage().contains(reason));
+    for (String name : List.of("Alice", "Bob", "Human resources", "F2 Support", "John Owner")) {
+      assertFalse(error.getMessage(), error.getMessage().contains(name));
+    }
+  }
+
+  /**
+   * @param path the folder's path
+   * @return a folder with the id {@link #FOLDER_ID}, created by John Owner,
+   *         shared with Alice (a full grant, one entry per permission type),
+   *         Bob (read), the F2 Support space (edit) and the Human resources
+   *         group (read), its creator holding edit
+   */
+  private FolderNode accessFolder(String path) {
+    FolderNode folder = folderNode(FOLDER_ID);
+    folder.setName("workflow");
+    folder.setPath(path);
+    folder.setCreatorId(5L);
+    folder.setCreatorUserName("john");
+    org.exoplatform.social.core.identity.model.Identity john = socialIdentity("5", "organization", "john", "John Owner");
+    org.exoplatform.social.core.identity.model.Identity alice = socialIdentity("11", "organization", "alice", "Alice Martin");
+    org.exoplatform.social.core.identity.model.Identity bob = socialIdentity("12", "organization", "bob", "Bob Reader");
+    org.exoplatform.social.core.identity.model.Identity f2 = socialIdentity("13", "space", "f2_support", "F2 Support");
+    org.exoplatform.social.core.identity.model.Identity hr = socialIdentity("group:hr", "group", "/platform/hr", "Human resources");
+    lenient().when(identityManager.getIdentity("5")).thenReturn(john);
+    List<PermissionEntry> entries = new java.util.ArrayList<>();
+    for (String type : List.of("read", "add_node", "set_property", "remove")) {
+      entries.add(new PermissionEntry(john, type, PermissionRole.ALL.name()));
+      entries.add(new PermissionEntry(alice, type, PermissionRole.ALL.name()));
+      entries.add(new PermissionEntry(f2, type, PermissionRole.ALL.name()));
+    }
+    entries.add(new PermissionEntry(bob, "read", PermissionRole.ALL.name()));
+    entries.add(new PermissionEntry(hr, "read", PermissionRole.ALL.name()));
+    folder.setAcl(new NodePermission(true, true, true, false, entries, null, null, null));
+    return folder;
+  }
+
+  /**
+   * @param id the identity id
+   * @param providerId its provider
+   * @param remoteId its remote id
+   * @param fullName its profile's full name
+   * @return the identity
+   */
+  private static org.exoplatform.social.core.identity.model.Identity socialIdentity(String id,
+                                                                                   String providerId,
+                                                                                   String remoteId,
+                                                                                   String fullName) {
+    org.exoplatform.social.core.identity.model.Identity identity = new org.exoplatform.social.core.identity.model.Identity(providerId, remoteId);
+    identity.setId(id);
+    org.exoplatform.social.core.identity.model.Profile profile = new org.exoplatform.social.core.identity.model.Profile(identity);
+    profile.setProperty(org.exoplatform.social.core.identity.model.Profile.FULL_NAME, fullName);
+    identity.setProfile(profile);
+    return identity;
   }
 
   /**

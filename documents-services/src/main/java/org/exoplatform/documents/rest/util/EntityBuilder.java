@@ -347,7 +347,7 @@ public class EntityBuilder {
    * @param publicDocumentAccessService to tell whether the node has a public link
    * @return the node's access, or null when the node carries none
    */
-  private static NodePermissionEntity toNodePermissionEntity(AbstractNode node,
+  public static NodePermissionEntity toNodePermissionEntity(AbstractNode node,
                                                              IdentityManager identityManager,
                                                              SpaceService spaceService,
                                                              PublicDocumentAccessService publicDocumentAccessService) {

@@ -89,6 +89,37 @@ public class DocumentToolDefinitionsTest {
   }
 
   /**
+   * get_document_access is a read (EXO-95034): read-only, idempotent, never
+   * asking for an approval, scoped to a space as get_document_permissions
+   * is, and its description says it is refused unless the user may manage
+   * the document's access. Mutants: readOnlyHint false; require_approval
+   * set; the space scope dropped; the refusal left out of the description.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessIsARefusableReadScopedAsThePermissionsRead() throws Exception {
+    JsonMapper mapper = JsonMapper.builder().build();
+    Map<String, JsonNode> tools = new TreeMap<>();
+    for (JsonNode tool : mapper.readTree(resource("ai-tool-definitions.json")).get("tools")) {
+      tools.put(tool.get("name").asString(), tool);
+    }
+    JsonNode access = tools.get("get_document_access");
+    assertNotNull(access);
+    assertTrue(access.get("annotations").get("readOnlyHint").asBoolean());
+    assertFalse(access.get("annotations").get("destructiveHint").asBoolean());
+    assertTrue(access.get("annotations").get("idempotentHint").asBoolean());
+    assertFalse("A read never asks for an approval", access.has("require_approval"));
+    assertEquals(tools.get("get_document_permissions").get("space_scope"), access.get("space_scope"));
+    List<String> properties = new java.util.ArrayList<>();
+    access.get("input_schema").get("properties").propertyNames().forEach(properties::add);
+    assertEquals(List.of("document_id"), properties);
+    String description = access.get("description").asString();
+    assertTrue(description, description.contains("Refused, with the reason and no list, unless you may manage the document's access"));
+    assertTrue(description, description.contains("by name"));
+  }
+
+  /**
    * search_documents says that with neither a query nor updated_since it lists
    * the scope's files, the most recent first, and its query is optional with
    * no condition (EXO-94927). A booted instance takes that text through
