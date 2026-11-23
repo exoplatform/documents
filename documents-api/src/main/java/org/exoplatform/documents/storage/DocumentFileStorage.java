@@ -359,7 +359,23 @@ public interface DocumentFileStorage {
    *           fails closed
    */
   Space getDocumentSpace(String documentId);
-  
+
+  /**
+   * Reads, through a system session, what a change of a space document's
+   * access is decided on: the access list the document reads, the identities a
+   * save of the requested permissions would write on it, its owner, and the
+   * access list of the space's drive root.
+   *
+   * @param documentId the identifier of the document whose access changes; a
+   *          symlink's own access list is the one read and written
+   * @param space the space the document belongs to
+   * @param permissions the permissions a save would write, null when none
+   * @return the document's stored and requested access
+   * @throws IllegalStateException when the document or the drive root cannot
+   *           be read: the caller fails closed
+   */
+  DocumentAccessChange getAccessChange(String documentId, Space space, NodePermission permissions);
+
   default void updateDocumentDescription(long ownerId,
                                          String documentID,
                                          String description,

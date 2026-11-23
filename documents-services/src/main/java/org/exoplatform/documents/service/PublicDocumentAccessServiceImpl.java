@@ -96,7 +96,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
                                                          Long expirationDate,
                                                          boolean hasPassword) throws IllegalAccessException {
     // Decided ahead of the catch-all below, so that a refusal reaches the caller
-    documentFileService.checkCanManageAccess(nodeId, docOwnerId, DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION);
+    documentFileService.checkCanCreatePublicLink(nodeId, docOwnerId);
     try {
       PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(nodeId);
       Date expiration = expirationDate != 0L ? new Date(expirationDate) : null;

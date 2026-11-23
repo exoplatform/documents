@@ -157,6 +157,15 @@ public class JCRDocumentsUtil {
   }
 
   /**
+   * @param nodeHierarchyCreator the service resolving the groups home
+   * @param space a space
+   * @return the path of the space's drive root, its group's Documents folder
+   */
+  public static String getSpaceDriveRootPath(NodeHierarchyCreator nodeHierarchyCreator, Space space) {
+    return getGroupsPath(nodeHierarchyCreator) + space.getGroupId() + "/" + DOCUMENTS_NODE;
+  }
+
+  /**
    * @return the JCR path holding every user's home node, e.g. {@code /Users}.
    */
   public static String getUsersPath() {

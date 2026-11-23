@@ -346,17 +346,35 @@ public interface DocumentFileService {
    */
   void downloadDocuments(int actionId, List<AbstractNode> documents, long authenticatedUserId) throws IllegalAccessException;
 
+  /**
+   * Writes the document's access list and shares it with the identities of
+   * {@link NodePermission#getToShare()}. The space of the document decides the
+   * whole request before anything is written: "Limit Access Management" as
+   * {@link #checkCanManageAccess}, then "Keep documents inside the space",
+   * which refuses an identity outside the space, everyone included, that the
+   * request adds to the document's stored access list or shares it with.
+   *
+   * @param documentId the document's identifier
+   * @param nodePermissionEntity the access list to write and the shares to make
+   * @param authenticatedUserId the social identity id of the user changing it
+   * @throws DocumentSharingRefusedException when the space refuses the change
+   * @throws IllegalAccessException when the user is unknown
+   */
   void updatePermissions(String documentId,
                          NodePermission nodePermissionEntity,
                          long authenticatedUserId) throws IllegalAccessException;
 
   /**
-   * Shares a document with given user or space
+   * Shares a document with given user or space. Its space decides as for
+   * {@link #updatePermissions}: under "Keep documents inside the space", a
+   * destination outside the space that the document's stored access list does
+   * not hold is refused, and one it holds is shared again.
    *
    * @param documentId document id
    * @param destId target user or space identity id
    * @param authenticatedUserId current user Identity id
-   * @throws IllegalAccessException
+   * @throws DocumentSharingRefusedException when the space refuses the share
+   * @throws IllegalAccessException when the user is unknown
    */
   void shareDocument(String documentId, long destId, long authenticatedUserId, boolean broadcast) throws IllegalAccessException;
 
@@ -417,6 +435,27 @@ public interface DocumentFileService {
    * @throws IllegalAccessException when the user is unknown
    */
   void checkCanManageAccess(String documentId, long userIdentityId, String action) throws IllegalAccessException;
+
+  /**
+   * Refuses the creation, or the update, of the document's public link when
+   * its space forbids it to the user: "Limit Access Management" as
+   * {@link #checkCanManageAccess}, then "Keep documents inside the space",
+   * which refuses every public link. The decision reads the space's committed
+   * settings once.
+   *
+   * @param documentId the document's identifier
+   * @param userIdentityId the social identity id of the user creating the link
+   * @throws DocumentSharingRefusedException when the space refuses the link
+   * @throws IllegalAccessException when the user is unknown
+   */
+  void checkCanCreatePublicLink(String documentId, long userIdentityId) throws IllegalAccessException;
+
+  /**
+   * @param documentId the document's identifier
+   * @return whether the document's space keeps its documents inside, on the
+   *         space's committed settings; true when they cannot be read
+   */
+  boolean isKeptInsideSpace(String documentId);
 
   /**
    * @param documentId the document's identifier
