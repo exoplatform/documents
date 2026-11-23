@@ -64,7 +64,27 @@
               item-value="value"
               dense
               class="caption pt-3"
-              outlined />
+              outlined>
+              <template #item="{ item }">
+                <v-tooltip
+                  :disabled="!item.disabled"
+                  content-class="keptInsideSpaceTooltip"
+                  bottom>
+                  <template #activator="{ on, attrs }">
+                    <!-- a disabled list item takes no pointer event: its content takes them back for its tooltip -->
+                    <div
+                      :class="item.hookClass"
+                      :style="item.disabled && 'pointer-events: auto'"
+                      class="documentVisibilityChoiceItem full-width"
+                      v-bind="attrs"
+                      v-on="on">
+                      {{ item.text }}
+                    </div>
+                  </template>
+                  <span>{{ $t('documents.tooltip.keptInsideSpace') }}</span>
+                </v-tooltip>
+              </template>
+            </v-select>
             <p class="text-subtitle text-break mb-0">
               {{ choiceInfo }}
             </p>
@@ -87,21 +107,35 @@
           <p class="text-header text-sub-title mb-3">
             {{ $t('documents.label.external.access.header') }}
           </p>
-          <exo-identity-suggester
-            ref="invitedCollaborators"
-            :labels="suggesterLabels"
-            v-model="collaborators"
-            :search-options="searchOptions"
-            :ignore-items="ignoreItems"
-            name="collaborator"
-            type-of-relations="user_to_invite"
-            height="40"
-            :group-member="userGroup"
-            :group-type="groupType"
-            :all-groups-for-admin="allGroupsForAdmin"
-            include-users
-            include-spaces
-            include-groups />
+          <v-tooltip
+            :disabled="!keptInsideSpace"
+            content-class="keptInsideSpaceTooltip"
+            bottom>
+            <template #activator="{ on, attrs }">
+              <div
+                id="documentExternalAccess"
+                v-bind="attrs"
+                v-on="on">
+                <exo-identity-suggester
+                  ref="invitedCollaborators"
+                  :labels="suggesterLabels"
+                  v-model="collaborators"
+                  :search-options="searchOptions"
+                  :ignore-items="ignoreItems"
+                  :disabled="keptInsideSpace"
+                  name="collaborator"
+                  type-of-relations="user_to_invite"
+                  height="40"
+                  :group-member="userGroup"
+                  :group-type="groupType"
+                  :all-groups-for-admin="allGroupsForAdmin"
+                  include-users
+                  include-spaces
+                  include-groups />
+              </div>
+            </template>
+            <span>{{ $t('documents.tooltip.keptInsideSpace') }}</span>
+          </v-tooltip>
           <div v-if="users.length" class="mt-2">
             <documents-visibility-collaborators
               v-for="user in usersToDisplay"
@@ -127,17 +161,43 @@
               <span class="text-body font-weight-bold">{{ $t('documents.label.public.link.header') }}</span>
             </v-label>
             <v-spacer />
-            <v-switch
-              id="documentPublicLinkEnabled"
-              v-model="publicLinkEnabled"
-              class="mt-0 me-1" />
+            <v-tooltip
+              :disabled="!publicLinkRefused"
+              content-class="keptInsideSpaceTooltip"
+              bottom>
+              <template #activator="{ on, attrs }">
+                <div
+                  v-bind="attrs"
+                  v-on="on">
+                  <v-switch
+                    id="documentPublicLinkEnabled"
+                    v-model="publicLinkEnabled"
+                    :disabled="publicLinkRefused"
+                    class="mt-0 me-1" />
+                </div>
+              </template>
+              <span>{{ $t('documents.tooltip.keptInsideSpace') }}</span>
+            </v-tooltip>
           </div>
           <template v-if="publicLinkEnabled">
-            <public-document-options
-              ref="publicDocumentOptions"
-              :file="file"
-              :existing-public-access="existingPublicAccess"
-              @change="onPublicOptionsChange" />
+            <v-tooltip
+              :disabled="!keptInsideSpace"
+              content-class="keptInsideSpaceTooltip"
+              bottom>
+              <template #activator="{ on, attrs }">
+                <div
+                  v-bind="attrs"
+                  v-on="on">
+                  <public-document-options
+                    ref="publicDocumentOptions"
+                    :file="file"
+                    :existing-public-access="existingPublicAccess"
+                    :disabled="keptInsideSpace"
+                    @change="onPublicOptionsChange" />
+                </div>
+              </template>
+              <span>{{ $t('documents.tooltip.keptInsideSpace') }}</span>
+            </v-tooltip>
           </template>
         </div>
       </template>
@@ -255,6 +315,13 @@ export default {
         return this.$t('document.visibility.collaborators.choice.info');
       }
     },
+    keptInsideSpace() {
+      return !!this.file?.acl?.keptInsideSpace;
+    },
+    publicLinkRefused() {
+      // Turning an existing link off stays possible; creating one is refused
+      return this.keptInsideSpace && !this.publicLinkEnabled;
+    },
     visibilityLabel() {
       const labels = [];
       if (eXo?.env?.portal?.spaceGroup) {
@@ -271,6 +338,9 @@ export default {
         text: eXo.env.portal.spaceGroup ? this.$t('documents.label.visibility.anyone') :
           this.$t('documents.myDrive.label.visibility.anyone'),
         value: 'ANYONE',
+        hookClass: 'documentVisibilityChoiceAnyone',
+        // A document already open to everyone keeps the choice it has
+        disabled: this.keptInsideSpace && this.originalFileProperties.visibilityChoice !== 'ANYONE',
       });
       return labels;
     },
@@ -350,6 +420,10 @@ export default {
       this.loading = false;
       this.$refs.documentVisibilityDrawer.endLoading();
       this.close();
+    });
+    this.$root.$on('visibility-save-failed', () => {
+      this.loading = false;
+      this.$refs.documentVisibilityDrawer.endLoading();
     });
   },
   methods: {
@@ -490,7 +564,10 @@ export default {
         this.file.acl.allMembersCanEdit = false;
       }
       this.file.acl.visibilityChoice = this.visibilityChoice;
-      this.$root.$emit('save-visibility', this.file, this.publicLinkEnabled, publicOptions || {});
+      // While the space keeps its documents inside, a save creates or updates no link, which would be refused:
+      // the switch only turns an existing link off, and the link's options are disabled
+      const linkOptions = this.keptInsideSpace ? null : publicOptions || {};
+      this.$root.$emit('save-visibility', this.file, this.publicLinkEnabled, linkOptions);
     },
     removeUser(user) {
       const index = this.users.findIndex(addedUser => {

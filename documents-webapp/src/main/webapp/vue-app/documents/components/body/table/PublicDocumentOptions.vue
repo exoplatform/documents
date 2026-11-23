@@ -20,7 +20,8 @@
     class="flex-wrap mt-4">
     <v-form
       ref="form"
-      v-model="valid">
+      v-model="valid"
+      :disabled="disabled">
       <div class="d-flex flex-row">
         <div class="d-flex flex-column full-width ma-auto">
           <p class="text-body">
@@ -136,6 +137,7 @@
               <v-btn
                 v-bind="attrs"
                 v-on="on"
+                :disabled="disabled"
                 class="mt-0 me-1 mt-auto mb-auto"
                 color="primary"
                 icon
@@ -183,6 +185,7 @@
               <v-menu
                 v-if="expirationDateType === 'specificDate'"
                 v-model="expirationDateMenu"
+                :disabled="disabled"
                 :close-on-content-click="true"
                 :nudge-right="40"
                 transition="scale-transition"
@@ -207,6 +210,7 @@
                 </template>
                 <v-date-picker
                   v-model="expirationDate"
+                  :disabled="disabled"
                   :min="new Date().toISOString().slice(0,10)"
                   :locale="lang"
                   required
@@ -301,6 +305,12 @@ export default {
     existingPublicAccess: {
       type: Object,
       default: null,
+    },
+    // The link's options are shown but cannot be changed: its space refuses any update of the link.
+    // The form disables its inputs; the menu, the date picker and the password edit button take it themselves
+    disabled: {
+      type: Boolean,
+      default: false,
     },
   },
   data: () => ({
