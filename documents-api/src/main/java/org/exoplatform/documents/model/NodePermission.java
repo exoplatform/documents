@@ -49,6 +49,13 @@ public class NodePermission {
    */
   private boolean canManageAccess = true;
 
+  /**
+   * Whether the document's space keeps its documents inside: its "Keep
+   * documents inside the space" setting refuses every share outside the space,
+   * everyone and public links included.
+   */
+  private boolean keptInsideSpace;
+
   public NodePermission(boolean canAccess,
                         boolean canEdit,
                         boolean canDelete,
@@ -57,7 +64,7 @@ public class NodePermission {
                         Map<Long, String> toShare,
                         Map<Long, String> toNotify,
                         Map<Long, String> toUnShare) {
-    this(canAccess, canEdit, canDelete, isPublic, permissions, toShare, toNotify, toUnShare, true);
+    this(canAccess, canEdit, canDelete, isPublic, permissions, toShare, toNotify, toUnShare, true, false);
   }
 
 }

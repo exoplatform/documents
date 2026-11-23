@@ -2251,60 +2251,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       Node node = getNodeByIdentifier(session, documentID);
-      Map<String, String[]> permissions = new HashMap<>();
-      List<PermissionEntry> permissionsList = nodePermissionEntity.getPermissions();
-      if (node.hasProperty(NodeTypeConstants.EXO_OWNER)) {
-        String owner = node.getProperty(NodeTypeConstants.EXO_OWNER).getString();
-        permissions.put(owner, PermissionType.ALL);
-      }
-      if (!isPersonalDrive(node)) {
-        permissions.put(GROUP_ADMINISTRATORS, PermissionType.ALL);
-      }
-      if (nodePermissionEntity.isPublic()) {
-        permissions.put("any", new String[] { PermissionType.READ });
-      }
-      for (PermissionEntry permission : permissionsList) {
-        if (permission.getIdentity().getProviderId().equals(SPACE_PROVIDER_ID)) {
-          Space space = spaceService.getSpaceByPrettyName(permission.getIdentity().getRemoteId());
-          String groupId = space.getGroupId();
-          if (permission.getPermission().equals("edit")) {
-            if (permission.getRole().equals(PermissionRole.ALL.name())) {
-              permissions.put("*:" + groupId, PermissionType.ALL);
-            }
-            if (permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name())) {
-              permissions.put("manager:" + groupId, PermissionType.ALL);
-              permissions.put("redactor:" + groupId, PermissionType.ALL);
-              permissions.put("publisher:" + groupId, PermissionType.ALL);
-
-            }
-          }
-          if (permission.getPermission().equals("read")) {
-            if (permission.getRole().equals(PermissionRole.ALL.name())) {
-              permissions.put("*:" + groupId, new String[] { PermissionType.READ });
-            }
-            if (permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name())) {
-              permissions.put("manager:" + groupId, new String[] { PermissionType.READ });
-              permissions.put("redactor:" + groupId, new String[] { PermissionType.READ });
-              permissions.put("publisher:" + groupId, new String[] { PermissionType.READ });
-            }
-          }
-        } else if (permission.getIdentity().getProviderId().equals("group")) {
-          String groupId = permission.getIdentity().getRemoteId();
-          if (permission.getPermission().equals("edit")) {
-            permissions.put("*:" + groupId, PermissionType.ALL);
-          }
-          if (permission.getPermission().equals("read")) {
-            permissions.put("*:" + groupId, new String[] { PermissionType.READ });
-          }
-        } else {
-          if (permission.getPermission().equals("edit")) {
-            permissions.put(permission.getIdentity().getRemoteId(), PermissionType.ALL);
-          }
-          if (permission.getPermission().equals("read")) {
-            permissions.put(permission.getIdentity().getRemoteId(), new String[] { PermissionType.READ });
-          }
-        }
-      }
+      Map<String, String[]> permissions = toAccessList(node, nodePermissionEntity);
       if (node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         node.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
@@ -2341,6 +2288,36 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
+    }
+  }
+
+  @Override
+  public DocumentAccessChange getAccessChange(String documentId, Space space, NodePermission permissions) {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node node = ((ExtendedSession) systemSession).getNodeByIdentifier(documentId);
+      Set<String> storedIdentities = new HashSet<>();
+      for (AccessControlEntry entry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
+        storedIdentities.add(entry.getIdentity());
+      }
+      Set<String> requestedIdentities = permissions == null ? Set.of() : toAccessList(node, permissions).keySet();
+      String owner = node.hasProperty(NodeTypeConstants.EXO_OWNER) ? node.getProperty(NodeTypeConstants.EXO_OWNER).getString()
+                                                                    : null;
+      Set<String> driveRootIdentities = new HashSet<>();
+      String driveRootPath = JCRDocumentsUtil.getSpaceDriveRootPath(nodeHierarchyCreator, space);
+      if (systemSession.itemExists(driveRootPath)) {
+        Map<String, List<String>> driveRootAccessList = getDocumentSpaceGuard().getAccessList((Node) systemSession.getItem(driveRootPath));
+        if (driveRootAccessList != null) {
+          driveRootIdentities.addAll(driveRootAccessList.keySet());
+        }
+      }
+      return new DocumentAccessChange(storedIdentities, Set.copyOf(requestedIdentities), owner, driveRootIdentities);
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("The access of document " + documentId + " could not be read", e);
+    } finally {
+      sessionProvider.close();
     }
   }
 
@@ -3695,6 +3672,70 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public boolean isPersonalDrive(Node node) throws RepositoryException {
     String nodePath = node.getPath();
     return StringUtils.startsWith(nodePath, "/Users") && StringUtils.contains(nodePath, "/Private");
+  }
+
+  /**
+   * The access list a save of these permissions writes on the node, identity
+   * by identity: its owner and, outside a personal drive, the platform
+   * administrators with every right; everyone when the permissions are public;
+   * then each requested entry.
+   */
+  private Map<String, String[]> toAccessList(Node node, NodePermission nodePermission) throws RepositoryException {
+    Map<String, String[]> permissions = new HashMap<>();
+    List<PermissionEntry> permissionsList = nodePermission.getPermissions();
+    if (node.hasProperty(NodeTypeConstants.EXO_OWNER)) {
+      String owner = node.getProperty(NodeTypeConstants.EXO_OWNER).getString();
+      permissions.put(owner, PermissionType.ALL);
+    }
+    if (!isPersonalDrive(node)) {
+      permissions.put(GROUP_ADMINISTRATORS, PermissionType.ALL);
+    }
+    if (nodePermission.isPublic()) {
+      permissions.put("any", new String[] { PermissionType.READ });
+    }
+    for (PermissionEntry permission : permissionsList) {
+      if (permission.getIdentity().getProviderId().equals(SPACE_PROVIDER_ID)) {
+        Space space = spaceService.getSpaceByPrettyName(permission.getIdentity().getRemoteId());
+        String groupId = space.getGroupId();
+        if (permission.getPermission().equals("edit")) {
+          if (permission.getRole().equals(PermissionRole.ALL.name())) {
+            permissions.put("*:" + groupId, PermissionType.ALL);
+          }
+          if (permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name())) {
+            permissions.put("manager:" + groupId, PermissionType.ALL);
+            permissions.put("redactor:" + groupId, PermissionType.ALL);
+            permissions.put("publisher:" + groupId, PermissionType.ALL);
+
+          }
+        }
+        if (permission.getPermission().equals("read")) {
+          if (permission.getRole().equals(PermissionRole.ALL.name())) {
+            permissions.put("*:" + groupId, new String[] { PermissionType.READ });
+          }
+          if (permission.getRole().equals(PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name())) {
+            permissions.put("manager:" + groupId, new String[] { PermissionType.READ });
+            permissions.put("redactor:" + groupId, new String[] { PermissionType.READ });
+            permissions.put("publisher:" + groupId, new String[] { PermissionType.READ });
+          }
+        }
+      } else if (permission.getIdentity().getProviderId().equals("group")) {
+        String groupId = permission.getIdentity().getRemoteId();
+        if (permission.getPermission().equals("edit")) {
+          permissions.put("*:" + groupId, PermissionType.ALL);
+        }
+        if (permission.getPermission().equals("read")) {
+          permissions.put("*:" + groupId, new String[] { PermissionType.READ });
+        }
+      } else {
+        if (permission.getPermission().equals("edit")) {
+          permissions.put(permission.getIdentity().getRemoteId(), PermissionType.ALL);
+        }
+        if (permission.getPermission().equals("read")) {
+          permissions.put(permission.getIdentity().getRemoteId(), new String[] { PermissionType.READ });
+        }
+      }
+    }
+    return permissions;
   }
 
   public AbstractNode getDocumentById(Session session, String documentId, Identity identity) throws RepositoryException {
