@@ -174,7 +174,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
    */
   @Override
   public boolean isPublicDocumentAccessExpired(String documentId) {
-    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    PublicDocumentAccess publicDocumentAccess = getServingLink(documentId);
     if (publicDocumentAccess == null) {
       return true;
     }
@@ -186,7 +186,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
    */
   @Override
   public boolean isDocumentPublicAccessValid(String documentId, String password) {
-    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    PublicDocumentAccess publicDocumentAccess = getServingLink(documentId);
     if (publicDocumentAccess == null) {
       return false;
     }
@@ -212,7 +212,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
     if (documentId == null) {
       throw new IllegalArgumentException("document id is mandatory");
     }
-    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    PublicDocumentAccess publicDocumentAccess = getServingLink(documentId);
     if (publicDocumentAccess == null) {
       throw new ObjectNotFoundException("Document has no public access link");
     }
@@ -242,6 +242,24 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
   public void revokeDocumentPublicAccess(String documentId, long userIdentityId) throws IllegalAccessException {
     documentFileService.checkCanManageAccess(documentId, userIdentityId, DocumentSharingRefusedException.REVOKE_PUBLIC_LINK_ACTION);
     publicDocumentAccessStorage.removePublicDocumentAccess(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean isProtectedBySpace(String documentId) {
+    return documentFileService.isKeptInsideSpace(documentId);
+  }
+
+  /**
+   * The document's public link, when it has one and its space lets it serve:
+   * a link of a document whose space keeps its documents inside is answered
+   * as no link, before its expiry or its password is read.
+   */
+  private PublicDocumentAccess getServingLink(String documentId) {
+    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    return publicDocumentAccess == null || isProtectedBySpace(documentId) ? null : publicDocumentAccess;
   }
 
   private static boolean isExpired(PublicDocumentAccess publicDocumentAccess) {
