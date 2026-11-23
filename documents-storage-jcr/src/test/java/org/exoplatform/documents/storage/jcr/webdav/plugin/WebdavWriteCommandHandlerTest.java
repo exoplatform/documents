@@ -272,7 +272,7 @@ public class WebdavWriteCommandHandlerTest {
   @Test
   @SneakyThrows
   public void testUncheckoutRestoresTheAccessListOfAUserTheSpaceRefuses() {
-    DocumentSpaceGuard guard = mockUncheckout(false);
+    DocumentSpaceGuard guard = mockUncheckout(DocumentSpaceGuard.ACCESS_MANAGEMENT_LIMITED);
     Map<String, List<String>> accessList = Map.of("*:/spaces/team", List.of(PermissionType.READ));
     when(guard.getAccessList(storedNode)).thenReturn(accessList);
 
@@ -285,10 +285,29 @@ public class WebdavWriteCommandHandlerTest {
     inOrder.verify(guard).restoreAccessList(storedNode, accessList);
   }
 
+  /**
+   * While the space keeps its documents inside, a restore keeps the current
+   * access list: the version's may hold an entry outside the space.
+   */
+  @Test
+  @SneakyThrows
+  public void testUncheckoutKeepsTheAccessListWhileTheSpaceKeepsItsDocumentsInside() {
+    DocumentSpaceGuard guard = mockUncheckout(DocumentSpaceGuard.KEPT_INSIDE_SHARE);
+    Map<String, List<String>> accessList = Map.of("*:/spaces/team", List.of(PermissionType.READ));
+    when(guard.getAccessList(storedNode)).thenReturn(accessList);
+
+    spiedHandler.uncheckout(session, JCR_PATH);
+
+    InOrder inOrder = inOrder(guard, node, storedNode);
+    inOrder.verify(guard).getAccessList(storedNode);
+    inOrder.verify(node).restore(version, true);
+    inOrder.verify(guard).restoreAccessList(storedNode, accessList);
+  }
+
   @Test
   @SneakyThrows
   public void testUncheckoutWhoseAccessListCannotBePutBackFails() {
-    DocumentSpaceGuard guard = mockUncheckout(false);
+    DocumentSpaceGuard guard = mockUncheckout(DocumentSpaceGuard.ACCESS_MANAGEMENT_LIMITED);
     doThrow(new RepositoryException("not privilegeable")).when(guard).restoreAccessList(any(), any());
 
     assertThrows(RepositoryException.class, () -> spiedHandler.uncheckout(session, JCR_PATH));
@@ -297,7 +316,7 @@ public class WebdavWriteCommandHandlerTest {
   @Test
   @SneakyThrows
   public void testUncheckoutLeavesTheAccessListToAUserTheSpaceAllows() {
-    DocumentSpaceGuard guard = mockUncheckout(true);
+    DocumentSpaceGuard guard = mockUncheckout(null);
 
     spiedHandler.uncheckout(session, JCR_PATH);
 
@@ -307,7 +326,7 @@ public class WebdavWriteCommandHandlerTest {
   }
 
   @SneakyThrows
-  private DocumentSpaceGuard mockUncheckout(boolean allowed) {
+  private DocumentSpaceGuard mockUncheckout(String refusal) {
     Node rootNode = mock(Node.class);
     when(session.getRootNode()).thenReturn(rootNode);
     when(rootNode.getNode("jcr/path")).thenReturn(node);
@@ -326,7 +345,7 @@ public class WebdavWriteCommandHandlerTest {
     when(repository.getSystemSession("collaboration")).thenReturn(systemSession);
     when(systemSession.getNodeByIdentifier("documentId")).thenReturn(storedNode);
     DocumentSpaceGuard guard = mock(DocumentSpaceGuard.class);
-    when(guard.canManageAccess(node, "mary", null)).thenReturn(allowed);
+    when(guard.getAccessListChangeRefusal(node, "mary", null)).thenReturn(refusal);
     spiedHandler = spy(handler);
     doReturn(guard).when(spiedHandler).getDocumentSpaceGuard();
     return guard;

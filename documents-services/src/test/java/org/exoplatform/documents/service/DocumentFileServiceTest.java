@@ -1489,6 +1489,24 @@ public class DocumentFileServiceTest {
     assertTrue(documentFileService.isKeptInsideSpace("123"));
   }
 
+  /**
+   * While the space keeps its documents inside, a restore keeps the current
+   * access list, whoever restores: the version's may hold an entry outside the
+   * space removed since.
+   */
+  @Test
+  public void testRestoreVersionKeepsTheAccessListWhileTheSpaceKeepsItsDocumentsInside() throws Exception {
+    SpaceSecurityService spaceSecurityService = keepDocumentsInside(Set.of(OWNER), Set.of());
+
+    documentFileService.restoreVersion("123", "username");
+    verify(documentFileStorage).restoreVersion("123", "username", true);
+    verify(spaceSecurityService, times(1)).getSettings(7L);
+
+    when(spaceSecurityService.isDocumentsKeptInside(any())).thenReturn(false);
+    documentFileService.restoreVersion("123", "username");
+    verify(documentFileStorage).restoreVersion("123", "username", false);
+  }
+
   private SpaceSecurityService assertSharingRefused(Set<String> storedIdentities, Set<String> requestedIdentities) throws Exception {
     SpaceSecurityService spaceSecurityService = keepDocumentsInside(storedIdentities, requestedIdentities);
     Space space = documentFileStorage.getDocumentSpace("123");
