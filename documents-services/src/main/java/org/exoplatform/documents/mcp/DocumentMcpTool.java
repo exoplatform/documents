@@ -1618,7 +1618,8 @@ public class DocumentMcpTool implements McpToolPlugin {
       // the drawer's own condition, acl.canEdit, from the node's entries for
       // the user: the repository's edit check also answers yes to the node's
       // owner whatever its entries say, which the drawer does not
-      throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name, "you can't edit it"));
+      throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name,
+                                                                      "its sharing gives you no edit right on it, which Documents requires to manage its access, even where get_document_permissions says can_edit because you own it"));
     } else if (StringUtils.startsWith(document.getPath(), SPACE_DRIVES_PATH)
                && StringUtils.equals(document.getCreatorUserName(), SYSTEM_CREATOR)
                && !userAcl.isAdministrator(getCurrentUserAclIdentity())) {

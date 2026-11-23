@@ -3361,10 +3361,10 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
     when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(true);
 
-    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "you can't edit it");
+    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "its sharing gives you no edit right on it");
 
     folder.setAcl(null);
-    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "you can't edit it");
+    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "its sharing gives you no edit right on it");
   }
 
   /**
