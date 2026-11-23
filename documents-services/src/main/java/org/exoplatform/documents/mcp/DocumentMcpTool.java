@@ -279,7 +279,7 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /** Why a user who may not manage a document's access is not told who has it (EXO-95034). */
   private static final String      MSG_ACCESS_NOT_SHOWN   =
-                                                         "You can't see who has access to '%s': %s. Documents shows that list only to who may manage the document's access; get_document_permissions tells your own rights.";
+                                                         "You can't see who has access to '%s': %s. Documents shows that list only to who may manage the document's access; your_rights gives your own rights.";
 
   /**
    * The shape of a node id: eXo JCR's 32 characters (lowercase hex, or the
@@ -1556,14 +1556,17 @@ public class DocumentMcpTool implements McpToolPlugin {
    * let them edit it (the drawer's {@code acl.canEdit}), on a document
    * that is no shortcut, no cloud drive folder, no news attachment and, in a
    * space, not a node the platform created unless the user is an
-   * administrator, while sharing is not suspended. Every other user is
-   * refused, with the reason and none of the list.
+   * administrator, while sharing is not suspended. Every other user who can
+   * read it gets none of the list: the answer says why and gives the user's
+   * own rights, as {@link #getDocumentPermissions} tells them. It is an
+   * answer, not an error, so that the assistant can tell them: ai replaces
+   * the answer of a turn whose read failed (EXO-95034).
    *
    * @param documentId the folder or file id
-   * @return who has access to it
+   * @return who has access to it, or why it is not shown and the user's own
+   *         rights
    * @throws ObjectNotFoundException when the document doesn't exist
-   * @throws IllegalAccessException when the user can't read it, or may not
-   *           manage its access
+   * @throws IllegalAccessException when the user can't read it
    */
   public DocumentAccessModel getDocumentAccess(String documentId) throws ObjectNotFoundException, IllegalAccessException {
     checkDocumentIdParameter(documentId);
@@ -1571,7 +1574,14 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (document == null) {
       throw new ObjectNotFoundException("No document has the id %s.".formatted(documentId));
     }
-    checkCanManageAccess(documentId, document);
+    String refusal = getManageAccessRefusal(documentId, document);
+    if (refusal != null) {
+      return DocumentAccessModel.notShown(documentId,
+                                          document.getName(),
+                                          document.isFolder(),
+                                          refusal,
+                                          getDocumentPermissions(documentId));
+    }
     NodePermissionEntity access = EntityBuilder.toNodePermissionEntity(document,
                                                                        identityManager,
                                                                        spaceService,
@@ -1585,49 +1595,51 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                      .sorted(Comparator.comparing(DocumentCollaboratorModel::getName,
                                                                                   String.CASE_INSENSITIVE_ORDER))
                                                      .toList();
-    return new DocumentAccessModel(documentId,
-                                   document.getName(),
-                                   document.isFolder(),
-                                   toVisibility(access == null ? null : access.getVisibilityChoice()),
-                                   access != null && access.isAllMembersCanEdit(),
-                                   getCreatorName(document),
-                                   collaborators);
+    return DocumentAccessModel.shown(documentId,
+                                     document.getName(),
+                                     document.isFolder(),
+                                     toVisibility(access == null ? null : access.getVisibilityChoice()),
+                                     access != null && access.isAllMembersCanEdit(),
+                                     getCreatorName(document),
+                                     collaborators);
   }
 
   /**
-   * Refuses the access list to a user to whom Documents offers no « Manage
-   * access » on the document: its menu entry's conditions
+   * Tells why the access list is not shown to a user to whom Documents
+   * offers no « Manage access » on the document: its menu entry's conditions
    * ({@code documents-webapp} {@code extensions.js}, the {@code visibility}
    * entry), checked on the server.
    *
    * @param documentId the id the user gave
    * @param document the document it resolved to
-   * @throws IllegalAccessException naming why, never who has access
+   * @return why the list is not shown, never who has access; null when
+   *         Documents offers the user « Manage access » on it
    */
-  private void checkCanManageAccess(String documentId, AbstractNode document) throws IllegalAccessException {
+  private String getManageAccessRefusal(String documentId, AbstractNode document) {
     String name = document.getName();
     if (!StringUtils.equals(documentId, document.getId())) {
-      throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name,
-                                                                      "%s is a shortcut, whose access is its target's: ask about the target, shortcut_target_id %s".formatted(documentId,
-                                                                                                                                                                             document.getId())));
+      return MSG_ACCESS_NOT_SHOWN.formatted(name,
+                                            "%s is a shortcut, whose access is its target's: ask about the target, shortcut_target_id %s".formatted(documentId,
+                                                                                                                                                   document.getId()));
     } else if (isSharingSuspended()) {
-      throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name, "an administrator suspended document sharing"));
+      return MSG_ACCESS_NOT_SHOWN.formatted(name, "an administrator suspended document sharing");
     } else if (document.isCloudDriveFolder()) {
-      throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name, "it is a connected cloud drive folder"));
+      return MSG_ACCESS_NOT_SHOWN.formatted(name, "it is a connected cloud drive folder");
     } else if (document.getAcl() == null || !document.getAcl().isCanEdit()) {
       // the drawer's own condition, acl.canEdit, from the node's entries for
       // the user: the repository's edit check also answers yes to the node's
       // owner whatever its entries say, which the drawer does not
-      throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name,
-                                                                      "its sharing gives you no edit right on it, which Documents requires to manage its access, even where get_document_permissions says can_edit because you own it"));
+      return MSG_ACCESS_NOT_SHOWN.formatted(name,
+                                            "its sharing gives you no edit right on it, which Documents requires to manage its access, even where your_rights says can_edit because you own it");
     } else if (StringUtils.startsWith(document.getPath(), SPACE_DRIVES_PATH)
                && StringUtils.equals(document.getCreatorUserName(), SYSTEM_CREATOR)
                && !userAcl.isAdministrator(getCurrentUserAclIdentity())) {
-      throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name,
-                                                                      "the platform created it in its space, and only an administrator manages its access"));
+      return MSG_ACCESS_NOT_SHOWN.formatted(name,
+                                            "the platform created it in its space, and only an administrator manages its access");
     } else if (StringUtils.contains(document.getPath(), NEWS_ATTACHMENTS)) {
-      throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name, "it holds a news article's attachments"));
+      return MSG_ACCESS_NOT_SHOWN.formatted(name, "it holds a news article's attachments");
     }
+    return null;
   }
 
   /**

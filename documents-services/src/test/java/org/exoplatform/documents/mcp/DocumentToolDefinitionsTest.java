@@ -91,9 +91,10 @@ public class DocumentToolDefinitionsTest {
   /**
    * get_document_access is a read (EXO-95034): read-only, idempotent, never
    * asking for an approval, scoped to a space as get_document_permissions
-   * is, and its description says it is refused unless the user may manage
-   * the document's access. Mutants: readOnlyHint false; require_approval
-   * set; the space scope dropped; the refusal left out of the description.
+   * is, and its description says it returns no list, only the reason and the
+   * user's own rights, unless the user may manage the document's access.
+   * Mutants: readOnlyHint false; require_approval set; the space scope
+   * dropped; the no-list answer left out of the description.
    *
    * @throws Exception never
    */
@@ -115,7 +116,8 @@ public class DocumentToolDefinitionsTest {
     access.get("input_schema").get("properties").propertyNames().forEach(properties::add);
     assertEquals(List.of("document_id"), properties);
     String description = access.get("description").asString();
-    assertTrue(description, description.contains("Refused, with the reason and no list, unless you may manage the document's access"));
+    assertTrue(description,
+               description.contains("Unless you may manage the document's access, it returns no list: access_shown false, the reason, and your_rights, your own rights on it"));
     assertTrue(description, description.contains("by name"));
   }
 

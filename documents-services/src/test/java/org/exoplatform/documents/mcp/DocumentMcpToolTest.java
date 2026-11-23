@@ -3271,6 +3271,9 @@ public class DocumentMcpToolTest {
 
     assertEquals(FOLDER_ID, access.getId());
     assertTrue(access.isFolder());
+    assertTrue(access.isAccessShown());
+    assertNull(access.getReason());
+    assertNull("The user's rights are given beside the list", access.getYourRights());
     assertEquals("specific_collaborators", access.getVisibility());
     assertEquals("John Owner", access.getOwner());
     assertEquals(List.of(new DocumentCollaboratorModel("Alice Martin", "user", "edit"),
@@ -3307,11 +3310,12 @@ public class DocumentMcpToolTest {
    * @throws Exception never
    */
   @Test
-  public void getDocumentAccessRefusesAShortcut() throws Exception {
+  public void getDocumentAccessShowsNoListForAShortcut() throws Exception {
     FolderNode folder = accessFolder("/documents/workflow");
     when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folder);
 
-    assertRefused(() -> documentMcpTool.getDocumentAccess("shortcut-id"), "shortcut_target_id " + FOLDER_ID);
+    DocumentAccessModel access = assertNotShown("shortcut-id", "shortcut_target_id " + FOLDER_ID);
+    assertEquals("The user's rights are not the target's", FOLDER_ID, access.getYourRights().getShortcutTargetId());
   }
 
   /**
@@ -3321,14 +3325,14 @@ public class DocumentMcpToolTest {
    * @throws Exception never
    */
   @Test
-  public void getDocumentAccessRefusesWhileSharingIsSuspended() throws Exception {
+  public void getDocumentAccessShowsNoListWhileSharingIsSuspended() throws Exception {
     FolderNode folder = accessFolder("/documents/workflow");
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
     when(settingService.get(Context.GLOBAL.id("sharedDocumentStatus"),
                             Scope.APPLICATION.id("sharedDocumentStatus"),
                             "exo:sharedDocumentStatus")).thenReturn((SettingValue) SettingValue.create("true"));
 
-    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "suspended document sharing");
+    assertNotShown(FOLDER_ID, "suspended document sharing");
   }
 
   /**
@@ -3338,12 +3342,12 @@ public class DocumentMcpToolTest {
    * @throws Exception never
    */
   @Test
-  public void getDocumentAccessRefusesACloudDriveFolder() throws Exception {
+  public void getDocumentAccessShowsNoListForACloudDriveFolder() throws Exception {
     FolderNode folder = accessFolder("/documents/drive");
     folder.setCloudDriveFolder(true);
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
 
-    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "cloud drive folder");
+    assertNotShown(FOLDER_ID, "cloud drive folder");
   }
 
   /**
@@ -3356,17 +3360,18 @@ public class DocumentMcpToolTest {
    * @throws Exception never
    */
   @Test
-  public void getDocumentAccessRefusesAUserWhoCantEdit() throws Exception {
+  public void getDocumentAccessShowsNoListToAUserWhoCantEdit() throws Exception {
     FolderNode folder = accessFolder("/documents/workflow");
     NodePermission acl = folder.getAcl();
     folder.setAcl(new NodePermission(true, false, false, false, acl.getPermissions(), null, null, null));
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
     when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(true);
 
-    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "its sharing gives you no edit right on it");
+    DocumentAccessModel access = assertNotShown(FOLDER_ID, "its sharing gives you no edit right on it");
+    assertTrue("The user's own rights are not the repository's", access.getYourRights().isCanEdit());
 
     folder.setAcl(null);
-    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "its sharing gives you no edit right on it");
+    assertNotShown(FOLDER_ID, "its sharing gives you no edit right on it");
   }
 
   /**
@@ -3382,10 +3387,10 @@ public class DocumentMcpToolTest {
     folder.setCreatorUserName("__system");
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
 
-    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "only an administrator manages its access");
+    assertNotShown(FOLDER_ID, "only an administrator manages its access");
 
     when(userAcl.isAdministrator(currentIdentity)).thenReturn(true);
-    assertNotNull(documentMcpTool.getDocumentAccess(FOLDER_ID));
+    assertTrue("An administrator is not shown the list", documentMcpTool.getDocumentAccess(FOLDER_ID).isAccessShown());
   }
 
   /**
@@ -3395,24 +3400,40 @@ public class DocumentMcpToolTest {
    * @throws Exception never
    */
   @Test
-  public void getDocumentAccessRefusesANewsAttachment() throws Exception {
+  public void getDocumentAccessShowsNoListForANewsAttachment() throws Exception {
     FolderNode folder = accessFolder("/Groups/spaces/f2_support/News Attachments/x");
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
 
-    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "news article's attachments");
+    assertNotShown(FOLDER_ID, "news article's attachments");
   }
 
   /**
-   * @param call a get_document_access call
+   * Checks a get_document_access answer that shows no list: an answer, not an
+   * error, since ai replaces the answer of a turn whose read failed
+   * (EXO-95034), with the reason, the user's own rights, and no field of the
+   * list nor any name it holds.
+   *
+   * @param documentId the id get_document_access is given
    * @param reason a part of the reason it must give
+   * @return the answer
    * @throws Exception never
    */
-  private void assertRefused(ThrowingRunnable call, String reason) throws Exception {
-    IllegalAccessException error = assertThrows(IllegalAccessException.class, call);
-    assertTrue(error.getMessage(), error.getMessage().contains(reason));
+  private DocumentAccessModel assertNotShown(String documentId, String reason) throws Exception {
+    DocumentAccessModel access = documentMcpTool.getDocumentAccess(documentId);
+    assertFalse("The list is shown", access.isAccessShown());
+    assertTrue(access.getReason(), access.getReason().contains(reason));
+    assertNull(access.getVisibility());
+    assertNull(access.getAllSpaceMembersCanEdit());
+    assertNull(access.getOwner());
+    assertNull(access.getCollaborators());
+    assertNotNull("The user's own rights are not given", access.getYourRights());
+    assertTrue(access.getYourRights().isCanRead());
+    assertEquals(documentId, access.getYourRights().getId());
+    String answer = access.toString();
     for (String name : List.of("Alice", "Bob", "Human resources", "F2 Support", "John Owner")) {
-      assertFalse(error.getMessage(), error.getMessage().contains(name));
+      assertFalse(answer, answer.contains(name));
     }
+    return access;
   }
 
   /**
