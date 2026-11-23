@@ -1136,7 +1136,7 @@ public class JCRDocumentsUtil {
       String sourceID = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
       Node sourceNode = getNodeByIdentifier(node.getSession(), sourceID);
       String shortcutPath = getDownloadPath(node, symlinkPath, sourcePath);
-      if (sourceNode != null && shortcutPath == null) {
+      if (sourceNode != null && toTempFolderPath(tempFolderPath, getRelativePath(node, symlinkPath, sourcePath, parentPath)) == null) {
         LOG.warn("Shortcut {} left out of the download: its path is not a path in the download folder", node.getPath());
       } else if (sourceNode != null) {
         createFile(sourceNode, shortcutPath, getPathWithTitles(sourceNode), tempFolderPath, parentPath);
@@ -1246,7 +1246,7 @@ public class JCRDocumentsUtil {
           String shortcutPath = getDownloadPath(node, symlinkPath, sourcePath);
           if (sourceNode == null) {
             return;
-          } else if (toTempFolderPath(tempFolderPath, shortcutPath == null ? null : stripLeadingPath(shortcutPath, parentPath)) == null) {
+          } else if (toTempFolderPath(tempFolderPath, getRelativePath(node, symlinkPath, sourcePath, parentPath)) == null) {
             LOG.warn("Shortcut {} left out of the download: its path is not a path in the download folder", node.getPath());
           } else if (isInShortcutTarget(node, symlinkPath, sourcePath) && !nestedTargets.add(sourceID)) {
             LOG.warn("Shortcut {} left out of the download: its target is already in the download", node.getPath());
@@ -1267,6 +1267,7 @@ public class JCRDocumentsUtil {
       walkPath.remove(nodeId);
     }
   }
+
   /**
    * @return true when the node lies inside the target folder of the shortcut
    *         that led to it, false when it is in the downloaded tree itself or
