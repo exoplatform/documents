@@ -1066,6 +1066,9 @@ public class DocumentFileRest implements ResourceContainer {
     try {
       documentFileService.cancelBulkAction(actionId, currentUserIdentity.getRemoteId());
       return Response.ok().build();
+    } catch (ObjectNotFoundException e) {
+      LOG.debug("No bulk action of user {} has the identifier {}", currentUserIdentity.getRemoteId(), actionId);
+      return Response.status(HTTPStatus.NOT_FOUND).build();
     } catch (Exception ex) {
       LOG.warn("Failed to cancel bulk action", ex);
       return Response.status(HTTPStatus.INTERNAL_ERROR).build();

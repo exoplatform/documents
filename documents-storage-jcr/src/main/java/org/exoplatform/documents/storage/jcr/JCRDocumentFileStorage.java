@@ -3205,10 +3205,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       return new byte[0];
   }
 
-  public void cancelBulkAction(String actionId, String userName) throws IOException {
+  public void cancelBulkAction(String actionId, String userName) throws ObjectNotFoundException {
     ActionData actionData = bulkStorageActionService.getActionData(actionId, userName);
     if (actionData == null) {
-      throw new IOException("No action of the current user has this identifier");
+      throw new ObjectNotFoundException("No action of the current user has this identifier");
     }
     actionData.setStatus(ActionStatus.CANCELED.name());
   }

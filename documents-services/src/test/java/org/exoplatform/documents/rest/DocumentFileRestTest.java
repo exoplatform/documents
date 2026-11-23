@@ -1074,6 +1074,26 @@ public class DocumentFileRestTest {
   }
 
   @Test
+  public void testCancelBulkActionAnswersNotFoundForAnActionTheUserDoesNotHave() throws Exception {
+    String username = "testuser";
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId("2");
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentIdentity);
+
+    Response response = documentFileRest.cancelBulkAction("7");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    verify(documentFileStorage).cancelBulkAction("7", username);
+
+    doThrow(new ObjectNotFoundException("no such action")).when(documentFileStorage).cancelBulkAction("8", username);
+    response = documentFileRest.cancelBulkAction("8");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+
+    doThrow(new IllegalStateException("failure")).when(documentFileStorage).cancelBulkAction("9", username);
+    response = documentFileRest.cancelBulkAction("9");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+  }
+
+  @Test
   public void testUndoDeleteDocument() {
     String username = "testuser";
     org.exoplatform.services.security.Identity root = new org.exoplatform.services.security.Identity(username);

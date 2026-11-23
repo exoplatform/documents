@@ -3319,7 +3319,7 @@ public class JCRDocumentFileStorageTest {
     alicesDownload.setStatus(ActionStatus.STARTED.name());
     when(bulkStorageActionService.getActionData("7", "alice")).thenReturn(alicesDownload);
 
-    assertThrows(IOException.class, () -> jcrDocumentFileStorage.cancelBulkAction("7", "bob"));
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.cancelBulkAction("7", "bob"));
     assertEquals(ActionStatus.STARTED.name(), alicesDownload.getStatus());
 
     jcrDocumentFileStorage.cancelBulkAction("7", "alice");

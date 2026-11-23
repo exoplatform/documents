@@ -660,7 +660,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getDownloadZipBytes(actionId,userName);
   }
   @Override
-  public void cancelBulkAction(String actionId, String userName) throws IOException {
+  public void cancelBulkAction(String actionId, String userName) throws ObjectNotFoundException {
     documentFileStorage.cancelBulkAction(actionId, userName);
   }
 
