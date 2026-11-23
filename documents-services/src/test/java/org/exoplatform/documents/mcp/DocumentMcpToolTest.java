@@ -1433,6 +1433,64 @@ public class DocumentMcpToolTest {
     }
   }
 
+  /**
+   * The tool returns the code of "Keep documents inside the space" as its
+   * error, and the refusal is logged with the MCP channel.
+   */
+  @Test
+  public void shareDocumentRefusedWhenTheSpaceKeepsItsDocumentsInside() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(identityManager.getOrCreateUserIdentity("bob")).thenReturn(new org.exoplatform.social.core.identity.model.Identity("200"));
+    doThrow(new DocumentSharingRefusedException(DocumentSharingRefusedException.KEPT_INSIDE_SHARE,
+                                                7L,
+                                                DOCUMENT_ID,
+                                                DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION))
+                                                                                                     .when(documentFileService)
+                                                                                                     .updatePermissions(eq(DOCUMENT_ID),
+                                                                                                                        any(),
+                                                                                                                        eq(USER_IDENTITY_ID));
+
+    try (MockedStatic<SpaceSecurityAudit> audit = mockStatic(SpaceSecurityAudit.class)) {
+      DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
+                                                             () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null));
+
+      assertEquals(DocumentSharingRefusedException.KEPT_INSIDE_SHARE, refusal.getMessage());
+      audit.verify(() -> SpaceSecurityAudit.actionRefused(7L,
+                                                          DOCUMENT_ID,
+                                                          DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION,
+                                                          USERNAME,
+                                                          DocumentSharingRefusedException.MCP_CHANNEL));
+    }
+  }
+
+  @Test
+  public void createPublicLinkRefusedWhenTheSpaceKeepsItsDocumentsInside() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(publicDocumentAccessService.createDocumentPublicAccess(anyLong(),
+                                                               anyString(),
+                                                               any(),
+                                                               anyLong(),
+                                                               anyBoolean()))
+                                                                             .thenThrow(new DocumentSharingRefusedException(DocumentSharingRefusedException.KEPT_INSIDE_PUBLIC_LINK,
+                                                                                                                            7L,
+                                                                                                                            DOCUMENT_ID,
+                                                                                                                            DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION));
+
+    try (MockedStatic<SpaceSecurityAudit> audit = mockStatic(SpaceSecurityAudit.class)) {
+      DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
+                                                             () -> documentMcpTool.createPublicLink(DOCUMENT_ID, null, null));
+
+      assertEquals(DocumentSharingRefusedException.KEPT_INSIDE_PUBLIC_LINK, refusal.getMessage());
+      audit.verify(() -> SpaceSecurityAudit.actionRefused(7L,
+                                                          DOCUMENT_ID,
+                                                          DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION,
+                                                          USERNAME,
+                                                          DocumentSharingRefusedException.MCP_CHANNEL));
+    }
+  }
+
   @Test
   public void shareDocumentWithoutEditPermissionFails() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
