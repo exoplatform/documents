@@ -731,6 +731,63 @@ public class JCRDocumentsUtilTest {
     }
   }
 
+  private static AbstractNode computeAcl(String userId, AccessControlList acl) throws RepositoryException {
+    ExtendedNode node = mock(ExtendedNode.class);
+    when(node.getACL()).thenReturn(acl);
+    Identity aclIdentity = new Identity(userId);
+    AbstractNode documentNode = new FileNode();
+    JCRDocumentsUtil.computeDocumentAcl(node,
+                                        documentNode,
+                                        aclIdentity,
+                                        mock(IdentityManager.class),
+                                        mock(SpaceService.class));
+    return documentNode;
+  }
+
+  @Test
+  public void computeDocumentAclGivesTheOwnerEveryRight() throws RepositoryException {
+    // an owner whose entries grant no edit nor remove right, as the JCR still lets the owner do everything
+    AccessControlList acl = new AccessControlList("john",
+                                                  Arrays.asList(new org.exoplatform.services.jcr.access.AccessControlEntry("john",
+                                                                                                                           PermissionType.READ)));
+    AbstractNode owner = computeAcl("john", acl);
+    assertTrue(owner.getAcl().isCanEdit());
+    assertTrue(owner.getAcl().isCanDelete());
+    // another user of the same node keeps what its entries give
+    AbstractNode other = computeAcl("mary", acl);
+    assertFalse(other.getAcl().isCanEdit());
+    assertFalse(other.getAcl().isCanDelete());
+  }
+
+  @Test
+  public void computeDocumentAclDoesNotGiveAShortcutItsCreatorTheOwnersRights() throws RepositoryException {
+    ExtendedNode symlink = mock(ExtendedNode.class);
+    when(symlink.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    // owned by its creator, with the read-only entry copied from its target
+    when(symlink.getACL()).thenReturn(new AccessControlList("john",
+                                                            Arrays.asList(new org.exoplatform.services.jcr.access.AccessControlEntry("john",
+                                                                                                                                     PermissionType.READ))));
+    AbstractNode documentNode = new FileNode();
+    JCRDocumentsUtil.computeDocumentAcl(symlink,
+                                        documentNode,
+                                        new Identity("john"),
+                                        mock(IdentityManager.class),
+                                        mock(SpaceService.class));
+    assertFalse(documentNode.getAcl().isCanEdit());
+    assertFalse(documentNode.getAcl().isCanDelete());
+  }
+
+  @Test
+  public void computeDocumentAclCountsAnAnyEntryForEveryUser() throws RepositoryException {
+    AccessControlList acl = new AccessControlList("john",
+                                                  Arrays.asList(new org.exoplatform.services.jcr.access.AccessControlEntry(org.exoplatform.services.security.IdentityConstants.ANY,
+                                                                                                                           PermissionType.SET_PROPERTY),
+                                                                new org.exoplatform.services.jcr.access.AccessControlEntry(org.exoplatform.services.security.IdentityConstants.ANY,
+                                                                                                                           PermissionType.REMOVE)));
+    AbstractNode other = computeAcl("mary", acl);
+    assertTrue(other.getAcl().isCanEdit());
+    assertTrue(other.getAcl().isCanDelete());
+  }
 
   private static class ChildNodeIterator implements NodeIterator {
 

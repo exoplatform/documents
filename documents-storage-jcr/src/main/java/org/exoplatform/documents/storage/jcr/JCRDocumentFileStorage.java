@@ -64,6 +64,7 @@ import org.exoplatform.services.cms.documents.NewDocumentTemplate;
 import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
+import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ExtendedSession;
@@ -3113,12 +3114,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String userId = aclIdentity.getUserId();
     try {
       ExtendedNode extendedNode = (ExtendedNode) node;
-      List<AccessControlEntry> permsList = extendedNode.getACL().getPermissionEntries();
+      AccessControlList acl = extendedNode.getACL();
+      // As the JCR does (AccessManager#hasPermission), the ACL owner holds every right,
+      // but a shortcut's owner is whoever created it: its rights are not the target's
+      if (userId != null && StringUtils.equals(userId, acl.getOwner())
+          && !node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        canAccess = true;
+        canEdit = true;
+        canDelete = true;
+      }
+      List<AccessControlEntry> permsList = acl.getPermissionEntries();
       for (AccessControlEntry accessControlEntry : permsList) {
         String nodeAclIdentity = accessControlEntry.getIdentity();
         MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
         if (StringUtils.equals(nodeAclIdentity, userId)
-            || StringUtils.equals(IdentityConstants.ANY, userId)
+            || StringUtils.equals(IdentityConstants.ANY, nodeAclIdentity)
             || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
           canEdit = canEdit || accessControlEntry.getPermission().contains(PermissionType.ADD_NODE)
                     || accessControlEntry.getPermission()
@@ -3126,7 +3136,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           canDelete = canDelete || accessControlEntry.getPermission().contains(PermissionType.REMOVE);
           canAccess = canAccess || accessControlEntry.getPermission().contains(PermissionType.READ);
         }
-        if (StringUtils.equals(nodeAclIdentity, userId) || StringUtils.equals(IdentityConstants.ANY, userId)
+        if (StringUtils.equals(nodeAclIdentity, userId)
             || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry)
                 && !StringUtils.equals(membershipEntry.toString(), GROUP_ADMINISTRATORS))) {
           canAccess = true;

@@ -54,6 +54,7 @@ import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.AccessControlEntry;
+import org.exoplatform.services.jcr.access.AccessControlList;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ExtendedSession;
@@ -625,13 +626,21 @@ public class JCRDocumentsUtil {
     List<PermissionEntry> permissions = new ArrayList<>();
     String userId = aclIdentity.getUserId();
     ExtendedNode extendedNode = (ExtendedNode) node;
-    List<AccessControlEntry> permsList = extendedNode.getACL().getPermissionEntries();
+    AccessControlList acl = extendedNode.getACL();
+    // As the JCR does (AccessManager#hasPermission), the ACL owner holds every right,
+    // but a shortcut's owner is whoever created it: its rights are not the target's
+    if (userId != null && StringUtils.equals(userId, acl.getOwner())
+        && !node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      canEdit = true;
+      canDelete = true;
+    }
+    List<AccessControlEntry> permsList = acl.getPermissionEntries();
     for (AccessControlEntry accessControlEntry : permsList) {
       String nodeAclIdentity = accessControlEntry.getIdentity();
       MembershipEntry membershipEntry = accessControlEntry.getMembershipEntry();
       isPublic = isPublic || StringUtils.equals(IdentityConstants.ANY, nodeAclIdentity);
       if (StringUtils.equals(nodeAclIdentity, userId)
-          || StringUtils.equals(IdentityConstants.ANY, userId)
+          || StringUtils.equals(IdentityConstants.ANY, nodeAclIdentity)
           || (membershipEntry != null && aclIdentity.isMemberOf(membershipEntry))) {
         canEdit = canEdit || accessControlEntry.getPermission().contains(PermissionType.SET_PROPERTY);
         canDelete = canDelete || accessControlEntry.getPermission().contains(PermissionType.REMOVE);
