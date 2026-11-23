@@ -30,6 +30,12 @@ public class DocumentSharingRefusedException extends SpaceSecurityRefusedExcepti
   /** The space limits who manages its documents' access. */
   public static final String ACCESS_MANAGEMENT_LIMITED = "documents.space.accessManagementLimited";
 
+  /** The space keeps its documents inside: a share outside it is refused. */
+  public static final String KEPT_INSIDE_SHARE         = "documents.space.keptInside.share";
+
+  /** The space keeps its documents inside: no public link is created. */
+  public static final String KEPT_INSIDE_PUBLIC_LINK   = "documents.space.keptInside.publicLink";
+
   /** A change of the document's access list, a share included. */
   public static final String CHANGE_PERMISSIONS_ACTION = "changePermissions";
 
