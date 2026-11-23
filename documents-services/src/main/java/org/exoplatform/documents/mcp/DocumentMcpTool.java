@@ -1552,7 +1552,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * members.
    * <p>
    * It is told only to a user to whom Documents offers « Manage access » on
-   * that document, never more: one who can read it and edit it, on a document
+   * that document, never more: one who can read it and whose entries on it
+   * let them edit it (the drawer's {@code acl.canEdit}), on a document
    * that is no shortcut, no cloud drive folder, no news attachment and, in a
    * space, not a node the platform created unless the user is an
    * administrator, while sharing is not suspended. Every other user is
@@ -1613,7 +1614,10 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name, "an administrator suspended document sharing"));
     } else if (document.isCloudDriveFolder()) {
       throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name, "it is a connected cloud drive folder"));
-    } else if (!documentFileService.hasEditPermissionOnDocument(document.getId(), getCurrentUserIdentityId())) {
+    } else if (document.getAcl() == null || !document.getAcl().isCanEdit()) {
+      // the drawer's own condition, acl.canEdit, from the node's entries for
+      // the user: the repository's edit check also answers yes to the node's
+      // owner whatever its entries say, which the drawer does not
       throw new IllegalAccessException(MSG_ACCESS_NOT_SHOWN.formatted(name, "you can't edit it"));
     } else if (StringUtils.startsWith(document.getPath(), SPACE_DRIVES_PATH)
                && StringUtils.equals(document.getCreatorUserName(), SYSTEM_CREATOR)

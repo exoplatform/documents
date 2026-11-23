@@ -3345,17 +3345,25 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * A reader who can't edit the document sees no list in Documents, only
-   * its sharing sign: refused, with the edit right the repository checks.
-   * Mutant: the edit check removed.
+   * A reader whose entries on the document don't let them edit it sees no
+   * list in Documents, only its sharing sign: refused on the drawer's own
+   * condition, the node's acl.canEdit, even when the repository's edit check
+   * says yes, as it does for the node's owner whatever its entries say.
+   * Mutants: the edit check removed; the repository's check used instead.
    *
    * @throws Exception never
    */
   @Test
   public void getDocumentAccessRefusesAUserWhoCantEdit() throws Exception {
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(accessFolder("/documents/workflow"));
-    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+    FolderNode folder = accessFolder("/documents/workflow");
+    NodePermission acl = folder.getAcl();
+    folder.setAcl(new NodePermission(true, false, false, false, acl.getPermissions(), null, null, null));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(true);
 
+    assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "you can't edit it");
+
+    folder.setAcl(null);
     assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "you can't edit it");
   }
 
