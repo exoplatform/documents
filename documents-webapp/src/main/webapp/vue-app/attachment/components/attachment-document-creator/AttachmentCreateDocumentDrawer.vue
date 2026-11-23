@@ -411,8 +411,10 @@ export default {
         }
       });
     },
+    // "." and ".." are refused once trimmed, as the server trims the title it checks.
     isDotTitle(title) {
-      return title === '.' || title === '..';
+      const trimmedTitle = title && title.trim();
+      return trimmedTitle === '.' || trimmedTitle === '..';
     },
     createNewDoc() {
       if (this.documentTitleMaxLengthReached) {
@@ -651,6 +653,10 @@ export default {
     // (attachment list add / Drive refresh + OnlyOffice open).
     createFromTemplate(template) {
       if (this.templateCreating) {
+        return;
+      }
+      if (this.isDotTitle(this.cleanedNewDocumentTitle)) {
+        this.$root.$emit('alert-message', this.$t('attachments.valid.title.dots.error.message'), 'warning');
         return;
       }
       // Same max-files guard as the blank-create path (attachment host only).
