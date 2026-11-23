@@ -143,6 +143,12 @@
 
 export default {
   data: () => ({
+    // The refusals of the space's settings, each answered 403 with its code, which is its label's key
+    spaceRefusalCodes: [
+      'documents.space.accessManagementLimited',
+      'documents.space.keptInside.share',
+      'documents.space.keptInside.publicLink',
+    ],
     canAdd: false,
     spaceCanAdd: false,
     versions: [],
@@ -1539,10 +1545,11 @@ export default {
       // A refusal of the space's settings answers 403 with the rule's code
       const code = error?.status === 403 && error.text ? error.text() : Promise.resolve(error?.message);
       return code.catch(() => null).then(refusalCode => {
-        const message = refusalCode === 'documents.space.accessManagementLimited'
-          ? this.$t('documents.space.accessManagementLimited')
+        const message = this.spaceRefusalCodes.includes(refusalCode)
+          ? this.$t(refusalCode)
           : this.$t('documents.label.saveVisibility.error');
         this.$root.$emit('show-alert', {type: 'error', message});
+        this.$root.$emit('visibility-save-failed');
       });
     },
     openDrawer(files) {
