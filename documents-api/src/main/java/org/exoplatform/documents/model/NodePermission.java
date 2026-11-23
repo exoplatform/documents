@@ -56,6 +56,13 @@ public class NodePermission {
    */
   private boolean keptInsideSpace;
 
+  /**
+   * The pretty name of the space whose drive holds the document, a link's target
+   * included: the space {@link #keptInsideSpace} was decided on. Null when the
+   * document is in no space, or when its space could not be resolved.
+   */
+  private String spacePrettyName;
+
   public NodePermission(boolean canAccess,
                         boolean canEdit,
                         boolean canDelete,
@@ -64,7 +71,7 @@ public class NodePermission {
                         Map<Long, String> toShare,
                         Map<Long, String> toNotify,
                         Map<Long, String> toUnShare) {
-    this(canAccess, canEdit, canDelete, isPublic, permissions, toShare, toNotify, toUnShare, true, false);
+    this(canAccess, canEdit, canDelete, isPublic, permissions, toShare, toNotify, toUnShare, true, false, null);
   }
 
 }

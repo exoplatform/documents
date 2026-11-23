@@ -50,13 +50,21 @@ public class NodePermissionEntity {
    */
   private boolean keptInsideSpace;
 
+  /**
+   * The pretty name of the space whose drive holds the document, a link's target
+   * included: the UI lists that space's members as the ones a document kept
+   * inside can still be shared with. Null when the document is in no space, or
+   * when its space could not be resolved.
+   */
+  private String spacePrettyName;
+
   public NodePermissionEntity(boolean canAccess,
                               boolean canEdit,
                               boolean canDelete,
                               boolean allMembersCanEdit,
                               String visibilityChoice,
                               List<PermissionEntryEntity> collaborators) {
-    this(canAccess, canEdit, canDelete, allMembersCanEdit, visibilityChoice, collaborators, true, false);
+    this(canAccess, canEdit, canDelete, allMembersCanEdit, visibilityChoice, collaborators, true, false, null);
   }
 
 }
