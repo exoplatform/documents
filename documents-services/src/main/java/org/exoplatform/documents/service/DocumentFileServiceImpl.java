@@ -507,6 +507,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   @Override
   public void updatePermissions(String documentId,  NodePermission nodePermissionEntity, long authenticatedUserId) throws IllegalAccessException {
+    // Only an editor's request is decided: nothing of the document's stored
+    // access is read for a user who cannot edit it
+    checkCanEdit(documentId, authenticatedUserId);
     // Decided once for the whole request, before any write
     Collection<Long> destinationIds = nodePermissionEntity.getToShare() == null ? List.of()
                                                                                 : nodePermissionEntity.getToShare().keySet();
@@ -537,6 +540,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   @Override
   public void shareDocument(String documentId, long destId, long authenticatedUserId, boolean notifyMember) throws IllegalAccessException {
+    checkCanEdit(documentId, authenticatedUserId);
     checkCanChangeAccess(documentId,
                          authenticatedUserId,
                          DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION,
@@ -590,6 +594,27 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     }
   }
 
+  @Override
+  public DocumentSpaceAccess getSpaceAccess(String documentId, long userIdentityId) {
+    try {
+      Identity userIdentity = identityManager.getIdentity(userIdentityId);
+      Space space = documentFileStorage.getDocumentSpace(documentId);
+      if (space == null) {
+        return new DocumentSpaceAccess(userIdentity != null, false);
+      }
+      SpaceSecurityService securityService = getSpaceSecurityService();
+      SpaceSecuritySettings settings = securityService.getSettings(space.getSpaceId());
+      return new DocumentSpaceAccess(userIdentity != null
+          && securityService.canManageDocumentsAccess(space, settings, userIdentity.getRemoteId()),
+                                     securityService.isDocumentsKeptInside(settings));
+    } catch (ObjectNotFoundException e) {
+      return new DocumentSpaceAccess(false, true);
+    } catch (RuntimeException e) {
+      LOG.warn("The space settings of document {} could not be read: access shown refused", documentId, e);
+      return new DocumentSpaceAccess(false, true);
+    }
+  }
+
   /**
    * Decides a change of the document's access on its space's committed
    * settings, read once: "Limit Access Management" first, then the rule of
@@ -638,8 +663,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    * Under "Keep documents inside the space", refuses a change that adds an
    * identity outside the space to the document's stored access list: one the
    * requested permissions write, or a share destination the list does not hold.
-   * An identity the stored list already holds is kept as it is; removing one is
-   * no addition.
+   * An identity the stored list already holds is kept as it is, and so is a
+   * membership of a group it already reaches, whatever its type; removing one
+   * is no addition.
    *
    * @return the refusal's code, null when the change adds nothing outside
    */
@@ -656,6 +682,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     Set<String> storedIdentities = accessChange.storedIdentities();
     Set<String> addedIdentities = new HashSet<>(accessChange.requestedIdentities());
     addedIdentities.removeAll(storedIdentities);
+    // A membership of a group the stored list already reaches is kept, whatever
+    // its type: a save may write back as "*:" a membership stored as "member:"
+    addedIdentities.removeIf(identity -> identity.indexOf(':') > 0 && holdsGroup(storedIdentities, identity));
     for (Long destinationId : destinationIds) {
       String destination = getShareDestination(destinationId);
       if (destination == null) {
@@ -704,20 +733,27 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (!destination.startsWith(SPACE_GROUP_MEMBERSHIP_PREFIX)) {
       return storedIdentities.contains(destination);
     }
-    String groupId = destination.substring(SPACE_GROUP_MEMBERSHIP_PREFIX.length());
-    return storedIdentities.stream().anyMatch(identity -> identity.endsWith(":" + groupId));
+    return holdsGroup(storedIdentities, destination);
   }
 
-  @Override
-  public boolean canManageAccess(String documentId, long userIdentityId) {
-    try {
-      checkCanManageAccess(documentId, userIdentityId, DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION);
-      return true;
-    } catch (IllegalAccessException e) {
-      return false;
-    } catch (RuntimeException e) {
-      LOG.warn("Access management of document {} could not be decided: refused", documentId, e);
-      return false;
+  /**
+   * @param membership a membership, such as {@code manager:/spaces/team}
+   * @return whether the stored access list holds a membership, of any type, of
+   *         the same group
+   */
+  private boolean holdsGroup(Set<String> storedIdentities, String membership) {
+    String groupSuffix = membership.substring(membership.indexOf(':'));
+    return storedIdentities.stream().anyMatch(identity -> identity.indexOf(':') > 0 && identity.endsWith(groupSuffix));
+  }
+
+  /**
+   * Refuses a change of the document's access to a user who cannot edit it,
+   * before anything of its stored access is read: the answer is the same
+   * whatever its access list and its space's settings.
+   */
+  private void checkCanEdit(String documentId, long userIdentityId) throws IllegalAccessException {
+    if (!hasEditPermissionOnDocument(documentId, userIdentityId)) {
+      throw new IllegalAccessException("User " + userIdentityId + " cannot edit document " + documentId);
     }
   }
 

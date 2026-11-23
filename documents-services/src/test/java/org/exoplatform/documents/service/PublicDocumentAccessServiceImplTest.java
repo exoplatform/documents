@@ -1,6 +1,7 @@
 package org.exoplatform.documents.service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.constant.PublicLinkAccess;
 import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
@@ -346,6 +347,76 @@ public class PublicDocumentAccessServiceImplTest {
     assertTrue(publicDocumentAccessService.isProtectedBySpace("123"));
     when(documentFileService.isKeptInsideSpace("123")).thenReturn(false);
     assertFalse(publicDocumentAccessService.isProtectedBySpace("123"));
+  }
+
+  /**
+   * The link is read once and its space once per decision; a protected
+   * document's link is answered as no link before its expiry or password is
+   * read, and an id with no link asks nothing of its space.
+   */
+  @Test
+  public void getLinkAccess() throws Exception {
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("none")).thenReturn(null);
+    assertEquals(PublicLinkAccess.NONE, publicDocumentAccessService.getLinkAccess("none", null));
+    verify(documentFileService, never()).isKeptInsideSpace("none");
+
+    PublicDocumentAccess expired = new PublicDocumentAccess(1L, "123", null, null, new Date(0));
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(expired);
+    when(documentFileService.isKeptInsideSpace("123")).thenReturn(true);
+    assertEquals(PublicLinkAccess.NONE, publicDocumentAccessService.getLinkAccess("123", null));
+
+    when(documentFileService.isKeptInsideSpace("123")).thenReturn(false);
+    assertEquals(PublicLinkAccess.EXPIRED, publicDocumentAccessService.getLinkAccess("123", null));
+
+    String hashKey = generatePasswordHash("Secret123456");
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(new PublicDocumentAccess(1L,
+                                                                                                                 "123",
+                                                                                                                 hashKey,
+                                                                                                                 "encoded",
+                                                                                                                 null));
+    assertEquals(PublicLinkAccess.INVALID_PASSWORD, publicDocumentAccessService.getLinkAccess("123", "wrong"));
+    // asked without a password, a locked link is refused before the password is checked: no error is logged
+    assertEquals(PublicLinkAccess.INVALID_PASSWORD, publicDocumentAccessService.getLinkAccess("123", null));
+    assertEquals(PublicLinkAccess.GRANTED, publicDocumentAccessService.getLinkAccess("123", "Secret123456"));
+
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(new PublicDocumentAccess(1L,
+                                                                                                                 "123",
+                                                                                                                 null,
+                                                                                                                 null,
+                                                                                                                 null));
+    assertEquals(PublicLinkAccess.GRANTED, publicDocumentAccessService.getLinkAccess("123", null));
+    verify(publicDocumentAccessStorage, times(6)).getPublicDocumentAccessByNodeId("123");
+    verify(documentFileService, times(6)).isKeptInsideSpace("123");
+  }
+
+  /**
+   * A locked link asked without a password is a normal refusal: it is answered
+   * as a wrong password and logs no error. Mutant: the null password handed to
+   * the password check, whose failure is logged at ERROR.
+   */
+  @Test
+  public void aLockedLinkAskedWithoutPasswordLogsNoError() throws Exception {
+    when(documentFileService.isKeptInsideSpace("123")).thenReturn(false);
+    String hashKey = generatePasswordHash("Secret123456");
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(new PublicDocumentAccess(1L,
+                                                                                                                 "123",
+                                                                                                                 hashKey,
+                                                                                                                 "encoded",
+                                                                                                                 null));
+    ch.qos.logback.classic.Logger rootLogger =
+                                             (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logged =
+                                                                                          new ch.qos.logback.core.read.ListAppender<>();
+    logged.start();
+    rootLogger.addAppender(logged);
+    try {
+      assertEquals(PublicLinkAccess.INVALID_PASSWORD, publicDocumentAccessService.getLinkAccess("123", null));
+    } finally {
+      rootLogger.detachAppender(logged);
+    }
+    assertTrue(logged.list.stream()
+                          .noneMatch(event -> event.getLevel() == ch.qos.logback.classic.Level.ERROR
+                              && event.getLoggerName().contains(PublicDocumentAccessServiceImpl.class.getSimpleName())));
   }
 
   private static DocumentSharingRefusedException refusal(String action) {
