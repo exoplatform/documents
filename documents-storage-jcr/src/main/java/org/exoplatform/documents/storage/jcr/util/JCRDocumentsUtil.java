@@ -89,6 +89,12 @@ public class JCRDocumentsUtil {
   /** The decisions of the listing the thread runs, by space and user */
   private static final ThreadLocal<Map<String, Boolean>> ACCESS_DECISIONS = new ThreadLocal<>();
 
+  /**
+   * Suffix of the key of a space's "Keep documents inside the space" decision,
+   * beside its users' "space id/user name" keys: no user name holds a '#'
+   */
+  private static final String                           KEPT_INSIDE_DECISION_SUFFIX = "#keptInside";
+
   private static final Log                              LOG                           =
                                                             ExoLogger.getLogger(JCRDocumentsUtil.class);
 
@@ -725,36 +731,45 @@ public class JCRDocumentsUtil {
     // isInUserPrivateSpace.
     canDelete = canDelete || isInUserPrivateSpace(node, userId);
     NodePermission nodePermission = new NodePermission(true, canEdit, canDelete, isPublic, permissions, null, null, null);
-    nodePermission.setCanManageAccess(canEdit && canManageAccess(node, userId));
+    setAccessManagementFlags(node, nodePermission, canEdit, userId);
     documentNode.setAcl(nodePermission);
   }
 
   /**
-   * Whether the space holding the node lets the user change its access list,
-   * decided for display on the space's cached settings: a refusal of the
-   * change itself reads the committed ones.
+   * Sets whether the space holding the node lets the user change its access
+   * list, and whether it keeps its documents inside, decided for display on
+   * the space's cached settings, once per space in a listing: a refusal of a
+   * change itself reads the committed ones. A space that cannot be resolved
+   * is shown as refusing both.
    */
-  private static boolean canManageAccess(Node node, String username) {
+  private static void setAccessManagementFlags(Node node, NodePermission nodePermission, boolean canEdit, String username) {
     try {
       Space space = DocumentSpaceGuard.getInstance().getDocumentSpace(node);
       if (space == null) {
-        return true;
+        nodePermission.setCanManageAccess(canEdit);
+        return;
       }
       Map<String, Boolean> decisions = ACCESS_DECISIONS.get();
-      String decisionKey = space.getId() + "/" + username;
-      Boolean decision = decisions == null ? null : decisions.get(decisionKey);
-      if (decision == null) {
+      String accessDecisionKey = space.getId() + "/" + username;
+      String keptInsideDecisionKey = space.getId() + KEPT_INSIDE_DECISION_SUFFIX;
+      Boolean canManageAccess = decisions == null ? null : decisions.get(accessDecisionKey);
+      Boolean keptInside = decisions == null ? null : decisions.get(keptInsideDecisionKey);
+      if (canManageAccess == null || keptInside == null) {
         SpaceSecurityService spaceSecurityService = CommonsUtils.getService(SpaceSecurityService.class);
         SpaceSecuritySettings settings = spaceSecurityService.getDisplaySettings(space);
-        decision = spaceSecurityService.canManageDocumentsAccess(space, settings, username);
+        canManageAccess = spaceSecurityService.canManageDocumentsAccess(space, settings, username);
+        keptInside = spaceSecurityService.isDocumentsKeptInside(settings);
         if (decisions != null) {
-          decisions.put(decisionKey, decision);
+          decisions.put(accessDecisionKey, canManageAccess);
+          decisions.put(keptInsideDecisionKey, keptInside);
         }
       }
-      return decision;
+      nodePermission.setCanManageAccess(canEdit && canManageAccess);
+      nodePermission.setKeptInsideSpace(keptInside);
     } catch (Exception e) {
       LOG.debug("Access management of node {} could not be decided: shown as refused", node, e);
-      return false;
+      nodePermission.setCanManageAccess(false);
+      nodePermission.setKeptInsideSpace(true);
     }
   }
 

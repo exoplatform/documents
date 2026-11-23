@@ -1291,10 +1291,95 @@ public class DocumentFileRestTest {
     response = documentFileRest1.getDocument("123", null);
     assertTrue(((AbstractNodeEntity) response.getEntity()).getAcl().isCanManageAccess());
 
+    // "Keep documents inside the space" is answered on the committed settings, whatever the cached listing said
+    assertFalse(((AbstractNodeEntity) response.getEntity()).getAcl().isKeptInsideSpace());
+    when(documentFileService1.isKeptInsideSpace("123")).thenReturn(true);
+    response = documentFileRest1.getDocument("123", null);
+    assertTrue(((AbstractNodeEntity) response.getEntity()).getAcl().isKeptInsideSpace());
+    entity.getAcl().setKeptInsideSpace(true);
+    when(documentFileService1.isKeptInsideSpace("123")).thenReturn(false);
+    response = documentFileRest1.getDocument("123", null);
+    assertFalse(((AbstractNodeEntity) response.getEntity()).getAcl().isKeptInsideSpace());
+
     // a user who may not edit the document never manages its access
     entity.getAcl().setCanEdit(false);
     response = documentFileRest1.getDocument("123", null);
     assertFalse(((AbstractNodeEntity) response.getEntity()).getAcl().isCanManageAccess());
+  }
+
+  @Test
+  public void testUpdatePermissionsRefusedWhenTheSpaceKeepsItsDocumentsInside() throws Exception {
+    DocumentFileService documentFileService = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              publicDocumentAccessService,
+                                                              externalDownloadService,
+                                                              documentWebDavService);
+    FileNodeEntity nodeEntity = new FileNodeEntity();
+    nodeEntity.setId("123");
+    nodeEntity.setAcl(new NodePermissionEntity());
+    NodePermission nodePermission = new NodePermission();
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    mockEntityBuilder().when(() -> EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager))
+                       .thenReturn(nodePermission);
+    doThrow(new DocumentSharingRefusedException(DocumentSharingRefusedException.KEPT_INSIDE_SHARE,
+                                                7L,
+                                                "123",
+                                                DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION)).when(documentFileService)
+                                                                                                           .updatePermissions("123",
+                                                                                                                              nodePermission,
+                                                                                                                              1L);
+    mockRestUtils().when(RestUtils::getCurrentUser).thenReturn("mary");
+
+    try (MockedStatic<SpaceSecurityAudit> audit = mockStatic(SpaceSecurityAudit.class)) {
+      Response response = documentFileRest1.updatePermissions(nodeEntity);
+
+      assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
+      assertEquals(DocumentSharingRefusedException.KEPT_INSIDE_SHARE, response.getEntity());
+      audit.verify(() -> SpaceSecurityAudit.actionRefused(7L,
+                                                          "123",
+                                                          DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION,
+                                                          "mary",
+                                                          DocumentSharingRefusedException.REST_CHANNEL));
+    }
+  }
+
+  @Test
+  public void testCreatePublicAccessLinkRefusedWhenTheSpaceKeepsItsDocumentsInside() throws Exception {
+    DocumentFileService documentFileService1 = mock(DocumentFileService.class);
+    DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
+                                                              spaceService,
+                                                              identityManager,
+                                                              metadataService,
+                                                              settingService,
+                                                              publicDocumentAccessService,
+                                                              externalDownloadService,
+                                                              documentWebDavService);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(1L);
+    when(documentFileService1.hasEditPermissionOnDocument("123", 1L)).thenReturn(true);
+    when(publicDocumentAccessService.createDocumentPublicAccess(1L, "123", null, 0L, false))
+                                                                                          .thenThrow(new DocumentSharingRefusedException(DocumentSharingRefusedException.KEPT_INSIDE_PUBLIC_LINK,
+                                                                                                                                         7L,
+                                                                                                                                         "123",
+                                                                                                                                         DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION));
+    PublicDocumentAccessOptionsEntity options = new PublicDocumentAccessOptionsEntity();
+    options.setExpirationDate(0L);
+    mockRestUtils().when(RestUtils::getCurrentUser).thenReturn("mary");
+
+    try (MockedStatic<SpaceSecurityAudit> audit = mockStatic(SpaceSecurityAudit.class)) {
+      Response response = documentFileRest1.createPublicAccessLink(null, "123", options);
+
+      assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
+      assertEquals(DocumentSharingRefusedException.KEPT_INSIDE_PUBLIC_LINK, response.getEntity());
+      audit.verify(() -> SpaceSecurityAudit.actionRefused(7L,
+                                                          "123",
+                                                          DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION,
+                                                          "mary",
+                                                          DocumentSharingRefusedException.REST_CHANNEL));
+    }
   }
 
   private static DocumentSharingRefusedException accessManagementRefusal(String action) {
