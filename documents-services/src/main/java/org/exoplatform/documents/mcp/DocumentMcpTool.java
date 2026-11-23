@@ -287,7 +287,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * letters of a system node's), or a UUID's 36 with its dashes (EXO-95034).
    * A value of another shape is a name, never an id.
    */
-  private static final Pattern     NODE_ID_SHAPE          = Pattern.compile("[0-9A-Za-z-]{32,36}");
+  private static final Pattern     NODE_ID_SHAPE          =
+                                                         Pattern.compile("[0-9A-Za-z]{32}|\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
 
   /**
    * The error of a lookup given a name where an id is expected (EXO-95034):

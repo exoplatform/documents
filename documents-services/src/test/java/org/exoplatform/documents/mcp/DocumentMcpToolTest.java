@@ -507,14 +507,22 @@ public class DocumentMcpToolTest {
    * found nothing, and the assistant told the user the file did not exist.
    * The error now says the value is not an id and to find the id with a
    * search tool, which ai reads as a lookup failure to recover from by a
-   * search. Mutants: the storage's error kept for a name; « search tool » or
-   * « not an id » dropped from the message.
+   * search. A name as long as an id, 33 or 34 characters of letters, digits
+   * and dashes, is a name too. Mutants: the storage's error kept for a name;
+   * « search tool » or « not an id » dropped from the message; any length
+   * from 32 to 36 taken as an id.
    *
    * @throws Exception never
    */
   @Test
   public void getDocumentByIdGivenANameSaysToSearchForIt() throws Exception {
-    for (String name : List.of("zz-8416-form.pdf", "workflow", "folder:workflow", "Private/workflow")) {
+    for (String name : List.of("zz-8416-form.pdf",
+                               "workflow",
+                               "folder:workflow",
+                               "Private/workflow",
+                               // 33 characters of letters, digits and dashes: a name, though as long as an id
+                               "Marketing-Campaign-Assets-Q4-2026",
+                               "Marketing-Campaign-Assets-Q4-2026x")) {
       when(documentFileService.getDocumentById(name, USERNAME)).thenThrow(new ObjectNotFoundException("Node with id " + name
           + " not found"));
 
