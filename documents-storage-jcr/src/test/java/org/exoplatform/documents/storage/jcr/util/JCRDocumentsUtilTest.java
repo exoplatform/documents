@@ -973,6 +973,38 @@ public class JCRDocumentsUtilTest {
     }
   }
 
+  /**
+   * A shortcut whose own title gives it no place in the download is left out
+   * with a warning that names the shortcut, not its target.
+   */
+  @Test
+  public void createFileWarnsAboutAShortcutWithNoPlaceOfItsOwn() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode root = folderNode("rootId", "", null);
+    ExtendedNode documents = folderNode("documentsId", "Documents", root);
+    ExtendedNode folderD = folderNode("dId", "D", documents);
+    ExtendedNode folderC = folderNode("cId", "C", documents);
+    ExtendedNode file = fileNode("fId", "c.txt", "content", folderC);
+    ExtendedNode shortcut = shortcutNode("l1Id", "..", folderD, file, session);
+
+    ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(JCRDocumentsUtil.class);
+    ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                                                                                             new ch.qos.logback.core.read.ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    Path tempFolder = Files.createTempDirectory("shortcut-test");
+    try {
+      JCRDocumentsUtil.createFile(shortcut, "", "", tempFolder.toString(), folderD);
+      assertEquals(Set.of(), filesUnder(tempFolder));
+      List<String> warnings = appender.list.stream().map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage).toList();
+      assertEquals(1, warnings.size());
+      assertTrue(warnings.get(0), warnings.get(0).startsWith("Shortcut "));
+    } finally {
+      logger.detachAppender(appender);
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
   private static ExtendedNode folderNode(String id, String name, ExtendedNode parent) throws RepositoryException {
     ExtendedNode node = namedNode(id, name, parent, NodeTypeConstants.NT_FOLDER);
     childrenOf(node);
