@@ -827,29 +827,33 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     if (versionId == null) {
       throw new IllegalArgumentException("version id is mandatory");
     }
-    // Under its space's "Limit Access Management", a user who may not change
-    // the document's access list restores the version's content, not its list
-    return documentFileStorage.restoreVersion(versionId, aclIdentity, !canManageAccessAs(versionId, aclIdentity));
+    // The version's content is restored, and its access list too unless the
+    // document's space keeps the current one
+    return documentFileStorage.restoreVersion(versionId, aclIdentity, keepsAccessListOnRestore(versionId, aclIdentity));
   }
 
   /**
-   * Decides, on the committed settings and rows, whether a user may change a
-   * document's access list; refused when it cannot be decided
+   * Decides, on the committed settings and rows read once, whether a version
+   * restore keeps the document's current access list: for a user "Limit Access
+   * Management" refuses, and for anyone while the space keeps its documents
+   * inside, since the version's list may hold an entry outside the space
+   * removed since. Kept when it cannot be decided.
    *
    * @param documentId a document's identifier, or one of its versions'
    * @param username the user
    */
-  private boolean canManageAccessAs(String documentId, String username) {
+  private boolean keepsAccessListOnRestore(String documentId, String username) {
     try {
       Space space = documentFileStorage.getDocumentSpace(documentId);
       if (space == null) {
-        return true;
+        return false;
       }
       SpaceSecurityService securityService = getSpaceSecurityService();
-      return securityService.canManageDocumentsAccess(space, securityService.getSettings(space.getSpaceId()), username);
+      SpaceSecuritySettings settings = securityService.getSettings(space.getSpaceId());
+      return securityService.isDocumentsKeptInside(settings) || !securityService.canManageDocumentsAccess(space, settings, username);
     } catch (Exception e) {
       LOG.warn("Access management of document {} could not be decided: its access list is kept", documentId, e);
-      return false;
+      return true;
     }
   }
 

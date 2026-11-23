@@ -400,12 +400,14 @@ public class WebdavWriteCommandHandler {
     Node node = session.getRootNode().getNode(TextUtil.relativizePath(jcrPath));
     Version restoreVersion = node.getBaseVersion();
     DocumentSpaceGuard guard = getDocumentSpaceGuard();
-    if (guard.canManageAccess(node, session.getUserID(), null)) {
+    if (guard.getAccessListChangeRefusal(node, session.getUserID(), null) == null) {
       node.restore(restoreVersion, true);
       return;
     }
     // Under the space's "Limit Access Management", a user who may not change
-    // the access list restores the content and keeps the current access list
+    // the access list restores the content and keeps the current access list,
+    // as anyone does while the space keeps its documents inside: the version's
+    // list may hold an entry outside the space
     String nodeId = ((NodeImpl) node).getIdentifier();
     SessionProvider systemSessionProvider = SessionProvider.createSystemProvider();
     try {
