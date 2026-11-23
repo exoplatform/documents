@@ -397,7 +397,8 @@ public class EntityBuilder {
                                     allCanEdit,
                                     visibilityChoice,
                                     new ArrayList<>(map.values()),
-                                    nodePermission.isCanManageAccess());
+                                    nodePermission.isCanManageAccess(),
+                                    nodePermission.isKeptInsideSpace());
   }
   private static PermissionEntryEntity toPermissionEntryEntity(PermissionEntry permissionEntry, SpaceService spaceService){
     if(permissionEntry == null) return null;

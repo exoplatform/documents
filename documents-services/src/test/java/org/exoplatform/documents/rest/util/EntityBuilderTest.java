@@ -125,6 +125,29 @@ public class EntityBuilderTest {
         assertEquals(Long.valueOf(useridentityEntity.getId()), nodePermission4.getToNotify().keySet().toArray()[0]);
     }
 
+    /**
+     * The access answer carries the flags the UI disables its access actions on.
+     */
+    @Test
+    public void toNodePermissionEntityCarriesTheSpaceFlags() throws Exception {
+        FileNode node = new FileNode();
+        node.setId("fileId");
+        node.setPath("/Groups/spaces/testspace");
+        when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(false);
+        NodePermission acl = new NodePermission(true, true, false, false, List.of(), null, null, null);
+        acl.setKeptInsideSpace(true);
+        acl.setCanManageAccess(false);
+        node.setAcl(acl);
+
+        NodePermissionEntity result = invokeToNodePermissionEntity(node);
+
+        assertTrue(result.isKeptInsideSpace());
+        assertFalse(result.isCanManageAccess());
+
+        acl.setKeptInsideSpace(false);
+        assertFalse(invokeToNodePermissionEntity(node).isKeptInsideSpace());
+    }
+
     @Test
     public void toNodePermissionEntityShowsCreatorWhenExplicitlyAddedAsReadCollaborator() throws Exception {
         Space space = new Space();

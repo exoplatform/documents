@@ -1956,6 +1956,7 @@ public class DocumentFileRest implements ResourceContainer {
         // The listing decides on the cached space; this answer, on its committed settings and roles
         NodePermissionEntity acl = abstractNodeEntity.getAcl();
         acl.setCanManageAccess(acl.isCanEdit() && documentFileService.canManageAccess(documentId, userIdentityId));
+        acl.setKeptInsideSpace(documentFileService.isKeptInsideSpace(documentId));
       }
       return Response.ok(abstractNodeEntity).build();
 

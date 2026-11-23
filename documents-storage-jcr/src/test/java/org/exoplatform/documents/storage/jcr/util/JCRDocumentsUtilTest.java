@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -200,6 +201,55 @@ public class JCRDocumentsUtilTest {
       assertTrue(first.getAcl().isCanManageAccess());
       assertTrue(second.getAcl().isCanManageAccess());
       verify(spaceSecurityService, times(1)).canManageDocumentsAccess(space, settings, "mary");
+      verify(spaceSecurityService, times(1)).isDocumentsKeptInside(settings);
+    }
+  }
+
+  /**
+   * A listing flags the documents of a space keeping its documents inside,
+   * decided on the space's cached settings; a document of no space is not
+   * flagged, and one whose space cannot be resolved is shown as kept inside.
+   */
+  @Test
+  public void testComputeDocumentAclKeptInsideSpace() throws Exception {
+    NodeImpl node = mock(NodeImpl.class);
+    when(node.getACL()).thenReturn(new AccessControlList("root",
+                                                         List.of(new AccessControlEntry("mary", PermissionType.READ),
+                                                                 new AccessControlEntry("mary", PermissionType.SET_PROPERTY))));
+    Space space = new Space();
+    space.setId(7L);
+    SpaceSecuritySettings settings = new SpaceSecuritySettings();
+    settings.setKeepDocumentsInside(true);
+    SpaceSecurityService spaceSecurityService = mock(SpaceSecurityService.class);
+    when(spaceSecurityService.getDisplaySettings(space)).thenReturn(settings);
+    when(spaceSecurityService.canManageDocumentsAccess(space, settings, "mary")).thenReturn(true);
+    when(spaceSecurityService.isDocumentsKeptInside(settings)).thenReturn(true);
+    COMMONS_UTILS_UTIL.when(() -> CommonsUtils.getService(SpaceSecurityService.class)).thenReturn(spaceSecurityService);
+    DocumentSpaceGuard guard = mock(DocumentSpaceGuard.class);
+    when(guard.getDocumentSpace(node)).thenReturn(space);
+
+    try (MockedStatic<DocumentSpaceGuard> guards = mockStatic(DocumentSpaceGuard.class)) {
+      guards.when(DocumentSpaceGuard::getInstance).thenReturn(guard);
+      FileNode document = new FileNode();
+
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
+      assertTrue(document.getAcl().isKeptInsideSpace());
+      assertTrue(document.getAcl().isCanManageAccess());
+      verify(spaceSecurityService, never()).getSettings(anyLong());
+
+      when(spaceSecurityService.isDocumentsKeptInside(settings)).thenReturn(false);
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
+      assertFalse(document.getAcl().isKeptInsideSpace());
+
+      when(guard.getDocumentSpace(node)).thenReturn(null);
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
+      assertFalse(document.getAcl().isKeptInsideSpace());
+      assertTrue(document.getAcl().isCanManageAccess());
+
+      when(guard.getDocumentSpace(node)).thenThrow(new RepositoryException("unreadable"));
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
+      assertTrue(document.getAcl().isKeptInsideSpace());
+      assertFalse(document.getAcl().isCanManageAccess());
     }
   }
 

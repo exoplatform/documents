@@ -44,13 +44,19 @@ public class NodePermissionEntity {
    */
   private boolean canManageAccess = true;
 
+  /**
+   * Whether the document's space keeps its documents inside: the UI disables
+   * every share outside the space, everyone and the public link included.
+   */
+  private boolean keptInsideSpace;
+
   public NodePermissionEntity(boolean canAccess,
                               boolean canEdit,
                               boolean canDelete,
                               boolean allMembersCanEdit,
                               String visibilityChoice,
                               List<PermissionEntryEntity> collaborators) {
-    this(canAccess, canEdit, canDelete, allMembersCanEdit, visibilityChoice, collaborators, true);
+    this(canAccess, canEdit, canDelete, allMembersCanEdit, visibilityChoice, collaborators, true, false);
   }
 
 }
