@@ -1039,6 +1039,7 @@ export default {
     },
     // Returns an existing child folder by name, creating it when missing.
     // Hidden folders are looked up too: the space's 'Activity Stream Documents' folder is hidden, and a lookup that misses it creates a visible duplicate.
+    // When a hidden folder and a visible one share the name, the hidden one is used.
     ensureFolder(ownerId, parentFolderId, folderPath, name) {
       const filter = {ownerId, listingType: 'FOLDER', sortField: 'name', ascending: true, favorites: false, showHiddenFiles: true};
       if (parentFolderId) {
@@ -1046,7 +1047,8 @@ export default {
       }
       return this.$documentFileService.getDocumentItems(filter, null, null, 0, 200, 'owner')
         .then(items => {
-          const found = (items || []).find(item => item.folder && item.name === name);
+          const matches = (items || []).filter(item => item.folder && item.name === name);
+          const found = matches.find(item => item.hidden) || matches[0];
           if (found) {
             return found;
           }
