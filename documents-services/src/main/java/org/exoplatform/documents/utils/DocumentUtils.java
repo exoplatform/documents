@@ -39,7 +39,7 @@ public final class DocumentUtils {
    * the string nor open or close a tag or a comment in the script block.
    *
    * @param value the value, possibly null
-   * @return the quoted literal, or {@code null} when the value is null
+   * @return the quoted literal, or the literal {@code "null"} when the value is null
    */
   public static String toScriptStringLiteral(String value) {
     return value == null ? "null" : "'" + StringEscapeUtils.escapeEcmaScript(value).replace("<", "\\u003C") + "'";
