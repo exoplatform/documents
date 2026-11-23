@@ -19,6 +19,7 @@ package org.exoplatform.documents.storage.jcr.util;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -218,6 +219,7 @@ public class JCRDocumentsUtilTest {
                                                                  new AccessControlEntry("mary", PermissionType.SET_PROPERTY))));
     Space space = new Space();
     space.setId(7L);
+    space.setPrettyName("projects");
     SpaceSecuritySettings settings = new SpaceSecuritySettings();
     settings.setKeepDocumentsInside(true);
     SpaceSecurityService spaceSecurityService = mock(SpaceSecurityService.class);
@@ -235,21 +237,32 @@ public class JCRDocumentsUtilTest {
       JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
       assertTrue(document.getAcl().isKeptInsideSpace());
       assertTrue(document.getAcl().isCanManageAccess());
+      assertEquals("projects", document.getAcl().getSpacePrettyName());
       verify(spaceSecurityService, never()).getSettings(anyLong());
 
       when(spaceSecurityService.isDocumentsKeptInside(settings)).thenReturn(false);
       JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
       assertFalse(document.getAcl().isKeptInsideSpace());
+      assertEquals("projects", document.getAcl().getSpacePrettyName());
+
+      // the space resolved, its settings unreadable: shown as refusing both, its name kept
+      when(spaceSecurityService.getDisplaySettings(space)).thenThrow(new IllegalStateException("unreadable settings"));
+      JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
+      assertTrue(document.getAcl().isKeptInsideSpace());
+      assertFalse(document.getAcl().isCanManageAccess());
+      assertEquals("projects", document.getAcl().getSpacePrettyName());
 
       when(guard.getDocumentSpace(node)).thenReturn(null);
       JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
       assertFalse(document.getAcl().isKeptInsideSpace());
       assertTrue(document.getAcl().isCanManageAccess());
+      assertNull(document.getAcl().getSpacePrettyName());
 
       when(guard.getDocumentSpace(node)).thenThrow(new RepositoryException("unreadable"));
       JCRDocumentsUtil.computeDocumentAcl(node, document, new Identity("mary"), mock(IdentityManager.class), mock(SpaceService.class));
       assertTrue(document.getAcl().isKeptInsideSpace());
       assertFalse(document.getAcl().isCanManageAccess());
+      assertNull(document.getAcl().getSpacePrettyName());
     }
   }
 
