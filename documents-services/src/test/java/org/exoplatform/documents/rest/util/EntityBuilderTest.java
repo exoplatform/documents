@@ -137,12 +137,14 @@ public class EntityBuilderTest {
         NodePermission acl = new NodePermission(true, true, false, false, List.of(), null, null, null);
         acl.setKeptInsideSpace(true);
         acl.setCanManageAccess(false);
+        acl.setSpacePrettyName("projects");
         node.setAcl(acl);
 
         NodePermissionEntity result = invokeToNodePermissionEntity(node);
 
         assertTrue(result.isKeptInsideSpace());
         assertFalse(result.isCanManageAccess());
+        assertEquals("projects", result.getSpacePrettyName());
 
         acl.setKeptInsideSpace(false);
         assertFalse(invokeToNodePermissionEntity(node).isKeptInsideSpace());

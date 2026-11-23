@@ -736,11 +736,13 @@ public class JCRDocumentsUtil {
   }
 
   /**
-   * Sets whether the space holding the node lets the user change its access
-   * list, and whether it keeps its documents inside, decided for display on
-   * the space's cached settings, once per space in a listing: a refusal of a
-   * change itself reads the committed ones. A space that cannot be resolved
-   * is shown as refusing both.
+   * Sets the pretty name of the space holding the node (a link's target's),
+   * then whether that space lets the user change its access list and whether
+   * it keeps its documents inside, both decided for display on the space's
+   * cached settings, once per space in a listing: a refusal of a change itself
+   * reads the committed ones. A space that cannot be resolved, or whose
+   * settings cannot be read, is shown as refusing both; in the second case its
+   * name is kept.
    */
   private static void setAccessManagementFlags(Node node, NodePermission nodePermission, boolean canEdit, String username) {
     try {
@@ -749,6 +751,7 @@ public class JCRDocumentsUtil {
         nodePermission.setCanManageAccess(canEdit);
         return;
       }
+      nodePermission.setSpacePrettyName(space.getPrettyName());
       Map<String, Boolean> decisions = ACCESS_DECISIONS.get();
       String accessDecisionKey = space.getId() + "/" + username;
       String keptInsideDecisionKey = space.getId() + KEPT_INSIDE_DECISION_SUFFIX;
