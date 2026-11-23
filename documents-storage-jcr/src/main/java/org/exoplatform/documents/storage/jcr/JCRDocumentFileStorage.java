@@ -3155,7 +3155,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                   descendantsPermissions);
           } catch (RepositoryException | RuntimeException e) {
             LOG.error("Version of document {} restored, but its access list could not be kept: check its access",
-                      node.getUUID());
+                      node.getUUID(),
+                      e);
             throw e;
           }
           Version newVersion = node.checkin();

@@ -1070,7 +1070,9 @@ public class JCRDocumentsUtil {
    * user who may edit the document without changing its access can restore it.
    * The document must be checked out when the private-access mixin has to be
    * added or removed on it or on a node below it, as told by
-   * {@link #needsMixinChange}; only the lists change otherwise.
+   * {@link #needsMixinChange}; only the lists change otherwise. The lists are
+   * saved in several steps: when one fails, the nodes whose list is not put
+   * back yet are logged with the error, which is rethrown.
    *
    * @param repository the repository holding the document
    * @param workspace the document's workspace
@@ -1079,7 +1081,7 @@ public class JCRDocumentsUtil {
    *          its own
    * @param descendantsPermissions the own permissions of the nodes below it, by
    *          node id, as read by {@link #getDescendantsOwnPermissions(Node)}
-   * @throws RepositoryException when the list can't be put back
+   * @throws RepositoryException when a list can't be put back
    */
   public static void putBackOwnPermissions(ManageableRepository repository,
                                            String workspace,
@@ -1087,6 +1089,10 @@ public class JCRDocumentsUtil {
                                            Map<String, String[]> ownPermissions,
                                            Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
     Session systemSession = repository.getSystemSession(workspace);
+    // The nodes whose list is not put back yet, named in the log when a save fails
+    Set<String> notPutBack = new LinkedHashSet<>();
+    notPutBack.add(nodeUuid);
+    notPutBack.addAll(descendantsPermissions.keySet());
     try {
       ExtendedNode node = (ExtendedNode) systemSession.getNodeByUUID(nodeUuid);
       if (ownPermissions != null) {
@@ -1101,9 +1107,16 @@ public class JCRDocumentsUtil {
         node.removeMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
       systemSession.save();
+      notPutBack.remove(nodeUuid);
       // After the document's own list: a node that reads its folder's list reads the one just put back
-      putBackDescendantsPermissions(systemSession, descendantsPermissions);
+      putBackDescendantsPermissions(systemSession, descendantsPermissions, notPutBack);
       systemSession.save();
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.error("After the restore of a version of document {}, the access lists of the nodes {} were not put back: they may keep the lists of the restored version",
+                nodeUuid,
+                notPutBack,
+                e);
+      throw e;
     } finally {
       systemSession.logout();
     }
@@ -1151,13 +1164,18 @@ public class JCRDocumentsUtil {
   }
 
   private static void putBackDescendantsPermissions(Session systemSession,
-                                                    Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
+                                                    Map<String, Map<String, String[]>> descendantsPermissions,
+                                                    Set<String> notPutBack) throws RepositoryException {
     // The lists are put back first and saved once: a node that reads its
     // folder's list only sees a list changed in this session after a save
     for (Map.Entry<String, Map<String, String[]>> descendant : descendantsPermissions.entrySet()) {
       ExtendedNode child = findNode(systemSession, descendant.getKey());
-      if (child == null || descendant.getValue() == null) {
-        continue; // the restore did not bring this node back, or it has no list to put back
+      if (child == null) {
+        notPutBack.remove(descendant.getKey()); // the restore did not bring this node back
+        continue;
+      }
+      if (descendant.getValue() == null) {
+        continue; // it has no list to put back: its list, if any, is removed below
       }
       if (!child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         child.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
@@ -1165,16 +1183,25 @@ public class JCRDocumentsUtil {
       child.setPermissions(descendant.getValue());
     }
     systemSession.save();
+    descendantsPermissions.forEach((nodeId, permissions) -> {
+      if (permissions != null) {
+        notPutBack.remove(nodeId);
+      }
+    });
     // Then the lists that are gone are removed, parents first, each removal saved
     for (Map.Entry<String, Map<String, String[]>> descendant : descendantsPermissions.entrySet()) {
+      if (descendant.getValue() != null) {
+        continue;
+      }
       ExtendedNode child = findNode(systemSession, descendant.getKey());
-      if (child != null && descendant.getValue() == null && child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+      if (child != null && child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         // Removing the mixin keeps the list in effect: its folder's is set first
         child.setPermissions(toPermissions((ExtendedNode) child.getParent()));
         systemSession.save();
         child.removeMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
         systemSession.save();
       }
+      notPutBack.remove(descendant.getKey());
     }
   }
 

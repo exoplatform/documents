@@ -80,6 +80,11 @@ import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDocumentFileStorageTest {
 
@@ -1251,9 +1256,20 @@ public class JCRDocumentFileStorageTest {
     when(session.getNodeByUUID("111")).thenReturn(node);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.putBackOwnPermissions(any(), any(), nullable(String.class), any(), any()))
                       .thenThrow(new javax.jcr.RepositoryException("refused"));
-
-    assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.restoreVersion("123", "user"));
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(JCRDocumentFileStorage.class);
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.restoreVersion("123", "user"));
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
     verify(node, never()).checkin();
+    List<ILoggingEvent> errors = appender.list.stream().filter(event -> event.getLevel() == Level.ERROR).toList();
+    assertEquals(1, errors.size());
+    assertEquals("the error is logged with it", "refused", errors.get(0).getThrowableProxy().getMessage());
   }
 
   @Test
