@@ -1068,7 +1068,9 @@ public class JCRDocumentsUtil {
    * Gives a document back the access list read by
    * {@link #getOwnPermissions(Node)}, through a system session, so that a
    * user who may edit the document without changing its access can restore it.
-   * The document must be checked out: its mixins may change.
+   * The document must be checked out when the private-access mixin has to be
+   * added or removed on it or on a node below it, as told by
+   * {@link #needsMixinChange}; only the lists change otherwise.
    *
    * @param repository the repository holding the document
    * @param workspace the document's workspace
