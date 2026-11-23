@@ -73,8 +73,6 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
   /** The root of the documents the DLP quarantines */
   public static final String         QUARANTINE_ROOT           = "/Quarantine";
 
-  private static final String        DRIVE_FOLDER_NAME         = "Documents";
-
   private static final Log           LOG                       = ExoLogger.getLogger(JCRSpaceDocumentsExposureStorage.class);
 
   private final RepositoryService    repositoryService;
@@ -260,7 +258,7 @@ public class JCRSpaceDocumentsExposureStorage implements SpaceDocumentsExposureS
   }
 
   private String getDriveRootPath(Space space) {
-    return JCRDocumentsUtil.getGroupsPath(nodeHierarchyCreator) + space.getGroupId() + "/" + DRIVE_FOLDER_NAME;
+    return JCRDocumentsUtil.getSpaceDriveRootPath(nodeHierarchyCreator, space);
   }
 
   private ExposedDocument toExposedDocument(Node node, String documentId) throws RepositoryException {

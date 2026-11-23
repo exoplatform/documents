@@ -1125,6 +1125,117 @@ public class JCRDocumentFileStorageTest {
     assertThrows(IllegalStateException.class, () -> this.jcrDocumentFileStorage.getDocumentSpace("123"));
   }
 
+  /**
+   * The access a change is decided on is read through a system session: the
+   * access list the document reads, one identity per entry whatever its
+   * permission types; what a save of the request writes, as
+   * {@code updatePermissions} writes it; the owner; and the identities of the
+   * space's drive root.
+   */
+  @Test
+  public void getAccessChange() throws RepositoryException {
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = new RepositoryEntry();
+    repositoryEntry.setName("repository");
+    repositoryEntry.setDefaultWorkspaceName("collaboration");
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    SessionImpl systemSession = mock(SessionImpl.class);
+    SessionProvider systemSessionProvider = mock(SessionProvider.class);
+    SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(systemSessionProvider);
+    when(systemSessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    ExtendedNode node = mock(ExtendedNode.class);
+    when(systemSession.getNodeByIdentifier("123")).thenReturn(node);
+    when(node.getPath()).thenReturn("/Groups/spaces/team/Documents/report.pdf");
+    AccessControlList storedAccessList = new AccessControlList("owner", new ArrayList<>());
+    storedAccessList.addPermissions("*:/spaces/team", new String[] { PermissionType.READ, PermissionType.ADD_NODE });
+    storedAccessList.addPermissions("*:/spaces/other", new String[] { PermissionType.READ });
+    when(node.getACL()).thenReturn(storedAccessList);
+    when(node.hasProperty(NodeTypeConstants.EXO_OWNER)).thenReturn(true);
+    Property ownerProperty = mock(Property.class);
+    when(ownerProperty.getString()).thenReturn("owner");
+    when(node.getProperty(NodeTypeConstants.EXO_OWNER)).thenReturn(ownerProperty);
+    Space space = new Space();
+    space.setGroupId("/spaces/team");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getSpaceDriveRootPath(nodeHierarchyCreator, space))
+                      .thenReturn("/Groups/spaces/team/Documents");
+    org.exoplatform.services.jcr.impl.core.NodeImpl driveRoot = mock(org.exoplatform.services.jcr.impl.core.NodeImpl.class);
+    when(systemSession.itemExists("/Groups/spaces/team/Documents")).thenReturn(true);
+    doReturn(driveRoot).when(systemSession).getItem("/Groups/spaces/team/Documents");
+    DocumentSpaceGuard guard = mockDocumentSpaceGuard();
+    when(guard.getAccessList(driveRoot)).thenReturn(Map.of("*:/spaces/team",
+                                                           List.of(PermissionType.READ),
+                                                           "*:/platform/administrators",
+                                                           List.of(PermissionType.READ)));
+    Space otherSpace = new Space();
+    otherSpace.setGroupId("/spaces/other");
+    when(spaceService.getSpaceByPrettyName("other")).thenReturn(otherSpace);
+    NodePermission nodePermission = new NodePermission();
+    nodePermission.setPublic(true);
+    nodePermission.setPermissions(List.of(new PermissionEntry(new Identity("space", "other"),
+                                                              "read",
+                                                              PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name()),
+                                          new PermissionEntry(new Identity("group", "/platform/users"), "edit", null),
+                                          new PermissionEntry(new Identity("organization", "john"), "read", null)));
+
+    DocumentAccessChange accessChange = jcrDocumentFileStorage.getAccessChange("123", space, nodePermission);
+
+    assertEquals(Set.of("*:/spaces/team", "*:/spaces/other"), accessChange.storedIdentities());
+    assertEquals(Set.of("owner",
+                        "*:/platform/administrators",
+                        "any",
+                        "manager:/spaces/other",
+                        "redactor:/spaces/other",
+                        "publisher:/spaces/other",
+                        "*:/platform/users",
+                        "john"),
+                 accessChange.requestedIdentities());
+    assertEquals("owner", accessChange.owner());
+    assertEquals(Set.of("*:/spaces/team", "*:/platform/administrators"), accessChange.driveRootIdentities());
+    verify(systemSessionProvider).close();
+
+    // no request: nothing requested; a drive root with no access list of its own adds no identity
+    when(guard.getAccessList(driveRoot)).thenReturn(null);
+    accessChange = jcrDocumentFileStorage.getAccessChange("123", space, null);
+    assertEquals(Set.of(), accessChange.requestedIdentities());
+    assertEquals(Set.of(), accessChange.driveRootIdentities());
+
+    // a document the repository cannot read is no empty access list: the caller fails closed
+    when(systemSession.getNodeByIdentifier("unreadable")).thenThrow(new RepositoryException("unreadable"));
+    assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.getAccessChange("unreadable", space, null));
+  }
+
+  /**
+   * In a personal drive, a save writes no entry for the platform
+   * administrators.
+   */
+  @Test
+  public void getAccessChangeOfAPersonalDocument() throws RepositoryException {
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = new RepositoryEntry();
+    repositoryEntry.setDefaultWorkspaceName("collaboration");
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    SessionImpl systemSession = mock(SessionImpl.class);
+    SessionProvider systemSessionProvider = mock(SessionProvider.class);
+    SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(systemSessionProvider);
+    when(systemSessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    ExtendedNode node = mock(ExtendedNode.class);
+    when(systemSession.getNodeByIdentifier("123")).thenReturn(node);
+    when(node.getPath()).thenReturn("/Users/j___/jo___/joh___/john/Private/Documents/report.pdf");
+    when(node.getACL()).thenReturn(new AccessControlList("john", new ArrayList<>()));
+    Space space = new Space();
+    space.setGroupId("/spaces/team");
+    mockDocumentSpaceGuard();
+    NodePermission nodePermission = new NodePermission();
+    nodePermission.setPermissions(List.of());
+
+    DocumentAccessChange accessChange = jcrDocumentFileStorage.getAccessChange("123", space, nodePermission);
+
+    assertEquals(Set.of(), accessChange.requestedIdentities());
+    assertNull(accessChange.owner());
+  }
+
   private DocumentSpaceGuard mockDocumentSpaceGuard() {
     DocumentSpaceGuard guard = mock(DocumentSpaceGuard.class);
     this.jcrDocumentFileStorage = spy(this.jcrDocumentFileStorage);

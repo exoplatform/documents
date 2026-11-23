@@ -57,6 +57,7 @@ public class PublicDocumentAccessServiceImplTest {
     when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(publicDocumentAccess);
     when(publicDocumentAccessStorage.savePublicDocumentAccess(any(), anyLong())).thenReturn(publicDocumentAccess);
     publicDocumentAccessService.createDocumentPublicAccess(1L, "123", "12345678", new Date().getTime(), false);
+    verify(documentFileService).checkCanCreatePublicLink("123", 1L);
     verify(publicDocumentAccessStorage).savePublicDocumentAccess(any(), anyLong());
   }
 
@@ -214,9 +215,7 @@ public class PublicDocumentAccessServiceImplTest {
   @Test
   public void createPublicAccessRefusedWhenTheSpaceRefusesTheUser() throws IllegalAccessException {
     doThrow(refusal(DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION)).when(documentFileService)
-                                                                              .checkCanManageAccess("123",
-                                                                                                    1L,
-                                                                                                    DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION);
+                                                                              .checkCanCreatePublicLink("123", 1L);
 
     DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
                                                            () -> publicDocumentAccessService.createDocumentPublicAccess(1L,
@@ -229,13 +228,38 @@ public class PublicDocumentAccessServiceImplTest {
     verify(publicDocumentAccessStorage, never()).savePublicDocumentAccess(any(), anyLong());
   }
 
+  /**
+   * "Keep documents inside the space" refuses the link ahead of the method's
+   * catch-all: the refusal reaches the caller with its code, instead of an
+   * error logged and a null link.
+   */
+  @Test
+  public void createPublicAccessRefusedWhenTheSpaceKeepsItsDocumentsInside() throws IllegalAccessException {
+    doThrow(new DocumentSharingRefusedException(DocumentSharingRefusedException.KEPT_INSIDE_PUBLIC_LINK,
+                                                7L,
+                                                "123",
+                                                DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION)).when(documentFileService)
+                                                                                                           .checkCanCreatePublicLink("123",
+                                                                                                                                     1L);
+
+    DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
+                                                           () -> publicDocumentAccessService.createDocumentPublicAccess(1L,
+                                                                                                                        "123",
+                                                                                                                        null,
+                                                                                                                        0L,
+                                                                                                                        false));
+
+    assertEquals(DocumentSharingRefusedException.KEPT_INSIDE_PUBLIC_LINK, refusal.getMessageCode());
+    assertEquals(DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION, refusal.getAction());
+    verify(publicDocumentAccessStorage, never()).getPublicDocumentAccessByNodeId(anyString());
+    verify(publicDocumentAccessStorage, never()).savePublicDocumentAccess(any(), anyLong());
+  }
+
   @Test
   @SuppressWarnings("removal")
   public void theDeprecatedCreationThrowsARefusalUnchecked() throws IllegalAccessException {
     doThrow(refusal(DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION)).when(documentFileService)
-                                                                              .checkCanManageAccess("123",
-                                                                                                    1L,
-                                                                                                    DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION);
+                                                                              .checkCanCreatePublicLink("123", 1L);
 
     IllegalStateException refusal = assertThrows(IllegalStateException.class,
                                                  () -> publicDocumentAccessService.createPublicDocumentAccess(1L,

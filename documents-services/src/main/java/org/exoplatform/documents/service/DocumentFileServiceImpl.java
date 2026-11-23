@@ -24,6 +24,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -54,6 +56,7 @@ import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.plugin.DocumentCategoryPlugin;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.documents.util.SpaceAccessClassifier;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -62,6 +65,7 @@ import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.services.thumbnail.ImageThumbnailService;
 import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
@@ -82,6 +86,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   private static final Log      LOG               = ExoLogger.getLogger(DocumentFileServiceImpl.class);
 
   private static final String   RENAME_FILE_EVENT = "rename_file_event";
+
+  /** The membership of a whole group, as an access list writes it */
+  private static final String   SPACE_GROUP_MEMBERSHIP_PREFIX = "*:";
 
   private static final String   VIDEO_THUMBNAIL_TYPE = "videoThumbnail";
 
@@ -501,7 +508,12 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public void updatePermissions(String documentId,  NodePermission nodePermissionEntity, long authenticatedUserId) throws IllegalAccessException {
     // Decided once for the whole request, before any write
-    checkCanManageAccess(documentId, authenticatedUserId, DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION);
+    Collection<Long> destinationIds = nodePermissionEntity.getToShare() == null ? List.of()
+                                                                                : nodePermissionEntity.getToShare().keySet();
+    checkCanChangeAccess(documentId,
+                         authenticatedUserId,
+                         DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION,
+                         (space, settings) -> refuseOutsideShare(documentId, nodePermissionEntity, destinationIds, space, settings));
     org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(authenticatedUserId);
     documentFileStorage.updatePermissions(documentId, nodePermissionEntity, aclIdentity);
     nodePermissionEntity.getToShare().keySet().forEach(destId-> {
@@ -525,7 +537,10 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   @Override
   public void shareDocument(String documentId, long destId, long authenticatedUserId, boolean notifyMember) throws IllegalAccessException {
-    checkCanManageAccess(documentId, authenticatedUserId, DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION);
+    checkCanChangeAccess(documentId,
+                         authenticatedUserId,
+                         DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION,
+                         (space, settings) -> refuseOutsideShare(documentId, null, List.of(destId), space, settings));
     documentFileStorage.shareDocument(documentId, destId, getAclUserIdentity(authenticatedUserId), notifyMember );
   }
 
@@ -546,6 +561,48 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   @Override
   public void checkCanManageAccess(String documentId, long userIdentityId, String action) throws IllegalAccessException {
+    checkCanChangeAccess(documentId, userIdentityId, action, (space, settings) -> null);
+  }
+
+  @Override
+  public void checkCanCreatePublicLink(String documentId, long userIdentityId) throws IllegalAccessException {
+    checkCanChangeAccess(documentId,
+                         userIdentityId,
+                         DocumentSharingRefusedException.CREATE_PUBLIC_LINK_ACTION,
+                         (space, settings) -> getSpaceSecurityService().isDocumentsKeptInside(settings) ? DocumentSharingRefusedException.KEPT_INSIDE_PUBLIC_LINK
+                                                                                                         : null);
+  }
+
+  @Override
+  public boolean isKeptInsideSpace(String documentId) {
+    try {
+      Space space = documentFileStorage.getDocumentSpace(documentId);
+      if (space == null) {
+        return false;
+      }
+      SpaceSecurityService securityService = getSpaceSecurityService();
+      return securityService.isDocumentsKeptInside(securityService.getSettings(space.getSpaceId()));
+    } catch (ObjectNotFoundException e) {
+      return true;
+    } catch (RuntimeException e) {
+      LOG.warn("Whether the space of document {} keeps its documents inside could not be read: shown kept inside", documentId, e);
+      return true;
+    }
+  }
+
+  /**
+   * Decides a change of the document's access on its space's committed
+   * settings, read once: "Limit Access Management" first, then the rule of
+   * "Keep documents inside the space" the change applies.
+   *
+   * @param keptInsideRefusal answers the code of the refusal "Keep documents
+   *          inside the space" makes for the change, null when it lets it
+   *          through
+   */
+  private void checkCanChangeAccess(String documentId,
+                                    long userIdentityId,
+                                    String action,
+                                    BiFunction<Space, SpaceSecuritySettings, String> keptInsideRefusal) throws IllegalAccessException {
     Identity userIdentity = identityManager.getIdentity(userIdentityId);
     if (userIdentity == null) {
       throw new IllegalAccessException("Can't find user identity with id " + userIdentityId);
@@ -571,6 +628,84 @@ public class DocumentFileServiceImpl implements DocumentFileService {
                                                 documentId,
                                                 action);
     }
+    String refusalCode = keptInsideRefusal.apply(space, settings);
+    if (refusalCode != null) {
+      throw new DocumentSharingRefusedException(refusalCode, space.getSpaceId(), documentId, action);
+    }
+  }
+
+  /**
+   * Under "Keep documents inside the space", refuses a change that adds an
+   * identity outside the space to the document's stored access list: one the
+   * requested permissions write, or a share destination the list does not hold.
+   * An identity the stored list already holds is kept as it is; removing one is
+   * no addition.
+   *
+   * @return the refusal's code, null when the change adds nothing outside
+   */
+  private String refuseOutsideShare(String documentId,
+                                    NodePermission permissions,
+                                    Collection<Long> destinationIds,
+                                    Space space,
+                                    SpaceSecuritySettings settings) {
+    SpaceSecurityService securityService = getSpaceSecurityService();
+    if (!securityService.isDocumentsKeptInside(settings)) {
+      return null;
+    }
+    DocumentAccessChange accessChange = documentFileStorage.getAccessChange(documentId, space, permissions);
+    Set<String> storedIdentities = accessChange.storedIdentities();
+    Set<String> addedIdentities = new HashSet<>(accessChange.requestedIdentities());
+    addedIdentities.removeAll(storedIdentities);
+    for (Long destinationId : destinationIds) {
+      String destination = getShareDestination(destinationId);
+      if (destination == null) {
+        // A destination that cannot be resolved cannot be told inside
+        return DocumentSharingRefusedException.KEPT_INSIDE_SHARE;
+      } else if (!holdsDestination(storedIdentities, destination)) {
+        addedIdentities.add(destination);
+      }
+    }
+    if (addedIdentities.isEmpty()) {
+      return null;
+    }
+    Set<String> users = addedIdentities.stream()
+                                       .filter(identity -> identity.indexOf(':') < 0 && !IdentityConstants.ANY.equals(identity))
+                                       .collect(Collectors.toSet());
+    Set<String> members = users.isEmpty() ? Set.of() : securityService.getCommittedMembers(space.getSpaceId(), users);
+    SpaceAccessClassifier classifier = new SpaceAccessClassifier(space.getGroupId(),
+                                                                 members::contains,
+                                                                 accessChange.driveRootIdentities());
+    return classifier.hasOutsideEntry(addedIdentities, accessChange.owner()) ? DocumentSharingRefusedException.KEPT_INSIDE_SHARE
+                                                                              : null;
+  }
+
+  /**
+   * @return the identity a share to this social identity reaches, as an
+   *         access list writes it: a space's whole group ({@code *:<group>})
+   *         or a user name; null when it cannot be resolved
+   */
+  private String getShareDestination(long destinationId) {
+    Identity destination = identityManager.getIdentity(destinationId);
+    if (destination == null) {
+      return null;
+    } else if (SpaceIdentityProvider.NAME.equals(destination.getProviderId())) {
+      Space destinationSpace = spaceService.getSpaceByPrettyName(destination.getRemoteId());
+      return destinationSpace == null ? null : SPACE_GROUP_MEMBERSHIP_PREFIX + destinationSpace.getGroupId();
+    } else {
+      return destination.getRemoteId();
+    }
+  }
+
+  /**
+   * @return whether the stored access list holds the destination: a user's own
+   *         entry, or an entry of any membership of a space's group
+   */
+  private boolean holdsDestination(Set<String> storedIdentities, String destination) {
+    if (!destination.startsWith(SPACE_GROUP_MEMBERSHIP_PREFIX)) {
+      return storedIdentities.contains(destination);
+    }
+    String groupId = destination.substring(SPACE_GROUP_MEMBERSHIP_PREFIX.length());
+    return storedIdentities.stream().anyMatch(identity -> identity.endsWith(":" + groupId));
   }
 
   @Override
