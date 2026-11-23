@@ -107,35 +107,31 @@
           <p class="text-header text-sub-title mb-3">
             {{ $t('documents.label.external.access.header') }}
           </p>
-          <v-tooltip
-            :disabled="!keptInsideSpace"
-            content-class="keptInsideSpaceTooltip"
-            bottom>
-            <template #activator="{ on, attrs }">
-              <div
-                id="documentExternalAccess"
-                v-bind="attrs"
-                v-on="on">
-                <exo-identity-suggester
-                  ref="invitedCollaborators"
-                  :labels="suggesterLabels"
-                  v-model="collaborators"
-                  :search-options="searchOptions"
-                  :ignore-items="ignoreItems"
-                  :disabled="keptInsideSpace"
-                  name="collaborator"
-                  type-of-relations="user_to_invite"
-                  height="40"
-                  :group-member="userGroup"
-                  :group-type="groupType"
-                  :all-groups-for-admin="allGroupsForAdmin"
-                  include-users
-                  include-spaces
-                  include-groups />
-              </div>
-            </template>
-            <span>{{ $t('documents.tooltip.keptInsideSpace') }}</span>
-          </v-tooltip>
+          <div id="documentExternalAccess">
+            <!-- re-created when its search scope changes: the suggester keeps the results of its earlier searches -->
+            <exo-identity-suggester
+              ref="invitedCollaborators"
+              :key="searchScope"
+              :labels="suggesterLabels"
+              v-model="collaborators"
+              :search-options="searchOptions"
+              :ignore-items="ignoreItems"
+              :type-of-relations="keptInsideSpace ? 'member_of_space' : 'user_to_invite'"
+              :include-users="!keptInsideSpace || !!spacePrettyName"
+              :include-spaces="!keptInsideSpace"
+              :include-groups="!keptInsideSpace"
+              name="collaborator"
+              height="40"
+              :group-member="userGroup"
+              :group-type="groupType"
+              :all-groups-for-admin="allGroupsForAdmin" />
+            <p
+              v-if="keptInsideSpace"
+              id="documentExternalAccessMembersOnly"
+              class="text-subtitle text-break mb-0 mt-1">
+              {{ $t('documents.label.visibility.spaceMembersOnly') }}
+            </p>
+          </div>
           <div v-if="users.length" class="mt-2">
             <documents-visibility-collaborators
               v-for="user in usersToDisplay"
@@ -254,9 +250,6 @@ export default {
     },
     icon: null,
     collaborators: [],
-    searchOptions: {
-      currentUser: '',
-    },
     originalFileProperties: {
       visibilityChoice: '',
       publicLinkEnabled: false,
@@ -318,6 +311,22 @@ export default {
     keptInsideSpace() {
       return !!this.file?.acl?.keptInsideSpace;
     },
+    spacePrettyName() {
+      // The document's space, a link's target's included, whatever page shows it
+      return this.file?.acl?.spacePrettyName;
+    },
+    searchOptions() {
+      // While the space keeps its documents inside, only its members are searched
+      return this.keptInsideSpace ? {
+        currentUser: '',
+        spaceURL: this.spacePrettyName,
+      } : {
+        currentUser: '',
+      };
+    },
+    searchScope() {
+      return this.keptInsideSpace ? `members:${this.spacePrettyName || ''}` : 'platform';
+    },
     publicLinkRefused() {
       // Turning an existing link off stays possible; creating one is refused
       return this.keptInsideSpace && !this.publicLinkEnabled;
@@ -349,7 +358,8 @@ export default {
     },
     suggesterLabels() {
       return {
-        searchPlaceholder: this.$t('documents.label.visibility.searchPlaceholder'),
+        // "Type space or people names": no space is searched while the space keeps its documents inside
+        searchPlaceholder: this.keptInsideSpace ? '' : this.$t('documents.label.visibility.searchPlaceholder'),
         placeholder: this.$t('documents.label.visibility.placeholder'),
         noDataLabel: this.$t('documents.label.visibility.noDataLabel'),
       };
@@ -479,7 +489,7 @@ export default {
     mapCollaborator(collaborator) {
       const fullName = collaborator.profile
           && collaborator.profile.fullName
-          && collaborator.profile.fullName.substring(0, collaborator.profile.fullName.lastIndexOf(' ('));
+          && this.withoutUsername(collaborator.profile.fullName);
       return {
         'permission': collaborator.permission || 'read',
         'id': collaborator.id,
@@ -491,6 +501,11 @@ export default {
         'providerId': collaborator.providerId,
         'avatar': collaborator.profile.avatarUrl
       };
+    },
+    withoutUsername(fullName) {
+      // The invitation search names a user "Full Name (username)", the space members search "Full Name"
+      const suffixIndex = fullName.lastIndexOf(' (');
+      return suffixIndex > 0 ? fullName.substring(0, suffixIndex) : fullName;
     },
     open(file) {
       this.file = file;
