@@ -17,6 +17,7 @@
 package org.exoplatform.documents.service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.constant.PublicLinkAccess;
 import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.model.PublicDocumentInfo;
@@ -100,6 +101,18 @@ public interface PublicDocumentAccessService {
    * @return true when the document's public link must serve nothing
    */
   boolean isProtectedBySpace(String documentId);
+
+  /**
+   * Decides what the document's public link grants an anonymous visitor, on
+   * one read of the link and, when it has one, of its space's committed
+   * settings: a document whose space keeps its documents inside is answered
+   * as a document with no link, before its expiry or its password is read.
+   *
+   * @param documentId document id
+   * @param password the password the visitor gave, null when none
+   * @return the link's answer
+   */
+  PublicLinkAccess getLinkAccess(String documentId, String password);
 
   /**
    * Checks if a document has public access

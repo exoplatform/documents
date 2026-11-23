@@ -364,7 +364,8 @@ public interface DocumentFileStorage {
    * Reads, through a system session, what a change of a space document's
    * access is decided on: the access list the document reads, the identities a
    * save of the requested permissions would write on it, its owner, and the
-   * access list of the space's drive root.
+   * access list of the space's drive root. It reads whatever the caller's
+   * rights: the caller has checked that the user may edit the document first.
    *
    * @param documentId the identifier of the document whose access changes; a
    *          symlink's own access list is the one read and written

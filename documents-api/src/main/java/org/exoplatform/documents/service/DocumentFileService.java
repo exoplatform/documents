@@ -349,16 +349,19 @@ public interface DocumentFileService {
   /**
    * Writes the document's access list and shares it with the identities of
    * {@link NodePermission#getToShare()}. The space of the document decides the
-   * whole request before anything is written: "Limit Access Management" as
-   * {@link #checkCanManageAccess}, then "Keep documents inside the space",
-   * which refuses an identity outside the space, everyone included, that the
-   * request adds to the document's stored access list or shares it with.
+   * whole request before anything is written, for a user who may edit the
+   * document: "Limit Access Management" as {@link #checkCanManageAccess}, then
+   * "Keep documents inside the space", which refuses an identity outside the
+   * space, everyone included, that the request adds to the document's stored
+   * access list or shares it with. A membership of a group the stored list
+   * already reaches, whatever its type, is not counted as added.
    *
    * @param documentId the document's identifier
    * @param nodePermissionEntity the access list to write and the shares to make
    * @param authenticatedUserId the social identity id of the user changing it
    * @throws DocumentSharingRefusedException when the space refuses the change
-   * @throws IllegalAccessException when the user is unknown
+   * @throws IllegalAccessException when the user is unknown or cannot edit the
+   *           document
    */
   void updatePermissions(String documentId,
                          NodePermission nodePermissionEntity,
@@ -374,7 +377,8 @@ public interface DocumentFileService {
    * @param destId target user or space identity id
    * @param authenticatedUserId current user Identity id
    * @throws DocumentSharingRefusedException when the space refuses the share
-   * @throws IllegalAccessException when the user is unknown
+   * @throws IllegalAccessException when the user is unknown or cannot edit the
+   *           document
    */
   void shareDocument(String documentId, long destId, long authenticatedUserId, boolean broadcast) throws IllegalAccessException;
 
@@ -460,10 +464,12 @@ public interface DocumentFileService {
   /**
    * @param documentId the document's identifier
    * @param userIdentityId the social identity id of the user
-   * @return whether the document's space lets the user change its access, on
-   *         the space's committed settings and roles
+   * @return whether the document's space lets the user change its access list,
+   *         and whether it keeps its documents inside, both decided on one
+   *         read of the space's committed settings and roles; a document whose
+   *         space or settings cannot be read refuses both
    */
-  boolean canManageAccess(String documentId, long userIdentityId);
+  DocumentSpaceAccess getSpaceAccess(String documentId, long userIdentityId);
 
   org.exoplatform.services.security.Identity getAclUserIdentity(String userName) throws IllegalAccessException;
   
