@@ -265,6 +265,8 @@ public class DocumentUtilsTest {
     assertTrue(body.contains("\\'"));
     assertTrue(body.contains("\\\""));
     assertTrue(body.contains("\\u003C\\/p>"));
+    assertTrue("the trailing backslash is escaped, so it cannot escape the closing quote", literal.endsWith(" \\\\'"));
+    assertEquals("'a\\\\b'", DocumentUtils.toScriptStringLiteral("a\\b"));
     String comment = DocumentUtils.toScriptStringLiteral("<!--note");
     assertEquals("'\\u003C!--note'", comment);
   }
