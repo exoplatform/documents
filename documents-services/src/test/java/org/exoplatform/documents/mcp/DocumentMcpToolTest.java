@@ -3308,7 +3308,8 @@ public class DocumentMcpToolTest {
    */
   @Test
   public void getDocumentAccessRefusesAShortcut() throws Exception {
-    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(accessFolder("/documents/workflow"));
+    FolderNode folder = accessFolder("/documents/workflow");
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folder);
 
     assertRefused(() -> documentMcpTool.getDocumentAccess("shortcut-id"), "shortcut_target_id " + FOLDER_ID);
   }
@@ -3321,7 +3322,8 @@ public class DocumentMcpToolTest {
    */
   @Test
   public void getDocumentAccessRefusesWhileSharingIsSuspended() throws Exception {
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(accessFolder("/documents/workflow"));
+    FolderNode folder = accessFolder("/documents/workflow");
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
     when(settingService.get(Context.GLOBAL.id("sharedDocumentStatus"),
                             Scope.APPLICATION.id("sharedDocumentStatus"),
                             "exo:sharedDocumentStatus")).thenReturn((SettingValue) SettingValue.create("true"));
@@ -3394,7 +3396,8 @@ public class DocumentMcpToolTest {
    */
   @Test
   public void getDocumentAccessRefusesANewsAttachment() throws Exception {
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(accessFolder("/Groups/spaces/f2_support/News Attachments/x"));
+    FolderNode folder = accessFolder("/Groups/spaces/f2_support/News Attachments/x");
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
 
     assertRefused(() -> documentMcpTool.getDocumentAccess(FOLDER_ID), "news article's attachments");
   }
