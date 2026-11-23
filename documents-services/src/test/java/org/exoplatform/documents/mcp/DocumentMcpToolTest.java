@@ -3422,7 +3422,7 @@ public class DocumentMcpToolTest {
     org.exoplatform.social.core.identity.model.Identity bob = socialIdentity("12", "organization", "bob", "Bob Reader");
     org.exoplatform.social.core.identity.model.Identity f2 = socialIdentity("13", "space", "f2_support", "F2 Support");
     org.exoplatform.social.core.identity.model.Identity hr = socialIdentity("group:hr", "group", "/platform/hr", "Human resources");
-    lenient().when(identityManager.getIdentity("5")).thenReturn(john);
+    lenient().when(identityManager.getIdentity(5L)).thenReturn(john);
     List<PermissionEntry> entries = new java.util.ArrayList<>();
     for (String type : List.of("read", "add_node", "set_property", "remove")) {
       entries.add(new PermissionEntry(john, type, PermissionRole.ALL.name()));

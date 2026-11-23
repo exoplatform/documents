@@ -265,7 +265,6 @@ public class DocumentMcpTool implements McpToolPlugin {
   private static final String      PARENT_FOLDER_NOT_FOUND_MESSAGE =
                                                                    "No folder has the id %s. Use only a document_id a tool returned (create_folder, get_root_folder_for_user, get_root_folder_by_space, get_documents_by_folder_id), never a composed one. To create nested folders, call create_folder once with their path in 'name', such as 'Finances/Factures/Entrantes', under a folder that exists.";
 
-  /** The refusal of an unknown space id, saying how to find the space. */
   /** The global setting by which an administrator suspends document sharing, read as Documents reads it. */
   static final String              SHARED_DOCUMENT_STATUS = "sharedDocumentStatus";
 
@@ -292,13 +291,15 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * The error of a lookup given a name where an id is expected (EXO-95034):
-   * it says "not an id" and "not found", which ai reads as a lookup failure,
-   * and "search tool", on which ai asks the model once more to search before
+   * it says "not an id", one of the markers by which ai reads a lookup failure
+   * ({@code UnpreparedAnswerAdvisor#LOOKUP_MARKERS}), with the value given, and
+   * "search tool", on which ai asks the model once more to search before
    * answering ({@code IdRecoveryRetryAdvisor}).
    */
   static final String              MSG_NAME_IS_NOT_AN_ID  =
                                                          "'%s' is not an id, so no document was found with it: an id is a value a tool returned, never a name. Find the document's id with a search tool first: a file with search_documents and its name as query (without space_id or parent_folder_id, it searches every document you can read); a folder from get_root_folder_for_user or get_root_folder_by_space, then get_folder_tree, by its name. When several match, name them and ask which one is meant; when none does, say what you searched.";
 
+  /** The refusal of an unknown space id, saying how to find the space. */
   private static final String      MSG_SPACE_NOT_FOUND    =
                                                           "Space with id %s doesn't exist. Pass space_name (the space's name) or find it with get_my_spaces.";
 
@@ -1678,7 +1679,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    *         null when unknown
    */
   private String getCreatorName(AbstractNode document) {
-    Identity creator = document.getCreatorId() > 0 ? identityManager.getIdentity(String.valueOf(document.getCreatorId())) : null;
+    Identity creator = document.getCreatorId() > 0 ? identityManager.getIdentity(document.getCreatorId()) : null;
     return creator == null || creator.getProfile() == null ? null : creator.getProfile().getFullName();
   }
 
