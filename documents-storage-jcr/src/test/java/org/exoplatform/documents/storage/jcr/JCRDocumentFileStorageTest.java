@@ -2300,6 +2300,82 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
+  public void createFolderMissingFolderPathThrowsObjectNotFound() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    when(aclIdentity.getUserId()).thenReturn("user");
+    Identity ownerIdentity = mock(Identity.class);
+    NodeImpl ownerRootNode = mock(NodeImpl.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(mock(ManageableRepository.class));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle("title")).thenReturn(true);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    when(identityManager.getIdentity("1")).thenReturn(ownerIdentity);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                       nodeHierarchyCreator,
+                                                                       "user",
+                                                                       ownerIdentity,
+                                                                       sessionProvider))
+                      .thenReturn(ownerRootNode);
+    when(ownerRootNode.getNode("missing")).thenThrow(new PathNotFoundException("missing"));
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.createFolder(1L, null, "missing", "title", aclIdentity));
+    verify(sessionProvider).close();
+  }
+
+  @Test
+  public void getNewNameMissingFolderPathThrowsObjectNotFound() throws Exception {
+    Session systemSession = mock(Session.class);
+    Identity ownerIdentity = mock(Identity.class);
+    NodeImpl ownerRootNode = mock(NodeImpl.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(SessionProvider.createSystemProvider()).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    when(identityManager.getIdentity("1")).thenReturn(ownerIdentity);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                       nodeHierarchyCreator,
+                                                                       ownerIdentity,
+                                                                       systemSession))
+                      .thenReturn(ownerRootNode);
+    when(ownerRootNode.getNode("missing")).thenThrow(new PathNotFoundException("missing"));
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.getNewName(1L, null, "missing", "title"));
+    verify(sessionProvider).close();
+  }
+
+  @Test
+  public void getBreadcrumbMissingFolderPathThrowsObjectNotFound() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    when(aclIdentity.getUserId()).thenReturn("user");
+    Identity ownerIdentity = mock(Identity.class);
+    NodeImpl ownerRootNode = mock(NodeImpl.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(mock(ManageableRepository.class));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    when(identityManager.getIdentity("1")).thenReturn(ownerIdentity);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                       nodeHierarchyCreator,
+                                                                       "user",
+                                                                       ownerIdentity,
+                                                                       sessionProvider))
+                      .thenReturn(ownerRootNode);
+    when(ownerRootNode.getNode("missing")).thenThrow(new PathNotFoundException("missing"));
+    when(ownerRootNode.getName()).thenReturn("root");
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.getBreadcrumb(1L, null, "missing", aclIdentity));
+    verify(sessionProvider).close();
+  }
+
+  @Test
   public void getBiggestDocumentsDeletedOwnerThrowsObjectNotFound() throws Exception {
     org.exoplatform.services.security.Identity aclIdentity = stubDeletedOwnerRootNode();
 
