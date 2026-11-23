@@ -51,6 +51,7 @@ import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.exception.DocumentSharingRefusedException;
+import org.exoplatform.documents.constant.PublicLinkAccess;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.rest.model.*;
 import org.exoplatform.documents.rest.util.EntityBuilder;
@@ -1278,7 +1279,7 @@ public class DocumentFileRestTest {
                                                                       null,
                                                                       1L))
                        .thenReturn(entity);
-    when(documentFileService1.canManageAccess("123", 1L)).thenReturn(false);
+    when(documentFileService1.getSpaceAccess("123", 1L)).thenReturn(new DocumentSpaceAccess(false, false));
 
     Response response = documentFileRest1.getDocument("123", null);
 
@@ -1287,17 +1288,17 @@ public class DocumentFileRestTest {
 
     // a refusal the cached listing still says is turned back on by the committed decision
     entity.getAcl().setCanManageAccess(false);
-    when(documentFileService1.canManageAccess("123", 1L)).thenReturn(true);
+    when(documentFileService1.getSpaceAccess("123", 1L)).thenReturn(new DocumentSpaceAccess(true, false));
     response = documentFileRest1.getDocument("123", null);
     assertTrue(((AbstractNodeEntity) response.getEntity()).getAcl().isCanManageAccess());
 
     // "Keep documents inside the space" is answered on the committed settings, whatever the cached listing said
     assertFalse(((AbstractNodeEntity) response.getEntity()).getAcl().isKeptInsideSpace());
-    when(documentFileService1.isKeptInsideSpace("123")).thenReturn(true);
+    when(documentFileService1.getSpaceAccess("123", 1L)).thenReturn(new DocumentSpaceAccess(true, true));
     response = documentFileRest1.getDocument("123", null);
     assertTrue(((AbstractNodeEntity) response.getEntity()).getAcl().isKeptInsideSpace());
     entity.getAcl().setKeptInsideSpace(true);
-    when(documentFileService1.isKeptInsideSpace("123")).thenReturn(false);
+    when(documentFileService1.getSpaceAccess("123", 1L)).thenReturn(new DocumentSpaceAccess(true, false));
     response = documentFileRest1.getDocument("123", null);
     assertFalse(((AbstractNodeEntity) response.getEntity()).getAcl().isKeptInsideSpace());
 
@@ -1954,8 +1955,9 @@ public class DocumentFileRestTest {
     Response response = documentFileRest.downloadDocument(null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertNoStore(response);
-    when(publicDocumentAccessService.isPublicDocumentAccessExpired("123")).thenReturn(true, false);
-    when(publicDocumentAccessService.isDocumentPublicAccessValid("123", null)).thenReturn(false, true);
+    when(publicDocumentAccessService.getLinkAccess("123", null)).thenReturn(PublicLinkAccess.EXPIRED,
+                                                                          PublicLinkAccess.INVALID_PASSWORD,
+                                                                          PublicLinkAccess.GRANTED);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     assertNoStore(response);
@@ -1976,6 +1978,35 @@ public class DocumentFileRestTest {
 
   }
 
+  /**
+   * A protected document's link is answered on every endpoint as a node with
+   * no link: the downloads as an expired link, the public link page as 404,
+   * each private and no-store, and nothing of the document is read.
+   */
+  @Test
+  public void aProtectedDocumentLinkIsAnsweredAsNoLinkOnEveryEndpoint() throws Exception {
+    when(publicDocumentAccessService.getLinkAccess("123", "password")).thenReturn(PublicLinkAccess.NONE);
+    when(publicDocumentAccessService.getPublicDocumentInfo("123")).thenThrow(new ObjectNotFoundException("no link"));
+
+    Response response = documentFileRest.downloadDocument("123", "password");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertEquals("access expired", response.getEntity());
+    assertNoStore(response);
+
+    response = documentFileRest.checkDocumentDownload("123", "password");
+    assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
+    assertNoStore(response);
+
+    response = documentFileRest.publicAccessDocument("123");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNull(response.getEntity());
+    assertNoStore(response);
+
+    verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
+    verify(externalDownloadService, never()).checkDocumentDownload(anyString());
+    verify(publicDocumentAccessService, times(2)).getLinkAccess("123", "password");
+  }
+
   private static void assertNoStore(Response response) {
     assertTrue("a download's answer, whatever its status, is never kept by a cache",
                String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
@@ -1993,7 +2024,7 @@ public class DocumentFileRestTest {
     assertTrue(head.isAnnotationPresent(javax.ws.rs.HEAD.class));
     assertEquals("/download", head.getAnnotation(javax.ws.rs.Path.class).value());
 
-    when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
+    when(publicDocumentAccessService.getLinkAccess("456", null)).thenReturn(PublicLinkAccess.GRANTED);
     Response response = documentFileRest.checkDocumentDownload("456", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     assertNull(response.getEntity());
@@ -2005,21 +2036,21 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     assertNoStore(response);
 
-    when(publicDocumentAccessService.isPublicDocumentAccessExpired("789")).thenReturn(true);
+    when(publicDocumentAccessService.getLinkAccess("789", null)).thenReturn(PublicLinkAccess.EXPIRED);
     response = documentFileRest.checkDocumentDownload("789", null);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     assertNoStore(response);
     verify(externalDownloadService, never()).checkDocumentDownload("789");
 
     // A password-protected link: the HEAD passes the caller's password on
-    when(publicDocumentAccessService.isDocumentPublicAccessValid("321", "right")).thenReturn(true);
+    when(publicDocumentAccessService.getLinkAccess("321", "right")).thenReturn(PublicLinkAccess.GRANTED);
     response = documentFileRest.checkDocumentDownload("321", "right");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     assertNoStore(response);
     verify(externalDownloadService).checkDocumentDownload("321");
 
     // The same link asked with a wrong password
-    when(publicDocumentAccessService.isDocumentPublicAccessValid("321", "wrong")).thenReturn(false);
+    when(publicDocumentAccessService.getLinkAccess("321", "wrong")).thenReturn(PublicLinkAccess.INVALID_PASSWORD);
     response = documentFileRest.checkDocumentDownload("321", "wrong");
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     assertNoStore(response);
@@ -2040,7 +2071,7 @@ public class DocumentFileRestTest {
   @Test
   public void downloadFolderOfAPublicLinkTheCreatorCannotArchiveIsNotFound() throws Exception {
     DownloadItem folderItem = new DownloadItem("456", "folder", null, null);
-    when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
+    when(publicDocumentAccessService.getLinkAccess("456", null)).thenReturn(PublicLinkAccess.GRANTED);
     when(externalDownloadService.getDocumentDownloadItem("456")).thenReturn(folderItem);
     when(externalDownloadService.downloadZippedFolder("456")).thenThrow(ObjectNotFoundException.class);
 
@@ -2069,7 +2100,7 @@ public class DocumentFileRestTest {
     ByteArrayOutputStream content = new ByteArrayOutputStream();
     content.write(1);
     DownloadItem fileItem = new DownloadItem("789", "file.txt", content, "text/plain");
-    when(publicDocumentAccessService.isDocumentPublicAccessValid("789", null)).thenReturn(true);
+    when(publicDocumentAccessService.getLinkAccess("789", null)).thenReturn(PublicLinkAccess.GRANTED);
     when(externalDownloadService.getDocumentDownloadItem("789")).thenReturn(fileItem);
     response = documentFileRest.downloadDocument("789", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
