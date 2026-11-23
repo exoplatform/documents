@@ -1527,6 +1527,18 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (document == null) {
       throw new ObjectNotFoundException("No document has the id %s.".formatted(documentId));
     }
+    return toPermissionsModel(documentId, document);
+  }
+
+  /**
+   * @param documentId the id the user gave
+   * @param document the document it resolved to, a shortcut's target for a
+   *          shortcut's id
+   * @return the user's rights on it, as {@link #getDocumentPermissions}
+   *         tells them
+   * @throws IllegalAccessException when the user can't read it
+   */
+  private DocumentPermissionsModel toPermissionsModel(String documentId, AbstractNode document) throws IllegalAccessException {
     // a shortcut's id resolves to its target: the rights are the target's, but
     // deleting the shortcut removes only the shortcut, so its delete right isn't the target's
     boolean shortcut = !StringUtils.equals(documentId, document.getId());
@@ -1580,7 +1592,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                           document.getName(),
                                           document.isFolder(),
                                           refusal,
-                                          getDocumentPermissions(documentId));
+                                          toPermissionsModel(documentId, document));
     }
     NodePermissionEntity access = EntityBuilder.toNodePermissionEntity(document,
                                                                        identityManager,

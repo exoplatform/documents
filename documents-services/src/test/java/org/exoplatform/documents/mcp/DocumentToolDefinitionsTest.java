@@ -41,6 +41,9 @@ import java.util.stream.Stream;
 
 import org.junit.Test;
 
+import org.exoplatform.documents.mcp.model.DocumentAccessModel;
+import org.exoplatform.documents.mcp.model.DocumentPermissionsModel;
+
 import io.meeds.mcp.server.model.SimpleToolDefinition;
 import io.meeds.mcp.server.util.McpToolUtils;
 
@@ -119,6 +122,35 @@ public class DocumentToolDefinitionsTest {
     assertTrue(description,
                description.contains("Unless you may manage the document's access, it returns no list: access_shown false, the reason, and your_rights, your own rights on it"));
     assertTrue(description, description.contains("by name"));
+  }
+
+  /**
+   * get_document_access answers with the field names its description and the
+   * documents agent's instructions read (EXO-95034): where the list is not
+   * shown, document_id, name, is_folder, access_shown, reason and
+   * your_rights only, the list's fields left out of the JSON; where it is
+   * shown, the list's fields and no reason nor your_rights. Mutants: a field
+   * renamed; the null fields written.
+   */
+  @Test
+  public void getDocumentAccessAnswersWithTheFieldNamesItsReadersUse() {
+    JsonMapper mapper = JsonMapper.builder().build();
+    DocumentPermissionsModel rights = new DocumentPermissionsModel("folder-42", "workflow", true, null, true, true, false);
+    assertEquals(Set.of("document_id", "name", "is_folder", "access_shown", "reason", "your_rights"),
+                 keys(mapper.valueToTree(DocumentAccessModel.notShown("folder-42", "workflow", true, "a reason", rights))));
+    assertEquals(Set.of("document_id", "name", "is_folder", "access_shown", "visibility", "all_space_members_can_edit", "owner",
+                        "collaborators"),
+                 keys(mapper.valueToTree(DocumentAccessModel.shown("folder-42", "workflow", true, "anyone", false, "John Owner", List.of()))));
+  }
+
+  /**
+   * @param node a JSON object
+   * @return its field names
+   */
+  private static Set<String> keys(JsonNode node) {
+    Set<String> keys = new HashSet<>();
+    node.propertyNames().forEach(keys::add);
+    return keys;
   }
 
   /**
