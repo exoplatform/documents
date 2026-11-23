@@ -92,6 +92,7 @@ public class WebdavWriteCommandHandlerTest {
   private static final String       WEBDAV_PARENT_PATH = "/John%20Doe%20%281%29";     // NOSONAR
 
   private static final String       VISIBLE_NAME       = "New File.txt";
+  private static final String       EM_SPACE           = "\u2003";
 
   private static final String       TECHNICAL_NAME     = "New_File.txt";
 
@@ -754,6 +755,66 @@ public class WebdavWriteCommandHandlerTest {
                                                                                                              "..txt")),
                                                                               Collections.emptyList());
     assertFalse(result.containsKey(PropertyConstants.getStatusDescription(HTTPStatus.FORBIDDEN)));
+  }
+
+  /**
+   * A dot name padded with a blank the repository accepts in a node name
+   * ({@code StringUtils.strip} removes it, {@code LocationFactory} keeps it)
+   * reaches {@code removeExistingTarget}, which refuses it with a 403. The
+   * technical name is the one the real {@code PathCommandHandler} returns:
+   * it only encodes {@code | [ ] *} and {@code :}.
+   */
+  @Test
+  @SneakyThrows
+  public void testMoveOntoDotNamePaddedWithAnAcceptedBlankIsRefused() {
+    givenMoveSource();
+    givenTargetVisibleName(EM_SPACE + ".." + EM_SPACE);
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyOntoDotNamePaddedWithAnAcceptedBlankIsRefused() {
+    givenCopySource();
+    givenTargetVisibleName(EM_SPACE + "." + EM_SPACE);
+
+    assertStatus(403, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false, false));
+
+    verify(workspace, never()).copy(anyString(), anyString());
+    assertTargetUntouched();
+  }
+
+  /**
+   * A dot name padded with an ASCII space never gets that far: the repository
+   * refuses it as a node name, so the request ends with a 400 before any
+   * existing target is touched.
+   */
+  @Test
+  @SneakyThrows
+  public void testMoveAndCopyOntoDotNamePaddedWithASpaceAreRefusedAsUnstorable() {
+    givenCopySource();
+    givenTargetVisibleName(" .. ");
+
+    assertStatus(400, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false));
+    assertStatus(400, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false, false));
+
+    verify(workspace, never()).copy(anyString(), anyString());
+    assertTargetUntouched();
+  }
+
+  /**
+   * Stubs the target name the way the real handler maps it: the visible name
+   * of the path's last segment, and its technical name, which {@code Utils#encodeNodeName}
+   * leaves as is for a name without {@code | [ ] *} or {@code :}.
+   */
+  @SneakyThrows
+  private void givenTargetVisibleName(String visibleName) {
+    when(pathCommandHandler.getLastVisibleSegment(anyString())).thenReturn(visibleName);
+    when(pathCommandHandler.toTechnicalName(visibleName)).thenReturn(visibleName);
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenThrow(new WebDavException(404, "missing"));
   }
 
   @SneakyThrows
