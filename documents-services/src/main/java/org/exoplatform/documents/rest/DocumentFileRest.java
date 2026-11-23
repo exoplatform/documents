@@ -63,11 +63,13 @@ import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.documents.constant.PublicLinkAccess;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
 import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.DocumentFavoriteFilter;
+import org.exoplatform.documents.model.DocumentSpaceAccess;
 import org.exoplatform.documents.model.DocumentFolderFilter;
 import org.exoplatform.documents.model.DocumentGroupsSize;
 import org.exoplatform.documents.model.DocumentNodeFilter;
@@ -1642,8 +1644,7 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.BAD_REQUEST).cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
     try {
-      if (publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId)
-          || !publicDocumentAccessService.isDocumentPublicAccessValid(nodeId, password)) {
+      if (publicDocumentAccessService.getLinkAccess(nodeId, password) != PublicLinkAccess.GRANTED) {
         return Response.status(Status.UNAUTHORIZED).cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
       externalDownloadService.checkDocumentDownload(nodeId);
@@ -1677,11 +1678,12 @@ public class DocumentFileRest implements ResourceContainer {
       return Response.status(Status.BAD_REQUEST).entity("nodeId id is mandatory").cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
     try {
-      if (publicDocumentAccessService.isPublicDocumentAccessExpired(nodeId)) {
-        return Response.status(Status.UNAUTHORIZED).entity("access expired").cacheControl(NO_STORE_CACHE_CONTROL).build();
-      }
-      if (!publicDocumentAccessService.isDocumentPublicAccessValid(nodeId, password)) {
+      // No link, a protected document's link and an expired link answer alike
+      PublicLinkAccess linkAccess = publicDocumentAccessService.getLinkAccess(nodeId, password);
+      if (linkAccess == PublicLinkAccess.INVALID_PASSWORD) {
         return Response.status(Status.UNAUTHORIZED).entity("access is not valid").cacheControl(NO_STORE_CACHE_CONTROL).build();
+      } else if (linkAccess != PublicLinkAccess.GRANTED) {
+        return Response.status(Status.UNAUTHORIZED).entity("access expired").cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
       DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
       if (downloadItem == null) {
@@ -1960,8 +1962,9 @@ public class DocumentFileRest implements ResourceContainer {
       if (abstractNodeEntity.getAcl() != null) {
         // The listing decides on the cached space; this answer, on its committed settings and roles
         NodePermissionEntity acl = abstractNodeEntity.getAcl();
-        acl.setCanManageAccess(acl.isCanEdit() && documentFileService.canManageAccess(documentId, userIdentityId));
-        acl.setKeptInsideSpace(documentFileService.isKeptInsideSpace(documentId));
+        DocumentSpaceAccess spaceAccess = documentFileService.getSpaceAccess(documentId, userIdentityId);
+        acl.setCanManageAccess(acl.isCanEdit() && spaceAccess.canManageAccess());
+        acl.setKeptInsideSpace(spaceAccess.keptInsideSpace());
       }
       return Response.ok(abstractNodeEntity).build();
 

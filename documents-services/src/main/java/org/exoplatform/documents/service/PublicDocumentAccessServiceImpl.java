@@ -18,6 +18,7 @@ package org.exoplatform.documents.service;
 
 import org.apache.commons.codec.binary.Hex;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.constant.PublicLinkAccess;
 import org.exoplatform.documents.exception.DocumentSharingRefusedException;
 import org.exoplatform.documents.model.DownloadItem;
 import org.exoplatform.documents.model.PublicDocumentAccess;
@@ -250,6 +251,24 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
   @Override
   public boolean isProtectedBySpace(String documentId) {
     return documentFileService.isKeptInsideSpace(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public PublicLinkAccess getLinkAccess(String documentId, String password) {
+    PublicDocumentAccess publicDocumentAccess = getServingLink(documentId);
+    if (publicDocumentAccess == null) {
+      return PublicLinkAccess.NONE;
+    } else if (isExpired(publicDocumentAccess)) {
+      return PublicLinkAccess.EXPIRED;
+    } else if (publicDocumentAccess.getPasswordHashKey() != null
+        && (password == null || !validatePassword(password, publicDocumentAccess.getPasswordHashKey()))) {
+      // A locked link asked without a password is refused as a wrong password, logging nothing
+      return PublicLinkAccess.INVALID_PASSWORD;
+    }
+    return PublicLinkAccess.GRANTED;
   }
 
   /**

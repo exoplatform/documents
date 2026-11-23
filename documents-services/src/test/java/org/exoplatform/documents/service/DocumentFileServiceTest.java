@@ -139,6 +139,8 @@ public class DocumentFileServiceTest {
     when(identityRegistry.getIdentity(userName)).thenReturn(userID);
     when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
     when(identityManager.getOrCreateIdentity(eq(OrganizationIdentityProvider.NAME), eq(userName))).thenReturn(currentIdentity);
+    // the users changing access in these tests may edit the documents
+    when(documentFileStorage.hasEditPermissions(anyString(), any())).thenReturn(true);
   }
 
   @Test
@@ -533,29 +535,35 @@ public class DocumentFileServiceTest {
   }
 
   @Test
-  public void testCanManageAccess() throws Exception {
+  public void testCheckCanManageAccess() throws Exception {
     SpaceSecurityService spaceSecurityService = limitAccessManagement("username", false);
-    assertFalse(documentFileService.canManageAccess("123", 1L));
+    assertThrows(DocumentSharingRefusedException.class,
+                 () -> documentFileService.checkCanManageAccess("123", 1L, DocumentSharingRefusedException.REVOKE_PUBLIC_LINK_ACTION));
 
     when(spaceSecurityService.canManageDocumentsAccess(any(), any(), eq("username"))).thenReturn(true);
-    assertTrue(documentFileService.canManageAccess("123", 1L));
+    documentFileService.checkCanManageAccess("123", 1L, DocumentSharingRefusedException.REVOKE_PUBLIC_LINK_ACTION);
   }
 
   @Test
-  public void testCanManageAccessOfADocumentOutsideEverySpace() throws Exception {
+  public void testCheckCanManageAccessOfADocumentOutsideEverySpace() throws Exception {
     SpaceSecurityService spaceSecurityService = limitAccessManagement("username", false);
     when(documentFileStorage.getDocumentSpace("123")).thenReturn(null);
 
-    assertTrue(documentFileService.canManageAccess("123", 1L));
+    documentFileService.checkCanManageAccess("123", 1L, DocumentSharingRefusedException.REVOKE_PUBLIC_LINK_ACTION);
     verify(spaceSecurityService, never()).getSettings(anyLong());
   }
 
   @Test
-  public void testCanManageAccessRefusedWhenTheSpaceIsGone() throws Exception {
+  public void testCheckCanManageAccessRefusedWhenTheSpaceIsGone() throws Exception {
     SpaceSecurityService spaceSecurityService = limitAccessManagement("username", true);
     when(spaceSecurityService.getSettings(7L)).thenThrow(new ObjectNotFoundException("gone"));
 
-    assertFalse(documentFileService.canManageAccess("123", 1L));
+    DocumentSharingRefusedException refusal =
+                                            assertThrows(DocumentSharingRefusedException.class,
+                                                         () -> documentFileService.checkCanManageAccess("123",
+                                                                                                        1L,
+                                                                                                        DocumentSharingRefusedException.REVOKE_PUBLIC_LINK_ACTION));
+    assertEquals(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED, refusal.getMessageCode());
   }
 
   /**
@@ -1505,6 +1513,115 @@ public class DocumentFileServiceTest {
     when(spaceSecurityService.isDocumentsKeptInside(any())).thenReturn(false);
     documentFileService.restoreVersion("123", "username");
     verify(documentFileStorage).restoreVersion("123", "username", false);
+  }
+
+  /**
+   * A user who cannot edit the document is refused before anything of its
+   * stored access or of its space's settings is read: the answer is the same
+   * whatever its access list and its space's settings.
+   */
+  @Test
+  public void testChangingAccessIsRefusedToANonEditorBeforeAnyRead() throws Exception {
+    SpaceSecurityService spaceSecurityService = keepDocumentsInside(Set.of(OWNER, TEAM_MEMBERS, "*:/spaces/other"),
+                                                                    Set.of(OWNER, TEAM_MEMBERS, "*:/spaces/other"));
+    when(documentFileStorage.hasEditPermissions(eq("123"), any())).thenReturn(false);
+    shareDestination(5L, SpaceIdentityProvider.NAME, "other", "/spaces/other");
+
+    IllegalAccessException refusal = assertThrows(IllegalAccessException.class,
+                                                  () -> documentFileService.updatePermissions("123", request(), 1L));
+    assertFalse(refusal instanceof DocumentSharingRefusedException);
+    assertThrows(IllegalAccessException.class, () -> documentFileService.shareDocument("123", 5L, 1L, false));
+    assertThrows(IllegalAccessException.class, () -> documentFileService.shareDocument("123", 404L, 1L, false));
+
+    verify(documentFileStorage, never()).getAccessChange(anyString(), any(), any());
+    verify(documentFileStorage, never()).getDocumentSpace(anyString());
+    verify(spaceSecurityService, never()).getSettings(anyLong());
+    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any());
+    verify(documentFileStorage, never()).shareDocument(anyString(), anyLong(), any(), anyBoolean());
+  }
+
+  /**
+   * A save writes back as "*:" a membership of an outside group stored as
+   * "member:" (a task attachment's grant), or a stored "manager:" as managers,
+   * redactors and publishers: a group the stored list already reaches is
+   * kept, while a group it does not reach is refused.
+   */
+  @Test
+  public void testUpdatePermissionsKeepsAnOutsideGroupTheStoredListReachesInAnotherForm() throws Exception {
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member:/spaces/q", "manager:/spaces/r"),
+                        Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member", "*:/spaces/q",
+                               "manager:/spaces/r", "redactor:/spaces/r", "publisher:/spaces/r"));
+    NodePermission nodePermission = request();
+
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any());
+  }
+
+  @Test
+  public void testUpdatePermissionsRefusesAGroupTheStoredListDoesNotReach() throws Exception {
+    // a group whose id starts like a stored one is another group
+    assertSharingRefused(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member:/spaces/q"),
+                         Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "*:/spaces/q", "*:/spaces/qq"));
+  }
+
+  /**
+   * A group is matched whole: a stored membership of a group whose id only
+   * ends with the requested group's id keeps nothing, as an entry or as a share
+   * destination. Mutant: the ':' dropped from the matched suffix.
+   */
+  @Test
+  public void testUpdatePermissionsMatchesAStoredGroupWhole() throws Exception {
+    assertSharingRefused(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member:/partners/spaces/q"),
+                         Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member:/partners/spaces/q", "*:/spaces/q"));
+  }
+
+  @Test
+  public void testShareDocumentMatchesAStoredGroupWhole() throws Exception {
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member:/partners/spaces/q"), Set.of());
+    shareDestination(5L, SpaceIdentityProvider.NAME, "q", "/spaces/q");
+
+    DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
+                                                           () -> documentFileService.shareDocument("123", 5L, 1L, false));
+
+    assertEquals(DocumentSharingRefusedException.KEPT_INSIDE_SHARE, refusal.getMessageCode());
+    verify(documentFileStorage, never()).shareDocument(anyString(), anyLong(), any(), anyBoolean());
+  }
+
+  @Test
+  public void testGetSpaceAccessReadsTheSettingsOnce() throws Exception {
+    SpaceSecurityService spaceSecurityService = keepDocumentsInside(Set.of(OWNER), Set.of());
+
+    DocumentSpaceAccess spaceAccess = documentFileService.getSpaceAccess("123", 1L);
+    assertTrue(spaceAccess.canManageAccess());
+    assertTrue(spaceAccess.keptInsideSpace());
+    verify(spaceSecurityService, times(1)).getSettings(7L);
+    verify(documentFileStorage, times(1)).getDocumentSpace("123");
+
+    when(spaceSecurityService.canManageDocumentsAccess(any(), any(), eq("username"))).thenReturn(false);
+    when(spaceSecurityService.isDocumentsKeptInside(any())).thenReturn(false);
+    spaceAccess = documentFileService.getSpaceAccess("123", 1L);
+    assertFalse(spaceAccess.canManageAccess());
+    assertFalse(spaceAccess.keptInsideSpace());
+
+    when(documentFileStorage.getDocumentSpace("123")).thenReturn(null);
+    spaceAccess = documentFileService.getSpaceAccess("123", 1L);
+    assertTrue(spaceAccess.canManageAccess());
+    assertFalse(spaceAccess.keptInsideSpace());
+
+    when(documentFileStorage.getDocumentSpace("123")).thenThrow(new IllegalStateException("unreadable"));
+    spaceAccess = documentFileService.getSpaceAccess("123", 1L);
+    assertFalse(spaceAccess.canManageAccess());
+    assertTrue(spaceAccess.keptInsideSpace());
+  }
+
+  @Test
+  public void testGetSpaceAccessOfAGoneSpaceRefusesBoth() throws Exception {
+    SpaceSecurityService spaceSecurityService = keepDocumentsInside(Set.of(OWNER), Set.of());
+    when(spaceSecurityService.getSettings(7L)).thenThrow(new ObjectNotFoundException("gone"));
+
+    DocumentSpaceAccess spaceAccess = documentFileService.getSpaceAccess("123", 1L);
+    assertFalse(spaceAccess.canManageAccess());
+    assertTrue(spaceAccess.keptInsideSpace());
   }
 
   private SpaceSecurityService assertSharingRefused(Set<String> storedIdentities, Set<String> requestedIdentities) throws Exception {
