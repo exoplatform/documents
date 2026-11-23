@@ -779,7 +779,7 @@ public class WebdavWriteCommandHandler {
     // ('.', '..'), or a target name the repository reads as a path, would let
     // the lookup below miss a document that mapping key already names
     String targetName = pathCommandHandler.getLastVisibleSegment(webDavTargetPath);
-    if (StringUtils.equalsAny(targetName, ".", "..")
+    if (isDotName(targetName)
         || StringUtils.contains(targetName, '/')
         || !StringUtils.equals(((Node) session.getItem(targetParentJcrPath)).getPath(), targetParentJcrPath)) {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN,

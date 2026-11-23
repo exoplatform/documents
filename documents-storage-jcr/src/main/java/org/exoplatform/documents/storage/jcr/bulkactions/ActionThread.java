@@ -29,6 +29,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
+import java.util.stream.Stream;
 
 import javax.jcr.Node;
 import javax.jcr.PathNotFoundException;
@@ -642,6 +643,14 @@ public class ActionThread implements Runnable {
         tempFolderPath = tempFolderPath.replace("\\", "/");
         String folderPath = filePath.substring(0, filePath.lastIndexOf("/"));
         folderPath = folderPath.replace(tempFolderPath, "");
+        if (hasDotName(folderPath, file.getName())) {
+          log.warn("Archive entry {} left out of the import: one of its folder or file titles is \".\" or \"..\"",
+                   filePath.replace(tempFolderPath, ""));
+          actionData.addIgnoredFile(filePath.replace(tempFolderPath, ""));
+          actionData.incrementImportCount();
+          brodcastEvent();
+          continue;
+        }
         Node folderNode = parent;
         if (StringUtils.isNotEmpty(folderPath)) {
           for (String folderName : folderPath.split("/")) {
@@ -724,6 +733,12 @@ public class ActionThread implements Runnable {
     }
     actionData.setDuration(System.currentTimeMillis() - startTime);
     brodcastEvent();
+  }
+
+  private static boolean hasDotName(String folderPath, String fileName) {
+    return Stream.concat(Arrays.stream(StringUtils.split(folderPath, '/')), Stream.of(fileName))
+                 .map(StringUtils::strip)
+                 .anyMatch(title -> ".".equals(title) || "..".equals(title));
   }
 
   public void handleImportConflict(File file,
