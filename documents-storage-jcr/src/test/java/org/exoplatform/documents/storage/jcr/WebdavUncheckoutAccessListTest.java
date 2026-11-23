@@ -56,7 +56,8 @@ import org.exoplatform.services.security.MembershipEntry;
 /**
  * Cancelling the checkout of a document over WebDAV brings back its content,
  * and leaves the access lists of the document and of the nodes below it as
- * they are.
+ * they are. A new version is created only when the private-access mixin has to
+ * be added or removed on the document or on a node below it.
  */
 class WebdavUncheckoutAccessListTest {
 
@@ -136,12 +137,14 @@ class WebdavUncheckoutAccessListTest {
     document.checkout();
     ((ExtendedNode) document).setPermissions(Map.of(GROUP, EDIT));
     systemSession.save();
+    long versions = versionCount(document);
 
     handler.uncheckout(userSession, "/uncheckoutSpace/revoked.txt");
 
     Node cancelled = reload(document);
     assertFalse(entriesOf(cancelled).contains("guest read"), "the revoked share stays revoked: " + entriesOf(cancelled));
     assertFalse(cancelled.isCheckedOut());
+    assertEquals(versions, versionCount(cancelled), "no version is created");
   }
 
   @Test
@@ -154,10 +157,13 @@ class WebdavUncheckoutAccessListTest {
     document.checkout();
     ((ExtendedNode) document).setPermissions(Map.of(GROUP, EDIT, "guest", READ));
     systemSession.save();
+    long versions = versionCount(document);
 
     handler.uncheckout(userSession, "/uncheckoutSpace/added.txt");
 
-    assertTrue(entriesOf(reload(document)).contains("guest read"));
+    Node cancelled = reload(document);
+    assertTrue(entriesOf(cancelled).contains("guest read"));
+    assertEquals(versions, versionCount(cancelled), "no version is created");
   }
 
   @Test
@@ -170,6 +176,7 @@ class WebdavUncheckoutAccessListTest {
     document.checkout();
     document.removeMixin("exo:privilegeable");
     systemSession.save();
+    long versions = versionCount(document);
 
     handler.uncheckout(userSession, "/uncheckoutSpace/own-removed.txt");
 
@@ -177,6 +184,7 @@ class WebdavUncheckoutAccessListTest {
     assertFalse(cancelled.isNodeType("exo:privilegeable"), "the document reads its folder's list");
     assertEquals(entriesOf(folder), entriesOf(cancelled));
     assertFalse(cancelled.isCheckedOut());
+    assertEquals(versions + 1, versionCount(cancelled), "one version carries the kept state");
   }
 
   @Test
@@ -187,6 +195,7 @@ class WebdavUncheckoutAccessListTest {
     document.addMixin("exo:privilegeable");
     ((ExtendedNode) document).setPermissions(Map.of(GROUP, EDIT, "guest", READ));
     systemSession.save();
+    long versions = versionCount(document);
 
     handler.uncheckout(userSession, "/uncheckoutSpace/own-added.txt");
 
@@ -194,6 +203,7 @@ class WebdavUncheckoutAccessListTest {
     assertTrue(cancelled.isNodeType("exo:privilegeable"));
     assertTrue(entriesOf(cancelled).contains("guest read"));
     assertFalse(cancelled.isCheckedOut());
+    assertEquals(versions + 1, versionCount(cancelled), "one version carries the kept list");
   }
 
   @Test
@@ -208,6 +218,7 @@ class WebdavUncheckoutAccessListTest {
     ((ExtendedNode) child).setPermissions(Map.of(GROUP, EDIT_REMOVE, "guest", READ));
     ((ExtendedNode) deeper).setPermissions(Map.of(GROUP, EDIT_REMOVE, "guest", READ));
     systemSession.save();
+    long versions = versionCount(versionedFolder);
 
     handler.uncheckout(userSession, "/uncheckoutSpace/revoked-below");
 
@@ -218,6 +229,7 @@ class WebdavUncheckoutAccessListTest {
     assertTrue(childEntries.contains("guest read"));
     assertFalse(deeperEntries.contains("member read"), "the revoked share stays revoked below: " + deeperEntries);
     assertTrue(deeperEntries.contains("guest read"));
+    assertEquals(versions, versionCount(cancelled), "no version is created");
   }
 
   @Test
@@ -230,12 +242,14 @@ class WebdavUncheckoutAccessListTest {
     child.addMixin("exo:privilegeable");
     ((ExtendedNode) child).setPermissions(Map.of(GROUP, EDIT_REMOVE, "guest", READ));
     systemSession.save();
+    long versions = versionCount(versionedFolder);
 
     handler.uncheckout(userSession, "/uncheckoutSpace/gained-below");
 
     Node cancelled = reload(versionedFolder);
     assertTrue(entriesOf(cancelled.getNode("child.txt")).contains("guest read"));
     assertFalse(cancelled.isCheckedOut());
+    assertEquals(versions + 1, versionCount(cancelled), "one version carries the kept list below");
   }
 
   @Test
@@ -331,6 +345,10 @@ class WebdavUncheckoutAccessListTest {
     resource.setProperty("jcr:lastModified", Calendar.getInstance());
     resource.setProperty("jcr:data", new ByteArrayInputStream(name.getBytes(StandardCharsets.UTF_8)));
     return file;
+  }
+
+  private static long versionCount(Node node) throws Exception {
+    return node.getVersionHistory().getAllVersions().getSize();
   }
 
   private static Node reload(Node node) throws Exception {
