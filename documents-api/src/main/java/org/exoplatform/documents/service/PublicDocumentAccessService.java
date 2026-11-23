@@ -73,7 +73,8 @@ public interface PublicDocumentAccessService {
   PublicDocumentAccess getPublicDocumentAccess(String documentId);
 
   /**
-   * Checks if public access expired
+   * Checks if public access expired. A document whose space keeps its
+   * documents inside is answered as a document with no link: expired.
    *
    * @param documentId node id
    * @return true or false
@@ -81,13 +82,24 @@ public interface PublicDocumentAccessService {
   boolean isPublicDocumentAccessExpired(String documentId);
 
   /**
-   * Checks the validity of a public access
+   * Checks the validity of a public access. A document whose space keeps its
+   * documents inside is answered as a document with no link: not valid.
    * 
    * @param documentId node id
    * @param password password of the document public access
    * @return true if access is valid or false else
    */
   boolean isDocumentPublicAccessValid(String documentId, String password);
+
+  /**
+   * Whether the document's space keeps its documents inside, on the space's
+   * committed settings: its public link, if it has one, then serves nothing.
+   * A document whose space or settings cannot be read is protected.
+   *
+   * @param documentId document id
+   * @return true when the document's public link must serve nothing
+   */
+  boolean isProtectedBySpace(String documentId);
 
   /**
    * Checks if a document has public access
@@ -102,7 +114,8 @@ public interface PublicDocumentAccessService {
    * access link: whether the link asks for a password or has expired, and the
    * document's name and mime type, without reading its content. The link is
    * read once and its password is never decoded. Nothing of the document is
-   * read when it has no public access link.
+   * read when it has no public access link. A document whose space keeps its
+   * documents inside is answered as a document with no link.
    *
    * @param documentId document id
    * @return {@link PublicDocumentInfo}

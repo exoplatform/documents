@@ -292,6 +292,62 @@ public class PublicDocumentAccessServiceImplTest {
     verify(publicDocumentAccessStorage, never()).removePublicDocumentAccess(anyString());
   }
 
+  /**
+   * While its space keeps its documents inside, a document's public link is
+   * answered as no link, whatever the link's state: valid, expired or locked.
+   * Nothing of the document is read for the public link page.
+   */
+  @Test
+  public void aLinkOfADocumentKeptInsideItsSpaceServesNothing() throws ObjectNotFoundException {
+    when(documentFileService.isKeptInsideSpace("123")).thenReturn(true);
+    for (PublicDocumentAccess link : java.util.List.of(new PublicDocumentAccess(1L, "123", null, null, null),
+                                                       new PublicDocumentAccess(2L, "123", null, null, new Date(0)),
+                                                       new PublicDocumentAccess(3L, "123", "1000:00:00", "encoded", null))) {
+      when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(link);
+
+      assertTrue(publicDocumentAccessService.isPublicDocumentAccessExpired("123"));
+      assertFalse(publicDocumentAccessService.isDocumentPublicAccessValid("123", "password"));
+      assertThrows(ObjectNotFoundException.class, () -> publicDocumentAccessService.getPublicDocumentInfo("123"));
+    }
+    verify(documentFileStorage, never()).getDocumentDownloadInfo(anyString());
+  }
+
+  @Test
+  public void aLinkOfADocumentWhoseSpaceLetsItServeIsServed() throws ObjectNotFoundException {
+    when(documentFileService.isKeptInsideSpace("123")).thenReturn(false);
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(new PublicDocumentAccess(1L,
+                                                                                                                 "123",
+                                                                                                                 null,
+                                                                                                                 null,
+                                                                                                                 null));
+    when(documentFileStorage.getDocumentDownloadInfo("123")).thenReturn(new DownloadItem("123", "document.pdf", null, null));
+
+    assertFalse(publicDocumentAccessService.isPublicDocumentAccessExpired("123"));
+    assertTrue(publicDocumentAccessService.isDocumentPublicAccessValid("123", null));
+    assertEquals("document.pdf", publicDocumentAccessService.getPublicDocumentInfo("123").getDocumentName());
+  }
+
+  /**
+   * An id with no link asks nothing of its space: nothing of its node is read.
+   */
+  @Test
+  public void anIdWithNoLinkReadsNothingOfItsSpace() {
+    when(publicDocumentAccessStorage.getPublicDocumentAccessByNodeId("123")).thenReturn(null);
+
+    assertTrue(publicDocumentAccessService.isPublicDocumentAccessExpired("123"));
+    assertFalse(publicDocumentAccessService.isDocumentPublicAccessValid("123", null));
+    assertThrows(ObjectNotFoundException.class, () -> publicDocumentAccessService.getPublicDocumentInfo("123"));
+    verify(documentFileService, never()).isKeptInsideSpace(anyString());
+  }
+
+  @Test
+  public void isProtectedBySpace() {
+    when(documentFileService.isKeptInsideSpace("123")).thenReturn(true);
+    assertTrue(publicDocumentAccessService.isProtectedBySpace("123"));
+    when(documentFileService.isKeptInsideSpace("123")).thenReturn(false);
+    assertFalse(publicDocumentAccessService.isProtectedBySpace("123"));
+  }
+
   private static DocumentSharingRefusedException refusal(String action) {
     return new DocumentSharingRefusedException(DocumentSharingRefusedException.ACCESS_MANAGEMENT_LIMITED, 7L, "123", action);
   }
