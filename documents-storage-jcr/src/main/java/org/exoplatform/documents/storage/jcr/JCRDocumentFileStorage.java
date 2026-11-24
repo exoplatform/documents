@@ -3888,16 +3888,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   /**
    * {@inheritDoc}
    * <p>
-   * One query of the repository, through the user's own session: eXo JCR
+   * One query of the repository per drive searched (eXo JCR refuses
+   * {@code jcr:path} clauses joined by OR unless their steps are the same:
+   * « Invalid combination of jcr:path clauses »), through the user's own
+   * session: eXo JCR
    * keeps only the hits that session may read ({@code QueryResultImpl}
    * checks each one with {@code AccessManager#hasPermission} for read, a
    * system session alone skipping the check), so no right is decided here. The name is compared to the node's title and to its name,
    * both in lower case. eXo JCR parses no bind variable (no JCR-SQL2 parser,
    * and no query declares a variable, so {@code QueryImpl#bindValue} refuses
    * every name): the name is written into the statement as a string literal,
-   * its quotes doubled, by {@link #getNameQueryStatement(List, String)}; a
+   * its quotes doubled, by {@link #getNameQueryStatement(String, String)}; a
    * backslash is no escape character there. At most {@link #MAX_NAME_ROWS}
-   * rows are read, in the repository's order, then sorted by their path: below
+   * rows are read per drive searched, in the repository's order, then all are
+   * sorted by their path: below
    * that bound the same drives give the same matches in the same order; past
    * it, the matches are taken from the rows read only.
    */
@@ -3951,24 +3955,25 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
         pathPatterns.add(spacesPath + "/%/" + DOCUMENTS_NODE + "/%");
       }
-      Query query = session.getWorkspace()
-                           .getQueryManager()
-                           .createQuery(getNameQueryStatement(pathPatterns, name), Query.SQL);
-      ((QueryImpl) query).setLimit(MAX_NAME_ROWS);
-      NodeIterator nodes = query.execute().getNodes();
       Map<String, Long> spaceIdentityIds = new HashMap<>();
       List<DocumentNameMatch> matches = new ArrayList<>();
-      while (nodes.hasNext()) {
-        Node node = nodes.nextNode();
-        DocumentNameMatch match = toNameMatch(session,
-                                              node,
-                                              aclIdentity,
-                                              spacesPath,
-                                              userDrivePath,
-                                              userDriveOwnerId,
-                                              spaceIdentityIds);
-        if (match != null) {
-          matches.add(match);
+      for (String pathPattern : pathPatterns) {
+        Query query = session.getWorkspace()
+                             .getQueryManager()
+                             .createQuery(getNameQueryStatement(pathPattern, name), Query.SQL);
+        ((QueryImpl) query).setLimit(MAX_NAME_ROWS);
+        NodeIterator nodes = query.execute().getNodes();
+        while (nodes.hasNext()) {
+          DocumentNameMatch match = toNameMatch(session,
+                                                nodes.nextNode(),
+                                                aclIdentity,
+                                                spacesPath,
+                                                userDrivePath,
+                                                userDriveOwnerId,
+                                                spaceIdentityIds);
+          if (match != null) {
+            matches.add(match);
+          }
         }
       }
       return matches.stream()
@@ -3987,18 +3992,17 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   /**
-   * Builds the query of the files, folders and shortcuts of a name under the
-   * given paths, hidden ones left out.
+   * Builds the query of the files, folders and shortcuts of a name under one
+   * drive, hidden ones left out. One path pattern only: eXo JCR refuses
+   * {@code jcr:path} clauses joined by OR whose steps differ.
    *
-   * @param pathPatterns the {@code jcr:path LIKE} patterns of the drives
+   * @param pathPattern the {@code jcr:path LIKE} pattern of the drive
    * @param name the name, compared in lower case to the title and the name
    * @return the JCR SQL statement
    */
-  static String getNameQueryStatement(List<String> pathPatterns, String name) {
+  static String getNameQueryStatement(String pathPattern, String name) {
     String value = toSqlLiteral(name.toLowerCase(Locale.ROOT));
-    String paths = pathPatterns.stream()
-                               .map(pattern -> "jcr:path LIKE '" + pattern + "'")
-                               .collect(Collectors.joining(" OR "));
+    String paths = "jcr:path LIKE '" + pathPattern + "'";
     String types = Stream.concat(Stream.of(NodeTypeConstants.NT_FILE), FOLDER_NODE_TYPES.stream())
                          .distinct()
                          .map(type -> "jcr:primaryType = '" + type + "'")

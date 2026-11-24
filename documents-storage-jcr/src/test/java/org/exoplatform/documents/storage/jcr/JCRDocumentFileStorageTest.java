@@ -5087,11 +5087,12 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
-   * The statement the repository runs holds the name as one literal, its
-   * quotes doubled, searches the user's drive and the spaces' Documents
-   * drives, and reads a bounded number of rows; a given owner narrows it to
-   * that drive. Mutants: the escape dropped; the row bound dropped; the owner
-   * ignored.
+   * One statement per drive runs, the engine refusing two jcr:path clauses
+   * joined by OR: the user's drive and the spaces' Documents drives, each
+   * holding the name as one literal, its quotes doubled, and reading a bounded
+   * number of rows; a given owner narrows the search to that drive's one
+   * statement. Mutants: the escape dropped; the row bound dropped; the owner
+   * ignored; the drives joined in one statement.
    *
    * @throws Exception never
    */
@@ -5104,11 +5105,15 @@ public class JCRDocumentFileStorageTest {
     jcrDocumentFileStorage.findDocumentsByName("O'Brien", null, aclIdentity, 20);
 
     ArgumentCaptor<String> statement = ArgumentCaptor.forClass(String.class);
-    verify(userSession.getWorkspace().getQueryManager()).createQuery(statement.capture(), eq(Query.SQL));
-    assertTrue(statement.getValue(), statement.getValue().contains("LOWER(exo:title) = 'o''brien'"));
-    assertTrue(statement.getValue(), statement.getValue().contains("jcr:path LIKE '" + NAME_LOOKUP_PRIVATE + "/%'"));
-    assertTrue(statement.getValue(), statement.getValue().contains("jcr:path LIKE '/Groups/spaces/%/Documents/%'"));
-    verify(query).setLimit(JCRDocumentFileStorage.MAX_NAME_ROWS);
+    verify(userSession.getWorkspace().getQueryManager(), times(2)).createQuery(statement.capture(), eq(Query.SQL));
+    assertEquals(List.of("(jcr:path LIKE '" + NAME_LOOKUP_PRIVATE + "/%')", "(jcr:path LIKE '/Groups/spaces/%/Documents/%')"),
+                 statement.getAllValues()
+                          .stream()
+                          .map(value -> value.substring(value.indexOf('('), value.indexOf(')') + 1))
+                          .toList());
+    assertTrue(statement.getAllValues().stream().allMatch(value -> value.contains("LOWER(exo:title) = 'o''brien'")),
+               statement.getAllValues().toString());
+    verify(query, times(2)).setLimit(JCRDocumentFileStorage.MAX_NAME_ROWS);
 
     Identity spaceIdentity = new Identity("space", "f2_support");
     spaceIdentity.setId("200");
@@ -5120,7 +5125,7 @@ public class JCRDocumentFileStorageTest {
 
     jcrDocumentFileStorage.findDocumentsByName("workflow", 200L, aclIdentity, 20);
 
-    verify(userSession.getWorkspace().getQueryManager(), times(2)).createQuery(statement.capture(), eq(Query.SQL));
+    verify(userSession.getWorkspace().getQueryManager(), times(3)).createQuery(statement.capture(), eq(Query.SQL));
     assertTrue(statement.getValue(), statement.getValue().contains("(jcr:path LIKE '/Groups/spaces/f2_support/Documents/%')"));
     assertFalse(statement.getValue(), statement.getValue().contains("/Groups/spaces/%"));
   }

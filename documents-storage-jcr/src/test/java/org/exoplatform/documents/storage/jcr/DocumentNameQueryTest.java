@@ -44,8 +44,9 @@ import org.exoplatform.services.jcr.impl.core.query.sql.JCRSQLQueryBuilder;
  */
 class DocumentNameQueryTest {
 
-  private static final List<String> DRIVES = List.of("/Users/j___/jo___/joh___/john/Private/%",
-                                                     "/Groups/spaces/%/Documents/%");
+  private static final String SPACES_DRIVES = "/Groups/spaces/%/Documents/%";
+
+  private static final String USER_DRIVE    = "/Users/j___/jo___/joh___/john/Private/%";
 
   /**
    * A name built to close the literal and widen the query stays one literal:
@@ -60,7 +61,7 @@ class DocumentNameQueryTest {
   void aNameClosingTheLiteralStaysOneValue() throws Exception {
     String name = "x' OR jcr:path LIKE '/%";
 
-    Parsed parsed = parse(JCRDocumentFileStorage.getNameQueryStatement(DRIVES, name));
+    Parsed parsed = parse(JCRDocumentFileStorage.getNameQueryStatement(SPACES_DRIVES, name));
 
     assertEquals(List.of("x' or jcr:path like '/%", "x' or jcr:path like '/%"), parsed.nameValues());
     assertEquals(List.of(PropertyFunctionQueryNode.LOWER_CASE, PropertyFunctionQueryNode.LOWER_CASE), parsed.functions);
@@ -80,7 +81,7 @@ class DocumentNameQueryTest {
   @DisplayName("A backslash before a quote, a trailing backslash and a line break stay inside the one compared value")
   void aBackslashOrALineBreakStaysInsideTheValue() throws Exception {
     for (String name : List.of("a\\' OR jcr:path LIKE '/%", "a\\", "line\nbreak' OR 'x'='x")) {
-      Parsed parsed = parse(JCRDocumentFileStorage.getNameQueryStatement(DRIVES, name));
+      Parsed parsed = parse(JCRDocumentFileStorage.getNameQueryStatement(SPACES_DRIVES, name));
 
       String value = name.toLowerCase(java.util.Locale.ROOT);
       assertEquals(List.of(value, value), parsed.nameValues(), name);
@@ -97,7 +98,7 @@ class DocumentNameQueryTest {
   @Test
   @DisplayName("Wildcard and path characters of a name are compared as themselves, in lower case")
   void aNameIsComparedExactlyInLowerCase() throws Exception {
-    Parsed parsed = parse(JCRDocumentFileStorage.getNameQueryStatement(DRIVES, "Draft_50%/V2"));
+    Parsed parsed = parse(JCRDocumentFileStorage.getNameQueryStatement(SPACES_DRIVES, "Draft_50%/V2"));
 
     assertEquals(List.of("draft_50%/v2", "draft_50%/v2"), parsed.nameValues());
     assertTrue(parsed.relations.stream()
@@ -107,21 +108,23 @@ class DocumentNameQueryTest {
   }
 
   /**
-   * The statement searches the given drives only, files, folders and
-   * shortcuts only, and leaves hidden nodes out; it parses with the drives'
-   * real path shapes (a user bucket's underscores, a space's wildcard step).
-   * Mutants: the hidden filter dropped; the type filter dropped.
+   * The statement searches its drive only, files, folders and shortcuts only,
+   * and leaves hidden nodes out; it parses with each drive's real path shape
+   * (a user bucket's underscores, a space's wildcard step), one per
+   * statement. Mutants: the hidden filter dropped; the type filter dropped;
+   * the two drives joined by OR in one statement (refused by the engine).
    *
    * @throws Exception never
    */
   @Test
-  @DisplayName("The statement keeps to the drives, to files, folders and shortcuts, and leaves hidden nodes out")
+  @DisplayName("The statement keeps to its drive, to files, folders and shortcuts, and leaves hidden nodes out")
   void theStatementKeepsToTheDrivesAndLeavesHiddenNodesOut() throws Exception {
-    String statement = JCRDocumentFileStorage.getNameQueryStatement(DRIVES, "workflow");
+    // each drive's statement parses: the engine refuses two jcr:path clauses joined by OR whose steps differ
+    parse(JCRDocumentFileStorage.getNameQueryStatement(USER_DRIVE, "workflow"));
+    String statement = JCRDocumentFileStorage.getNameQueryStatement(SPACES_DRIVES, "workflow");
 
     parse(statement);
-    assertTrue(statement.contains("jcr:path LIKE '/Users/j___/jo___/joh___/john/Private/%' OR jcr:path LIKE '/Groups/spaces/%/Documents/%'"),
-               statement);
+    assertTrue(statement.contains("(jcr:path LIKE '/Groups/spaces/%/Documents/%')"), statement);
     assertTrue(statement.contains("jcr:primaryType = 'nt:file'") && statement.contains("jcr:primaryType = 'nt:folder'")
         && statement.contains("jcr:primaryType = 'exo:symlink'"), statement);
     assertTrue(statement.endsWith(" AND NOT jcr:mixinTypes LIKE 'exo:hiddenable'"), statement);
