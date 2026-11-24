@@ -5215,8 +5215,8 @@ public class JCRDocumentFileStorageTest {
                           .stream()
                           .map(value -> value.substring(value.indexOf('('), value.indexOf(')') + 1))
                           .toList());
-    assertTrue(statement.getAllValues().stream().allMatch(value -> value.contains("LOWER(exo:title) = 'o''brien'")),
-               statement.getAllValues().toString());
+    assertTrue(statement.getAllValues().toString(),
+               statement.getAllValues().stream().allMatch(value -> value.contains("LOWER(exo:title) = 'o''brien'")));
     assertEquals(3, queries.size());
     for (QueryImpl query : queries) {
       verify(query).setLimit(JCRDocumentFileStorage.MAX_NAME_ROWS);
