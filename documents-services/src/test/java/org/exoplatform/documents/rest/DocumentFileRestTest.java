@@ -1082,15 +1082,18 @@ public class DocumentFileRestTest {
 
     Response response = documentFileRest.cancelBulkAction("7");
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertNotStored(response);
     verify(documentFileStorage).cancelBulkAction("7", username);
 
     doThrow(new ObjectNotFoundException("no such action")).when(documentFileStorage).cancelBulkAction("8", username);
     response = documentFileRest.cancelBulkAction("8");
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNotStored(response);
 
     doThrow(new IllegalStateException("failure")).when(documentFileStorage).cancelBulkAction("9", username);
     response = documentFileRest.cancelBulkAction("9");
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+    assertNotStored(response);
   }
 
   @Test
