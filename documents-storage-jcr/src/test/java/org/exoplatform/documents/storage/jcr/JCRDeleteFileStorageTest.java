@@ -634,6 +634,34 @@ public class JCRDeleteFileStorageTest {
   }
 
   @Test
+  public void anImmediateDeletionMovesTheDocumentToTheTrashThenClosesTheUserProvider() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    SessionProvider systemProvider = mock(SessionProvider.class);
+    when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(systemProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", repository)).thenReturn(session);
+    NodeImpl node = mock(NodeImpl.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "doc")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session, "/folder/doc")).thenReturn(node);
+    when(node.isCheckedOut()).thenReturn(true);
+    when(trashStorage.moveToTrash(node, systemProvider)).thenReturn("trash-doc");
+    when(trashStorage.getNodeByTrashId("trash-doc")).thenReturn(node);
+    NodeType fileType = mock(NodeType.class);
+    when(fileType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(node.getPrimaryNodeType()).thenReturn(fileType);
+
+    jcrDeleteFileStorage.deleteDocument("/folder/doc", "doc", false, true, 0, aclIdentity, 1L);
+
+    verify(trashStorage).moveToTrash(node, systemProvider);
+    verify(sessionProvider).close();
+    verify(systemProvider, never()).close();
+  }
+
+  @Test
   public void aDelayedDeletionReadsThroughASessionOfItsOwnOpenedAfterTheRequestProviderClosed() throws Exception {
     org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
     AtomicBoolean requestProviderClosed = new AtomicBoolean();

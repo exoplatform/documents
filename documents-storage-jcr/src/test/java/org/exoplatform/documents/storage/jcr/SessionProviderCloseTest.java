@@ -318,7 +318,7 @@ public class SessionProviderCloseTest {
     jcrDocumentsUtil.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "doc"))
                     .thenThrow(new IllegalStateException("down"));
 
-    assertEquals(false, storage.hasEditPermissions("doc", aclIdentity));
+    assertFalse(storage.hasEditPermissions("doc", aclIdentity));
 
     verify(sessionProvider).close();
   }
