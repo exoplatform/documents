@@ -533,6 +533,8 @@ export default {
         this.users.push({
           ...collaborator.identity,
           permission: collaborator.permission,
+          // Written back with the space's members it was read with
+          role: collaborator.role,
         });
       }
       this.getDocumentPublicAccessInfo();
@@ -558,6 +560,7 @@ export default {
       for (const user of this.users) {
         const collaborator = {
           'permission': user.permission || 'read',
+          'role': user.role,
           'identity': {
             'id': user.id,
             'name': user.name,

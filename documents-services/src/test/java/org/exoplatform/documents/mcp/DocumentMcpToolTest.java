@@ -1396,6 +1396,54 @@ public class DocumentMcpToolTest {
                                                   eq(USER_IDENTITY_ID));
   }
 
+  /**
+   * A space the document reaches only through its managers, redactors and
+   * publishers is not shared with its members: sharing with it asks for the
+   * whole space, beside the role already given.
+   */
+  @Test
+  public void shareDocumentWithASpaceReachedThroughItsManagersAsksForTheWholeSpace() throws Exception {
+    Space space = new Space();
+    space.setId(String.valueOf(SPACE_ID));
+    space.setPrettyName("engineering");
+    when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(space);
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity =
+                                                                       new org.exoplatform.social.core.identity.model.Identity("300");
+    spaceIdentity.setProviderId("space");
+    spaceIdentity.setRemoteId("engineering");
+    when(identityManager.getOrCreateSpaceIdentity("engineering")).thenReturn(spaceIdentity);
+    FileNode node = fileNode(DOCUMENT_ID, "application/pdf");
+    node.setAcl(new NodePermission(true,
+                                   true,
+                                   false,
+                                   false,
+                                   List.of(new PermissionEntry(spaceIdentity,
+                                                               "set_property",
+                                                               PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name())),
+                                   new java.util.HashMap<>(),
+                                   new java.util.HashMap<>(),
+                                   null));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(node);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    documentMcpTool.shareDocument(DOCUMENT_ID, null, SPACE_ID, false);
+
+    verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
+                                                  argThat((NodePermission np) -> np.getPermissions()
+                                                                                   .stream()
+                                                                                   .anyMatch(p -> p.getIdentity() == spaceIdentity
+                                                                                                  && "read".equals(p.getPermission())
+                                                                                                  && PermissionRole.ALL.name()
+                                                                                                                       .equals(p.getRole()))
+                                                                                 && np.getPermissions()
+                                                                                      .stream()
+                                                                                      .anyMatch(p -> p.getIdentity() == spaceIdentity
+                                                                                                     && "edit".equals(p.getPermission())
+                                                                                                     && PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name()
+                                                                                                                                                    .equals(p.getRole()))),
+                                                  eq(USER_IDENTITY_ID));
+  }
+
   @Test
   public void shareDocumentRequiresExactlyOneRecipient() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
