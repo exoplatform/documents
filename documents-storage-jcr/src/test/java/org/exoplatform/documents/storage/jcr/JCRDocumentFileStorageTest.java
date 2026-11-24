@@ -2188,6 +2188,58 @@ public class JCRDocumentFileStorageTest {
         && Arrays.equals(map.get("John"), PermissionType.ALL)));
   }
   
+  /**
+   * A space stored as its whole group (view) and its managers (edit), saved
+   * with both roles, keeps both and is not unshared; saved with its managers'
+   * role only, its whole group goes and the space is unshared, its link in
+   * the space's shared folder removed.
+   */
+  @Test
+  public void TestUpdatePermissionKeepsBothRolesOfASpace() throws RepositoryException {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity = mock(org.exoplatform.social.core.identity.model.Identity.class);
+    Space space = mock(Space.class);
+    when(spaceIdentity.getProviderId()).thenReturn("space");
+    when(spaceIdentity.getRemoteId()).thenReturn("b");
+    lenient().when(spaceIdentity.getId()).thenReturn("5");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    lenient().when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    lenient().when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    ExtendedNode node = mock(ExtendedNode.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "123")).thenReturn(node);
+    lenient().when(spaceService.getSpaceByPrettyName("b")).thenReturn(space);
+    lenient().when(spaceService.getSpaceByGroupId("/spaces/b")).thenReturn(space);
+    lenient().when(space.getGroupId()).thenReturn("/spaces/b");
+    lenient().when(space.getPrettyName()).thenReturn("b");
+    lenient().when(identityManager.getOrCreateSpaceIdentity("b")).thenReturn(spaceIdentity);
+    lenient().when(node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)).thenReturn(true);
+    AccessControlList storedAccessList = new AccessControlList("root", new ArrayList<>());
+    storedAccessList.addPermissions("*:/spaces/b", new String[] { PermissionType.READ });
+    storedAccessList.addPermissions("manager:/spaces/b", PermissionType.ALL);
+    when(node.getACL()).thenReturn(storedAccessList);
+    NodePermission bothRoles = new NodePermission();
+    bothRoles.setPermissions(List.of(new PermissionEntry(spaceIdentity, "edit", PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name()),
+                                     new PermissionEntry(spaceIdentity, "read", PermissionRole.ALL.name())));
+
+    jcrDocumentFileStorage.updatePermissions("123", bothRoles, aclIdentity);
+
+    // A managers' role sent with no stored form is written as the space's managers, redactors and publishers
+    verify(node).setPermissions(argThat((Map<String, String[]> map) -> Arrays.equals(map.get("*:/spaces/b"), new String[] { PermissionType.READ })
+        && Arrays.equals(map.get("manager:/spaces/b"), PermissionType.ALL)
+        && Arrays.equals(map.get("redactor:/spaces/b"), PermissionType.ALL)
+        && Arrays.equals(map.get("publisher:/spaces/b"), PermissionType.ALL)));
+    assertTrue(bothRoles.getToUnShare().isEmpty());
+
+    NodePermission managersOnly = new NodePermission();
+    managersOnly.setPermissions(List.of(new PermissionEntry(spaceIdentity, "edit", PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name())));
+    jcrDocumentFileStorage.updatePermissions("123", managersOnly, aclIdentity);
+    assertTrue(managersOnly.getToUnShare().containsKey(5L));
+  }
+
   private Session getMockedSession(org.exoplatform.services.security.Identity identity) throws RepositoryException {
     SessionProvider systemSessionprovider = mock(SessionProvider.class);
     SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(systemSessionprovider);

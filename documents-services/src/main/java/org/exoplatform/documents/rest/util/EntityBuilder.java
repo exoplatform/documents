@@ -48,6 +48,10 @@ public class EntityBuilder {
 
   private static final String        SPACE_PATH_PREFIX = "/Groups/spaces/";
 
+  /** The roles a space collaborator can hold */
+  private static final Set<String>   SPACE_ROLES       = Set.of(PermissionRole.ALL.name(),
+                                                                  PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name());
+
   public static final String         USER_PRIVATE_ROOT_NODE           = "/Private";
 
   public static final String         USER_PUBLIC_ROOT_NODE           = "/Public";
@@ -347,6 +351,8 @@ public class EntityBuilder {
     boolean allCanEdit = false;
     Identity identity = getOwnerIdentityFromNodePath(path, identityManager, spaceService);
     Map<String, PermissionEntryEntity> map = new HashMap<>();
+    // Whether each role of a collaborator grants edit, by collaborator
+    Map<String, Map<String, Boolean>> rolesByCollaborator = new HashMap<>();
     List<PermissionEntry> permissions = nodePermission.getPermissions();
     // JCRDocumentFileStorage#updatePermissions writes the owner (exo:owner, the creator) with
     // PermissionType.ALL on every save, which the JCR stores as one entry per permission type
@@ -368,15 +374,31 @@ public class EntityBuilder {
           allCanEdit = true;
         }
       } else {
-        PermissionEntryEntity permissionEntry_ = map.get(permissionEntry.getIdentity().getRemoteId());
+        // A user and a space may share a name: a collaborator is its provider and its name
+        String collaboratorKey = permissionEntry.getIdentity().getProviderId() + ":" + permissionEntry.getIdentity().getRemoteId();
+        rolesByCollaborator.computeIfAbsent(collaboratorKey, key -> new HashMap<>())
+                           .merge(permissionEntry.getRole(), isEditPermission(permissionEntry.getPermission()), Boolean::logicalOr);
+        PermissionEntryEntity permissionEntry_ = map.get(collaboratorKey);
         if(permissionEntry_ == null){
-          map.put(permissionEntry.getIdentity().getRemoteId(),toPermissionEntryEntity(permissionEntry, spaceService));
+          map.put(collaboratorKey, toPermissionEntryEntity(permissionEntry, spaceService));
         } else if (isWiderThanRow(permissionEntry, permissionEntry_)) {
-          map.put(permissionEntry.getIdentity().getRemoteId(), toPermissionEntryEntity(permissionEntry, spaceService));
+          map.put(collaboratorKey, toPermissionEntryEntity(permissionEntry, spaceService));
         }
 
       }
     }
+    // A row shows one role: the collaborator's other roles ride along, so that a save writes them back
+    map.forEach((collaboratorKey, row) -> {
+      Map<String, String> otherRoles = new HashMap<>();
+      rolesByCollaborator.get(collaboratorKey).forEach((role, edit) -> {
+        if (role != null && !role.equals(row.getRole())) {
+          otherRoles.put(role, Boolean.TRUE.equals(edit) ? "edit" : "read");
+        }
+      });
+      if (!otherRoles.isEmpty()) {
+        row.setOtherRoles(otherRoles);
+      }
+    });
     boolean isPublic = nodePermission.isPublic();
     boolean hasPublicAccessLink = publicDocumentAccessService.hasDocumentPublicAccess(node.getId());
     String visibilityChoice;
@@ -421,7 +443,9 @@ public class EntityBuilder {
       for(PermissionEntryEntity permissionEntryEntity : collaborators){
         if (permissionEntryEntity.getIdentity().getProviderId().equals("space")) {
           toShare.put(Long.valueOf(identityManager.getOrCreateSpaceIdentity(permissionEntryEntity.getIdentity().getRemoteId()).getId()), permissionEntryEntity.getPermission());
-          permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
+          PermissionEntry row = toPermissionEntry(permissionEntryEntity, identityManager);
+          permissions.add(row);
+          permissions.addAll(toOtherRoleEntries(permissionEntryEntity, row));
         } else if(permissionEntryEntity.getIdentity().getProviderId().equals("group")){
             permissions.add(toPermissionEntry(permissionEntryEntity, identityManager));
         } else {
@@ -502,6 +526,27 @@ public class EntityBuilder {
     String role = PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name().equals(permissionEntryEntity.getRole()) ? PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name()
                                                                                                              : PermissionRole.ALL.name();
     return new PermissionEntry(identity, permissionEntryEntity.getPermission(), role);
+  }
+
+  /**
+   * @param collaborator a space collaborator as the drawer sends it
+   * @param row the entry of the collaborator's row
+   * @return an entry for each other role of the collaborator: a role other
+   *         than the row's, ALL or MANAGERS_REDACTORS_PUBLISHERS, at its
+   *         permission, "read" or "edit", and at most at the row's, so that
+   *         a row set to view sets every role of its collaborator to view
+   */
+  private static List<PermissionEntry> toOtherRoleEntries(PermissionEntryEntity collaborator, PermissionEntry row) {
+    if (row == null || MapUtils.isEmpty(collaborator.getOtherRoles())) {
+      return List.of();
+    }
+    List<PermissionEntry> entries = new ArrayList<>();
+    collaborator.getOtherRoles().forEach((role, permission) -> {
+      if (SPACE_ROLES.contains(role) && !role.equals(row.getRole()) && ("read".equals(permission) || "edit".equals(permission))) {
+        entries.add(new PermissionEntry(row.getIdentity(), "read".equals(row.getPermission()) ? "read" : permission, role));
+      }
+    });
+    return entries;
   }
 
   public static Map<String, List<MetadataItemEntity>> retrieveMetadataItems(Map<String, List<MetadataItem>> metadatas,

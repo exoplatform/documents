@@ -100,6 +100,7 @@ export default {
         const  collaborator= {
           'permission': user.permission || 'read',
           'role': user.role,
+          'otherRoles': user.otherRoles,
           'identity': {
             'id': user.id,
             'name': user.displayName || user.fullName,
@@ -117,7 +118,7 @@ export default {
     },
     removeUser(user) {
       const index = this.users.findIndex(addedUser => {
-        return user.remoteId === addedUser.remoteId;
+        return user.remoteId === addedUser.remoteId && user.providerId === addedUser.providerId;
       });
       if (index >= 0) {
         this.users.splice(index, 1);
@@ -125,7 +126,7 @@ export default {
     },
     setUserVisibility(user) {
       const index = this.users.findIndex(addedUser => {
-        return user.remoteId === addedUser.remoteId;
+        return user.remoteId === addedUser.remoteId && user.providerId === addedUser.providerId;
       });
       if (index >= 0) {
         this.users[index].permission=user.permission;

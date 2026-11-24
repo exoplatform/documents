@@ -533,8 +533,9 @@ export default {
         this.users.push({
           ...collaborator.identity,
           permission: collaborator.permission,
-          // Written back with the space's members it was read with
+          // Written back with the space's members it was read with, and with its other roles
           role: collaborator.role,
+          otherRoles: collaborator.otherRoles,
         });
       }
       this.getDocumentPublicAccessInfo();
@@ -561,6 +562,7 @@ export default {
         const collaborator = {
           'permission': user.permission || 'read',
           'role': user.role,
+          'otherRoles': user.otherRoles,
           'identity': {
             'id': user.id,
             'name': user.name,
@@ -589,7 +591,7 @@ export default {
     },
     removeUser(user) {
       const index = this.users.findIndex(addedUser => {
-        return user.remoteId === addedUser.remoteId;
+        return user.remoteId === addedUser.remoteId && user.providerId === addedUser.providerId;
       });
       if (index >= 0) {
         this.users.splice(index, 1);
@@ -597,7 +599,7 @@ export default {
     },
     setUserVisibility(user) {
       const index = this.users.findIndex(addedUser => {
-        return user.remoteId === addedUser.remoteId;
+        return user.remoteId === addedUser.remoteId && user.providerId === addedUser.providerId;
       });
       if (index >= 0) {
         this.users[index].permission = user.permission;

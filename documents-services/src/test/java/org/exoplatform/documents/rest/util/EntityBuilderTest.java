@@ -311,6 +311,179 @@ public class EntityBuilderTest {
         assertRow(node, "edit", managers, new PermissionEntry(outside, "set_property", managers), new PermissionEntry(outside, "read", whole));
     }
 
+    /**
+     * A space stored with its members viewing and its managers, redactors and
+     * publishers editing is read as one editing row that carries its other
+     * role, and written back with both: an unchanged drawer save keeps the
+     * stored list. A row's own role, an unknown role and an unknown
+     * permission among the other roles are not written.
+     */
+    @Test
+    public void spaceCollaboratorKeepsItsOtherRolesFromReadToWrite() throws Exception {
+        Space space = new Space();
+        space.setPrettyName("testspace");
+        when(spaceService.getSpaceByGroupId("/spaces/testspace")).thenReturn(space);
+        Identity spaceIdentity = mock(Identity.class);
+        when(spaceIdentity.getId()).thenReturn("999");
+        when(identityManager.getOrCreateSpaceIdentity("testspace")).thenReturn(spaceIdentity);
+        Identity outside = mock(Identity.class);
+        when(outside.getId()).thenReturn("5");
+        when(outside.getProviderId()).thenReturn("space");
+        when(outside.getRemoteId()).thenReturn("outside");
+        when(outside.isSpace()).thenReturn(true);
+        FileNode node = new FileNode();
+        node.setId("fileId");
+        node.setPath("/Groups/spaces/testspace");
+        when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(false);
+        String managers = PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name();
+        String whole = PermissionRole.ALL.name();
+        node.setAcl(new NodePermission(true,
+                                       true,
+                                       false,
+                                       false,
+                                       List.of(new PermissionEntry(outside, "read", whole),
+                                               new PermissionEntry(outside, "read", managers),
+                                               new PermissionEntry(outside, "set_property", managers)),
+                                       null,
+                                       null,
+                                       null));
+
+        PermissionEntryEntity row = invokeToNodePermissionEntity(node).getCollaborators().get(0);
+        assertEquals("edit", row.getPermission());
+        assertEquals(managers, row.getRole());
+        assertEquals(java.util.Map.of(whole, "read"), row.getOtherRoles());
+
+        when(identityManager.getOrCreateSpaceIdentity("outside")).thenReturn(outside);
+        AbstractNodeEntity nodeEntity = new AbstractNodeEntity(true);
+        nodeEntity.setPath("/Groups/spaces/testspace");
+        NodePermissionEntity acl = new NodePermissionEntity();
+        acl.setVisibilityChoice(Visibility.SPECIFIC_COLLABORATOR.name());
+        acl.setCollaborators(List.of(row));
+        nodeEntity.setAcl(acl);
+        assertEquals(List.of("edit " + managers, "read " + whole), writtenEntries(nodeEntity));
+
+        row.setOtherRoles(java.util.Map.of(managers, "read", "unknown", "read"));
+        assertEquals(List.of("edit " + managers), writtenEntries(nodeEntity));
+        row.setOtherRoles(java.util.Map.of(whole, "owner"));
+        assertEquals(List.of("edit " + managers), writtenEntries(nodeEntity));
+
+        node.setAcl(new NodePermission(true,
+                                       true,
+                                       false,
+                                       false,
+                                       List.of(new PermissionEntry(outside, "set_property", managers),
+                                               new PermissionEntry(outside, "read", managers),
+                                               new PermissionEntry(outside, "set_property", whole)),
+                                       null,
+                                       null,
+                                       null));
+        PermissionEntryEntity wholeRow = invokeToNodePermissionEntity(node).getCollaborators().get(0);
+        assertEquals(whole, wholeRow.getRole());
+        assertEquals(java.util.Map.of(managers, "edit"), wholeRow.getOtherRoles());
+
+        node.setAcl(new NodePermission(true,
+                                       true,
+                                       false,
+                                       false,
+                                       List.of(new PermissionEntry(outside, "read", whole)),
+                                       null,
+                                       null,
+                                       null));
+        assertNull(invokeToNodePermissionEntity(node).getCollaborators().get(0).getOtherRoles());
+    }
+
+    /**
+     * A user and a space may share a name: each gets its own row, and
+     * neither carries the other's role. A space row set to view writes its
+     * other roles at view too.
+     */
+    @Test
+    public void spaceCollaboratorOtherRolesAreItsOwnAndFollowALoweredRow() throws Exception {
+        Space space = new Space();
+        space.setPrettyName("testspace");
+        when(spaceService.getSpaceByGroupId("/spaces/testspace")).thenReturn(space);
+        Identity spaceIdentity = mock(Identity.class);
+        when(spaceIdentity.getId()).thenReturn("999");
+        when(identityManager.getOrCreateSpaceIdentity("testspace")).thenReturn(spaceIdentity);
+        Identity john = mockUserIdentity("42", "john", "John Doe");
+        when(john.getProviderId()).thenReturn("organization");
+        Identity johnSpace = mock(Identity.class);
+        when(johnSpace.getId()).thenReturn("6");
+        when(johnSpace.getProviderId()).thenReturn("space");
+        when(johnSpace.getRemoteId()).thenReturn("john");
+        when(johnSpace.isSpace()).thenReturn(true);
+        when(identityManager.getOrCreateSpaceIdentity("john")).thenReturn(johnSpace);
+        FileNode node = new FileNode();
+        node.setId("fileId");
+        node.setPath("/Groups/spaces/testspace");
+        when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(false);
+        String managers = PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name();
+        String whole = PermissionRole.ALL.name();
+        node.setAcl(new NodePermission(true,
+                                       true,
+                                       false,
+                                       false,
+                                       List.of(new PermissionEntry(john, "read", whole),
+                                               new PermissionEntry(johnSpace, "set_property", managers)),
+                                       null,
+                                       null,
+                                       null));
+
+        List<PermissionEntryEntity> rows = invokeToNodePermissionEntity(node).getCollaborators();
+        assertEquals(2, rows.size());
+        PermissionEntryEntity spaceRow = rows.stream().filter(r -> "space".equals(r.getIdentity().getProviderId())).findFirst().orElseThrow();
+        PermissionEntryEntity userRow = rows.stream().filter(r -> "organization".equals(r.getIdentity().getProviderId())).findFirst().orElseThrow();
+        assertEquals("edit", spaceRow.getPermission());
+        assertEquals(managers, spaceRow.getRole());
+        assertNull(spaceRow.getOtherRoles());
+        assertEquals("read", userRow.getPermission());
+        assertNull(userRow.getOtherRoles());
+
+        node.setAcl(new NodePermission(true,
+                                       true,
+                                       false,
+                                       false,
+                                       List.of(new PermissionEntry(john, "set_property", whole),
+                                               new PermissionEntry(johnSpace, "read", managers)),
+                                       null,
+                                       null,
+                                       null));
+        rows = invokeToNodePermissionEntity(node).getCollaborators();
+        assertEquals(2, rows.size());
+        assertTrue(rows.stream().allMatch(r -> r.getOtherRoles() == null));
+        assertEquals("read " + managers,
+                     rows.stream().filter(r -> "space".equals(r.getIdentity().getProviderId())).map(r -> r.getPermission() + " " + r.getRole()).findFirst().orElseThrow());
+
+        node.setAcl(new NodePermission(true,
+                                       true,
+                                       false,
+                                       false,
+                                       List.of(new PermissionEntry(johnSpace, "set_property", whole),
+                                               new PermissionEntry(johnSpace, "set_property", managers)),
+                                       null,
+                                       null,
+                                       null));
+        PermissionEntryEntity row = invokeToNodePermissionEntity(node).getCollaborators().get(0);
+        assertEquals(java.util.Map.of(managers, "edit"), row.getOtherRoles());
+        AbstractNodeEntity nodeEntity = new AbstractNodeEntity(true);
+        nodeEntity.setPath("/Groups/spaces/testspace");
+        NodePermissionEntity acl = new NodePermissionEntity();
+        acl.setVisibilityChoice(Visibility.SPECIFIC_COLLABORATOR.name());
+        acl.setCollaborators(List.of(row));
+        nodeEntity.setAcl(acl);
+        assertEquals(List.of("edit " + whole, "edit " + managers), writtenEntries(nodeEntity));
+        row.setPermission("read");
+        assertEquals(List.of("read " + whole, "read " + managers), writtenEntries(nodeEntity));
+    }
+
+  /** @return the entries the node's one collaborator is written with, as "permission role" */
+  private List<String> writtenEntries(AbstractNodeEntity nodeEntity) {
+    List<PermissionEntry> entries = EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager)
+                                                 .getPermissions();
+    // The last entry is the document's own space, appended after the collaborators
+    return entries.subList(0, entries.size() - 1).stream().map(entry -> entry.getPermission() + " " + entry.getRole()).toList();
+  }
+
   private void assertRow(FileNode node, String permission, String role, PermissionEntry... entries) throws Exception {
     node.setAcl(new NodePermission(true, true, false, false, List.of(entries), null, null, null));
     PermissionEntryEntity row = invokeToNodePermissionEntity(node).getCollaborators().get(0);
