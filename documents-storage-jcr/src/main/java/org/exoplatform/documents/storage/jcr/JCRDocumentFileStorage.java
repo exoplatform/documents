@@ -3888,15 +3888,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   /**
    * {@inheritDoc}
    * <p>
-   * One query of the repository, through the user's own session: the
-   * repository returns only the nodes that user can read, so no right is
-   * decided here. The name is compared to the node's title and to its name,
+   * One query of the repository, through the user's own session: eXo JCR
+   * keeps only the hits that session may read ({@code QueryResultImpl}
+   * checks each one with {@code AccessManager#hasPermission} for read, a
+   * system session alone skipping the check), so no right is decided here. The name is compared to the node's title and to its name,
    * both in lower case. eXo JCR parses no bind variable (no JCR-SQL2 parser,
    * and no query declares a variable, so {@code QueryImpl#bindValue} refuses
    * every name): the name is written into the statement as a string literal,
-   * its quotes doubled, by {@link #getNameQueryStatement(List, String)}. At
-   * most {@link #MAX_NAME_ROWS} rows are read, then sorted by their path, so
-   * the same drives give the same matches in the same order.
+   * its quotes doubled, by {@link #getNameQueryStatement(List, String)}; a
+   * backslash is no escape character there. At most {@link #MAX_NAME_ROWS}
+   * rows are read, in the repository's order, then sorted by their path: below
+   * that bound the same drives give the same matches in the same order; past
+   * it, the matches are taken from the rows read only.
    */
   @Override
   public List<DocumentNameMatch> findDocumentsByName(String name,
