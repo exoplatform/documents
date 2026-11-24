@@ -5033,8 +5033,9 @@ public class JCRDocumentFileStorageTest {
   /**
    * A row the user's session lists but can't read by its id, a node outside a
    * space's Documents drive, and a node in a group that is no space's are
-   * left out; the user's own drive is the user's. Mutants: the Documents
-   * bound dropped from the drive check; a node the session can't read kept.
+   * left out; the user's own drive is the user's, its Public folder included.
+   * Mutants: the Documents bound dropped from the drive check; a node the
+   * session can't read kept; the Public folder not searched.
    *
    * @throws Exception never
    */
@@ -5048,19 +5049,25 @@ public class JCRDocumentFileStorageTest {
     when(unreadable.getIdentifier()).thenReturn("unreadable");
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(userSession, "unreadable")).thenReturn(null);
     ExtendedNode applicationData = nameLookupFolder(userSession,
-                                                    "/Groups/spaces/f2_support/ApplicationData/x/workflow",
+                                                    "/Groups/spaces/f2_support/ApplicationData/Documents/workflow",
                                                     "appdata",
                                                     aclIdentity);
     ExtendedNode noSpace = nameLookupFolder(userSession, "/Groups/spaces/gone/Documents/workflow", "gone", aclIdentity);
-    nameLookupRows(userSession, own, unreadable, applicationData, noSpace);
+    ExtendedNode published = nameLookupFolder(userSession,
+                                              "/Users/j___/jo___/joh___/john/Public/shared/workflow",
+                                              "public",
+                                              aclIdentity);
+    nameLookupRows(userSession, own, unreadable, applicationData, noSpace, published);
     nameLookupSpace("f2_support", "f2_support", 200L);
 
     List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 20);
 
-    assertEquals(1, matches.size());
-    assertEquals("own", matches.get(0).document().getId());
+    assertEquals(List.of("own", "public"), matches.stream().map(match -> match.document().getId()).toList());
     assertEquals(1L, matches.get(0).ownerIdentityId());
     assertEquals("/projects", matches.get(0).folderPath());
+    // the user's Public folder, beside Private, is shown in the user's drive as /Public
+    assertEquals(1L, matches.get(1).ownerIdentityId());
+    assertEquals("/Public/shared", matches.get(1).folderPath());
   }
 
   /**
@@ -5120,6 +5127,38 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * A shortcut whose path sorts before its target's own gives way to the
+   * target's own row: the match keeps the target's drive and folder. Mutant:
+   * the shortcut's row kept once the target's comes.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameReplacesAShortcutByItsTargetsOwnRow() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    ExtendedNode target = nameLookupFolder(userSession, "/Groups/spaces/b_space/Documents/workflow", "doc", aclIdentity);
+    ExtendedNode shortcut = mock(ExtendedNode.class);
+    when(shortcut.getPath()).thenReturn("/Groups/spaces/a_space/Documents/links/workflow");
+    when(shortcut.getIdentifier()).thenReturn("shortcut");
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    when(shortcut.getSession()).thenReturn(userSession);
+    Property targetId = mock(Property.class);
+    when(targetId.getString()).thenReturn("doc");
+    when(shortcut.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(targetId);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(userSession, "shortcut")).thenReturn(shortcut);
+    nameLookupRows(userSession, target, shortcut);
+    nameLookupSpace("a_space", "a_space", 300L);
+    nameLookupSpace("b_space", "b_space", 400L);
+
+    List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 20);
+
+    assertEquals(1, matches.size());
+    assertEquals(400L, matches.get(0).ownerIdentityId());
+    assertEquals("/", matches.get(0).folderPath());
+  }
+
+  /**
    * The folder a match lies in is named by the folders' titles, as Documents
    * shows them, and a folder whose title can't be read keeps its node name.
    * Mutant: the node names kept for every folder.
@@ -5150,7 +5189,8 @@ public class JCRDocumentFileStorageTest {
 
   /**
    * One statement per drive runs, the engine refusing two jcr:path clauses
-   * joined by OR: the user's drive and the spaces' Documents drives, each
+   * joined by OR: the user's drive, its Public folder and the spaces'
+   * Documents drives, each
    * holding the name as one literal, its quotes doubled, and reading a bounded
    * number of rows; a given owner narrows the search to that drive's one
    * statement. Mutants: the escape dropped; the row bound dropped; the owner
@@ -5167,15 +5207,17 @@ public class JCRDocumentFileStorageTest {
     jcrDocumentFileStorage.findDocumentsByName("O'Brien", null, aclIdentity, 20);
 
     ArgumentCaptor<String> statement = ArgumentCaptor.forClass(String.class);
-    verify(userSession.getWorkspace().getQueryManager(), times(2)).createQuery(statement.capture(), eq(Query.SQL));
-    assertEquals(List.of("(jcr:path LIKE '" + NAME_LOOKUP_PRIVATE + "/%')", "(jcr:path LIKE '/Groups/spaces/%/Documents/%')"),
+    verify(userSession.getWorkspace().getQueryManager(), times(3)).createQuery(statement.capture(), eq(Query.SQL));
+    assertEquals(List.of("(jcr:path LIKE '" + NAME_LOOKUP_PRIVATE + "/%')",
+                         "(jcr:path LIKE '/Users/j___/jo___/joh___/john/Public/%')",
+                         "(jcr:path LIKE '/Groups/spaces/%/Documents/%')"),
                  statement.getAllValues()
                           .stream()
                           .map(value -> value.substring(value.indexOf('('), value.indexOf(')') + 1))
                           .toList());
     assertTrue(statement.getAllValues().stream().allMatch(value -> value.contains("LOWER(exo:title) = 'o''brien'")),
                statement.getAllValues().toString());
-    assertEquals(2, queries.size());
+    assertEquals(3, queries.size());
     for (QueryImpl query : queries) {
       verify(query).setLimit(JCRDocumentFileStorage.MAX_NAME_ROWS);
     }
@@ -5190,7 +5232,7 @@ public class JCRDocumentFileStorageTest {
 
     jcrDocumentFileStorage.findDocumentsByName("workflow", 200L, aclIdentity, 20);
 
-    verify(userSession.getWorkspace().getQueryManager(), times(3)).createQuery(statement.capture(), eq(Query.SQL));
+    verify(userSession.getWorkspace().getQueryManager(), times(4)).createQuery(statement.capture(), eq(Query.SQL));
     assertTrue(statement.getValue(), statement.getValue().contains("(jcr:path LIKE '/Groups/spaces/f2_support/Documents/%')"));
     assertFalse(statement.getValue(), statement.getValue().contains("/Groups/spaces/%"));
   }

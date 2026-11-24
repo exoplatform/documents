@@ -3925,6 +3925,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       String spacesPath = getGroupsPath(nodeHierarchyCreator) + SPACES_GROUP_PATH;
       List<String> pathPatterns = new ArrayList<>();
       String userDrivePath = null;
+      String userPublicPath = null;
       long userDriveOwnerId = 0;
       if (ownerId != null) {
         org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
@@ -3952,6 +3953,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           userDrivePath = userDriveNode.getPath();
           userDriveOwnerId = userIdentity.getIdentityId();
           pathPatterns.add(userDrivePath + "/%");
+          // the user's Public folder sits beside Private, shown in the drive through a shortcut
+          if (userDrivePath.endsWith(SLASH + USER_PRIVATE_ROOT_NODE)) {
+            userPublicPath = userDrivePath.substring(0, userDrivePath.length() - USER_PRIVATE_ROOT_NODE.length())
+                + USER_PUBLIC_ROOT_NODE;
+            pathPatterns.add(userPublicPath + "/%");
+          }
         }
         pathPatterns.add(spacesPath + "/%/" + DOCUMENTS_NODE + "/%");
       }
@@ -3981,6 +3988,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                               aclIdentity,
                                               spacesPath,
                                               userDrivePath,
+                                              userPublicPath,
                                               userDriveOwnerId,
                                               spaceIdentityIds);
         if (match != null) {
@@ -4052,6 +4060,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @param aclIdentity the user, for the rights of the document
    * @param spacesPath the path of the spaces' group nodes
    * @param userDrivePath the path of the user drive searched, null when none
+   * @param userPublicPath the path of the user's Public folder searched, shown
+   *          as {@code /Public} in the user's drive, null when none
    * @param userDriveOwnerId the identity id of that drive's owner
    * @param spaceIdentityIds the spaces' identity ids already read, by group
    *          name
@@ -4065,14 +4075,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                         Identity aclIdentity,
                                         String spacesPath,
                                         String userDrivePath,
+                                        String userPublicPath,
                                         long userDriveOwnerId,
                                         Map<String, Long> spaceIdentityIds) throws RepositoryException {
     String nodePath = node.getPath();
     String drivePath;
     long ownerIdentityId;
+    String folderPrefix = "";
     if (userDrivePath != null && nodePath.startsWith(userDrivePath + SLASH)) {
       drivePath = userDrivePath;
       ownerIdentityId = userDriveOwnerId;
+    } else if (userPublicPath != null && nodePath.startsWith(userPublicPath + SLASH)) {
+      drivePath = userPublicPath;
+      ownerIdentityId = userDriveOwnerId;
+      folderPrefix = USER_PUBLIC_ROOT_NODE;
     } else if (nodePath.startsWith(spacesPath + SLASH)) {
       String[] segments = nodePath.substring(spacesPath.length() + 1).split(SLASH, 3);
       if (segments.length < 3 || !DOCUMENTS_NODE.equals(segments[1])) {
@@ -4096,7 +4112,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     if (document == null) {
       return null;
     }
-    return new DocumentNameMatch(document, ownerIdentityId, getFolderPathInDrive(node, nodePath, drivePath));
+    String folderPath = getFolderPathInDrive(node, nodePath, drivePath);
+    if (!folderPrefix.isEmpty()) {
+      folderPath = SLASH + folderPrefix + (SLASH.equals(folderPath) ? "" : folderPath);
+    }
+    return new DocumentNameMatch(document, ownerIdentityId, folderPath);
   }
 
   /**
