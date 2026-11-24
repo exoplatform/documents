@@ -59,8 +59,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.security.AccessControlException;
 import javax.jcr.AccessDeniedException;
-import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.nodetype.NodeType;
@@ -483,7 +483,7 @@ public class JCRDeleteFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session, "/Quarantine/report.pdf")).thenReturn(quarantined);
     when(trashStorage.isInTrash(quarantined)).thenReturn(false);
 
-    assertThrows(ItemNotFoundException.class, () -> jcrDeleteFileStorage.restoreFromTrash("/Quarantine/report.pdf"));
+    assertThrows(PathNotFoundException.class, () -> jcrDeleteFileStorage.restoreFromTrash("/Quarantine/report.pdf"));
     verify(trashStorage, never()).restoreFromTrash(anyString(), any());
 
     Node trashed = mock(Node.class);

@@ -276,7 +276,7 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
     Node trashNode = JCRDocumentsUtil.getNodeByPath(trashStorage.getTrashHomeNode().getSession(), trashNodePath);
     // Only a node of the trash is restored: a quarantined node carries a restore path too
     if (trashNode == null || !trashStorage.isInTrash(trashNode)) {
-      throw new ItemNotFoundException("No node exists in trash with path " + trashNodePath);
+      throw new PathNotFoundException("No node exists in trash with path " + trashNodePath);
     }
     trashStorage.restoreFromTrash(trashNode.getPath(), sessionProvider);
   }
