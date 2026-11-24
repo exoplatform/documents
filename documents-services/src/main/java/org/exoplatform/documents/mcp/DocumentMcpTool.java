@@ -87,6 +87,7 @@ import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentNameMatch;
 import org.exoplatform.documents.model.DocumentOutlineEntry;
 import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentTextPage;
@@ -297,11 +298,21 @@ public class DocumentMcpTool implements McpToolPlugin {
    * answering ({@code IdRecoveryRetryAdvisor}).
    */
   static final String              MSG_NAME_IS_NOT_AN_ID  =
-                                                         "'%s' is not an id, so no document was found with it: an id is a value a tool returned, never a name. Find the document's id with a search tool first: a file with search_documents and its name as query (without space_id or parent_folder_id, it searches every document you can read); a folder from get_root_folder_for_user or get_root_folder_by_space, then get_folder_tree, by its name. When several match, name them and ask which one is meant; when none does, say what you searched.";
+                                                         "'%s' is not an id, so no document was found with it: an id is a value a tool returned, never a name. Find the document's id with a search tool first: search_documents with its name as name finds the files and folders of that name in every drive you can read, each with its space and folder. When several match, name them and ask which one is meant; when none does, say what you searched.";
 
   /** The refusal of an unknown space id, saying how to find the space. */
   private static final String      MSG_SPACE_NOT_FOUND    =
                                                           "Space with id %s doesn't exist. Pass space_name (the space's name) or find it with get_my_spaces.";
+
+  /** The most matches a name lookup of search_documents returns. */
+  static final int                 MAX_NAME_MATCHES       = 20;
+
+  /** The drive name a name lookup gives for the user's own drive. */
+  static final String              PERSONAL_DRIVE         = "personal drive";
+
+  /** The refusal of a name lookup combined with another kind of search. */
+  static final String              MSG_NAME_ALONE         =
+                                                  "Pass name alone, or with space_id or space_name: name doesn't combine with query, updated_since, parent_folder_id, is_favorites or offset.";
 
   /** The refusal of a space given both by id and by name. */
   private static final String      MSG_SPACE_ID_OR_NAME   = "Pass either space_id or space_name, not both.";
@@ -1386,6 +1397,11 @@ public class DocumentMcpTool implements McpToolPlugin {
    * recent first.
    *
    * @param query the full-text query, blank for none
+   * @param name the exact name of the files and folders to find, compared
+   *          without case, blank for none: it finds folders too, in every
+   *          drive the user can read or in the one space given, each with its
+   *          drive and its folder, at most {@link #MAX_NAME_MATCHES}, in the
+   *          order of their path
    * @param spaceId the space to search in, null for none
    * @param spaceName the name of the space to search in, blank for none
    * @param parentFolderId the folder to search under, which wins over the
@@ -1400,17 +1416,21 @@ public class DocumentMcpTool implements McpToolPlugin {
    *           of the user carries the name
    * @throws IllegalAccessException when the user can't view the space
    * @throws IllegalArgumentException when both a space id and a name are
-   *           given, several of the user's spaces carry the name, or the
-   *           date can't be read
+   *           given, several of the user's spaces carry the name, the date
+   *           can't be read, or a name is combined with another search
    */
-  public List<DocumentFileModel> searchDocuments(String query,
-                                                 Long spaceId,
+  public List<DocumentModel> searchDocuments(String query,
+                                             String name,
+                                             Long spaceId,
                                                  String spaceName,
                                                  String parentFolderId,
                                                  Integer offset,
                                                  Integer limit,
                                                  Boolean isFavorites,
                                                  String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
+    if (StringUtils.isNotBlank(name)) {
+      return findDocumentsByName(name, query, spaceId, spaceName, parentFolderId, offset, limit, isFavorites, updatedSince);
+    }
     Long updatedSinceTime = parseUpdatedSince(updatedSince);
     DocumentTimelineFilter filter = new DocumentTimelineFilter();
     filter.setQuery(query);
@@ -1428,20 +1448,109 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isNotBlank(parentFolderId)) {
       filter.setParentFolderId(parentFolderId);
     } else if (searchedSpaceId != null) {
-      Space space = spaceService.getSpaceById(String.valueOf(searchedSpaceId));
-      if (space == null) {
-        throw new ObjectNotFoundException(MSG_SPACE_NOT_FOUND.formatted(searchedSpaceId));
-      } else if (!spaceService.canViewSpace(space, getCurrentUserName())) {
-        throw new IllegalAccessException("Space with id %s isn't accessible to you. Use get_my_spaces to find your spaces.".formatted(searchedSpaceId));
-      }
-      Identity spaceIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
-      filter.setOwnerId(spaceIdentity.getIdentityId());
+      filter.setOwnerId(getViewableSpaceIdentityId(searchedSpaceId));
     }
     List<FileNode> files = documentFileService.search(filter,
                                                       getCurrentUserAclIdentity(),
                                                       getInteger(offset, DEFAULT_OFFSET),
                                                       getInteger(limit, DEFAULT_LIMIT));
-    return files.stream().map(this::toDocumentFileModel).toList();
+    return files.stream().map(file -> (DocumentModel) toDocumentFileModel(file)).toList();
+  }
+
+  /**
+   * Finds the files and the folders of a name the user can read, in every
+   * drive or in one space's, each with the drive and the folder it lies in.
+   * The storage reads through the user's own session, so no right is decided
+   * here.
+   *
+   * @param name the exact name, compared without case
+   * @param query must be blank
+   * @param spaceId the space to search in, null for none
+   * @param spaceName the name of the space to search in, blank for none
+   * @param parentFolderId must be blank
+   * @param offset must be null or 0
+   * @param limit the most matches, at most {@link #MAX_NAME_MATCHES}
+   * @param isFavorites must be null or false
+   * @param updatedSince must be blank
+   * @return the matches, in the order of their path
+   * @throws ObjectNotFoundException when the space doesn't exist, or no space
+   *           of the user carries the name
+   * @throws IllegalAccessException when the user can't view the space
+   * @throws IllegalArgumentException when the name is combined with another
+   *           search, or the storage refuses it
+   */
+  private List<DocumentModel> findDocumentsByName(String name,
+                                                  String query,
+                                                  Long spaceId,
+                                                  String spaceName,
+                                                  String parentFolderId,
+                                                  Integer offset,
+                                                  Integer limit,
+                                                  Boolean isFavorites,
+                                                  String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
+    if (StringUtils.isNotBlank(query) || StringUtils.isNotBlank(updatedSince) || StringUtils.isNotBlank(parentFolderId)
+        || Boolean.TRUE.equals(isFavorites) || (offset != null && offset > 0)) {
+      throw new IllegalArgumentException(MSG_NAME_ALONE);
+    }
+    Long searchedSpaceId = resolveSpaceId(spaceId, spaceName, "search_documents");
+    Long ownerId = searchedSpaceId == null ? null : getViewableSpaceIdentityId(searchedSpaceId);
+    int size = Math.min(Math.max(getInteger(limit, MAX_NAME_MATCHES), 1), MAX_NAME_MATCHES);
+    List<DocumentNameMatch> matches = documentFileService.findDocumentsByName(name.trim(),
+                                                                              ownerId,
+                                                                              getCurrentUserIdentityId(),
+                                                                              size);
+    Map<Long, String> driveNames = new HashMap<>();
+    return matches.stream().map(match -> toNameMatchModel(match, driveNames)).toList();
+  }
+
+  /**
+   * Maps a match of a name lookup to the model the tools return, with its
+   * drive's name and its folder.
+   *
+   * @param match the match
+   * @param driveNames the drive names already read, by owner identity id
+   * @return the model
+   */
+  private DocumentModel toNameMatchModel(DocumentNameMatch match, Map<Long, String> driveNames) {
+    DocumentModel model = toDocumentModel(match.document());
+    model.setSpaceName(driveNames.computeIfAbsent(match.ownerIdentityId(), this::getDriveName));
+    model.setFolderPath(match.folderPath());
+    model.setFolder(match.document().isFolder());
+    return model;
+  }
+
+  /**
+   * @param ownerIdentityId the identity id of a drive's owner
+   * @return the space's name for a space's drive, {@link #PERSONAL_DRIVE} for
+   *         a user's, null when the owner can't be read
+   */
+  private String getDriveName(long ownerIdentityId) {
+    Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerIdentityId));
+    if (ownerIdentity == null) {
+      return null;
+    } else if (ownerIdentity.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
+      return space == null ? null : space.getDisplayName();
+    } else {
+      return PERSONAL_DRIVE;
+    }
+  }
+
+  /**
+   * @param spaceId a space id
+   * @return the identity id of the space, which the user can view
+   * @throws ObjectNotFoundException when the space doesn't exist
+   * @throws IllegalAccessException when the user can't view the space
+   */
+  private long getViewableSpaceIdentityId(long spaceId) throws ObjectNotFoundException, IllegalAccessException {
+    Space space = spaceService.getSpaceById(String.valueOf(spaceId));
+    if (space == null) {
+      throw new ObjectNotFoundException(MSG_SPACE_NOT_FOUND.formatted(spaceId));
+    } else if (!spaceService.canViewSpace(space, getCurrentUserName())) {
+      throw new IllegalAccessException("Space with id %s isn't accessible to you. Use get_my_spaces to find your spaces.".formatted(spaceId));
+    }
+    Identity spaceIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
+    return spaceIdentity.getIdentityId();
   }
 
   // ---------------------------------------------------------------------------

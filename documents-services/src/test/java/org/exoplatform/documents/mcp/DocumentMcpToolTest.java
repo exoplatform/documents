@@ -67,6 +67,7 @@ import org.exoplatform.documents.mcp.model.DocumentVersionModel;
 import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.BreadCrumbItem;
+import org.exoplatform.documents.model.DocumentNameMatch;
 import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.model.FileNode;
@@ -529,7 +530,7 @@ public class DocumentMcpToolTest {
       ObjectNotFoundException error = assertThrows(ObjectNotFoundException.class, () -> documentMcpTool.getDocumentById(name));
 
       assertTrue(error.getMessage(), error.getMessage().startsWith("'" + name + "' is not an id, so no document was found with it"));
-      assertTrue(error.getMessage(), error.getMessage().contains("with a search tool first: a file with search_documents and its name as query"));
+      assertTrue(error.getMessage(), error.getMessage().contains("with a search tool first: search_documents with its name as name finds the files and folders of that name"));
       assertTrue(error.getMessage(), error.getMessage().contains("When several match, name them and ask which one is meant"));
     }
   }
@@ -1249,7 +1250,7 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    List<DocumentFileModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null, null, null);
+    List<DocumentModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null, null, null, null);
 
     assertNotNull(models);
     assertEquals(1, models.size());
@@ -1261,7 +1262,7 @@ public class DocumentMcpToolTest {
     when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(null);
 
     assertThrows(ObjectNotFoundException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", null, SPACE_ID, null, null, null, null, null, null));
   }
 
   @Test
@@ -1273,7 +1274,137 @@ public class DocumentMcpToolTest {
     when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(false);
 
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", null, SPACE_ID, null, null, null, null, null, null));
+  }
+
+  /**
+   * A name is looked up by the name lookup, never by the search index, which
+   * holds files only, and each match says its drive and its folder. Kills the
+   * mutant that ignores the name when no query is given.
+   */
+  @Test
+  public void searchDocumentsByNameListsEachMatchWithItsDriveAndFolder() throws Exception {
+    FolderNode spaceFolder = folderNode(FOLDER_ID);
+    spaceFolder.setName("workflow");
+    FolderNode personalFolder = folderNode("e958c8b2");
+    personalFolder.setName("Workflow");
+    when(documentFileService.findDocumentsByName("workflow", null, USER_IDENTITY_ID, DocumentMcpTool.MAX_NAME_MATCHES))
+        .thenReturn(List.of(new DocumentNameMatch(spaceFolder, 200L, "/"),
+                            new DocumentNameMatch(personalFolder, USER_IDENTITY_ID, "/projects")));
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity =
+                                                                      new org.exoplatform.social.core.identity.model.Identity("space",
+                                                                                                                              "f2_support");
+    spaceIdentity.setId("200");
+    when(identityManager.getIdentity("200")).thenReturn(spaceIdentity);
+    org.exoplatform.social.core.identity.model.Identity userIdentity =
+                                                                     new org.exoplatform.social.core.identity.model.Identity("organization",
+                                                                                                                             USERNAME);
+    userIdentity.setId(String.valueOf(USER_IDENTITY_ID));
+    when(identityManager.getIdentity(String.valueOf(USER_IDENTITY_ID))).thenReturn(userIdentity);
+    Space space = new Space();
+    space.setDisplayName("F2 Support");
+    when(spaceService.getSpaceByPrettyName("f2_support")).thenReturn(space);
+
+    List<DocumentModel> models = documentMcpTool.searchDocuments(null, " workflow ", null, null, null, null, null, null, null);
+
+    assertEquals(2, models.size());
+    assertEquals(FOLDER_ID, models.get(0).getId());
+    assertEquals("F2 Support", models.get(0).getSpaceName());
+    assertEquals("/", models.get(0).getFolderPath());
+    assertEquals(Boolean.TRUE, models.get(0).getFolder());
+    assertEquals(DocumentMcpTool.PERSONAL_DRIVE, models.get(1).getSpaceName());
+    assertEquals("/projects", models.get(1).getFolderPath());
+    verify(documentFileService, never()).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                                any(),
+                                                anyInt(),
+                                                anyInt());
+  }
+
+  /**
+   * A file found by its name says it isn't a folder.
+   */
+  @Test
+  public void searchDocumentsByNameTellsAFileIsNoFolder() throws Exception {
+    when(documentFileService.findDocumentsByName("zz-8416-form.pdf", null, USER_IDENTITY_ID, DocumentMcpTool.MAX_NAME_MATCHES))
+        .thenReturn(List.of(new DocumentNameMatch(fileNode(DOCUMENT_ID, "application/pdf"), 200L, "/workflow/12")));
+
+    List<DocumentModel> models = documentMcpTool.searchDocuments(null, "zz-8416-form.pdf", null, null, null, null, null, null, null);
+
+    assertEquals(1, models.size());
+    assertEquals(Boolean.FALSE, models.get(0).getFolder());
+    assertEquals("/workflow/12", models.get(0).getFolderPath());
+  }
+
+  /**
+   * The number of matches is capped at {@link DocumentMcpTool#MAX_NAME_MATCHES}
+   * whatever limit is asked, and a smaller limit is kept.
+   */
+  @Test
+  public void searchDocumentsByNameCapsTheMatches() throws Exception {
+    documentMcpTool.searchDocuments(null, "workflow", null, null, null, null, 500, null, null);
+    documentMcpTool.searchDocuments(null, "workflow", null, null, null, null, 5, null, null);
+
+    verify(documentFileService).findDocumentsByName("workflow", null, USER_IDENTITY_ID, DocumentMcpTool.MAX_NAME_MATCHES);
+    verify(documentFileService).findDocumentsByName("workflow", null, USER_IDENTITY_ID, 5);
+  }
+
+  /**
+   * A name with a space searches that space's drive only, once the user may
+   * view the space.
+   */
+  @Test
+  public void searchDocumentsByNameInASpaceSearchesItsDriveOnly() throws Exception {
+    Space space = new Space();
+    space.setId(String.valueOf(SPACE_ID));
+    space.setPrettyName("f2_support");
+    when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(space);
+    when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(true);
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity =
+                                                                      new org.exoplatform.social.core.identity.model.Identity("space",
+                                                                                                                              "f2_support");
+    spaceIdentity.setId("200");
+    when(identityManager.getOrCreateSpaceIdentity("f2_support")).thenReturn(spaceIdentity);
+
+    documentMcpTool.searchDocuments(null, "workflow", SPACE_ID, null, null, null, null, null, null);
+
+    verify(documentFileService).findDocumentsByName("workflow", 200L, USER_IDENTITY_ID, DocumentMcpTool.MAX_NAME_MATCHES);
+  }
+
+  /**
+   * A name in a space the user can't view is refused before any lookup.
+   */
+  @Test
+  public void searchDocumentsByNameInASpaceNotViewableFails() throws Exception {
+    Space space = new Space();
+    space.setId(String.valueOf(SPACE_ID));
+    space.setPrettyName("engineering");
+    when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(space);
+    when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.searchDocuments(null, "workflow", SPACE_ID, null, null, null, null, null, null));
+    verify(documentFileService, never()).findDocumentsByName(anyString(), any(), anyLong(), anyInt());
+  }
+
+  /**
+   * A name combined with another kind of search is refused, saying what it
+   * combines with.
+   */
+  @Test
+  public void searchDocumentsByNameWithAnotherSearchFails() throws Exception {
+    IllegalArgumentException withQuery =
+                                       assertThrows(IllegalArgumentException.class,
+                                                    () -> documentMcpTool.searchDocuments("report", "workflow", null, null, null, null, null, null, null));
+    assertEquals(DocumentMcpTool.MSG_NAME_ALONE, withQuery.getMessage());
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.searchDocuments(null, "workflow", null, null, FOLDER_ID, null, null, null, null));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.searchDocuments(null, "workflow", null, null, null, 20, null, null, null));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.searchDocuments(null, "workflow", null, null, null, null, null, true, null));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.searchDocuments(null, "workflow", null, null, null, null, null, null, "2026-11-23"));
+    verify(documentFileService, never()).findDocumentsByName(anyString(), any(), anyLong(), anyInt());
   }
 
   @Test
@@ -2493,7 +2624,7 @@ public class DocumentMcpToolTest {
                                             () -> documentMcpTool.getRootFolderBySpace(null, "Marketing"));
     assertTrue(e.getMessage(), e.getMessage().contains("limited to the space with id 6"));
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.searchDocuments("report", null, "Marketing", null, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", null, null, "Marketing", null, null, null, null, null));
     verify(documentFileService, never()).getSpaceRootFolder(eq(5L), any());
 
     scopeSpaceId = null;
@@ -2518,14 +2649,14 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    assertEquals(1, documentMcpTool.searchDocuments("report", null, "legal", null, null, null, null, null).size());
+    assertEquals(1, documentMcpTool.searchDocuments("report", null, null, "legal", null, null, null, null, null).size());
 
     verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> Long.valueOf(306L).equals(filter.getOwnerId())),
                                        eq(currentIdentity),
                                        anyInt(),
                                        anyInt());
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.searchDocuments("report", 6L, "legal", null, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", null, 6L, "legal", null, null, null, null, null));
   }
 
   /**
@@ -2953,14 +3084,14 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    assertEquals(1, documentMcpTool.searchDocuments(null, null, null, FOLDER_ID, null, null, null, "2026-10-01").size());
+    assertEquals(1, documentMcpTool.searchDocuments(null, null, null, null, FOLDER_ID, null, null, null, "2026-10-01").size());
 
     verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> Long.valueOf(since)
                                                                                                                        .equals(filter.getAfterDate())
         && filter.getSortField() == org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE
         && !filter.isAscending()
         && FOLDER_ID.equals(filter.getParentFolderId())), eq(currentIdentity), anyInt(), anyInt());
-    assertEquals(1, documentMcpTool.searchDocuments(" ", null, null, FOLDER_ID, null, null, null, null).size());
+    assertEquals(1, documentMcpTool.searchDocuments(" ", null, null, null, FOLDER_ID, null, null, null, null).size());
     verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> filter.getAfterDate() == null
         && filter.getSortField() == org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE
         && !filter.isAscending()
@@ -2996,7 +3127,7 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    assertEquals(1, documentMcpTool.searchDocuments(null, SPACE_ID, null, null, null, 3, null, null).size());
+    assertEquals(1, documentMcpTool.searchDocuments(null, null, SPACE_ID, null, null, null, 3, null, null).size());
 
     verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> (filter.getQuery() == null || filter.getQuery().isBlank())
         && filter.getAfterDate() == null
@@ -3004,12 +3135,12 @@ public class DocumentMcpToolTest {
         && !filter.isAscending()
         && Long.valueOf(306L).equals(filter.getOwnerId())), eq(currentIdentity), anyInt(), eq(3));
 
-    documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, 3, null, null);
+    documentMcpTool.searchDocuments("report", null, SPACE_ID, null, null, null, 3, null, null);
     verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> "report".equals(filter.getQuery())
         && filter.getSortField() == null), eq(currentIdentity), anyInt(), eq(3));
 
     when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(false);
-    assertThrows(IllegalAccessException.class, () -> documentMcpTool.searchDocuments(null, SPACE_ID, null, null, null, 3, null, null));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.searchDocuments(null, null, SPACE_ID, null, null, null, 3, null, null));
     verify(documentFileService, Mockito.times(2)).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
                                                          any(),
                                                          anyInt(),

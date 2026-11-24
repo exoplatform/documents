@@ -328,6 +328,15 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                       ZIP_EXTENSION               = ".zip";
 
+  /** The longest name a name lookup takes. */
+  static final int                                  MAX_NAME_LENGTH             = 255;
+
+  /** The most rows a name lookup reads before sorting them by their path. */
+  static final int                                  MAX_NAME_ROWS               = 500;
+
+  /** The group path, under the groups' node, of the spaces' groups. */
+  private static final String                       SPACES_GROUP_PATH           = "/spaces";
+
   static final String                               DOCUMENT_CATEGORY_IDS_QUERY = "SELECT exo:categoryIds FROM nt:base " +
       "WHERE 'mix:documentsCategory' IN jcr:mixinTypes " +
       "AND jcr:path LIKE '%s/%%' " +
@@ -3874,6 +3883,209 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ancestor = getReadableParent(ancestor);
     }
     return ancestorPaths;
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * One query of the repository, through the user's own session: the
+   * repository returns only the nodes that user can read, so no right is
+   * decided here. The name is compared to the node's title and to its name,
+   * both in lower case. eXo JCR parses no bind variable (no JCR-SQL2 parser,
+   * and no query declares a variable, so {@code QueryImpl#bindValue} refuses
+   * every name): the name is written into the statement as a string literal,
+   * its quotes doubled, by {@link #getNameQueryStatement(List, String)}. At
+   * most {@link #MAX_NAME_ROWS} rows are read, then sorted by their path, so
+   * the same drives give the same matches in the same order.
+   */
+  @Override
+  public List<DocumentNameMatch> findDocumentsByName(String name,
+                                                     Long ownerId,
+                                                     Identity aclIdentity,
+                                                     int limit) throws ObjectNotFoundException {
+    if (StringUtils.isBlank(name)) {
+      throw new IllegalArgumentException("A name is mandatory");
+    } else if (name.length() > MAX_NAME_LENGTH) {
+      throw new IllegalArgumentException("A name is at most %s characters".formatted(MAX_NAME_LENGTH));
+    } else if (name.chars().anyMatch(Character::isISOControl)) {
+      throw new IllegalArgumentException("A name holds no line break or control character");
+    }
+    String username = aclIdentity.getUserId();
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      String spacesPath = getGroupsPath(nodeHierarchyCreator) + SPACES_GROUP_PATH;
+      List<String> pathPatterns = new ArrayList<>();
+      String userDrivePath = null;
+      long userDriveOwnerId = 0;
+      if (ownerId != null) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(ownerId);
+        if (ownerIdentity == null) {
+          throw new ObjectNotFoundException("Owner Identity with id : " + ownerId + " isn't found");
+        }
+        Node driveRootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+        if (driveRootNode == null) {
+          return Collections.emptyList();
+        }
+        if (ownerIdentity.isUser()) {
+          userDrivePath = driveRootNode.getPath();
+          userDriveOwnerId = ownerIdentity.getIdentityId();
+        }
+        pathPatterns.add(driveRootNode.getPath() + "/%");
+      } else {
+        org.exoplatform.social.core.identity.model.Identity userIdentity = identityManager.getOrCreateUserIdentity(username);
+        Node userDriveNode = userIdentity == null ? null
+                                                  : getIdentityRootNode(spaceService,
+                                                                        nodeHierarchyCreator,
+                                                                        username,
+                                                                        userIdentity,
+                                                                        sessionProvider);
+        if (userDriveNode != null) {
+          userDrivePath = userDriveNode.getPath();
+          userDriveOwnerId = userIdentity.getIdentityId();
+          pathPatterns.add(userDrivePath + "/%");
+        }
+        pathPatterns.add(spacesPath + "/%/" + DOCUMENTS_NODE + "/%");
+      }
+      Query query = session.getWorkspace()
+                           .getQueryManager()
+                           .createQuery(getNameQueryStatement(pathPatterns, name), Query.SQL);
+      ((QueryImpl) query).setLimit(MAX_NAME_ROWS);
+      NodeIterator nodes = query.execute().getNodes();
+      Map<String, Long> spaceIdentityIds = new HashMap<>();
+      List<DocumentNameMatch> matches = new ArrayList<>();
+      while (nodes.hasNext()) {
+        Node node = nodes.nextNode();
+        DocumentNameMatch match = toNameMatch(session,
+                                              node,
+                                              aclIdentity,
+                                              spacesPath,
+                                              userDrivePath,
+                                              userDriveOwnerId,
+                                              spaceIdentityIds);
+        if (match != null) {
+          matches.add(match);
+        }
+      }
+      return matches.stream()
+                    .sorted(Comparator.comparing((DocumentNameMatch match) -> match.document().getPath()))
+                    .limit(Math.max(limit, 0))
+                    .toList();
+    } catch (ObjectNotFoundException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IllegalStateException("Error finding the documents named '%s'".formatted(name), e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * Builds the query of the files, folders and shortcuts of a name under the
+   * given paths, hidden ones left out.
+   *
+   * @param pathPatterns the {@code jcr:path LIKE} patterns of the drives
+   * @param name the name, compared in lower case to the title and the name
+   * @return the JCR SQL statement
+   */
+  static String getNameQueryStatement(List<String> pathPatterns, String name) {
+    String value = toSqlLiteral(name.toLowerCase(Locale.ROOT));
+    String paths = pathPatterns.stream()
+                               .map(pattern -> "jcr:path LIKE '" + pattern + "'")
+                               .collect(Collectors.joining(" OR "));
+    String types = Stream.concat(Stream.of(NodeTypeConstants.NT_FILE), FOLDER_NODE_TYPES.stream())
+                         .distinct()
+                         .map(type -> "jcr:primaryType = '" + type + "'")
+                         .collect(Collectors.joining(" OR "));
+    return "SELECT * FROM nt:base WHERE (" + paths + ")"
+        + " AND (" + types + ")"
+        + " AND (LOWER(" + NodeTypeConstants.EXO_TITLE + ") = " + value
+        + " OR LOWER(" + NodeTypeConstants.EXO_NAME + ") = " + value + ")"
+        + " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable'";
+  }
+
+  /**
+   * @param value a text
+   * @return the text as a JCR SQL string literal: in quotes, each of its
+   *         quotes doubled
+   */
+  static String toSqlLiteral(String value) {
+    return "'" + value.replace("'", "''") + "'";
+  }
+
+  /**
+   * Maps a node the name query found to its match, a shortcut answered as its
+   * target with the shortcut's path, and the drive it lies in.
+   *
+   * @param session the user's session
+   * @param node the node found
+   * @param aclIdentity the user, for the rights of the document
+   * @param spacesPath the path of the spaces' group nodes
+   * @param userDrivePath the path of the user drive searched, null when none
+   * @param userDriveOwnerId the identity id of that drive's owner
+   * @param spaceIdentityIds the spaces' identity ids already read, by group
+   *          name
+   * @return the match, null when the node lies in no drive searched, is a
+   *         shortcut whose target is gone or can't be read, or is neither a
+   *         file nor a folder
+   * @throws RepositoryException when the repository fails
+   */
+  private DocumentNameMatch toNameMatch(Session session,
+                                        Node node,
+                                        Identity aclIdentity,
+                                        String spacesPath,
+                                        String userDrivePath,
+                                        long userDriveOwnerId,
+                                        Map<String, Long> spaceIdentityIds) throws RepositoryException {
+    String nodePath = node.getPath();
+    String drivePath;
+    long ownerIdentityId;
+    if (userDrivePath != null && nodePath.startsWith(userDrivePath + SLASH)) {
+      drivePath = userDrivePath;
+      ownerIdentityId = userDriveOwnerId;
+    } else if (nodePath.startsWith(spacesPath + SLASH)) {
+      String[] segments = nodePath.substring(spacesPath.length() + 1).split(SLASH, 3);
+      if (segments.length < 3 || !DOCUMENTS_NODE.equals(segments[1])) {
+        return null;
+      }
+      Long spaceIdentityId = spaceIdentityIds.computeIfAbsent(segments[0], this::getSpaceIdentityId);
+      if (spaceIdentityId == null || spaceIdentityId <= 0) {
+        return null;
+      }
+      drivePath = spacesPath + SLASH + segments[0] + SLASH + DOCUMENTS_NODE;
+      ownerIdentityId = spaceIdentityId;
+    } else {
+      return null;
+    }
+    AbstractNode document;
+    try {
+      document = getDocumentById(session, ((ExtendedNode) node).getIdentifier(), aclIdentity);
+    } catch (ItemNotFoundException e) {
+      return null;
+    }
+    if (document == null) {
+      return null;
+    }
+    String parentPath = nodePath.substring(0, nodePath.lastIndexOf(SLASH));
+    String folderPath = parentPath.length() <= drivePath.length() ? SLASH : parentPath.substring(drivePath.length());
+    return new DocumentNameMatch(document, ownerIdentityId, folderPath);
+  }
+
+  /**
+   * @param groupName the name of a space's group, under {@code /spaces}
+   * @return the identity id of the space, null when no space has that group
+   */
+  private Long getSpaceIdentityId(String groupName) {
+    Space space = spaceService.getSpaceByGroupId(SPACES_GROUP_PATH + SLASH + groupName);
+    if (space == null) {
+      return null;
+    }
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity =
+                                                                    identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
+    return spaceIdentity == null ? null : spaceIdentity.getIdentityId();
   }
 
   /**

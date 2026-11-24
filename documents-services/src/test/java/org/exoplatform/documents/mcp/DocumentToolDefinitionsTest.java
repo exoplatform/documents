@@ -197,7 +197,9 @@ public class DocumentToolDefinitionsTest {
             "730825e85b8df00014dc003f120adba652889f62289b65a8c11d7dcda04c90b2",
             "d3e347ce117f582a0b63507483bbf334ebe715ef520c28bdb90dfda20f034110",
             "6439b74c3301e63f39ddc5048f4398b82bd66f11ea9c1b40d560254b6046e2ea",
-            "3355a37e4de74828f7eaff2175d0341678c39488228055daf31dbb93c45a024c")
+            "3355a37e4de74828f7eaff2175d0341678c39488228055daf31dbb93c45a024c",
+            // documents cd18fc178 (EXO-94927), replaced by the name lookup (EXO-95137)
+            "217914868e5e94688a4c3ed5e2d2f47e52878dbac8684dabaa1aeb7927a9ae95")
         .forEach(digest -> assertTrue(digest + " not in " + replaced, replaced.contains(digest)));
     Map<String, Object> current = new TreeMap<>();
     current.put("description", description);
@@ -206,6 +208,33 @@ public class DocumentToolDefinitionsTest {
                              .formatHex(MessageDigest.getInstance("SHA-256")
                                                      .digest(mapper.writeValueAsString(current).getBytes(StandardCharsets.UTF_8)));
     assertFalse("the current text replaces nothing: " + digest, replaced.contains(digest));
+  }
+
+  /**
+   * search_documents finds a file or a folder by its name (EXO-95137): it
+   * takes a name, its description states the cap the tool applies and the
+   * fields each match carries, and it stays a read that asks for no approval.
+   * Mutants: the name property dropped; the cap in the description and in
+   * the tool drifting apart; readOnlyHint false; require_approval set.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsFindsByNameWithItsCapStatedAndStaysARead() throws Exception {
+    JsonMapper mapper = JsonMapper.builder().build();
+    JsonNode search = null;
+    for (JsonNode tool : mapper.readTree(resource("ai-tool-definitions.json")).get("tools")) {
+      if ("search_documents".equals(tool.get("name").asString())) {
+        search = tool;
+      }
+    }
+    assertNotNull(search);
+    assertTrue(search.get("input_schema").get("properties").has("name"));
+    String description = search.get("description").asString();
+    assertTrue(description, description.contains("at most " + DocumentMcpTool.MAX_NAME_MATCHES + ", in the order of their path"));
+    assertTrue(description, description.contains("space_name") && description.contains("folder_path"));
+    assertTrue(search.get("annotations").get("readOnlyHint").asBoolean());
+    assertFalse(search.has("require_approval") && search.get("require_approval").asBoolean());
   }
 
   /**

@@ -1248,6 +1248,17 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     return documentFileStorage.getDocumentPathInDrive(documentId, ownerId, getAclUserIdentity(authenticatedUserId));
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<DocumentNameMatch> findDocumentsByName(String name,
+                                                     Long ownerId,
+                                                     long authenticatedUserId,
+                                                     int limit) throws ObjectNotFoundException, IllegalAccessException {
+    return documentFileStorage.findDocumentsByName(name, ownerId, getAclUserIdentity(authenticatedUserId), limit);
+  }
+
   @Override
   public void setDocumentVisibility(long ownerId, String documentID, Boolean hidden, long authenticatedUserId) throws Exception {
     documentFileStorage.setDocumentVisibility(ownerId, documentID, hidden, getAclUserIdentity(authenticatedUserId));
