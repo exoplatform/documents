@@ -41,6 +41,9 @@ import java.util.stream.Stream;
 
 import org.junit.Test;
 
+import org.exoplatform.documents.mcp.model.DocumentAccessModel;
+import org.exoplatform.documents.mcp.model.DocumentPermissionsModel;
+
 import io.meeds.mcp.server.model.SimpleToolDefinition;
 import io.meeds.mcp.server.util.McpToolUtils;
 
@@ -86,6 +89,68 @@ public class DocumentToolDefinitionsTest {
     });
     assertTrue(definitions.get("upload_document").getInputSchema().contains("\"upload_id\""));
     assertTrue(definitions.get("add_document_version").getInputSchema().contains("\"upload_id\""));
+  }
+
+  /**
+   * get_document_access is a read (EXO-95034): read-only, idempotent, never
+   * asking for an approval, scoped to a space as get_document_permissions
+   * is, and its description says it returns no list, only the reason and the
+   * user's own rights, unless the user may manage the document's access.
+   * Mutants: readOnlyHint false; require_approval set; the space scope
+   * dropped; the no-list answer left out of the description.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentAccessIsARefusableReadScopedAsThePermissionsRead() throws Exception {
+    JsonMapper mapper = JsonMapper.builder().build();
+    Map<String, JsonNode> tools = new TreeMap<>();
+    for (JsonNode tool : mapper.readTree(resource("ai-tool-definitions.json")).get("tools")) {
+      tools.put(tool.get("name").asString(), tool);
+    }
+    JsonNode access = tools.get("get_document_access");
+    assertNotNull(access);
+    assertTrue(access.get("annotations").get("readOnlyHint").asBoolean());
+    assertFalse(access.get("annotations").get("destructiveHint").asBoolean());
+    assertTrue(access.get("annotations").get("idempotentHint").asBoolean());
+    assertFalse("A read never asks for an approval", access.has("require_approval"));
+    assertEquals(tools.get("get_document_permissions").get("space_scope"), access.get("space_scope"));
+    List<String> properties = new java.util.ArrayList<>();
+    access.get("input_schema").get("properties").propertyNames().forEach(properties::add);
+    assertEquals(List.of("document_id"), properties);
+    String description = access.get("description").asString();
+    assertTrue(description,
+               description.contains("Unless you may manage the document's access, it returns no list: access_shown false, the reason, and your_rights, your own rights on it"));
+    assertTrue(description, description.contains("by name"));
+  }
+
+  /**
+   * get_document_access answers with the field names its description and the
+   * documents agent's instructions read (EXO-95034): where the list is not
+   * shown, document_id, name, is_folder, access_shown, reason and
+   * your_rights only, the list's fields left out of the JSON; where it is
+   * shown, the list's fields and no reason nor your_rights. Mutants: a field
+   * renamed; the null fields written.
+   */
+  @Test
+  public void getDocumentAccessAnswersWithTheFieldNamesItsReadersUse() {
+    JsonMapper mapper = JsonMapper.builder().build();
+    DocumentPermissionsModel rights = new DocumentPermissionsModel("folder-42", "workflow", true, null, true, true, false);
+    assertEquals(Set.of("document_id", "name", "is_folder", "access_shown", "reason", "your_rights"),
+                 keys(mapper.valueToTree(DocumentAccessModel.notShown("folder-42", "workflow", true, "a reason", rights))));
+    assertEquals(Set.of("document_id", "name", "is_folder", "access_shown", "visibility", "all_space_members_can_edit", "owner",
+                        "collaborators"),
+                 keys(mapper.valueToTree(DocumentAccessModel.shown("folder-42", "workflow", true, "anyone", false, "John Owner", List.of()))));
+  }
+
+  /**
+   * @param node a JSON object
+   * @return its field names
+   */
+  private static Set<String> keys(JsonNode node) {
+    Set<String> keys = new HashSet<>();
+    node.propertyNames().forEach(keys::add);
+    return keys;
   }
 
   /**

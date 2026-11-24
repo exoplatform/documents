@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import javax.jcr.RepositoryException;
 
@@ -56,6 +57,10 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
+import org.exoplatform.commons.api.settings.SettingService;
+import org.exoplatform.commons.api.settings.SettingValue;
+import org.exoplatform.commons.api.settings.data.Context;
+import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
 import org.exoplatform.container.ExoContainerContext;
@@ -68,6 +73,8 @@ import org.exoplatform.documents.mcp.model.DocumentFileModel;
 import org.exoplatform.documents.mcp.model.ChunkedUpload;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
+import org.exoplatform.documents.mcp.model.DocumentAccessModel;
+import org.exoplatform.documents.mcp.model.DocumentCollaboratorModel;
 import org.exoplatform.documents.mcp.model.DocumentPermissionsModel;
 import org.exoplatform.documents.mcp.model.DocumentOutlineModel;
 import org.exoplatform.documents.mcp.model.DocumentHeadingModel;
@@ -93,6 +100,10 @@ import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
 import org.exoplatform.documents.model.NodePermission;
+import org.exoplatform.documents.rest.model.IdentityEntity;
+import org.exoplatform.documents.rest.model.NodePermissionEntity;
+import org.exoplatform.documents.rest.model.PermissionEntryEntity;
+import org.exoplatform.documents.rest.util.EntityBuilder;
 import org.exoplatform.documents.model.PermissionEntry;
 import org.exoplatform.documents.model.PermissionRole;
 import org.exoplatform.documents.model.PublicDocumentAccess;
@@ -105,6 +116,7 @@ import org.exoplatform.services.attachments.service.AttachmentService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.identity.provider.SpaceIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
 import org.exoplatform.social.core.space.model.Space;
@@ -252,6 +264,40 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   private static final String      PARENT_FOLDER_NOT_FOUND_MESSAGE =
                                                                    "No folder has the id %s. Use only a document_id a tool returned (create_folder, get_root_folder_for_user, get_root_folder_by_space, get_documents_by_folder_id), never a composed one. To create nested folders, call create_folder once with their path in 'name', such as 'Finances/Factures/Entrantes', under a folder that exists.";
+
+  /** The global setting by which an administrator suspends document sharing, read as Documents reads it. */
+  static final String              SHARED_DOCUMENT_STATUS = "sharedDocumentStatus";
+
+  /** The root of the space drives: a node under it belongs to a space. */
+  private static final String      SPACE_DRIVES_PATH      = "/Groups/spaces/";
+
+  /** The creator of a node the platform created. */
+  private static final String      SYSTEM_CREATOR         = "__system";
+
+  /** The folder of the news articles' attachments, whose access Documents does not let anyone manage. */
+  private static final String      NEWS_ATTACHMENTS       = "News Attachments";
+
+  /** Why a user who may not manage a document's access is not told who has it (EXO-95034). */
+  private static final String      MSG_ACCESS_NOT_SHOWN   =
+                                                         "You can't see who has access to '%s': %s. Documents shows that list only to who may manage the document's access; your_rights gives your own rights.";
+
+  /**
+   * The shape of a node id: eXo JCR's 32 characters (lowercase hex, or the
+   * letters of a system node's), or a UUID's 36 with its dashes (EXO-95034).
+   * A value of another shape is a name, never an id.
+   */
+  private static final Pattern     NODE_ID_SHAPE          =
+                                                         Pattern.compile("[0-9A-Za-z]{32}|\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
+
+  /**
+   * The error of a lookup given a name where an id is expected (EXO-95034):
+   * it says "not an id", one of the markers by which ai reads a lookup failure
+   * ({@code UnpreparedAnswerAdvisor#LOOKUP_MARKERS}), with the value given, and
+   * "search tool", on which ai asks the model once more to search before
+   * answering ({@code IdRecoveryRetryAdvisor}).
+   */
+  static final String              MSG_NAME_IS_NOT_AN_ID  =
+                                                         "'%s' is not an id, so no document was found with it: an id is a value a tool returned, never a name. Find the document's id with a search tool first: a file with search_documents and its name as query (without space_id or parent_folder_id, it searches every document you can read); a folder from get_root_folder_for_user or get_root_folder_by_space, then get_folder_tree, by its name. When several match, name them and ask which one is meant; when none does, say what you searched.";
 
   /** The refusal of an unknown space id, saying how to find the space. */
   private static final String      MSG_SPACE_NOT_FOUND    =
@@ -442,6 +488,9 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private final FavoriteService     favoriteService;
 
+  /** Reads whether an administrator suspended document sharing. */
+  private final SettingService      settingService;
+
   /** Finds a space by its name among the calling user's spaces. */
   private final SpaceNameResolver   spaceNameResolver;
 
@@ -460,7 +509,8 @@ public class DocumentMcpTool implements McpToolPlugin {
                          UserPortalConfigService portalConfigService,
                          UploadService uploadService,
                          PublicDocumentAccessService publicDocumentAccessService,
-                         FavoriteService favoriteService) {
+                         FavoriteService favoriteService,
+                         SettingService settingService) {
     this.documentFileService = documentFileService;
     this.attachmentService = attachmentService;
     this.socialAttachmentService = socialAttachmentService;
@@ -474,6 +524,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     this.uploadService = uploadService;
     this.publicDocumentAccessService = publicDocumentAccessService;
     this.favoriteService = favoriteService;
+    this.settingService = settingService;
     this.spaceNameResolver = new SpaceNameResolver(spaceService);
     this.chunkedUploads = new ChunkedUploadStore(DocumentUploadLimit.getMaxBytes(),
                                                  MAX_OPEN_UPLOADS,
@@ -674,6 +725,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                     Integer offset,
                                                     Integer limit) throws ObjectNotFoundException,
                                                                    IllegalAccessException {
+    checkFolderIsNotAName(folderId);
     int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
     if (size == 0) {
       // a negative limit; the storage reads every child when given none
@@ -713,7 +765,7 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   public DocumentModel getDocumentById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
-    AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
+    AbstractNode document = lookUpDocument(documentId);
     DocumentModel model = toDocumentModel(document);
     if (!StringUtils.equals(documentId, document.getId())) {
       // a shortcut resolves to its target: deleting the shortcut removes only the shortcut
@@ -1424,6 +1476,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                 Integer limit,
                                                 String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
     checkFolderIdParameter(folderId);
+    checkFolderIsNotAName(folderId);
     Long updatedSinceTime = parseUpdatedSince(updatedSince);
     int first = Math.max(getInteger(offset, DEFAULT_OFFSET), 0);
     int size = Math.max(getInteger(limit, DEFAULT_LIMIT), 0);
@@ -1470,10 +1523,22 @@ public class DocumentMcpTool implements McpToolPlugin {
   public DocumentPermissionsModel getDocumentPermissions(String documentId) throws ObjectNotFoundException,
                                                                             IllegalAccessException {
     checkDocumentIdParameter(documentId);
-    AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
+    AbstractNode document = lookUpDocument(documentId);
     if (document == null) {
       throw new ObjectNotFoundException("No document has the id %s.".formatted(documentId));
     }
+    return toPermissionsModel(documentId, document);
+  }
+
+  /**
+   * @param documentId the id the user gave
+   * @param document the document it resolved to, a shortcut's target for a
+   *          shortcut's id
+   * @return the user's rights on it, as {@link #getDocumentPermissions}
+   *         tells them
+   * @throws IllegalAccessException when the user can't read it
+   */
+  private DocumentPermissionsModel toPermissionsModel(String documentId, AbstractNode document) throws IllegalAccessException {
     // a shortcut's id resolves to its target: the rights are the target's, but
     // deleting the shortcut removes only the shortcut, so its delete right isn't the target's
     boolean shortcut = !StringUtils.equals(documentId, document.getId());
@@ -1486,6 +1551,165 @@ public class DocumentMcpTool implements McpToolPlugin {
                                         true,
                                         canEdit,
                                         shortcut ? null : isOwner(document) || (acl != null && acl.isCanDelete()));
+  }
+
+  /**
+   * Tells who has access to a folder or a file, as the Documents « Manage
+   * access » drawer shows it (EXO-95034): who can view it, whether every
+   * member of its space can edit it, its owner, and its collaborators, each
+   * a user, a space or a group with edit or view access, by name only. The
+   * list is the drawer's own ({@link EntityBuilder#toNodePermissionEntity}):
+   * one row per identity, edit winning over view, the owner and the drive's
+   * space out of the rows, the administrators group shown only to its
+   * members.
+   * <p>
+   * It is told only to a user to whom Documents offers « Manage access » on
+   * that document, never more: one who can read it and whose entries on it
+   * let them edit it (the drawer's {@code acl.canEdit}), on a document
+   * that is no shortcut, no cloud drive folder, no news attachment and, in a
+   * space, not a node the platform created unless the user is an
+   * administrator, while sharing is not suspended. Every other user who can
+   * read it gets none of the list: the answer says why and gives the user's
+   * own rights, as {@link #getDocumentPermissions} tells them. It is an
+   * answer, not an error, so that the assistant can tell them: ai replaces
+   * the answer of a turn whose read failed (EXO-95034).
+   *
+   * @param documentId the folder or file id
+   * @return who has access to it, or why it is not shown and the user's own
+   *         rights
+   * @throws ObjectNotFoundException when the document doesn't exist
+   * @throws IllegalAccessException when the user can't read it
+   */
+  public DocumentAccessModel getDocumentAccess(String documentId) throws ObjectNotFoundException, IllegalAccessException {
+    checkDocumentIdParameter(documentId);
+    AbstractNode document = lookUpDocument(documentId);
+    if (document == null) {
+      throw new ObjectNotFoundException("No document has the id %s.".formatted(documentId));
+    }
+    String refusal = getManageAccessRefusal(documentId, document);
+    if (refusal != null) {
+      return DocumentAccessModel.notShown(documentId,
+                                          document.getName(),
+                                          document.isFolder(),
+                                          refusal,
+                                          toPermissionsModel(documentId, document));
+    }
+    NodePermissionEntity access = EntityBuilder.toNodePermissionEntity(document,
+                                                                       identityManager,
+                                                                       spaceService,
+                                                                       publicDocumentAccessService);
+    List<DocumentCollaboratorModel> collaborators = access == null
+        || access.getCollaborators() == null ? List.of()
+                                             : access.getCollaborators()
+                                                     .stream()
+                                                     .map(this::toCollaboratorModel)
+                                                     .filter(collaborator -> StringUtils.isNotBlank(collaborator.getName()))
+                                                     .sorted(Comparator.comparing(DocumentCollaboratorModel::getName,
+                                                                                  String.CASE_INSENSITIVE_ORDER))
+                                                     .toList();
+    return DocumentAccessModel.shown(documentId,
+                                     document.getName(),
+                                     document.isFolder(),
+                                     toVisibility(access == null ? null : access.getVisibilityChoice()),
+                                     access != null && access.isAllMembersCanEdit(),
+                                     getCreatorName(document),
+                                     collaborators);
+  }
+
+  /**
+   * Tells why the access list is not shown to a user to whom Documents
+   * offers no « Manage access » on the document: its menu entry's conditions
+   * ({@code documents-webapp} {@code extensions.js}, the {@code visibility}
+   * entry), checked on the server.
+   *
+   * @param documentId the id the user gave
+   * @param document the document it resolved to
+   * @return why the list is not shown, never who has access; null when
+   *         Documents offers the user « Manage access » on it
+   */
+  private String getManageAccessRefusal(String documentId, AbstractNode document) {
+    String name = document.getName();
+    if (!StringUtils.equals(documentId, document.getId())) {
+      return MSG_ACCESS_NOT_SHOWN.formatted(name,
+                                            "%s is a shortcut, whose access is its target's: ask about the target, shortcut_target_id %s".formatted(documentId,
+                                                                                                                                                   document.getId()));
+    } else if (isSharingSuspended()) {
+      return MSG_ACCESS_NOT_SHOWN.formatted(name, "an administrator suspended document sharing");
+    } else if (document.isCloudDriveFolder()) {
+      return MSG_ACCESS_NOT_SHOWN.formatted(name, "it is a connected cloud drive folder");
+    } else if (document.getAcl() == null || !document.getAcl().isCanEdit()) {
+      // the drawer's own condition, acl.canEdit, from the node's entries for
+      // the user: the repository's edit check also answers yes to the node's
+      // owner whatever its entries say, which the drawer does not
+      return MSG_ACCESS_NOT_SHOWN.formatted(name,
+                                            "its sharing gives you no edit right on it, which Documents requires to manage its access, even where your_rights says can_edit because you own it");
+    } else if (StringUtils.startsWith(document.getPath(), SPACE_DRIVES_PATH)
+               && StringUtils.equals(document.getCreatorUserName(), SYSTEM_CREATOR)
+               && !userAcl.isAdministrator(getCurrentUserAclIdentity())) {
+      return MSG_ACCESS_NOT_SHOWN.formatted(name,
+                                            "the platform created it in its space, and only an administrator manages its access");
+    } else if (StringUtils.contains(document.getPath(), NEWS_ATTACHMENTS)) {
+      return MSG_ACCESS_NOT_SHOWN.formatted(name, "it holds a news article's attachments");
+    }
+    return null;
+  }
+
+  /**
+   * @return whether an administrator suspended document sharing, as Documents
+   *         reads its global setting
+   */
+  private boolean isSharingSuspended() {
+    SettingValue<?> value = settingService.get(Context.GLOBAL.id(SHARED_DOCUMENT_STATUS),
+                                               Scope.APPLICATION.id(SHARED_DOCUMENT_STATUS),
+                                               "exo:" + SHARED_DOCUMENT_STATUS);
+    return value != null && value.getValue() != null && Boolean.parseBoolean(value.getValue().toString());
+  }
+
+  /**
+   * @param entry a row of the drawer's list
+   * @return the row by name only: the type and the access, never an id, a
+   *         username or an email
+   */
+  private DocumentCollaboratorModel toCollaboratorModel(PermissionEntryEntity entry) {
+    IdentityEntity identity = entry.getIdentity();
+    String providerId = identity == null ? null : identity.getProviderId();
+    String type;
+    if (EntityBuilder.GROUP_PROVIDER_ID.equals(providerId)) {
+      type = "group";
+    } else if (SpaceIdentityProvider.NAME.equals(providerId)) {
+      type = "space";
+    } else {
+      type = "user";
+    }
+    return new DocumentCollaboratorModel(identity == null ? null : identity.getName(),
+                                         type,
+                                         "edit".equals(entry.getPermission()) ? "edit" : "view");
+  }
+
+  /**
+   * @param visibilityChoice the drawer's choice of who can view
+   * @return that choice as the tool names it
+   */
+  private static String toVisibility(String visibilityChoice) {
+    if (visibilityChoice == null) {
+      return null;
+    }
+    return switch (visibilityChoice) {
+    case "ANYONE" -> "anyone";
+    case "COLLABORATORS_AND_PUBLIC_ACCESS" -> "collaborators_and_public_link";
+    case "ALL_MEMBERS" -> "all_space_members";
+    default -> "specific_collaborators";
+    };
+  }
+
+  /**
+   * @param document a document
+   * @return the full name of the user who created it, the drawer's owner,
+   *         null when unknown
+   */
+  private String getCreatorName(AbstractNode document) {
+    Identity creator = document.getCreatorId() > 0 ? identityManager.getIdentity(document.getCreatorId()) : null;
+    return creator == null || creator.getProfile() == null ? null : creator.getProfile().getFullName();
   }
 
   public List<BreadcrumbItemModel> getFolderBreadcrumb(String folderId) throws ObjectNotFoundException,
@@ -1511,6 +1735,7 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                    Boolean withChildren) throws ObjectNotFoundException,
                                                                          IllegalAccessException {
     checkFolderIdParameter(folderId);
+    checkFolderIsNotAName(folderId);
     List<FullTreeItem> tree = documentFileService.getFullTreeData(getOwnerId(folderId),
                                                                   folderId,
                                                                   null,
@@ -2808,13 +3033,79 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * @param documentId the document id, checked not blank
+   * @return the document, as the current user reads it
+   * @throws IllegalAccessException when the user can't read it
+   * @throws ObjectNotFoundException when it doesn't exist, saying how to find
+   *           its id when a name was given
+   */
   private AbstractNode checkCanAccessDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
-    return documentFileService.getDocumentById(documentId, getCurrentUserName());
+    return lookUpDocument(documentId);
   }
 
+  /**
+   * @param documentId the document id
+   * @return the document, as the current user reads it
+   * @throws IllegalAccessException when the user can't read it
+   * @throws ObjectNotFoundException when it doesn't exist, saying how to find
+   *           its id when a name was given
+   */
   private AbstractNode getNode(String documentId) throws IllegalAccessException, ObjectNotFoundException {
-    return documentFileService.getDocumentById(documentId, getCurrentUserName());
+    return lookUpDocument(documentId);
+  }
+
+  /**
+   * Reads a document by its id as the current user. A lookup that finds
+   * nothing for a value that is not shaped as an id was given a name
+   * (EXO-95034): its error says so and how to find the id, so that the model
+   * searches instead of telling the user the document doesn't exist. A
+   * lookup that succeeds, or fails for an id-shaped value, is unchanged.
+   *
+   * @param documentId the document id
+   * @return the document
+   * @throws IllegalAccessException when the user can't read it
+   * @throws ObjectNotFoundException when it doesn't exist
+   */
+  private AbstractNode lookUpDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+    try {
+      return documentFileService.getDocumentById(documentId, getCurrentUserName());
+    } catch (ObjectNotFoundException e) {
+      throw nameOrNotFound(documentId, e);
+    }
+  }
+
+  /**
+   * A folder listing given an unknown folder id lists nothing rather than
+   * failing, so a folder named where its id is expected (EXO-95034) would be
+   * answered as an empty folder: a value not shaped as an id is first looked
+   * up, which fails with the error of {@link #lookUpDocument(String)} when no
+   * document has it. An id-shaped value is not looked up.
+   *
+   * @param folderId the folder id
+   * @throws IllegalAccessException when the user can't read that document
+   * @throws ObjectNotFoundException when the value is not shaped as an id and
+   *           no document has it
+   */
+  private void checkFolderIsNotAName(String folderId) throws IllegalAccessException, ObjectNotFoundException {
+    if (StringUtils.isNotBlank(folderId) && !NODE_ID_SHAPE.matcher(folderId).matches()) {
+      lookUpDocument(folderId);
+    }
+  }
+
+  /**
+   * @param value the value given as an id
+   * @param notFound the storage's not-found error
+   * @return the error to raise: one saying that the value is a name and how
+   *         to find the id, when the value is not shaped as an id; the
+   *         storage's error otherwise
+   */
+  static ObjectNotFoundException nameOrNotFound(String value, ObjectNotFoundException notFound) {
+    if (value == null || NODE_ID_SHAPE.matcher(value).matches()) {
+      return notFound;
+    }
+    return new ObjectNotFoundException(MSG_NAME_IS_NOT_AN_ID.formatted(value));
   }
 
   /**
