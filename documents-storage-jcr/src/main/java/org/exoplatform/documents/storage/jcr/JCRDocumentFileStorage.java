@@ -3955,8 +3955,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
         pathPatterns.add(spacesPath + "/%/" + DOCUMENTS_NODE + "/%");
       }
-      Map<String, Long> spaceIdentityIds = new HashMap<>();
-      List<DocumentNameMatch> matches = new ArrayList<>();
+      // the rows of every drive, by their path: the order costs no read of a document
+      TreeMap<String, Node> rows = new TreeMap<>();
       for (String pathPattern : pathPatterns) {
         Query query = session.getWorkspace()
                              .getQueryManager()
@@ -3964,21 +3964,41 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         ((QueryImpl) query).setLimit(MAX_NAME_ROWS);
         NodeIterator nodes = query.execute().getNodes();
         while (nodes.hasNext()) {
-          DocumentNameMatch match = toNameMatch(session,
-                                                nodes.nextNode(),
-                                                aclIdentity,
-                                                spacesPath,
-                                                userDrivePath,
-                                                userDriveOwnerId,
-                                                spaceIdentityIds);
-          if (match != null) {
-            matches.add(match);
+          Node node = nodes.nextNode();
+          rows.putIfAbsent(node.getPath(), node);
+        }
+      }
+      // a document is read only until the limit is reached, and kept once: its own row rather than a shortcut's
+      Map<String, Long> spaceIdentityIds = new HashMap<>();
+      Map<String, DocumentNameMatch> matches = new LinkedHashMap<>();
+      Set<String> shortcutMatchIds = new HashSet<>();
+      for (Node node : rows.values()) {
+        if (matches.size() >= limit) {
+          break;
+        }
+        DocumentNameMatch match = toNameMatch(session,
+                                              node,
+                                              aclIdentity,
+                                              spacesPath,
+                                              userDrivePath,
+                                              userDriveOwnerId,
+                                              spaceIdentityIds);
+        if (match != null) {
+          String documentId = match.document().getId();
+          boolean shortcut = node.isNodeType(EXO_SYMLINK);
+          if (!matches.containsKey(documentId) || (shortcutMatchIds.contains(documentId) && !shortcut)) {
+            matches.put(documentId, match);
+            if (shortcut) {
+              shortcutMatchIds.add(documentId);
+            } else {
+              shortcutMatchIds.remove(documentId);
+            }
           }
         }
       }
-      return matches.stream()
+      return matches.values()
+                    .stream()
                     .sorted(Comparator.comparing((DocumentNameMatch match) -> match.document().getPath()))
-                    .limit(Math.max(limit, 0))
                     .toList();
     } catch (ObjectNotFoundException e) {
       throw e;
@@ -4076,9 +4096,40 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     if (document == null) {
       return null;
     }
+    return new DocumentNameMatch(document, ownerIdentityId, getFolderPathInDrive(node, nodePath, drivePath));
+  }
+
+  /**
+   * Names the folder holding a node, from its drive's root, by the folders'
+   * shown names (their titles, as Documents lists them), read through the
+   * node's own session; a folder whose title can't be read keeps its node
+   * name.
+   *
+   * @param node the node
+   * @param nodePath the node's path
+   * @param drivePath the path of the drive's root
+   * @return the folder's path from the drive's root, {@code /} for the root
+   */
+  private static String getFolderPathInDrive(Node node, String nodePath, String drivePath) {
     String parentPath = nodePath.substring(0, nodePath.lastIndexOf(SLASH));
-    String folderPath = parentPath.length() <= drivePath.length() ? SLASH : parentPath.substring(drivePath.length());
-    return new DocumentNameMatch(document, ownerIdentityId, folderPath);
+    if (parentPath.length() <= drivePath.length()) {
+      return SLASH;
+    }
+    String[] folders = parentPath.substring(drivePath.length() + 1).split(SLASH);
+    try {
+      Node ancestor = node.getParent();
+      for (int i = folders.length - 1; i >= 0 && ancestor != null; i--) {
+        String title = getTitle(ancestor);
+        if (StringUtils.isNotBlank(title)) {
+          folders[i] = title;
+        }
+        ancestor = i > 0 ? ancestor.getParent() : null;
+      }
+    } catch (RepositoryException e) {
+      // an ancestor the user can't read keeps its node name, from the path
+      LOG.debug("Folder title not readable above {}", nodePath, e);
+    }
+    return SLASH + String.join(SLASH, folders);
   }
 
   /**

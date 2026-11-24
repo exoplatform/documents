@@ -24,7 +24,8 @@ package org.exoplatform.documents.model;
  * @param ownerIdentityId the identity id of the drive's owner: the space for a
  *          space drive, the user for their own drive
  * @param folderPath the path of the folder holding it, from the drive's root
- *          ({@code /} for the root itself), made of the folders' names
+ *          ({@code /} for the root itself), made of the folders' titles as
+ *          Documents shows them
  */
 public record DocumentNameMatch(AbstractNode document, long ownerIdentityId, String folderPath) {
 }

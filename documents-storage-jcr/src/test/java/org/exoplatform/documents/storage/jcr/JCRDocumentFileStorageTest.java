@@ -5084,6 +5084,68 @@ public class JCRDocumentFileStorageTest {
 
     assertEquals(List.of("a", "b"), matches.stream().map(match -> match.document().getId()).toList());
     assertEquals("/a", matches.get(0).folderPath());
+    // a row past the limit is never read as a document
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByIdentifier(userSession, "c"), never());
+  }
+
+  /**
+   * A shortcut to a document the lookup also finds in its own place gives one
+   * match, the document's own: the assistant would otherwise ask the user to
+   * choose between a file and itself. Mutant: no de-duplication by id.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameKeepsADocumentOnceWithItsOwnPlace() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    ExtendedNode target = nameLookupFolder(userSession, "/Groups/spaces/f2_support/Documents/workflow", "f2", aclIdentity);
+    ExtendedNode shortcut = mock(ExtendedNode.class);
+    when(shortcut.getPath()).thenReturn(NAME_LOOKUP_PRIVATE + "/links/workflow");
+    when(shortcut.getIdentifier()).thenReturn("shortcut");
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    when(shortcut.getSession()).thenReturn(userSession);
+    Property targetId = mock(Property.class);
+    when(targetId.getString()).thenReturn("f2");
+    when(shortcut.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(targetId);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(userSession, "shortcut")).thenReturn(shortcut);
+    nameLookupRows(userSession, target, shortcut);
+    nameLookupSpace("f2_support", "f2_support", 200L);
+
+    List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 20);
+
+    assertEquals(1, matches.size());
+    assertEquals("f2", matches.get(0).document().getId());
+    assertEquals(200L, matches.get(0).ownerIdentityId());
+  }
+
+  /**
+   * The folder a match lies in is named by the folders' titles, as Documents
+   * shows them, and a folder whose title can't be read keeps its node name.
+   * Mutant: the node names kept for every folder.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameNamesTheFolderByItsTitles() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    ExtendedNode folder = nameLookupFolder(userSession,
+                                           "/Groups/spaces/f2_support/Documents/contrats-clients/x2026/workflow",
+                                           "f2",
+                                           aclIdentity);
+    Node year = mock(Node.class);
+    Node contracts = mock(Node.class);
+    when(folder.getParent()).thenReturn(year);
+    when(year.getParent()).thenReturn(contracts);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(year)).thenReturn("2026");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(contracts)).thenThrow(new AccessDeniedException());
+    nameLookupRows(userSession, folder);
+    nameLookupSpace("f2_support", "f2_support", 200L);
+
+    List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 20);
+
+    assertEquals("/contrats-clients/2026", matches.get(0).folderPath());
   }
 
   /**
@@ -5100,7 +5162,7 @@ public class JCRDocumentFileStorageTest {
   public void findDocumentsByNameRunsOneBoundedStatementOnTheSearchedDrives() throws Exception {
     org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
     Session userSession = nameLookupSession(aclIdentity);
-    QueryImpl query = nameLookupRows(userSession);
+    List<QueryImpl> queries = nameLookupRows(userSession);
 
     jcrDocumentFileStorage.findDocumentsByName("O'Brien", null, aclIdentity, 20);
 
@@ -5113,7 +5175,10 @@ public class JCRDocumentFileStorageTest {
                           .toList());
     assertTrue(statement.getAllValues().stream().allMatch(value -> value.contains("LOWER(exo:title) = 'o''brien'")),
                statement.getAllValues().toString());
-    verify(query, times(2)).setLimit(JCRDocumentFileStorage.MAX_NAME_ROWS);
+    assertEquals(2, queries.size());
+    for (QueryImpl query : queries) {
+      verify(query).setLimit(JCRDocumentFileStorage.MAX_NAME_ROWS);
+    }
 
     Identity spaceIdentity = new Identity("space", "f2_support");
     spaceIdentity.setId("200");
@@ -5205,26 +5270,44 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
-   * @param session the session the query runs in
-   * @param rows the nodes the query returns, in that order
-   * @return the query
+   * Answers each statement the session runs with the given rows that lie
+   * under its {@code jcr:path LIKE} pattern, in the given order, as one query
+   * per drive would.
+   *
+   * @param session the session the queries run in
+   * @param rows the nodes the repository holds
+   * @return the queries created, in the order they were
    * @throws Exception never
    */
-  private QueryImpl nameLookupRows(Session session, Node... rows) throws Exception {
+  private List<QueryImpl> nameLookupRows(Session session, Node... rows) throws Exception {
     Workspace workspace = mock(Workspace.class);
     lenient().when(session.getWorkspace()).thenReturn(workspace);
     QueryManager queryManager = mock(QueryManager.class);
     lenient().when(workspace.getQueryManager()).thenReturn(queryManager);
-    QueryImpl query = mock(QueryImpl.class);
-    lenient().when(queryManager.createQuery(anyString(), eq(Query.SQL))).thenReturn(query);
-    QueryResult result = mock(QueryResult.class);
-    lenient().when(query.execute()).thenReturn(result);
-    Iterator<Node> iterator = Arrays.asList(rows).iterator();
-    NodeIterator nodes = mock(NodeIterator.class);
-    lenient().when(nodes.hasNext()).thenAnswer(invocation -> iterator.hasNext());
-    lenient().when(nodes.nextNode()).thenAnswer(invocation -> iterator.next());
-    lenient().when(result.getNodes()).thenReturn(nodes);
-    return query;
+    List<QueryImpl> queries = new ArrayList<>();
+    lenient().when(queryManager.createQuery(anyString(), eq(Query.SQL))).thenAnswer(invocation -> {
+      String statement = invocation.getArgument(0);
+      int start = statement.indexOf("jcr:path LIKE '") + "jcr:path LIKE '".length();
+      String pattern = statement.substring(start, statement.indexOf('\'', start));
+      String regex = Arrays.stream(pattern.split("%", -1)).map(java.util.regex.Pattern::quote).collect(java.util.stream.Collectors.joining(".*"));
+      List<Node> matching = new ArrayList<>();
+      for (Node row : rows) {
+        if (row.getPath().matches(regex)) {
+          matching.add(row);
+        }
+      }
+      QueryImpl query = mock(QueryImpl.class);
+      QueryResult result = mock(QueryResult.class);
+      when(query.execute()).thenReturn(result);
+      Iterator<Node> iterator = matching.iterator();
+      NodeIterator nodes = mock(NodeIterator.class);
+      when(nodes.hasNext()).thenAnswer(next -> iterator.hasNext());
+      when(nodes.nextNode()).thenAnswer(next -> iterator.next());
+      when(result.getNodes()).thenReturn(nodes);
+      queries.add(query);
+      return query;
+    });
+    return queries;
   }
 
   /**

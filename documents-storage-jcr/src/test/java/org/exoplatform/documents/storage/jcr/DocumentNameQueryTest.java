@@ -31,6 +31,7 @@ import org.exoplatform.services.jcr.impl.core.LocationFactory;
 import org.exoplatform.services.jcr.impl.core.NamespaceRegistryImpl;
 import org.exoplatform.services.jcr.impl.core.query.DefaultQueryNodeFactory;
 import org.exoplatform.services.jcr.impl.core.query.PropertyFunctionQueryNode;
+import org.exoplatform.services.jcr.impl.core.query.QueryConstants;
 import org.exoplatform.services.jcr.impl.core.query.QueryRootNode;
 import org.exoplatform.services.jcr.impl.core.query.RelationQueryNode;
 import org.exoplatform.services.jcr.impl.core.query.TraversingQueryNodeVisitor;
@@ -103,8 +104,8 @@ class DocumentNameQueryTest {
     assertEquals(List.of("draft_50%/v2", "draft_50%/v2"), parsed.nameValues());
     assertTrue(parsed.relations.stream()
                                .filter(relation -> "draft_50%/v2".equals(relation.getStringValue()))
-                               .allMatch(relation -> relation.getOperation() != 23),
-               "a name is never compared with LIKE (operation 23)");
+                               .allMatch(relation -> relation.getOperation() != QueryConstants.OPERATION_LIKE),
+               "a name is never compared with LIKE");
   }
 
   /**
