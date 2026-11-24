@@ -406,11 +406,15 @@ class PublicLinkFolderDownloadTest {
   }
 
   /**
-   * A public folder archive leaves out a shortcut whose target is in the
-   * trash, and holds it again once the target is restored.
+   * A public folder archive leaves out a shortcut while its target is in the
+   * trash, and holds it again once the target is back. The trash is simulated
+   * by a raw move under the trash home: the real delete also sends a direct
+   * shortcut to the trash, so the skip guards the shortcuts that stay in place
+   * (a target in a trashed folder its deleter could not read, a failed
+   * cascade, a shortcut restored while its target is still in the trash).
    */
   @Test
-  void aShortcutToATrashedDocumentIsLeftOutOfThePublicArchiveUntilItIsRestored() throws Exception {
+  void aShortcutIsLeftOutOfThePublicArchiveWhileItsTargetIsInTheTrash() throws Exception {
     Node root = systemSession.getRootNode();
     boolean trashHomeCreated = !root.hasNode("Trash");
     Node trashHome = trashHomeCreated ? root.addNode("Trash", "nt:folder") : root.getNode("Trash");
