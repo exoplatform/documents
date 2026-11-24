@@ -78,17 +78,18 @@ public class DocumentToolDefinitionSpaceScopeTest {
    * Reads by node id: the id's argument and the other arguments a call may
    * carry.
    */
-  private static final Map<String, List<String>> READS = Map.of("get_document_by_id", List.of("document_id"),
-                                                                "get_document_content_by_id", List.of("document_id"),
-                                                                "get_document_outline", List.of("document_id"),
-                                                                "read_document_text", List.of("document_id", "offset", "max_chars", "section"),
-                                                                "get_document_transcription_by_id", List.of("document_id", "timestamps"),
-                                                                "get_transcript_excerpt", List.of("document_id", "chapter", "from", "to"),
-                                                                "list_document_versions", List.of("document_id"),
-                                                                "get_document_permissions", List.of("document_id"),
-                                                                "get_documents_by_folder_id",
-                                                                List.of("folder_id", "files_only", "folders_only", "offset", "limit"),
-                                                                "list_folder_children", List.of("folder_id", "offset", "limit", "updated_since"));
+  private static final Map<String, List<String>> READS = Map.ofEntries(
+                                                                      Map.entry("get_document_by_id", List.of("document_id")),
+                                                                      Map.entry("get_document_content_by_id", List.of("document_id")),
+                                                                      Map.entry("get_document_outline", List.of("document_id")),
+                                                                      Map.entry("read_document_text", List.of("document_id", "offset", "max_chars", "section")),
+                                                                      Map.entry("get_document_transcription_by_id", List.of("document_id", "timestamps")),
+                                                                      Map.entry("get_transcript_excerpt", List.of("document_id", "chapter", "from", "to")),
+                                                                      Map.entry("list_document_versions", List.of("document_id")),
+                                                                      Map.entry("get_document_permissions", List.of("document_id")),
+                                                                      Map.entry("get_document_access", List.of("document_id")),
+                                                                      Map.entry("get_documents_by_folder_id", List.of("folder_id", "files_only", "folders_only", "offset", "limit")),
+                                                                      Map.entry("list_folder_children", List.of("folder_id", "offset", "limit", "updated_since")));
 
   /**
    * Writes by node id, whose whole effect stays in the space of that node.
