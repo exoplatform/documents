@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.rest.model;
 
+import java.util.Map;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -34,8 +36,19 @@ public class PermissionEntryEntity {
    */
   private  String role;
 
+  /**
+   * The other roles the collaborator holds, each with its permission ("read"
+   * or "edit"), which the entry's row does not show: a space can be reached
+   * both as its whole group and as its managers, redactors and publishers
+   */
+  private  Map<String, String> otherRoles;
+
   public PermissionEntryEntity(IdentityEntity identity, String permission) {
     this(identity, permission, null);
+  }
+
+  public PermissionEntryEntity(IdentityEntity identity, String permission, String role) {
+    this(identity, permission, role, null);
   }
 
 }

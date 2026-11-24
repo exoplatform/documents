@@ -1656,6 +1656,24 @@ public class DocumentFileServiceTest {
   }
 
   /**
+   * An outside space held whole, with its managers editing, saved unchanged
+   * from the drawer with both roles: the whole group adds no one, and the
+   * managers' role is written as sent, as its managers, redactors and
+   * publishers, never in its stored form.
+   */
+  @Test
+  public void testUpdatePermissionsWritesTheManagersOfAnOutsideSpaceHeldWholeAsSent() throws Exception {
+    spaceGroups("/spaces/b");
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "*:/spaces/b", "manager:/spaces/b"),
+                        Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "*:/spaces/b",
+                               "manager:/spaces/b", "redactor:/spaces/b", "publisher:/spaces/b"));
+    NodePermission nodePermission = request();
+
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), eq(Map.of()));
+  }
+
+  /**
    * The space's own group is inside: asked as managers, redactors and
    * publishers where only "manager:" is stored, it is written as asked, as
    * when the space does not keep its documents inside.
