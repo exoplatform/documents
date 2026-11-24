@@ -2244,14 +2244,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return null;
   }
 
-  public void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity) {
+  @Override
+  public void updatePermissions(String documentID,
+                                NodePermission nodePermissionEntity,
+                                Identity aclIdentity,
+                                Map<String, Set<String>> storedForms) {
     SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       Node node = getNodeByIdentifier(session, documentID);
-      Map<String, String[]> permissions = toAccessList(node, nodePermissionEntity);
+      Map<String, String[]> permissions = writeStoredForms(toAccessList(node, nodePermissionEntity), storedForms);
       if (node.canAddMixin(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
         node.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
       }
@@ -3672,6 +3676,26 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public boolean isPersonalDrive(Node node) throws RepositoryException {
     String nodePath = node.getPath();
     return StringUtils.startsWith(nodePath, "/Users") && StringUtils.contains(nodePath, "/Private");
+  }
+
+  /**
+   * Writes each requested membership that has a stored form as that form: the
+   * stored memberships, at the permission the request gives the membership.
+   */
+  private static Map<String, String[]> writeStoredForms(Map<String, String[]> permissions,
+                                                        Map<String, Set<String>> storedForms) {
+    Map<String, String[]> storedFormPermissions = new HashMap<>();
+    storedForms.forEach((requestedMembership, storedMemberships) -> {
+      String[] requestedPermission = permissions.remove(requestedMembership);
+      if (requestedPermission != null) {
+        storedMemberships.forEach(storedMembership -> storedFormPermissions.merge(storedMembership,
+                                                                                  requestedPermission,
+                                                                                  (first, second) -> first.length >= second.length ? first
+                                                                                                                                   : second));
+      }
+    });
+    permissions.putAll(storedFormPermissions);
+    return permissions;
   }
 
   /**

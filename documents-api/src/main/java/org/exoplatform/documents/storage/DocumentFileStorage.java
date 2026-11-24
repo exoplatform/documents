@@ -19,6 +19,8 @@ package org.exoplatform.documents.storage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -327,7 +329,23 @@ public interface DocumentFileStorage {
 
   void renameDocument(long ownerId, String documentID, String title, Identity aclIdentity) throws IllegalAccessException,  ObjectAlreadyExistsException,
                                                                                ObjectNotFoundException;
-  void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity);
+  default void updatePermissions(String documentID, NodePermission nodePermissionEntity, Identity aclIdentity) {
+    updatePermissions(documentID, nodePermissionEntity, aclIdentity, Map.of());
+  }
+
+  /**
+   * Writes the document's access list the request describes.
+   *
+   * @param storedForms requested group memberships, such as
+   *          {@code *:/spaces/team}, each mapped to the stored memberships
+   *          written in its place, such as {@code member:/spaces/team}, at the
+   *          permission the request gives it; a membership the request leaves
+   *          out is removed
+   */
+  void updatePermissions(String documentID,
+                         NodePermission nodePermissionEntity,
+                         Identity aclIdentity,
+                         Map<String, Set<String>> storedForms);
 
   void downloadDocuments(int actionId, List<AbstractNode> documents, Identity identity, long authenticatedUserId);
 

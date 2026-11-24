@@ -2160,6 +2160,32 @@ public class JCRDocumentFileStorageTest {
     assertEquals(2, nodePermission.getToUnShare().size());
     assertTrue(nodePermission.getToUnShare().containsKey(3L));
     assertTrue(nodePermission.getToUnShare().containsKey(4L));
+
+    // A requested membership that has a stored form is written as that form,
+    // at the permission the request gives the membership; a stored form of a
+    // membership the request does not write is not written
+    clearInvocations(node);
+    Set<String> managerForm = Set.of("manager:/spaces/spaceTest");
+    jcrDocumentFileStorage.updatePermissions("123",
+                                             nodePermission,
+                                             aclIdentity,
+                                             Map.of("*:/platform/users",
+                                                    Set.of("member:/platform/users"),
+                                                    "manager:/spaces/spaceTest",
+                                                    managerForm,
+                                                    "redactor:/spaces/spaceTest",
+                                                    managerForm,
+                                                    "publisher:/spaces/spaceTest",
+                                                    managerForm,
+                                                    "*:/spaces/notRequested",
+                                                    Set.of("member:/spaces/notRequested")));
+    verify(node).setPermissions(argThat((Map<String, String[]> map) -> Arrays.equals(map.get("manager:/spaces/spaceTest"),
+                                                                                     PermissionType.ALL)
+        && !map.containsKey("redactor:/spaces/spaceTest") && !map.containsKey("publisher:/spaces/spaceTest")
+        && Arrays.equals(map.get("member:/platform/users"), new String[] { "read" })
+        && !map.containsKey("*:/platform/users")
+        && !map.containsKey("member:/spaces/notRequested")
+        && Arrays.equals(map.get("John"), PermissionType.ALL)));
   }
   
   private Session getMockedSession(org.exoplatform.services.security.Identity identity) throws RepositoryException {

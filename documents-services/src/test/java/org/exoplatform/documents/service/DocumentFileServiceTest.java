@@ -496,7 +496,7 @@ public class DocumentFileServiceTest {
     assertEquals("123", refusal.getDocumentId());
     assertEquals(DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION, refusal.getAction());
     verify(spaceSecurityService).getSettings(7L);
-    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any());
+    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any(), any());
     verify(documentFileStorage, never()).shareDocument(anyString(), anyLong(), any(), anyBoolean());
   }
 
@@ -510,7 +510,7 @@ public class DocumentFileServiceTest {
 
     documentFileService.updatePermissions("123", nodePermission, 1L);
 
-    verify(documentFileStorage).updatePermissions("123", nodePermission, aclIdentity);
+    verify(documentFileStorage).updatePermissions("123", nodePermission, aclIdentity, Map.of());
     verify(documentFileStorage).shareDocument("123", 1L, aclIdentity, false);
   }
 
@@ -599,14 +599,14 @@ public class DocumentFileServiceTest {
     when(socialIdentity.getRemoteId()).thenReturn("username");
     when(identityManager.getIdentity(1)).thenReturn(socialIdentity);
     documentFileService.updatePermissions("123", nodePermission, 1L);
-    verify(documentFileStorage, times(1)).updatePermissions("123", nodePermission, identity);
+    verify(documentFileStorage, times(1)).updatePermissions("123", nodePermission, identity, Map.of());
     verify(documentFileStorage, times(1)).shareDocument("123", 1L, identity, false);
     //
     Map<Long, String> toNotify = new HashMap<>();
     toNotify.put(1L, "read");
     nodePermission.setToNotify(toNotify);
     documentFileService.updatePermissions("123", nodePermission, 1L);
-    verify(documentFileStorage, atLeast(1)).updatePermissions("123", nodePermission, identity);
+    verify(documentFileStorage, atLeast(1)).updatePermissions("123", nodePermission, identity, Map.of());
     verify(documentFileStorage, atLeast(1)).shareDocument("123", 1L, identity, true);
 
   }
@@ -1271,7 +1271,7 @@ public class DocumentFileServiceTest {
 
     assertThrows(DocumentSharingRefusedException.class, () -> documentFileService.updatePermissions("123", request(), 1L));
 
-    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any());
+    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any(), any());
   }
 
   @Test
@@ -1281,7 +1281,7 @@ public class DocumentFileServiceTest {
     NodePermission nodePermission = request();
     documentFileService.updatePermissions("123", nodePermission, 1L);
 
-    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any());
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), any());
   }
 
   @Test
@@ -1292,7 +1292,7 @@ public class DocumentFileServiceTest {
     NodePermission nodePermission = request();
     documentFileService.updatePermissions("123", nodePermission, 1L);
 
-    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any());
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), any());
   }
 
   /**
@@ -1309,7 +1309,7 @@ public class DocumentFileServiceTest {
     nodePermission.setToShare(Map.of(5L, "read"));
     documentFileService.updatePermissions("123", nodePermission, 1L);
 
-    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any());
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), any());
     verify(documentFileStorage).shareDocument(eq("123"), eq(5L), any(), anyBoolean());
   }
 
@@ -1320,7 +1320,7 @@ public class DocumentFileServiceTest {
     NodePermission nodePermission = request();
     documentFileService.updatePermissions("123", nodePermission, 1L);
 
-    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any());
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), any());
   }
 
   /**
@@ -1338,7 +1338,7 @@ public class DocumentFileServiceTest {
                                                            () -> documentFileService.updatePermissions("123", nodePermission, 1L));
 
     assertEquals(DocumentSharingRefusedException.KEPT_INSIDE_SHARE, refusal.getMessageCode());
-    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any());
+    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any(), any());
     verify(documentFileStorage, never()).shareDocument(anyString(), anyLong(), any(), anyBoolean());
   }
 
@@ -1356,7 +1356,7 @@ public class DocumentFileServiceTest {
     verify(spaceSecurityService, times(1)).getSettings(7L);
     verify(spaceSecurityService, never()).getDisplaySettings(any());
     verify(spaceSecurityService, times(1)).getCommittedMembers(anyLong(), anyCollection());
-    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any());
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), any());
   }
 
   @Test
@@ -1368,7 +1368,7 @@ public class DocumentFileServiceTest {
     documentFileService.updatePermissions("123", nodePermission, 1L);
 
     verify(documentFileStorage, never()).getAccessChange(anyString(), any(), any());
-    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any());
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), any());
   }
 
   @Test
@@ -1380,7 +1380,7 @@ public class DocumentFileServiceTest {
     documentFileService.updatePermissions("123", nodePermission, 1L);
 
     verify(spaceSecurityService, never()).getSettings(anyLong());
-    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any());
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), any());
   }
 
   @Test
@@ -1390,7 +1390,7 @@ public class DocumentFileServiceTest {
 
     assertThrows(IllegalStateException.class, () -> documentFileService.updatePermissions("123", request(), 1L));
 
-    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any());
+    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any(), any());
   }
 
   @Test
@@ -1409,7 +1409,7 @@ public class DocumentFileServiceTest {
 
   @Test
   public void testShareDocumentAllowedWhenTheAccessListHoldsTheDestination() throws Exception {
-    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "manager:/spaces/other"), Set.of());
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "*:/spaces/other"), Set.of());
     shareDestination(5L, SpaceIdentityProvider.NAME, "other", "/spaces/other");
 
     documentFileService.shareDocument("123", 5L, 1L, false);
@@ -1536,25 +1536,187 @@ public class DocumentFileServiceTest {
     verify(documentFileStorage, never()).getAccessChange(anyString(), any(), any());
     verify(documentFileStorage, never()).getDocumentSpace(anyString());
     verify(spaceSecurityService, never()).getSettings(anyLong());
-    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any());
+    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any(), any());
     verify(documentFileStorage, never()).shareDocument(anyString(), anyLong(), any(), anyBoolean());
   }
 
   /**
-   * A save writes back as "*:" a membership of an outside group stored as
-   * "member:" (a task attachment's grant), or a stored "manager:" as managers,
-   * redactors and publishers: a group the stored list already reaches is
-   * kept, while a group it does not reach is refused.
+   * A save asks for a stored "member:" membership of an outside space as the
+   * whole group ("*:"), and for a stored "manager:" one as managers, redactors
+   * and publishers, the roles the drawer reads them back as: each is unchanged
+   * and written in its stored form.
    */
   @Test
-  public void testUpdatePermissionsKeepsAnOutsideGroupTheStoredListReachesInAnotherForm() throws Exception {
+  public void testUpdatePermissionsWritesAnUnchangedOutsideGroupInItsStoredForm() throws Exception {
+    spaceGroups("/spaces/q", "/spaces/r");
     keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member:/spaces/q", "manager:/spaces/r"),
                         Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member", "*:/spaces/q",
                                "manager:/spaces/r", "redactor:/spaces/r", "publisher:/spaces/r"));
     NodePermission nodePermission = request();
 
     documentFileService.updatePermissions("123", nodePermission, 1L);
-    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any());
+    Set<String> managerForm = Set.of("manager:/spaces/r");
+    verify(documentFileStorage).updatePermissions(eq("123"),
+                                                  eq(nodePermission),
+                                                  any(),
+                                                  eq(Map.of("*:/spaces/q",
+                                                            Set.of("member:/spaces/q"),
+                                                            "manager:/spaces/r",
+                                                            managerForm,
+                                                            "redactor:/spaces/r",
+                                                            managerForm,
+                                                            "publisher:/spaces/r",
+                                                            managerForm)));
+  }
+
+  /**
+   * A stored "manager:" membership of an outside space, saved unchanged from
+   * the drawer, keeps only that membership; asked as the whole group, it
+   * reaches more of that space and is refused, the list unchanged.
+   */
+  @Test
+  public void testUpdatePermissionsKeepsAStoredManagerMembershipAsIs() throws Exception {
+    spaceGroups("/spaces/b");
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "manager:/spaces/b"),
+                        Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS,
+                               "manager:/spaces/b", "redactor:/spaces/b", "publisher:/spaces/b"));
+    NodePermission nodePermission = request();
+
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    Set<String> managerForm = Set.of("manager:/spaces/b");
+    verify(documentFileStorage).updatePermissions(eq("123"),
+                                                  eq(nodePermission),
+                                                  any(),
+                                                  eq(Map.of("manager:/spaces/b",
+                                                            managerForm,
+                                                            "redactor:/spaces/b",
+                                                            managerForm,
+                                                            "publisher:/spaces/b",
+                                                            managerForm)));
+  }
+
+  @Test
+  public void testUpdatePermissionsRefusesAStoredManagerMembershipWidenedToTheWholeGroup() throws Exception {
+    spaceGroups("/spaces/b");
+    assertSharingRefused(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "manager:/spaces/b"),
+                         Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "*:/spaces/b"));
+  }
+
+  /**
+   * Every membership of a group that is not a space's, a "manager:" one
+   * included, reads back as the whole group: saved unchanged, it is written as
+   * stored.
+   */
+  @Test
+  public void testUpdatePermissionsKeepsAStoredPlatformGroupMembershipAsIs() throws Exception {
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "manager:/platform/x"),
+                        Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "*:/platform/x"));
+    NodePermission nodePermission = request();
+
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    verify(documentFileStorage).updatePermissions(eq("123"),
+                                                  eq(nodePermission),
+                                                  any(),
+                                                  eq(Map.of("*:/platform/x", Set.of("manager:/platform/x"))));
+  }
+
+  /**
+   * An outside space stored as its members (read) and its managers (edit),
+   * asked as the whole group only: the whole group's role is unchanged and
+   * written as the stored "member:" membership, the managers' role is removed.
+   */
+  @Test
+  public void testUpdatePermissionsComparesEachRoleOfAnOutsideSpaceApart() throws Exception {
+    spaceGroups("/spaces/b");
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member:/spaces/b", "manager:/spaces/b"),
+                        Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "*:/spaces/b"));
+    NodePermission nodePermission = request();
+
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    verify(documentFileStorage).updatePermissions(eq("123"),
+                                                  eq(nodePermission),
+                                                  any(),
+                                                  eq(Map.of("*:/spaces/b", Set.of("member:/spaces/b"))));
+  }
+
+  /**
+   * An outside space the stored list holds whole, narrowed to its managers,
+   * redactors and publishers: they reach no one new, and are written as asked.
+   */
+  @Test
+  public void testUpdatePermissionsNarrowsAnOutsideSpaceHeldWholeToItsManagers() throws Exception {
+    spaceGroups("/spaces/b");
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "*:/spaces/b"),
+                        Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS,
+                               "manager:/spaces/b", "redactor:/spaces/b", "publisher:/spaces/b"));
+    NodePermission nodePermission = request();
+
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), eq(Map.of()));
+  }
+
+  /**
+   * The space's own group is inside: asked as managers, redactors and
+   * publishers where only "manager:" is stored, it is written as asked, as
+   * when the space does not keep its documents inside.
+   */
+  @Test
+  public void testUpdatePermissionsWritesTheSpaceOwnGroupAsAsked() throws Exception {
+    spaceGroups("/spaces/team");
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, "manager:/spaces/team"),
+                        Set.of(OWNER, ADMINISTRATORS,
+                               "manager:/spaces/team", "redactor:/spaces/team", "publisher:/spaces/team"));
+    NodePermission nodePermission = request();
+
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), eq(Map.of()));
+  }
+
+  /**
+   * The drawer shares a document with each space collaborator on every save:
+   * an outside space stored as its managers, saved unchanged, is shared again,
+   * its role written in its stored form.
+   */
+  @Test
+  public void testUpdatePermissionsKeepsSharingAnOutsideSpaceItsRequestWritesInItsStoredForm() throws Exception {
+    spaceGroups("/spaces/b");
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "manager:/spaces/b"),
+                        Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS,
+                               "manager:/spaces/b", "redactor:/spaces/b", "publisher:/spaces/b"));
+    shareDestination(5L, SpaceIdentityProvider.NAME, "b", "/spaces/b");
+    NodePermission nodePermission = request();
+    nodePermission.setToShare(Map.of(5L, "read"));
+
+    documentFileService.updatePermissions("123", nodePermission, 1L);
+    verify(documentFileStorage).updatePermissions(eq("123"), eq(nodePermission), any(), argThat(storedForms -> storedForms.size() == 3));
+    verify(documentFileStorage).shareDocument(eq("123"), eq(5L), any(), anyBoolean());
+  }
+
+  /**
+   * A share to a space writes its whole group: a stored "manager:" membership
+   * of that space does not hold it.
+   */
+  @Test
+  public void testShareDocumentRefusesASpaceTheStoredListReachesOnlyThroughItsManagers() throws Exception {
+    spaceGroups("/spaces/b");
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "manager:/spaces/b"), Set.of());
+    shareDestination(5L, SpaceIdentityProvider.NAME, "b", "/spaces/b");
+
+    DocumentSharingRefusedException refusal = assertThrows(DocumentSharingRefusedException.class,
+                                                           () -> documentFileService.shareDocument("123", 5L, 1L, false));
+
+    assertEquals(DocumentSharingRefusedException.KEPT_INSIDE_SHARE, refusal.getMessageCode());
+    verify(documentFileStorage, never()).shareDocument(anyString(), anyLong(), any(), anyBoolean());
+  }
+
+  @Test
+  public void testShareDocumentKeepsASpaceTheStoredListReachesWhole() throws Exception {
+    spaceGroups("/spaces/q");
+    keepDocumentsInside(Set.of(OWNER, ADMINISTRATORS, TEAM_MEMBERS, "member:/spaces/q"), Set.of());
+    shareDestination(5L, SpaceIdentityProvider.NAME, "q", "/spaces/q");
+
+    documentFileService.shareDocument("123", 5L, 1L, false);
+    verify(documentFileStorage).shareDocument(eq("123"), eq(5L), any(), eq(false));
   }
 
   @Test
@@ -1637,7 +1799,7 @@ public class DocumentFileServiceTest {
     assertEquals("123", refusal.getDocumentId());
     assertEquals(DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION, refusal.getAction());
     verify(documentFileStorage).getAccessChange("123", space, nodePermission);
-    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any());
+    verify(documentFileStorage, never()).updatePermissions(anyString(), any(), any(), any());
     verify(documentFileStorage, never()).shareDocument(anyString(), anyLong(), any(), anyBoolean());
     return spaceSecurityService;
   }
@@ -1685,6 +1847,15 @@ public class DocumentFileServiceTest {
     NodePermission nodePermission = new NodePermission();
     nodePermission.setToShare(new HashMap<>());
     return nodePermission;
+  }
+
+  /** These groups are spaces' groups: their manager memberships read back as managers, redactors and publishers */
+  private void spaceGroups(String... groupIds) {
+    for (String groupId : groupIds) {
+      Space groupSpace = new Space();
+      groupSpace.setGroupId(groupId);
+      when(spaceService.getSpaceByGroupId(groupId)).thenReturn(groupSpace);
+    }
   }
 
   private void shareDestination(long identityId, String providerId, String remoteId, String groupId) {

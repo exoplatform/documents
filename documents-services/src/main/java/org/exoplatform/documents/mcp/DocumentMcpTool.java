@@ -1100,7 +1100,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * Whether the reconstructed collaborator list already contains the given
    * identity with any grant (read or edit). When true, the share must NOT append
    * a (recipient,"read") entry, as that would overwrite an existing higher grant
-   * (edit) when the storage writes the permissions map in list order.
+   * (edit) when the storage writes the permissions map in list order. A space
+   * reached only through its managers, redactors and publishers is not shared
+   * with its members: the share asks for the whole space.
    */
   private static boolean alreadyGrantsAccess(List<PermissionEntry> permissions, Identity identity) {
     if (permissions == null || identity == null) {
@@ -1109,7 +1111,8 @@ public class DocumentMcpTool implements McpToolPlugin {
     return permissions.stream().anyMatch(entry -> {
       Identity existing = entry.getIdentity();
       return existing != null && StringUtils.equals(existing.getProviderId(), identity.getProviderId())
-             && StringUtils.equals(existing.getRemoteId(), identity.getRemoteId());
+             && StringUtils.equals(existing.getRemoteId(), identity.getRemoteId())
+             && !PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name().equals(entry.getRole());
     });
   }
 

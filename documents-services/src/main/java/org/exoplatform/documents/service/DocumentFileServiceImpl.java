@@ -90,6 +90,9 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   /** The membership of a whole group, as an access list writes it */
   private static final String   SPACE_GROUP_MEMBERSHIP_PREFIX = "*:";
 
+  /** The membership types the access drawer reads back as a space's managers, redactors and publishers */
+  private static final Set<String> MANAGING_MEMBERSHIP_TYPES = Set.of("manager", "redactor", "publisher");
+
   private static final String   VIDEO_THUMBNAIL_TYPE = "videoThumbnail";
 
   /** The one preview size the documents clients display, width and height. */
@@ -513,12 +516,18 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     // Decided once for the whole request, before any write
     Collection<Long> destinationIds = nodePermissionEntity.getToShare() == null ? List.of()
                                                                                 : nodePermissionEntity.getToShare().keySet();
+    Map<String, Set<String>> storedForms = new HashMap<>();
     checkCanChangeAccess(documentId,
                          authenticatedUserId,
                          DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION,
-                         (space, settings) -> refuseOutsideShare(documentId, nodePermissionEntity, destinationIds, space, settings));
+                         (space, settings) -> refuseOutsideShare(documentId,
+                                                                 nodePermissionEntity,
+                                                                 destinationIds,
+                                                                 space,
+                                                                 settings,
+                                                                 storedForms));
     org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(authenticatedUserId);
-    documentFileStorage.updatePermissions(documentId, nodePermissionEntity, aclIdentity);
+    documentFileStorage.updatePermissions(documentId, nodePermissionEntity, aclIdentity, storedForms);
     nodePermissionEntity.getToShare().keySet().forEach(destId-> {
       try {
         boolean notifyMember = nodePermissionEntity.getToNotify() != null && nodePermissionEntity.getToNotify().containsKey(destId);
@@ -544,7 +553,7 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     checkCanChangeAccess(documentId,
                          authenticatedUserId,
                          DocumentSharingRefusedException.CHANGE_PERMISSIONS_ACTION,
-                         (space, settings) -> refuseOutsideShare(documentId, null, List.of(destId), space, settings));
+                         (space, settings) -> refuseOutsideShare(documentId, null, List.of(destId), space, settings, new HashMap<>()));
     documentFileStorage.shareDocument(documentId, destId, getAclUserIdentity(authenticatedUserId), notifyMember );
   }
 
@@ -663,17 +672,24 @@ public class DocumentFileServiceImpl implements DocumentFileService {
    * Under "Keep documents inside the space", refuses a change that adds an
    * identity outside the space to the document's stored access list: one the
    * requested permissions write, or a share destination the list does not hold.
-   * An identity the stored list already holds is kept as it is, and so is a
-   * membership of a group it already reaches, whatever its type; removing one
-   * is no addition.
+   * An identity the stored list already holds is kept as it is; removing one is
+   * no addition, and neither is a membership of a group the list holds whole.
+   * The memberships the request gives a group outside the space are compared
+   * with the stored ones role by role, each membership with the role the access
+   * drawer reads it back as: a role the stored list already gives that group
+   * is unchanged, and is written back in its stored form; a role it does not
+   * give that group adds its memberships.
    *
+   * @param storedForms filled with the stored form of each requested membership
+   *          of an unchanged role, which the save writes in its place
    * @return the refusal's code, null when the change adds nothing outside
    */
   private String refuseOutsideShare(String documentId,
                                     NodePermission permissions,
                                     Collection<Long> destinationIds,
                                     Space space,
-                                    SpaceSecuritySettings settings) {
+                                    SpaceSecuritySettings settings,
+                                    Map<String, Set<String>> storedForms) {
     SpaceSecurityService securityService = getSpaceSecurityService();
     if (!securityService.isDocumentsKeptInside(settings)) {
       return null;
@@ -682,30 +698,48 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     Set<String> storedIdentities = accessChange.storedIdentities();
     Set<String> addedIdentities = new HashSet<>(accessChange.requestedIdentities());
     addedIdentities.removeAll(storedIdentities);
-    // A membership of a group the stored list already reaches is kept, whatever
-    // its type: a save may write back as "*:" a membership stored as "member:"
-    addedIdentities.removeIf(identity -> identity.indexOf(':') > 0 && holdsGroup(storedIdentities, identity));
+    Map<String, Set<String>> requestedMembershipsByGroup = accessChange.requestedIdentities()
+                                                                       .stream()
+                                                                       .filter(DocumentFileServiceImpl::isMembership)
+                                                                       .collect(Collectors.groupingBy(DocumentFileServiceImpl::getMembershipGroup,
+                                                                                                      Collectors.toSet()));
     for (Long destinationId : destinationIds) {
       String destination = getShareDestination(destinationId);
       if (destination == null) {
         // A destination that cannot be resolved cannot be told inside
         return DocumentSharingRefusedException.KEPT_INSIDE_SHARE;
-      } else if (!holdsDestination(storedIdentities, destination)) {
+      } else if (!holdsDestination(storedIdentities, requestedMembershipsByGroup.keySet(), destination)) {
         addedIdentities.add(destination);
       }
     }
-    if (addedIdentities.isEmpty()) {
-      return null;
-    }
     Set<String> users = addedIdentities.stream()
-                                       .filter(identity -> identity.indexOf(':') < 0 && !IdentityConstants.ANY.equals(identity))
+                                       .filter(identity -> !isMembership(identity) && !IdentityConstants.ANY.equals(identity))
                                        .collect(Collectors.toSet());
     Set<String> members = users.isEmpty() ? Set.of() : securityService.getCommittedMembers(space.getSpaceId(), users);
     SpaceAccessClassifier classifier = new SpaceAccessClassifier(space.getGroupId(),
                                                                  members::contains,
                                                                  accessChange.driveRootIdentities());
-    return classifier.hasOutsideEntry(addedIdentities, accessChange.owner()) ? DocumentSharingRefusedException.KEPT_INSIDE_SHARE
-                                                                              : null;
+    String owner = accessChange.owner();
+    requestedMembershipsByGroup.forEach((group, requestedMemberships) -> {
+      Set<String> storedMemberships = getStoredMemberships(storedIdentities, group);
+      if (storedMemberships.contains(SPACE_GROUP_MEMBERSHIP_PREFIX + group)) {
+        // The whole group reaches every membership of it
+        addedIdentities.removeAll(requestedMemberships);
+        return;
+      }
+      boolean spaceGroup = spaceService.getSpaceByGroupId(group) != null;
+      Map<String, Set<String>> storedByRole = groupByReadBackRole(storedMemberships, spaceGroup);
+      groupByReadBackRole(requestedMemberships, spaceGroup).forEach((role, requestedPart) -> {
+        Set<String> storedPart = storedByRole.get(role);
+        if (storedPart != null
+            && requestedPart.stream().anyMatch(membership -> addedIdentities.contains(membership)
+                && classifier.isOutside(membership, owner))) {
+          addedIdentities.removeAll(requestedPart);
+          requestedPart.forEach(membership -> storedForms.put(membership, storedPart));
+        }
+      });
+    });
+    return classifier.hasOutsideEntry(addedIdentities, owner) ? DocumentSharingRefusedException.KEPT_INSIDE_SHARE : null;
   }
 
   /**
@@ -726,24 +760,61 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   /**
+   * @param requestedGroups the groups the requested permissions write
+   *          memberships of, which decide a share to their space
    * @return whether the stored access list holds the destination: a user's own
-   *         entry, or an entry of any membership of a space's group
+   *         entry, or a membership of a space's group that reads back as the
+   *         whole group, as a share to the space writes it
    */
-  private boolean holdsDestination(Set<String> storedIdentities, String destination) {
+  private boolean holdsDestination(Set<String> storedIdentities, Set<String> requestedGroups, String destination) {
     if (!destination.startsWith(SPACE_GROUP_MEMBERSHIP_PREFIX)) {
       return storedIdentities.contains(destination);
     }
-    return holdsGroup(storedIdentities, destination);
+    String group = getMembershipGroup(destination);
+    return requestedGroups.contains(group)
+        || groupByReadBackRole(getStoredMemberships(storedIdentities, group), true).containsKey(PermissionRole.ALL.name());
+  }
+
+  /**
+   * @return whether the access entry's identity is a group membership, such as
+   *         {@code manager:/spaces/team}
+   */
+  private static boolean isMembership(String identity) {
+    return identity.indexOf(':') > 0;
   }
 
   /**
    * @param membership a membership, such as {@code manager:/spaces/team}
-   * @return whether the stored access list holds a membership, of any type, of
-   *         the same group
+   * @return its group, {@code /spaces/team}
    */
-  private boolean holdsGroup(Set<String> storedIdentities, String membership) {
-    String groupSuffix = membership.substring(membership.indexOf(':'));
-    return storedIdentities.stream().anyMatch(identity -> identity.indexOf(':') > 0 && identity.endsWith(groupSuffix));
+  private static String getMembershipGroup(String membership) {
+    return membership.substring(membership.indexOf(':') + 1);
+  }
+
+  /**
+   * @return the stored memberships, of any type, of exactly this group
+   */
+  private static Set<String> getStoredMemberships(Set<String> storedIdentities, String group) {
+    return storedIdentities.stream()
+                           .filter(identity -> isMembership(identity) && getMembershipGroup(identity).equals(group))
+                           .collect(Collectors.toSet());
+  }
+
+  /**
+   * @param memberships memberships of one group
+   * @param spaceGroup whether the group is a space's
+   * @return the memberships by the role the access drawer reads them back as,
+   *         as JCRDocumentsUtil#computeDocumentAcl does: a manager, redactor
+   *         or publisher membership of a space's group as
+   *         MANAGERS_REDACTORS_PUBLISHERS; any other membership, and every
+   *         membership of a group that is not a space's, as ALL
+   */
+  private static Map<String, Set<String>> groupByReadBackRole(Set<String> memberships, boolean spaceGroup) {
+    return memberships.stream()
+                      .collect(Collectors.groupingBy(membership -> spaceGroup
+                          && MANAGING_MEMBERSHIP_TYPES.contains(membership.substring(0, membership.indexOf(':'))) ? PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name()
+                                                                                                                 : PermissionRole.ALL.name(),
+                                                     Collectors.toSet()));
   }
 
   /**
