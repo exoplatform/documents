@@ -67,6 +67,27 @@ class DocumentNameQueryTest {
   }
 
   /**
+   * A backslash is no escape character in a JCR SQL comparison: a name that
+   * puts one before a quote, or ends with one, still stays one compared value,
+   * the backslash kept. A line break inside the literal stays in the value
+   * too; the storage refuses such a name before building the statement
+   * ({@code findDocumentsByNameRefusesABlankLongOrMultiLineName}). Mutant: the
+   * quotes no longer doubled.
+   *
+   * @throws Exception never
+   */
+  @Test
+  @DisplayName("A backslash before a quote, a trailing backslash and a line break stay inside the one compared value")
+  void aBackslashOrALineBreakStaysInsideTheValue() throws Exception {
+    for (String name : List.of("a\\' OR jcr:path LIKE '/%", "a\\", "line\nbreak' OR 'x'='x")) {
+      Parsed parsed = parse(JCRDocumentFileStorage.getNameQueryStatement(DRIVES, name));
+
+      String value = name.toLowerCase(java.util.Locale.ROOT);
+      assertEquals(List.of(value, value), parsed.nameValues(), name);
+    }
+  }
+
+  /**
    * A name is compared exactly, in lower case: {@code %}, {@code _} and
    * {@code /} are characters of the name, never wildcards or path steps.
    * Mutant: the comparison turned into a LIKE.
