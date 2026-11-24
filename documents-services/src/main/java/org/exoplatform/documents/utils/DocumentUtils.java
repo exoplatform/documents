@@ -35,7 +35,7 @@ public final class DocumentUtils {
   /**
    * Prints a value as a JavaScript string literal, for a page that writes it
    * into an inline script: quotes, backslashes and line ends are escaped, and
-   * every '<' is written as a unicode escape, so the value can neither close
+   * every {@code '<'} is written as a unicode escape, so the value can neither close
    * the string nor open or close a tag or a comment in the script block.
    *
    * @param value the value, possibly null
