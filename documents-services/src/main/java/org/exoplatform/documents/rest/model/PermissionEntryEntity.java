@@ -28,4 +28,14 @@ public class PermissionEntryEntity {
   private  IdentityEntity identity;
   private  String permission;
 
+  /**
+   * The space's members this entry reaches, a PermissionRole name: ALL, or
+   * MANAGERS_REDACTORS_PUBLISHERS; ALL when absent
+   */
+  private  String role;
+
+  public PermissionEntryEntity(IdentityEntity identity, String permission) {
+    this(identity, permission, null);
+  }
+
 }

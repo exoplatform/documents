@@ -99,6 +99,7 @@ export default {
       for (const user of  this.users) {
         const  collaborator= {
           'permission': user.permission || 'read',
+          'role': user.role,
           'identity': {
             'id': user.id,
             'name': user.displayName || user.fullName,
