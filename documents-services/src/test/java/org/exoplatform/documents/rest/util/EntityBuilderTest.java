@@ -225,6 +225,107 @@ public class EntityBuilderTest {
         assertEquals("edit", result.getCollaborators().get(0).getPermission());
     }
 
+    /**
+     * A space collaborator is read back with the role its entries give it, and
+     * written back with the role it is sent with, the whole space when none or
+     * an unknown one is sent: a drawer save writes a space's managers,
+     * redactors and publishers back as them.
+     */
+    @Test
+    public void spaceCollaboratorKeepsItsRoleFromReadToWrite() throws Exception {
+        Space space = new Space();
+        space.setPrettyName("testspace");
+        when(spaceService.getSpaceByGroupId("/spaces/testspace")).thenReturn(space);
+        Identity spaceIdentity = mock(Identity.class);
+        when(spaceIdentity.getId()).thenReturn("999");
+        when(spaceIdentity.isSpace()).thenReturn(true);
+        when(identityManager.getOrCreateSpaceIdentity("testspace")).thenReturn(spaceIdentity);
+        Identity outsideSpaceIdentity = mock(Identity.class);
+        when(outsideSpaceIdentity.getId()).thenReturn("5");
+        when(outsideSpaceIdentity.getProviderId()).thenReturn("space");
+        when(outsideSpaceIdentity.getRemoteId()).thenReturn("outside");
+        when(outsideSpaceIdentity.isSpace()).thenReturn(true);
+        FileNode node = new FileNode();
+        node.setId("fileId");
+        node.setPath("/Groups/spaces/testspace");
+        when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(false);
+        node.setAcl(new NodePermission(true,
+                                       true,
+                                       false,
+                                       false,
+                                       List.of(new PermissionEntry(outsideSpaceIdentity,
+                                                                   "set_property",
+                                                                   PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name())),
+                                       null,
+                                       null,
+                                       null));
+
+        PermissionEntryEntity collaborator = invokeToNodePermissionEntity(node).getCollaborators().get(0);
+        assertEquals("edit", collaborator.getPermission());
+        assertEquals(PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name(), collaborator.getRole());
+
+        when(identityManager.getOrCreateSpaceIdentity("outside")).thenReturn(outsideSpaceIdentity);
+        AbstractNodeEntity nodeEntity = new AbstractNodeEntity(true);
+        nodeEntity.setPath("/Groups/spaces/testspace");
+        NodePermissionEntity acl = new NodePermissionEntity();
+        acl.setVisibilityChoice(Visibility.SPECIFIC_COLLABORATOR.name());
+        acl.setCollaborators(List.of(collaborator));
+        nodeEntity.setAcl(acl);
+        assertEquals(PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name(), writtenRole(nodeEntity));
+        collaborator.setRole(null);
+        assertEquals(PermissionRole.ALL.name(), writtenRole(nodeEntity));
+        collaborator.setRole("unknown");
+        assertEquals(PermissionRole.ALL.name(), writtenRole(nodeEntity));
+    }
+
+    /**
+     * A space stored as its whole group and as its managers, redactors and
+     * publishers at the same permission is read as its whole group, whatever
+     * the order of its entries; one stored with its members viewing and its
+     * managers editing is read as its managers, editing.
+     */
+    @Test
+    public void spaceCollaboratorRowDoesNotDependOnTheStoredOrder() throws Exception {
+        Space space = new Space();
+        space.setPrettyName("testspace");
+        when(spaceService.getSpaceByGroupId("/spaces/testspace")).thenReturn(space);
+        Identity spaceIdentity = mock(Identity.class);
+        when(spaceIdentity.getId()).thenReturn("999");
+        when(identityManager.getOrCreateSpaceIdentity("testspace")).thenReturn(spaceIdentity);
+        Identity outside = mock(Identity.class);
+        when(outside.getId()).thenReturn("5");
+        when(outside.getRemoteId()).thenReturn("outside");
+        when(outside.isSpace()).thenReturn(true);
+        FileNode node = new FileNode();
+        node.setId("fileId");
+        node.setPath("/Groups/spaces/testspace");
+        when(publicDocumentAccessService.hasDocumentPublicAccess("fileId")).thenReturn(false);
+        String managers = PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name();
+        String whole = PermissionRole.ALL.name();
+
+        assertRow(node, "read", whole, new PermissionEntry(outside, "read", managers), new PermissionEntry(outside, "read", whole));
+        assertRow(node, "read", whole, new PermissionEntry(outside, "read", whole), new PermissionEntry(outside, "read", managers));
+        assertRow(node, "edit", whole, new PermissionEntry(outside, "set_property", managers), new PermissionEntry(outside, "set_property", whole));
+        assertRow(node, "edit", whole, new PermissionEntry(outside, "set_property", whole), new PermissionEntry(outside, "set_property", managers));
+        assertRow(node, "edit", managers, new PermissionEntry(outside, "read", whole), new PermissionEntry(outside, "set_property", managers));
+        assertRow(node, "edit", managers, new PermissionEntry(outside, "set_property", managers), new PermissionEntry(outside, "read", whole));
+    }
+
+  private void assertRow(FileNode node, String permission, String role, PermissionEntry... entries) throws Exception {
+    node.setAcl(new NodePermission(true, true, false, false, List.of(entries), null, null, null));
+    PermissionEntryEntity row = invokeToNodePermissionEntity(node).getCollaborators().get(0);
+    assertEquals(permission, row.getPermission());
+    assertEquals(role, row.getRole());
+  }
+
+  /** @return the role the node's one collaborator is written with */
+  private String writtenRole(AbstractNodeEntity nodeEntity) {
+    return EntityBuilder.toNodePermission(nodeEntity, documentFileService, spaceService, identityManager)
+                        .getPermissions()
+                        .get(0)
+                        .getRole();
+  }
+
   private Identity mockUserIdentity(String id, String remoteId, String fullName) {
     Identity userIdentity = mock(Identity.class);
     when(userIdentity.getId()).thenReturn(id);

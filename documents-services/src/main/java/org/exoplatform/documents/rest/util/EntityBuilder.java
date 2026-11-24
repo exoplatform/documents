@@ -371,10 +371,8 @@ public class EntityBuilder {
         PermissionEntryEntity permissionEntry_ = map.get(permissionEntry.getIdentity().getRemoteId());
         if(permissionEntry_ == null){
           map.put(permissionEntry.getIdentity().getRemoteId(),toPermissionEntryEntity(permissionEntry, spaceService));
-        } else{
-          if(isEditPermission(permissionEntry.getPermission()) && !isEditPermission(permissionEntry_.getPermission()) ){
-            map.put(permissionEntry.getIdentity().getRemoteId(),toPermissionEntryEntity(permissionEntry, spaceService));
-          }
+        } else if (isWiderThanRow(permissionEntry, permissionEntry_)) {
+          map.put(permissionEntry.getIdentity().getRemoteId(), toPermissionEntryEntity(permissionEntry, spaceService));
         }
 
       }
@@ -407,7 +405,7 @@ public class EntityBuilder {
     if(isEditPermission(permissionEntry.getPermission())){
       permission = "edit";
     }
-    return new PermissionEntryEntity(toIdentityEntity(permissionEntry.getIdentity(),spaceService), permission);
+    return new PermissionEntryEntity(toIdentityEntity(permissionEntry.getIdentity(),spaceService), permission, permissionEntry.getRole());
   }
   public static NodePermission toNodePermission(AbstractNodeEntity node, DocumentFileService documentFileService, SpaceService spaceService, IdentityManager identityManager){
     if(node.getAcl() == null) return null;
@@ -500,7 +498,10 @@ public class EntityBuilder {
       identity = identityManager.getOrCreateUserIdentity(permissionEntryEntity.getIdentity().getRemoteId());
     }
     if(identity == null) return null;
-    return new PermissionEntry(identity, permissionEntryEntity.getPermission(),PermissionRole.ALL.name());
+    // A collaborator read back as a space's managers, redactors and publishers is written back as them
+    String role = PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name().equals(permissionEntryEntity.getRole()) ? PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name()
+                                                                                                             : PermissionRole.ALL.name();
+    return new PermissionEntry(identity, permissionEntryEntity.getPermission(), role);
   }
 
   public static Map<String, List<MetadataItemEntity>> retrieveMetadataItems(Map<String, List<MetadataItem>> metadatas,
@@ -596,6 +597,23 @@ public class EntityBuilder {
       identityEntity.setName(identity.getProfile().getFullName());
     return identityEntity;
   }
+  /**
+   * @param entry an access entry of the collaborator the row shows
+   * @param row the collaborator's row read so far
+   * @return whether the entry gives more than the row: edit where the row
+   *         has view, or, at the same permission, a space's whole group where
+   *         the row has its managers, redactors and publishers, so that the
+   *         row does not depend on the order the entries are stored in
+   */
+  private static boolean isWiderThanRow(PermissionEntry entry, PermissionEntryEntity row) {
+    boolean edit = isEditPermission(entry.getPermission());
+    if (edit != "edit".equals(row.getPermission())) {
+      return edit;
+    }
+    return PermissionRole.ALL.name().equals(entry.getRole())
+        && PermissionRole.MANAGERS_REDACTORS_PUBLISHERS.name().equals(row.getRole());
+  }
+
   private static boolean isEditPermission(String permission){
     return  permission.contains("add_node") || permission.contains("set_property") || permission.contains("remove");
   }
