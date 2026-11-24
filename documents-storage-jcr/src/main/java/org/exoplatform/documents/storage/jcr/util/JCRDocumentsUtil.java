@@ -619,6 +619,22 @@ public class JCRDocumentsUtil {
     return versionSize;
   }
 
+  /**
+   * As the JCR does (AccessManager#hasPermission), the ACL owner holds every
+   * right, but a shortcut's owner is whoever created it: its rights are not the
+   * target's.
+   *
+   * @param node the node whose rights are computed
+   * @param acl the node's access control list
+   * @param userId the user whose rights are computed
+   * @return true when the user is the ACL owner of a node that is not a shortcut
+   * @throws RepositoryException when the node type cannot be read
+   */
+  public static boolean isAclOwner(Node node, AccessControlList acl, String userId) throws RepositoryException {
+    return userId != null && StringUtils.equals(userId, acl.getOwner())
+        && !node.isNodeType(NodeTypeConstants.EXO_SYMLINK);
+  }
+
   public static void computeDocumentAcl(Node node, AbstractNode documentNode, Identity aclIdentity, IdentityManager identityManager, SpaceService spaceService) throws RepositoryException {
     boolean canEdit = false;
     boolean canDelete = false;
@@ -627,10 +643,7 @@ public class JCRDocumentsUtil {
     String userId = aclIdentity.getUserId();
     ExtendedNode extendedNode = (ExtendedNode) node;
     AccessControlList acl = extendedNode.getACL();
-    // As the JCR does (AccessManager#hasPermission), the ACL owner holds every right,
-    // but a shortcut's owner is whoever created it: its rights are not the target's
-    if (userId != null && StringUtils.equals(userId, acl.getOwner())
-        && !node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+    if (isAclOwner(node, acl, userId)) {
       canEdit = true;
       canDelete = true;
     }

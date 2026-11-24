@@ -150,6 +150,8 @@ public class JCRDocumentFileStorageTest {
                                                              activityManager,
                                                              bulkStorageActionService,
                                                              documentService);
+    // countNodeAccessList reads the owner rule from JCRDocumentsUtil, which this class mocks statically
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isAclOwner(any(), any(), any())).thenCallRealMethod();
   }
 
   @Test

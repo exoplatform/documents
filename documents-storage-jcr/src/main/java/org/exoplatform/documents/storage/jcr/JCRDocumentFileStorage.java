@@ -3115,10 +3115,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     try {
       ExtendedNode extendedNode = (ExtendedNode) node;
       AccessControlList acl = extendedNode.getACL();
-      // As the JCR does (AccessManager#hasPermission), the ACL owner holds every right,
-      // but a shortcut's owner is whoever created it: its rights are not the target's
-      if (userId != null && StringUtils.equals(userId, acl.getOwner())
-          && !node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      if (isAclOwner(node, acl, userId)) {
         canAccess = true;
         canEdit = true;
         canDelete = true;
