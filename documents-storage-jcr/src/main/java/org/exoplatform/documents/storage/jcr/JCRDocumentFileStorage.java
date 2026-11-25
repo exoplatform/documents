@@ -389,12 +389,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         String sortField = getSortField(filter, false);
         String sortDirection = getSortDirection(filter);
 
-        List<String> paths = new ArrayList<>();
-        paths.add(rootPath);
-        paths.addAll(findSymlinkTargetPaths(session, rootPath));
+        List<String> folderPaths = new ArrayList<>();
+        folderPaths.add(rootPath);
+        List<String> filePaths = new ArrayList<>();
+        addSymlinkTargetPaths(session, rootPath, folderPaths, filePaths);
         Collection<DocumentFileSearchResult> filesSearchList = documentSearchServiceConnector.search(aclIdentity,
                                                                                                      workspace,
-                                                                                                     paths,
+                                                                                                     folderPaths,
+                                                                                                     filePaths,
                                                                                                      filter,
                                                                                                      offset,
                                                                                                      limit,
@@ -454,7 +456,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       sessionProvider = getUserSessionProvider(repositoryService, identity);
       ManageableRepository repository = repositoryService.getCurrentRepository();
       Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-      List<String> paths = new ArrayList<>();
+      List<String> folderPaths = new ArrayList<>();
       String path = "/";
       if (StringUtils.isNotBlank(filter.getParentFolderId())) {
         Node parent = getNodeByIdentifier(session, filter.getParentFolderId());
@@ -478,11 +480,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         }
         path = identityRootNode.getPath();
       }
-      paths.add(path);
-      paths.addAll(findSymlinkTargetPaths(session, path));
+      folderPaths.add(path);
+      List<String> filePaths = new ArrayList<>();
+      addSymlinkTargetPaths(session, path, folderPaths, filePaths);
       Collection<DocumentFileSearchResult> results = documentSearchServiceConnector.search(identity,
                                                                                            COLLABORATION,
-                                                                                           paths,
+                                                                                           folderPaths,
+                                                                                           filePaths,
                                                                                            filter,
                                                                                            offset,
                                                                                            limit,
@@ -501,8 +505,17 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
-  private List<String> findSymlinkTargetPaths(Session session, String path) throws RepositoryException {
-    List<String> targetPaths = new ArrayList<>();
+  /**
+   * Adds the target of every shortcut under the given path, as the session
+   * reads it: a folder target to the folders whose descendants are searched, a
+   * file target to the files searched as such. A shared document is such a
+   * shortcut in its recipient's drive, while the document stays in its
+   * owner's drive.
+   */
+  private void addSymlinkTargetPaths(Session session,
+                                     String path,
+                                     List<String> folderPaths,
+                                     List<String> filePaths) throws RepositoryException {
     String query = "SELECT * FROM exo:symlink WHERE jcr:path LIKE '" + path + "/%'";
     Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(query, Query.SQL);
     QueryResult queryResult = jcrQuery.execute();
@@ -512,19 +525,26 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node symlink = nodeIterator.nextNode();
       try {
         Node targetNode = resolveSymlinks(session, symlink);
-        if (targetNode == null || !(targetNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED) || targetNode.isNodeType(NodeTypeConstants.NT_FOLDER))) {
+        if (targetNode == null) {
+          continue;
+        }
+        List<String> targetPaths;
+        if (targetNode.isNodeType(NodeTypeConstants.NT_FILE)) {
+          targetPaths = filePaths;
+        } else if (targetNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)
+            || targetNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
+          targetPaths = folderPaths;
+        } else {
           continue;
         }
         String targetPath = targetNode.getPath();
-        if (!seen.contains(targetPath)) {
-          seen.add(targetPath);
+        if (seen.add(targetPath)) {
           targetPaths.add(targetPath);
         }
       } catch (RepositoryException e) {
         LOG.debug("Symlink target not found for symlink at {}", symlink.getPath(), e);
       }
     }
-    return targetPaths;
   }
 
   @Override
@@ -786,12 +806,14 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           String sortField = getSortField(filter, false);
           String sortDirection = getSortDirection(filter);
 
-          List<String> paths = new ArrayList<>();
-          paths.add(parent.getPath());
-          paths.addAll(findSymlinkTargetPaths(session, parent.getPath()));
+          List<String> folderPaths = new ArrayList<>();
+          folderPaths.add(parent.getPath());
+          List<String> filePaths = new ArrayList<>();
+          addSymlinkTargetPaths(session, parent.getPath(), folderPaths, filePaths);
           Collection<DocumentFileSearchResult> filesSearchList = documentSearchServiceConnector.search(aclIdentity,
                                                                                                        workspace,
-                                                                                                       paths,
+                                                                                                       folderPaths,
+                                                                                                       filePaths,
                                                                                                        filter,
                                                                                                        offset,
                                                                                                        limit,

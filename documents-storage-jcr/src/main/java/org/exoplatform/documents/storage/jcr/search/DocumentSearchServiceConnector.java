@@ -196,6 +196,27 @@ public class DocumentSearchServiceConnector {
                                                      int limit,
                                                      String sortField,
                                                      String sortDirection) {
+    return search(userIdentity, workspace, paths, Collections.emptyList(), filter, offset, limit, sortField, sortDirection);
+  }
+
+  /**
+   * Searches the files under the given folders and, in the same query, the
+   * given files themselves.
+   *
+   * @param folderPaths JCR paths of the folders whose descendants are searched
+   * @param filePaths JCR paths of files searched as such, matched on their
+   *          exact path: the target of a shortcut to a file, which no folder
+   *          path covers
+   */
+  public Collection<DocumentFileSearchResult> search(Identity userIdentity, // NOSONAR
+                                                     String workspace,
+                                                     List<String> folderPaths,
+                                                     List<String> filePaths,
+                                                     DocumentNodeFilter filter,
+                                                     int offset,
+                                                     int limit,
+                                                     String sortField,
+                                                     String sortDirection) {
     if (userIdentity == null) {
       throw new IllegalArgumentException("Viewer identity is mandatory");
     }
@@ -225,7 +246,16 @@ public class DocumentSearchServiceConnector {
         sortField = "_score";
     }
 
-    String esQuery = buildQueryStatement(userIdentity, workspace, paths, filter, sortField, sortDirection, false, offset, limit);
+    String esQuery = buildQueryStatement(userIdentity,
+                                         workspace,
+                                         folderPaths,
+                                         filePaths,
+                                         filter,
+                                         sortField,
+                                         sortDirection,
+                                         false,
+                                         offset,
+                                         limit);
     String jsonResponse = this.client.sendRequest(esQuery, this.index);
     return buildResult(jsonResponse);
   }
@@ -276,6 +306,7 @@ public class DocumentSearchServiceConnector {
     String esQuery = buildQueryStatement(userIdentity,
                                          workspace,
                                          paths,
+                                         Collections.emptyList(),
                                          new DocumentTimelineFilter(),
                                          "lastUpdatedDate",
                                          "ASC",
@@ -306,9 +337,10 @@ public class DocumentSearchServiceConnector {
       return "";
   }
 
-  private String buildQueryStatement(Identity userIdentity,
+  private String buildQueryStatement(Identity userIdentity, // NOSONAR
                                      String workspace,
-                                     List<String> paths,
+                                     List<String> folderPaths,
+                                     List<String> filePaths,
                                      DocumentNodeFilter filter,
                                      String sortField,
                                      String sortDirection,
@@ -329,7 +361,7 @@ public class DocumentSearchServiceConnector {
                                 .replace("@fileTypes_query@", getFileTypesQuery(filter))
                                 .replace("@size_query@", getSizeQuery(filter))
                                 .replace("@date_query@", getDatesQuery(filter))
-                                .replace("@path_filter@", buildPathFilter(paths))
+                                .replace("@path_filter@", buildPathFilter(folderPaths, filePaths))
                                 .replace("@workspace@", workspace)
                                 .replace("@size_agg@", getSizeAgg(getTotalSize))
                                 .replace("@sort_field@", sortField)
@@ -338,13 +370,13 @@ public class DocumentSearchServiceConnector {
                                 .replace("@limit@", getLimit(limit));
   }
 
-  private String buildPathFilter(List<String> paths) {
+  private String buildPathFilter(List<String> folderPaths, List<String> filePaths) {
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
     sb.append("  \"bool\": {\n");
     sb.append("    \"should\": [\n");
-    for (int i = 0; i < paths.size(); i++) {
-      String path = paths.get(i);
+    for (int i = 0; i < folderPaths.size(); i++) {
+      String path = folderPaths.get(i);
       if (StringUtils.isNotEmpty(path) && !path.endsWith("/")) {
         path += "/";
       }
@@ -354,8 +386,20 @@ public class DocumentSearchServiceConnector {
       sb.append("      {\n");
       sb.append("        \"prefix\": {\n");
       sb.append("          \"path\": {\n");
-      sb.append("            \"value\": \"").append(path).append("\"\n");
+      sb.append("            \"value\": ").append(toJsonString(path)).append("\n");
       sb.append("          }\n");
+      sb.append("        }\n");
+      sb.append("      }");
+    }
+    if (CollectionUtils.isNotEmpty(filePaths)) {
+      if (!folderPaths.isEmpty()) {
+        sb.append(",\n");
+      }
+      sb.append("      {\n");
+      sb.append("        \"terms\": {\n");
+      sb.append("          \"path\": [")
+        .append(filePaths.stream().map(DocumentSearchServiceConnector::toJsonString).collect(Collectors.joining(",")))
+        .append("]\n");
       sb.append("        }\n");
       sb.append("      }");
     }
@@ -365,6 +409,24 @@ public class DocumentSearchServiceConnector {
     sb.append("  }\n");
     sb.append("}");
     return sb.toString();
+  }
+
+  /**
+   * A JCR name may hold a double quote or a backslash, which would end the
+   * JSON string of a path written as is and make the whole query invalid.
+   */
+  private static String toJsonString(String value) {
+    StringBuilder sb = new StringBuilder(value.length() + 2).append('"');
+    for (char c : value.toCharArray()) {
+      if (c == '"' || c == '\\') {
+        sb.append('\\').append(c);
+      } else if (c < 0x20) {
+        sb.append(String.format("\\u%04x", (int) c));
+      } else {
+        sb.append(c);
+      }
+    }
+    return sb.append('"').toString();
   }
 
   private String getFileTypesQuery(DocumentNodeFilter filter) {

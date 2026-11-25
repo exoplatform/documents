@@ -856,8 +856,86 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getSortDirection(filter)).thenCallRealMethod();
     jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0);
     verify(documentSearchServiceConnector,
-           times(1)).search(identity, "collaboration", List.of("/documents/path"), filter, 0, 0, "lastUpdatedDate", "ASC");
+           times(1)).search(identity,
+                            "collaboration",
+                            List.of("/documents/path"),
+                            List.of(),
+                            filter,
+                            0,
+                            0,
+                            "lastUpdatedDate",
+                            "ASC");
 
+  }
+
+  @Test
+  public void searchCoversTheFilesAndTheFoldersTheShortcutsUnderTheSearchedFolderPointTo() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    Session userSession = mock(Session.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(userSession);
+
+    String sharedFolderPath = "/Users/b___/bob/Private/Documents/Shared";
+    Node sharedFolder = mock(Node.class);
+    when(sharedFolder.getPath()).thenReturn(sharedFolderPath);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(userSession, "sharedFolderId")).thenReturn(sharedFolder);
+
+    Node sharedFile = mock(Node.class);
+    when(sharedFile.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
+    when(sharedFile.getPath()).thenReturn("/Users/a___/alice/Private/Documents/TEST.docx");
+    Node sharedSubFolder = mock(Node.class);
+    when(sharedSubFolder.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(sharedSubFolder.getPath()).thenReturn("/Users/a___/alice/Private/Documents/Reports");
+    Node otherTypeTarget = mock(Node.class);
+    when(otherTypeTarget.getPath()).thenReturn("/Users/a___/alice/Private/Documents/other");
+    NodeIterator symlinks = mock(NodeIterator.class);
+    Node fileLink = mockSymlinkTo(userSession, "fileId", sharedFile);
+    Node folderLink = mockSymlinkTo(userSession, "folderId", sharedSubFolder);
+    Node unreadableLink = mockSymlinkTo(userSession, "unreadableId", null);
+    Node otherTypeLink = mockSymlinkTo(userSession, "otherTypeId", otherTypeTarget);
+    Node secondFileLink = mockSymlinkTo(userSession, "fileId", sharedFile);
+    when(symlinks.hasNext()).thenReturn(true, true, true, true, true, false);
+    when(symlinks.nextNode()).thenReturn(fileLink, folderLink, unreadableLink, otherTypeLink, secondFileLink);
+    Workspace workspace = mock(Workspace.class);
+    QueryManager queryManager = mock(QueryManager.class);
+    QueryImpl symlinksQuery = mock(QueryImpl.class);
+    QueryResult symlinksResult = mock(QueryResult.class);
+    when(userSession.getWorkspace()).thenReturn(workspace);
+    when(workspace.getQueryManager()).thenReturn(queryManager);
+    when(queryManager.createQuery("SELECT * FROM exo:symlink WHERE jcr:path LIKE '" + sharedFolderPath + "/%'",
+                                  Query.SQL)).thenReturn(symlinksQuery);
+    when(symlinksQuery.execute()).thenReturn(symlinksResult);
+    when(symlinksResult.getNodes()).thenReturn(symlinks);
+
+    DocumentTimelineFilter filter = new DocumentTimelineFilter();
+    filter.setQuery("hello");
+    filter.setParentFolderId("sharedFolderId");
+    jcrDocumentFileStorage.search(filter, identity, 0, 10);
+
+    verify(documentSearchServiceConnector).search(identity,
+                                                  "collaboration",
+                                                  List.of(sharedFolderPath, "/Users/a___/alice/Private/Documents/Reports"),
+                                                  List.of("/Users/a___/alice/Private/Documents/TEST.docx"),
+                                                  filter,
+                                                  0,
+                                                  10,
+                                                  "_score",
+                                                  "DESC");
+  }
+
+  private Node mockSymlinkTo(Session session, String targetId, Node target) throws RepositoryException {
+    Node symlink = mock(Node.class);
+    Property targetIdProperty = mock(Property.class);
+    when(targetIdProperty.getString()).thenReturn(targetId);
+    when(symlink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(targetIdProperty);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, targetId)).thenReturn(target);
+    return symlink;
   }
 
   @Test
