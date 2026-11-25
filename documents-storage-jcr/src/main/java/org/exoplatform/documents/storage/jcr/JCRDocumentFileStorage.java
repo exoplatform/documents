@@ -553,6 +553,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                     .map(result -> (AbstractNode) toFileNode(identityManager, session, aclIdentity, result, spaceService))
                     .filter(item -> item != null && (!item.isHidden() || filter.isIncludeHiddenFiles()))
                     .toList();
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error when getting the documents size for identity " + ownerId, e);
     } finally {
@@ -912,6 +914,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
           }
         }
       }
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
     } finally {
@@ -940,7 +944,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                             String destinationFolderPath,
                                             Identity aclIdentity,
                                             boolean withChildren,
-                                            boolean showHidden) {
+                                            boolean showHidden) throws ObjectNotFoundException {
     String username = aclIdentity.getUserId();
     SessionProvider sessionProvider = null;
     List<FullTreeItem> parents = new ArrayList<>();
@@ -985,6 +989,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                      showHidden && node.isNodeType(NodeTypeConstants.EXO_HIDDENABLE),
                                      String.valueOf(ownerId)));
       }
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving tree folder'" + folderId, e);
     } finally {
@@ -1052,7 +1058,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                    String folderId,
                                    String folderPath,
                                    String title,
-                                   Identity aclIdentity) throws ObjectAlreadyExistsException, IllegalAccessException {
+                                   Identity aclIdentity) throws ObjectAlreadyExistsException, IllegalAccessException, ObjectNotFoundException {
     if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
       throw new IllegalArgumentException(INVALID_FOLDER_NAME_MESSAGE.formatted(title));
     }
@@ -1099,6 +1105,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new IllegalAccessException(exception.getMessage());
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
     } finally {
@@ -1341,6 +1349,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         newName = Text.escapeIllegalJcrChars(cleanName(newTitle.toLowerCase(), NodeTypeConstants.NT_FOLDER));
       }
       return newTitle;
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving folder'" + folderId + "' breadcrumb", e);
     } finally {
@@ -1354,7 +1364,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public void renameDocument(long ownerId,
                              String documentID,
                              String title,
-                             Identity aclIdentity) throws ObjectAlreadyExistsException {
+                             Identity aclIdentity) throws ObjectAlreadyExistsException, ObjectNotFoundException {
     if (!JCRDocumentsUtil.isValidDocumentTitle(title)) {
       throw new IllegalArgumentException("document title is not valid");
     }
@@ -1421,6 +1431,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentID, e);
     } finally {
@@ -1434,7 +1446,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public void setDocumentVisibility(long ownerId,
                                     String documentID,
                                     Boolean hidden,
-                                    Identity aclIdentity) throws ObjectAlreadyExistsException {
+                                    Identity aclIdentity) throws ObjectAlreadyExistsException, ObjectNotFoundException {
     if (hidden == null) {
       throw new IllegalArgumentException("Hidden value should not be null");
     }
@@ -1479,6 +1491,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error hiding document'" + documentID, e);
     } finally {
@@ -1539,6 +1553,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       VersionHistoryUtils.createVersion(newNode);
       return toFileNode(identityManager, aclIdentity, parentNode, "", spaceService);
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error retrieving duplicate file'" + fileId, e);
     } finally {
@@ -1748,7 +1764,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                            String fileId,
                            String destPath,
                            Identity aclIdentity,
-                           String conflictAction) throws ObjectAlreadyExistsException {
+                           String conflictAction) throws ObjectAlreadyExistsException, ObjectNotFoundException {
     SessionProvider sessionProvider = null;
     Session session;
     try {
@@ -1758,6 +1774,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       moveDocument(session, ownerId, fileId, destPath, aclIdentity, conflictAction);
     } catch (ObjectAlreadyExistsException e) {
       throw new ObjectAlreadyExistsException(e);
+    } catch (ObjectNotFoundException e) {
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("Error moving document's id " + fileId, e);
     } finally {
@@ -2331,6 +2349,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Node currentNode = getNodeByIdentifier(session, documentId);
       // add symlink to destination user
       org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
+      if (destIdentity != null && destIdentity.isDeleted()) {
+        return;
+      }
       rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, session);
       if (!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
         rootNode = rootNode.getNode("Documents");
@@ -3529,6 +3550,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       Node currentNode = getNodeByIdentifier(systemSession, documentId);
       org.exoplatform.social.core.identity.model.Identity destIdentity = identityManager.getIdentity(String.valueOf(destId));
+      if (destIdentity != null && destIdentity.isDeleted()) {
+        return;
+      }
       rootNode = getIdentityRootNode(spaceService, nodeHierarchyCreator, destIdentity, systemSession);
       if (!destIdentity.getProviderId().equals(SPACE_PROVIDER_ID)) {
         rootNode = rootNode.getNode("Documents");

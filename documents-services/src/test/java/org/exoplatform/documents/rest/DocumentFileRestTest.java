@@ -1219,6 +1219,76 @@ public class DocumentFileRestTest {
   }
 
   @Test
+  public void getNewNameOwnerNotFound() throws ObjectNotFoundException, ObjectAlreadyExistsException, IllegalAccessException {
+    when(documentFileService.getNewName(1L, "123", "path", "test")).thenThrow(new ObjectNotFoundException("not found"));
+    Response response = documentFileRest.getNewName("123", "path", 1L, "test");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void createFolderOwnerNotFound() throws Exception {
+    org.exoplatform.services.security.Identity userID = mockRestUserForOwnerNotFound();
+    when(documentFileStorage.createFolder(2L, "11111111", null, "222", userID)).thenThrow(new ObjectNotFoundException("not found"));
+
+    Response response = documentFileRest.createFolder("11111111", null, 2L, "222");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void getBiggestDocumentsOwnerNotFound() throws Exception {
+    org.exoplatform.services.security.Identity userID = mockRestUserForOwnerNotFound();
+    when(documentFileStorage.getBiggestDocuments(2L, userID, 0, 10)).thenThrow(new ObjectNotFoundException("not found"));
+
+    Response response = documentFileRest.getBiggestDocuments(2L, 0, 10);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void moveDocumentOwnerNotFound() throws Exception {
+    org.exoplatform.services.security.Identity userID = mockRestUserForOwnerNotFound();
+    doThrow(new ObjectNotFoundException("not found")).when(documentFileStorage)
+                                                     .moveDocument(2L, "11111111", "/dest", userID, "keepBoth");
+
+    Response response = documentFileRest.moveDocument("11111111", 2L, "/dest", "keepBoth");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void renameDocumentOwnerNotFound() throws Exception {
+    org.exoplatform.services.security.Identity userID = mockRestUserForOwnerNotFound();
+    doThrow(new ObjectNotFoundException("not found")).when(documentFileStorage)
+                                                     .renameDocument(2L, "11111111", "renameTest", userID);
+
+    Response response = documentFileRest.updateDocument("name", "11111111", 2L, "renameTest", "", null);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+  }
+
+  @Test
+  public void setDocumentVisibilityOwnerNotFound() throws Exception {
+    org.exoplatform.services.security.Identity userID = mockRestUserForOwnerNotFound();
+    doThrow(new ObjectNotFoundException("not found")).when(documentFileStorage)
+                                                     .setDocumentVisibility(2L, "11111111", true, userID);
+
+    Response response = documentFileRest.updateDocument("visibility", "11111111", 2L, null, null, true);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+  }
+
+  private org.exoplatform.services.security.Identity mockRestUserForOwnerNotFound() throws Exception {
+    String username = "testuser";
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    ConversationState.setCurrent(new ConversationState(userID));
+    long currentOwnerId = 2;
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentityId(identityManager)).thenReturn(currentOwnerId);
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentIdentity);
+    when(identityRegistry.getIdentity(username)).thenReturn(userID);
+    when(identityManager.getIdentity(currentOwnerId)).thenReturn(currentIdentity);
+    when(identityManager.getOrCreateUserIdentity(username)).thenReturn(currentIdentity);
+    return userID;
+  }
+
+  @Test
   public void updateDocumentDescription() throws IllegalAccessException, RepositoryException {
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
@@ -1241,7 +1311,7 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
   }
   @Test
-  public void testUpdateDocumentVisibility() throws ObjectAlreadyExistsException {
+  public void testUpdateDocumentVisibility() throws ObjectAlreadyExistsException, ObjectNotFoundException {
     DocumentFileService documentFileService1 = mock(DocumentFileService.class);
     DocumentFileRest documentFileRest1 = new DocumentFileRest(documentFileService1,
                                                               spaceService,

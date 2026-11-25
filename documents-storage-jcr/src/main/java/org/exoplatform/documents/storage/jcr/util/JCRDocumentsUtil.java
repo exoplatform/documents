@@ -43,6 +43,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import com.ibm.icu.text.Transliterator;
 
+import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.HTMLSanitizer;
 import org.exoplatform.documents.constant.DocumentSortField;
@@ -759,6 +760,7 @@ public class JCRDocumentsUtil {
       Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
       identityRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
     } else if (ownerIdentity.isUser()) {
+      checkNotDeleted(ownerIdentity);
       SessionProvider systemSession = SessionProvider.createSystemProvider();
       Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, ownerIdentity.getRemoteId());
       Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
@@ -784,6 +786,7 @@ public class JCRDocumentsUtil {
       Space space = spaceService.getSpaceByPrettyName(ownerIdentity.getRemoteId());
       identityRootNode = getGroupNode(nodeHierarchyCreator, session, space.getGroupId());
     } else if (ownerIdentity.isUser()) {
+      checkNotDeleted(ownerIdentity);
       SessionProvider systemSession = SessionProvider.createSystemProvider();
       Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, ownerIdentity.getRemoteId());
       String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
@@ -792,6 +795,12 @@ public class JCRDocumentsUtil {
         }
      }
     return identityRootNode;
+  }
+
+  private static void checkNotDeleted(org.exoplatform.social.core.identity.model.Identity ownerIdentity) throws ObjectNotFoundException {
+    if (ownerIdentity.isDeleted()) {
+      throw new ObjectNotFoundException("Identity with id %s not found".formatted(ownerIdentity.getId()));
+    }
   }
 
   public static String getSortDirection(DocumentNodeFilter filter) {
