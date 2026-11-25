@@ -3451,24 +3451,22 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     if (aclIdentity == null) {
       throw new IllegalArgumentException("the identity whose rights apply is mandatory");
     }
-    Session userSession = null;
     try {
       // Not a getUserSessionProvider session: the visitor's request carries no
       // identity of aclIdentity's user
-      userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
-      Node node = getNodeByIdentifier(userSession, folderId);
-      if (node == null) {
-        throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
+      Session userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
+      // A JCR 1.0 session is not AutoCloseable
+      try (AutoCloseable logout = userSession::logout) {
+        Node node = getNodeByIdentifier(userSession, folderId);
+        if (node == null) {
+          throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
+        }
+        return new TempFolderArchive(copyFolder(node));
       }
-      return new TempFolderArchive(copyFolder(node));
     } catch (ObjectNotFoundException | IOException e) {
       throw e;
     } catch (Exception e) {
       throw new IOException("Folder " + folderId + " cannot be copied for its download", e);
-    } finally {
-      if (userSession != null) {
-        userSession.logout();
-      }
     }
   }
 
