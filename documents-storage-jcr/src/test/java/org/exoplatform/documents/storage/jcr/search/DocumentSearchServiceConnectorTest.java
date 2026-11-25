@@ -253,8 +253,13 @@ public class DocumentSearchServiceConnectorTest {
 
   }
 
+  /**
+   * Checks the query's shape with a strict parser. No search engine runs here,
+   * as no test harness of this repository starts one: how the clauses match on
+   * a real index is checked on a running platform.
+   */
   @Test
-  public void searchMatchesFoldersByPrefixAndFilesByTheirExactPathInAValidQueryWhateverTheirNames() throws Exception {
+  public void searchWritesFoldersAsPrefixesAndFilesAsExactPathsInAValidQueryWhateverTheirNames() throws Exception {
     Identity userIdentity = mock(Identity.class);
     when(userIdentity.getUserId()).thenReturn("bob");
     when(userIdentity.getMemberships()).thenReturn(new ArrayList<>());

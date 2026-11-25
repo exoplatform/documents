@@ -55,10 +55,14 @@ import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
 import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
+import org.exoplatform.services.jcr.impl.core.LocationFactory;
+import org.exoplatform.services.jcr.impl.core.NamespaceRegistryImpl;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.WorkspaceImpl;
+import org.exoplatform.services.jcr.impl.core.query.DefaultQueryNodeFactory;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
+import org.exoplatform.services.jcr.impl.core.query.sql.JCRSQLQueryBuilder;
 import org.exoplatform.services.cms.documents.NewDocumentTemplate;
 import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
 import org.exoplatform.services.listener.ListenerService;
@@ -927,6 +931,19 @@ public class JCRDocumentFileStorageTest {
                                                   10,
                                                   "_score",
                                                   "DESC");
+  }
+
+  /**
+   * Runs the statement through the repository's own SQL parser: a quote in the
+   * searched folder's path that is not doubled ends the string literal, and the
+   * parser refuses the whole statement.
+   */
+  @Test
+  public void theShortcutStatementParsesWhateverQuoteTheSearchedFolderPathHolds() throws Exception {
+    String statement = JCRDocumentFileStorage.getSymlinksUnderPathStatement("/Users/b___/bob/Private/Bob's docs");
+
+    JCRSQLQueryBuilder.createQuery(statement, new LocationFactory(new NamespaceRegistryImpl()), new DefaultQueryNodeFactory());
+    assertEquals("SELECT * FROM exo:symlink WHERE jcr:path LIKE '/Users/b___/bob/Private/Bob''s docs/%'", statement);
   }
 
   private Node mockSymlinkTo(Session session, String targetId, Node target) throws RepositoryException {
