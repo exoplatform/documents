@@ -722,6 +722,60 @@ class RecycleBinServiceImplTest {
   }
 
   @Test
+  void theItemsOfTheTrashAreGivenTheirFactsOnTheirOwn() throws Exception {
+    when(trashStorage.normalizeRecycleBinItems()).thenReturn(4);
+
+    assertEquals(4, service.normalizeItems());
+    verifyNoInteractions(storage, driveStorage);
+  }
+
+  @Test
+  void aTrashThatCannotBeReadToGiveItsItemsTheirFactsIsAFailure() throws Exception {
+    RepositoryException failure = new RepositoryException("The trash cannot be read");
+    when(trashStorage.normalizeRecycleBinItems()).thenThrow(failure);
+
+    IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> service.normalizeItems());
+
+    assertSame(failure, thrown.getCause());
+  }
+
+  @Test
+  void theBinsAreCountedAgainFromTheTrashOnTheirOwn() throws Exception {
+    List<RecycleBinDrive> totals = List.of(new RecycleBinDrive(JOHN_ID, 15, 2));
+    when(storage.getDriveTotals()).thenReturn(totals);
+
+    service.recountDrives();
+
+    verify(driveStorage).replaceAll(totals);
+    verifyNoInteractions(trashStorage);
+  }
+
+  @Test
+  void aTrashThatCannotBeReadToCountTheBinsChangesNoTotal() throws Exception {
+    RepositoryException failure = new RepositoryException("The trash cannot be read");
+    when(storage.getDriveTotals()).thenThrow(failure);
+
+    IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> service.recountDrives());
+
+    assertSame(failure, thrown.getCause());
+    verify(driveStorage, never()).replaceAll(any());
+  }
+
+  /**
+   * The upgrade is recorded as done once the count returns: totals that could
+   * not be written must not return as if they were.
+   */
+  @Test
+  void totalsThatCannotBeWrittenAreAFailure() throws Exception {
+    List<RecycleBinDrive> totals = List.of(new RecycleBinDrive(JOHN_ID, 15, 2));
+    when(storage.getDriveTotals()).thenReturn(totals);
+    IllegalStateException failure = new IllegalStateException("The database is not available");
+    doThrow(failure).when(driveStorage).replaceAll(totals);
+
+    assertSame(failure, assertThrows(IllegalStateException.class, () -> service.recountDrives()));
+  }
+
+  @Test
   void eachStepOfARunAndEachItemHasARequestOfItsOwn() throws Exception {
     List<String> seen = new ArrayList<>();
     RecycleBinServiceImpl scoped = new RecycleBinServiceImpl(storage,

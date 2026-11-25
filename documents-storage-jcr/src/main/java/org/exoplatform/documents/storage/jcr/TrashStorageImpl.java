@@ -748,7 +748,7 @@ public class TrashStorageImpl implements TrashStorage {
     } catch (RepositoryException | RuntimeException e) {
       LOG.debug("The item {} of the trash could not be read again", itemId, e);
     }
-    LOG.warn("The item {} of the trash could not be given its Recycle Bin facts", itemId, failure);
+    LOG.warn("The item {} of the trash could not be given its Recycle Bin facts: it is tried again at the next daily run", itemId, failure);
   }
 
   /**

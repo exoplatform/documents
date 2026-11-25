@@ -17,12 +17,16 @@
 package org.exoplatform.documents.storage.jcr.upgrade;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.io.File;
@@ -31,7 +35,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.jcr.RepositoryException;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -43,36 +46,54 @@ import org.exoplatform.commons.upgrade.UpgradePluginException;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.container.xml.ValueParam;
-import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.service.RecycleBinService;
 
 class RecycleBinItemsUpgradePluginTest {
 
-  private TrashStorage trashStorage;
+  private RecycleBinService recycleBinService;
 
-  private List<String> calls;
+  private List<String>      calls;
 
   @BeforeEach
-  void setUp() throws Exception {
+  void setUp() {
     calls = new ArrayList<>();
-    trashStorage = mock(TrashStorage.class);
-    when(trashStorage.normalizeRecycleBinItems()).thenAnswer(invocation -> {
+    recycleBinService = mock(RecycleBinService.class);
+    when(recycleBinService.normalizeItems()).thenAnswer(invocation -> {
       calls.add("normalize");
       return 3;
     });
+    doAnswer(invocation -> calls.add("recount")).when(recycleBinService).recountDrives();
   }
 
   @Test
-  void theItemsAreHandledOnceTheServerHasStarted() {
-    plugin(null).processUpgrade("7.2.0", "7.3.0");
+  void onceTheServerHasStartedTheItemsAreGivenTheirFactsThenTheBinsAreCountedAgain() {
+    plugin(null, recycleBinService).processUpgrade("7.2.0", "7.3.0");
 
-    assertEquals(List.of("await", "normalize"), calls);
+    assertEquals(List.of("await", "lookup", "normalize", "recount"), calls);
   }
 
   @Test
-  void aFailureIsThrownSoThatTheUpgradeRunsAgainAtTheNextStart() throws Exception {
-    RepositoryException failure = new RepositoryException("The trash cannot be read");
-    when(trashStorage.normalizeRecycleBinItems()).thenThrow(failure);
-    RecycleBinItemsUpgradePlugin plugin = plugin(null);
+  void aFailedNormalizationIsThrownAndCountsNothing() {
+    IllegalStateException failure = new IllegalStateException("The trash cannot be read");
+    when(recycleBinService.normalizeItems()).thenThrow(failure);
+    RecycleBinItemsUpgradePlugin plugin = plugin(null, recycleBinService);
+
+    UpgradePluginException thrown = assertThrows(UpgradePluginException.class, () -> plugin.processUpgrade("7.2.0", "7.3.0"));
+
+    assertSame(failure, thrown.getCause());
+    verify(recycleBinService, never()).recountDrives();
+  }
+
+  /**
+   * Returning instead would record the upgrade as done with bins never
+   * counted: the Bin Overview would miss the drives of the former items of
+   * the trash until the first daily run.
+   */
+  @Test
+  void aFailedCountIsThrownSoThatTheUpgradeIsNotRecordedAsDone() {
+    IllegalStateException failure = new IllegalStateException("The database is not available");
+    doThrow(failure).when(recycleBinService).recountDrives();
+    RecycleBinItemsUpgradePlugin plugin = plugin(null, recycleBinService);
 
     UpgradePluginException thrown = assertThrows(UpgradePluginException.class, () -> plugin.processUpgrade("7.2.0", "7.3.0"));
 
@@ -80,16 +101,28 @@ class RecycleBinItemsUpgradePluginTest {
   }
 
   @Test
-  void anInterruptedWaitHandlesNothingAndKeepsTheInterruption() throws Exception {
+  void anUnavailableServiceHandlesNothingAndIsThrownWithItsOwnMessage() {
+    RecycleBinItemsUpgradePlugin plugin = plugin(null, null);
+
+    UpgradePluginException thrown = assertThrows(UpgradePluginException.class, () -> plugin.processUpgrade("7.2.0", "7.3.0"));
+
+    assertNull(thrown.getCause());
+    assertTrue(thrown.getMessage().startsWith("The Recycle Bin service is not available"), thrown.getMessage());
+    assertEquals(List.of("await", "lookup"), calls);
+  }
+
+  @Test
+  void anInterruptedWaitHandlesNothingAndKeepsTheInterruption() {
     InterruptedException interruption = new InterruptedException("The server is stopping");
-    RecycleBinItemsUpgradePlugin plugin = plugin(interruption);
+    RecycleBinItemsUpgradePlugin plugin = plugin(interruption, recycleBinService);
 
     try {
       UpgradePluginException thrown = assertThrows(UpgradePluginException.class, () -> plugin.processUpgrade("7.2.0", "7.3.0"));
 
       assertSame(interruption, thrown.getCause());
       assertTrue(Thread.currentThread().isInterrupted());
-      verify(trashStorage, never()).normalizeRecycleBinItems();
+      assertEquals(List.of(), calls);
+      verifyNoInteractions(recycleBinService);
     } finally {
       Thread.interrupted();
     }
@@ -126,19 +159,25 @@ class RecycleBinItemsUpgradePluginTest {
     assertEquals("org.exoplatform.social", params.get("product.group.id"));
   }
 
-  private RecycleBinItemsUpgradePlugin plugin(InterruptedException interruption) {
+  private RecycleBinItemsUpgradePlugin plugin(InterruptedException interruption, RecycleBinService service) {
     InitParams params = new InitParams();
     ValueParam groupId = new ValueParam();
     groupId.setName("product.group.id");
     groupId.setValue("org.exoplatform.social");
     params.addParameter(groupId);
-    return new RecycleBinItemsUpgradePlugin(trashStorage, mock(PortalContainer.class), params) {
+    return new RecycleBinItemsUpgradePlugin(mock(PortalContainer.class), params) {
       @Override
       void awaitServerStartup() throws InterruptedException {
         if (interruption != null) {
           throw interruption;
         }
         calls.add("await");
+      }
+
+      @Override
+      RecycleBinService getRecycleBinService() {
+        calls.add("lookup");
+        return service;
       }
     };
   }

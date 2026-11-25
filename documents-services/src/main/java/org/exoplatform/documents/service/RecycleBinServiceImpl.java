@@ -494,6 +494,26 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     startPurge(requester);
   }
 
+  @Override
+  public int normalizeItems() {
+    try {
+      return trashStorage.normalizeRecycleBinItems();
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("The items of the trash cannot be read to give them their Recycle Bin facts", e);
+    }
+  }
+
+  @Override
+  public void recountDrives() {
+    List<RecycleBinDrive> totals;
+    try {
+      totals = recycleBinStorage.getDriveTotals();
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("The trash cannot be read to count what each Recycle Bin holds", e);
+    }
+    recycleBinDriveStorage.replaceAll(totals);
+  }
+
   /** Records what is asked for, and starts the run when none is going on: the one going on serves it. */
   private void startPurge(String requester) {
     synchronized (purgeLock) {
@@ -552,13 +572,12 @@ public class RecycleBinServiceImpl implements RecycleBinService {
     boolean failed = false;
     if (dailyRun) {
       runDailyStep("gives the former items of the trash their Recycle Bin facts", () -> {
-        int normalized = trashStorage.normalizeRecycleBinItems();
+        int normalized = normalizeItems();
         if (normalized > 0) {
           LOG.info("{} item(s) of the trash were given their Recycle Bin facts", normalized);
         }
       });
-      runDailyStep("counts again what each Recycle Bin holds",
-                   () -> recycleBinDriveStorage.replaceAll(recycleBinStorage.getDriveTotals()));
+      runDailyStep("counts again what each Recycle Bin holds", this::recountDrives);
     }
     try {
       removed = removeExpiredItems();
@@ -572,11 +591,11 @@ public class RecycleBinServiceImpl implements RecycleBinService {
   }
 
   /** A step of the daily run that fails is reported and tried again the next day: the removal still runs. */
-  private void runDailyStep(String what, DailyStep step) {
+  private void runDailyStep(String what, Runnable step) {
     requestScope.accept(() -> {
       try {
         step.run();
-      } catch (RepositoryException | RuntimeException e) {
+      } catch (RuntimeException e) {
         LOG.warn("The step of the daily run that {} ended on a failure", what, e);
       }
     });
