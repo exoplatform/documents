@@ -110,6 +110,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final String                       COLLABORATION               = "collaboration";
 
+  private static final String                       ROOT_PATH                   = "/";
+
   private static final List<String>                 FOLDER_NODE_TYPES           = List.of(NodeTypeConstants.NT_UNSTRUCTURED,
                                                                                           NodeTypeConstants.NT_FOLDER,
                                                                                           NodeTypeConstants.EXO_SYMLINK,
@@ -452,7 +454,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       sessionProvider = getUserSessionProvider(repositoryService, identity);
       ManageableRepository repository = repositoryService.getCurrentRepository();
       Session session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-      String path = "/";
+      String path = ROOT_PATH;
       if (StringUtils.isNotBlank(filter.getParentFolderId())) {
         Node parent = getNodeByIdentifier(session, filter.getParentFolderId());
         if (parent != null && parent.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
@@ -514,7 +516,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     List<String> folderPaths = new ArrayList<>();
     folderPaths.add(folderPath);
     List<String> filePaths = new ArrayList<>();
-    addSymlinkTargetPaths(session, folderPath, folderPaths, filePaths);
+    if (!ROOT_PATH.equals(folderPath)) {
+      // every shortcut target lies under the repository root, which the scope
+      // already covers whole
+      addSymlinkTargetPaths(session, folderPath, folderPaths, filePaths);
+    }
     return documentSearchServiceConnector.search(aclIdentity,
                                                  workspace,
                                                  folderPaths,

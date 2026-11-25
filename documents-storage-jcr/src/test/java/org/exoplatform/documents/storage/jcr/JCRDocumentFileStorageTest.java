@@ -933,6 +933,45 @@ public class JCRDocumentFileStorageTest {
                                                   "DESC");
   }
 
+  @Test
+  public void searchOfTheWholeRepositoryWalksNoShortcut() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    Session userSession = mock(Session.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(userSession);
+    Workspace workspace = mock(Workspace.class);
+    QueryManager queryManager = mock(QueryManager.class);
+    when(userSession.getWorkspace()).thenReturn(workspace);
+    when(workspace.getQueryManager()).thenReturn(queryManager);
+    // a walk, were one made, finds no shortcut: the test fails on the walk itself
+    QueryImpl symlinksQuery = mock(QueryImpl.class);
+    QueryResult noSymlinkResult = mock(QueryResult.class);
+    when(queryManager.createQuery(anyString(), anyString())).thenReturn(symlinksQuery);
+    when(symlinksQuery.execute()).thenReturn(noSymlinkResult);
+    when(noSymlinkResult.getNodes()).thenReturn(mock(NodeIterator.class));
+
+    DocumentTimelineFilter filter = new DocumentTimelineFilter();
+    filter.setQuery("hello");
+    jcrDocumentFileStorage.search(filter, identity, 0, 10);
+
+    verify(queryManager, never()).createQuery(anyString(), anyString());
+    verify(documentSearchServiceConnector).search(identity,
+                                                  "collaboration",
+                                                  List.of("/"),
+                                                  List.of(),
+                                                  filter,
+                                                  0,
+                                                  10,
+                                                  "_score",
+                                                  "DESC");
+  }
+
   /**
    * Runs the statement through the repository's own SQL parser: a quote in the
    * searched folder's path that is not doubled ends the string literal, and the
