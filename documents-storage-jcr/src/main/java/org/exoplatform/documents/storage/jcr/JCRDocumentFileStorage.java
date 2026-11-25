@@ -3319,6 +3319,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
+  @Deprecated(since = "7.3.x")
   public DownloadItem getDocumentDownloadItem(String documentId) {
     return getDownloadItem(documentId, true);
   }
@@ -3392,6 +3393,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
+  @Deprecated(since = "7.3.x")
   public String downloadFolder(String folderId, Identity aclIdentity) throws ObjectNotFoundException {
     if (aclIdentity == null) {
       throw new IllegalArgumentException("the identity whose rights apply is mandatory");
@@ -3442,6 +3444,61 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   /**
+   * {@inheritDoc}
+   */
+  @Override
+  public FolderArchive getFolderArchive(String folderId, Identity aclIdentity) throws ObjectNotFoundException, IOException {
+    if (aclIdentity == null) {
+      throw new IllegalArgumentException("the identity whose rights apply is mandatory");
+    }
+    Session userSession = null;
+    try {
+      // Not a getUserSessionProvider session: the visitor's request carries no
+      // identity of aclIdentity's user
+      userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
+      Node node = getNodeByIdentifier(userSession, folderId);
+      if (node == null) {
+        throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
+      }
+      return new TempFolderArchive(copyFolder(node));
+    } catch (ObjectNotFoundException | IOException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IOException("Folder " + folderId + " cannot be copied for its download", e);
+    } finally {
+      if (userSession != null) {
+        userSession.logout();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void writeDocumentContent(String documentId, OutputStream outputStream) throws ObjectNotFoundException, IOException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node node = getNodeByIdentifier(systemSession, documentId);
+      if (node == null || !node.hasNode(NodeTypeConstants.JCR_CONTENT)
+          || !node.getNode(NodeTypeConstants.JCR_CONTENT).hasProperty(NodeTypeConstants.JCR_DATA)) {
+        throw new ObjectNotFoundException("No document content has id " + documentId);
+      }
+      try (InputStream inputStream = node.getNode(NodeTypeConstants.JCR_CONTENT)
+                                         .getProperty(NodeTypeConstants.JCR_DATA)
+                                         .getStream()) {
+        inputStream.transferTo(outputStream);
+      }
+    } catch (RepositoryException e) {
+      throw new IOException("Content of document " + documentId + " cannot be read", e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
    * Copies a folder's tree into a temp folder of its own and zips it into a
    * file of its own, so that two downloads of the same folder at once never
    * share either. The temp folder is deleted whatever happens, and so is the
@@ -3450,9 +3507,31 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @return the zip's path, for the caller to delete once it is sent
    */
   private String zipFolder(Node node) throws Exception {
-    Path tempFolder = Files.createTempDirectory(TEMP_DOWNLOAD_FOLDER_PREFIX); // NOSONAR
+    Path tempFolder = copyFolder(node);
     Path zip = null;
     boolean built = false;
+    try {
+      zip = Files.createTempFile(ZIP_PREFIX, ZIP_EXTENSION); // NOSONAR
+      zipFiles(zip.toString(), tempFolder.toString());
+      built = true;
+      return zip.toString();
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+      if (!built && zip != null) {
+        Files.deleteIfExists(zip);
+      }
+    }
+  }
+
+  /**
+   * Copies a folder's tree, as the session's user reads it, into a temp folder
+   * of its own, deleted when the copy fails.
+   *
+   * @return the temp folder, for the caller to delete
+   */
+  private Path copyFolder(Node node) throws Exception {
+    Path tempFolder = Files.createTempDirectory(TEMP_DOWNLOAD_FOLDER_PREFIX); // NOSONAR
+    boolean copied = false;
     try {
       String tempFolderPath = tempFolder.toString();
       String parentPath;
@@ -3470,14 +3549,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       // A shortcut whose target is in the trash is left out: the archive is
       // only built for a public link, which must not give a trashed document
       JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", walkFolderPath, parentPath, this::isInTrashFailClosed);
-      zip = Files.createTempFile(ZIP_PREFIX, ZIP_EXTENSION); // NOSONAR
-      zipFiles(zip.toString(), tempFolderPath);
-      built = true;
-      return zip.toString();
+      copied = true;
+      return tempFolder;
     } finally {
-      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
-      if (!built && zip != null) {
-        Files.deleteIfExists(zip);
+      if (!copied) {
+        JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
       }
     }
   }

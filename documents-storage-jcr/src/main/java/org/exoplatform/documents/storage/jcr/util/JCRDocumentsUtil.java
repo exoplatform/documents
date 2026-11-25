@@ -1384,11 +1384,39 @@ public class JCRDocumentsUtil {
     }
   }
 
+  /**
+   * Zips a folder's tree into a stream, entry by entry: nothing is held in
+   * memory but the current buffer, and the zip switches to its 64-bit format
+   * by itself above 4 GiB or 65535 entries.
+   *
+   * @param folder the folder whose content is zipped, the folder itself left
+   *          out of the entries' paths
+   * @param outputStream where the zip is written; it is finished, not closed
+   * @throws IOException when a file cannot be read or the stream written
+   */
+  public static void zipFiles(File folder, OutputStream outputStream) throws IOException {
+    try (ZipOutputStream zipOutputStream = new ZipOutputStream(new FilterOutputStream(outputStream) {
+      @Override
+      public void write(byte[] bytes, int offset, int length) throws IOException {
+        out.write(bytes, offset, length);
+      }
+
+      @Override
+      public void close() throws IOException {
+        // The caller owns the stream: closing the zip finishes it and frees
+        // its deflater only
+        flush();
+      }
+    })) {
+      zipFolder(folder, "", zipOutputStream);
+    }
+  }
+
   private static String getFolderName(File file, String folderName) {
     return StringUtils.isNotEmpty(folderName) ? folderName + "/" + file.getName() : file.getName();
   }
   
-  private static void zipFolder(File folder, String folderName, ZipOutputStream zipOutputStream) throws Exception {
+  private static void zipFolder(File folder, String folderName, ZipOutputStream zipOutputStream) throws IOException {
     File[] files = folder.listFiles();
     if (files == null) {
       return;
@@ -1397,13 +1425,9 @@ public class JCRDocumentsUtil {
       if (file.isDirectory()) {
         zipFolder(file, getFolderName(file, folderName), zipOutputStream);
       } else {
-        byte[] buffer = new byte[1024];
         try (FileInputStream fis = new FileInputStream(file)) {
           zipOutputStream.putNextEntry(new ZipEntry(getFolderName(file, folderName)));
-          int length;
-          while ((length = fis.read(buffer)) > 0) {
-            zipOutputStream.write(buffer, 0, length);
-          }
+          fis.transferTo(zipOutputStream);
           zipOutputStream.closeEntry();
         }
       }

@@ -41,6 +41,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.CacheControl;
 import javax.ws.rs.core.EntityTag;
 import javax.ws.rs.core.MediaType;
@@ -71,6 +72,7 @@ import org.exoplatform.documents.model.DocumentGroupsSize;
 import org.exoplatform.documents.model.DocumentNodeFilter;
 import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DownloadItem;
+import org.exoplatform.documents.model.FolderArchive;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.model.PublicDocumentInfo;
 import org.exoplatform.documents.model.TrashElementNode;
@@ -1595,12 +1597,22 @@ public class DocumentFileRest implements ResourceContainer {
       if (!publicDocumentAccessService.isDocumentPublicAccessValid(nodeId, password)) {
         return Response.status(Status.UNAUTHORIZED).entity("access is not valid").cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
-      DownloadItem downloadItem = externalDownloadService.getDocumentDownloadItem(nodeId);
+      DownloadItem downloadItem = externalDownloadService.getDocumentDownloadInfo(nodeId);
       if (downloadItem == null) {
         return Response.status(Status.NOT_FOUND).cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
       if(downloadItem.getMimeType() != null) {
-        return Response.ok(downloadItem.getItemContent().toByteArray())
+        String documentId = downloadItem.getItemId();
+        // Copied from the repository as it is read, rather than read whole into
+        // memory, which fails above 2 GiB
+        StreamingOutput documentBody = output -> {
+          try {
+            externalDownloadService.writeDocumentContent(documentId, output);
+          } catch (ObjectNotFoundException e) {
+            throw new WebApplicationException(e, Status.NOT_FOUND);
+          }
+        };
+        return Response.ok(documentBody)
                 .type(downloadItem.getMimeType())
                 .cacheControl(NO_STORE_CACHE_CONTROL)
                 .header("Content-Disposition",
@@ -1610,12 +1622,12 @@ public class DocumentFileRest implements ResourceContainer {
       } else {
         String contentDisposition = "attachment; filename=\""
             + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8).replace("+", "%20") + ".zip\"";
-        InputStream zipStream = externalDownloadService.downloadZippedFolder(downloadItem.getItemId());
-        // Streamed from its file, which closing the stream deletes, rather
-        // than read whole into memory
+        FolderArchive folderArchive = externalDownloadService.getFolderArchive(downloadItem.getItemId());
+        // Zipped while it is sent, from the folder's copy, which closing the
+        // archive deletes: no zip is built before the first byte
         StreamingOutput zipBody = output -> {
-          try (InputStream input = zipStream) {
-            input.transferTo(output);
+          try (FolderArchive archive = folderArchive) {
+            archive.writeZip(output);
           }
         };
         return Response.ok(zipBody)

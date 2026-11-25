@@ -147,11 +147,12 @@ export default {
         return;
       }
       this.isDownloading = true;
-      this.$documentFileService.downloadPublicDocument(this.nodeId, this.password).then((response) => {
-        return response.blob();
-      }).then(blob => {
+      const password = this.password;
+      this.$documentFileService.checkPublicDocumentDownload(this.nodeId, password).then(() => {
+        // The browser downloads the file itself, streamed to disk, whatever
+        // its size
         const element = document.createElement('a');
-        element.href = URL.createObjectURL(blob);
+        element.href = this.$documentFileService.getPublicDocumentDownloadUrl(this.nodeId, password);
         element.setAttribute('download', this.documentName);
         element.click();
         element.remove();

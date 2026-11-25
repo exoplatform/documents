@@ -661,7 +661,7 @@ export function revokeDocumentPublicAccess(nodeId) {
   });
 }
 
-export function downloadPublicDocument(nodeId, password) {
+export function getPublicDocumentDownloadUrl(nodeId, password) {
   const formData = new FormData();
   if (nodeId) {
     formData.append('nodeId', nodeId);
@@ -670,12 +670,14 @@ export function downloadPublicDocument(nodeId, password) {
     formData.append('password', password);
   }
   const params = new URLSearchParams(formData).toString();
-  const url = `${window.location.origin}${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/download?${params}`;
-  return fetch(url, {
-    headers: {
-      'Content-Type': 'text/plain'
-    },
-    method: 'GET'
+  return `${window.location.origin}${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/documents/download?${params}`;
+}
+
+// Checks the download without its content: the browser then downloads it
+// itself, so that the page never holds the whole file
+export function checkPublicDocumentDownload(nodeId, password) {
+  return fetch(getPublicDocumentDownloadUrl(nodeId, password), {
+    method: 'HEAD'
   }).then(response => {
     if (response?.ok) {
       return response;
