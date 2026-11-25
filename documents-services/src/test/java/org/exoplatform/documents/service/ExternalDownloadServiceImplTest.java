@@ -212,6 +212,8 @@ public class ExternalDownloadServiceImplTest {
     assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.getFolderArchive(FOLDER_ID));
     assertThrows(ObjectNotFoundException.class,
                  () -> externalDownloadService.writeDocumentContent(FOLDER_ID, new ByteArrayOutputStream()));
+    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.getDocumentContentLength(FOLDER_ID));
+    verify(documentFileStorage, never()).getDocumentContentLength(anyString());
     verify(documentFileStorage, never()).getDocumentDownloadItem(anyString());
     verify(documentFileStorage, never()).getDocumentDownloadInfo(anyString());
     verify(documentFileStorage, never()).downloadFolder(anyString(), nullable(org.exoplatform.services.security.Identity.class));
@@ -233,6 +235,8 @@ public class ExternalDownloadServiceImplTest {
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     externalDownloadService.writeDocumentContent(FOLDER_ID, outputStream);
     verify(documentFileStorage).writeDocumentContent(FOLDER_ID, outputStream);
+    when(documentFileStorage.getDocumentContentLength(FOLDER_ID)).thenReturn(3L);
+    assertEquals(3L, externalDownloadService.getDocumentContentLength(FOLDER_ID));
   }
 
   /**

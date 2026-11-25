@@ -3476,26 +3476,50 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
-  public void writeDocumentContent(String documentId, OutputStream outputStream) throws ObjectNotFoundException, IOException {
+  public long getDocumentContentLength(String documentId) throws ObjectNotFoundException {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
     try {
-      ManageableRepository repository = repositoryService.getCurrentRepository();
-      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-      Node node = getNodeByIdentifier(systemSession, documentId);
-      if (node == null || !node.hasNode(NodeTypeConstants.JCR_CONTENT)
-          || !node.getNode(NodeTypeConstants.JCR_CONTENT).hasProperty(NodeTypeConstants.JCR_DATA)) {
-        throw new ObjectNotFoundException("No document content has id " + documentId);
+      long length = getContentData(sessionProvider, documentId).getLength();
+      if (length < 0) {
+        throw new ObjectNotFoundException("The content size of document " + documentId + " cannot be read");
       }
-      try (InputStream inputStream = node.getNode(NodeTypeConstants.JCR_CONTENT)
-                                         .getProperty(NodeTypeConstants.JCR_DATA)
-                                         .getStream()) {
-        inputStream.transferTo(outputStream);
-      }
+      return length;
+    } catch (RepositoryException e) {
+      throw new ObjectNotFoundException("The content of document " + documentId + " cannot be read");
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void writeDocumentContent(String documentId, OutputStream outputStream) throws ObjectNotFoundException, IOException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try (InputStream inputStream = getContentData(sessionProvider, documentId).getStream()) {
+      inputStream.transferTo(outputStream);
     } catch (RepositoryException e) {
       throw new IOException("Content of document " + documentId + " cannot be read", e);
     } finally {
       sessionProvider.close();
     }
+  }
+
+  /**
+   * @return the {@code jcr:data} property of a document, read with a system
+   *         session of the given provider
+   */
+  private Property getContentData(SessionProvider sessionProvider, String documentId) throws RepositoryException,
+                                                                                          ObjectNotFoundException {
+    ManageableRepository repository = repositoryService.getCurrentRepository();
+    Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+    Node node = getNodeByIdentifier(systemSession, documentId);
+    if (node == null || !node.hasNode(NodeTypeConstants.JCR_CONTENT)
+        || !node.getNode(NodeTypeConstants.JCR_CONTENT).hasProperty(NodeTypeConstants.JCR_DATA)) {
+      throw new ObjectNotFoundException("No document content has id " + documentId);
+    }
+    return node.getNode(NodeTypeConstants.JCR_CONTENT).getProperty(NodeTypeConstants.JCR_DATA);
   }
 
   /**

@@ -1395,20 +1395,61 @@ public class JCRDocumentsUtil {
    * @throws IOException when a file cannot be read or the stream written
    */
   public static void zipFiles(File folder, OutputStream outputStream) throws IOException {
-    try (ZipOutputStream zipOutputStream = new ZipOutputStream(new FilterOutputStream(outputStream) {
-      @Override
-      public void write(byte[] bytes, int offset, int length) throws IOException {
+    ZipTarget target = new ZipTarget(outputStream);
+    ZipOutputStream zipOutputStream = new ZipOutputStream(target);
+    try {
+      zipFolder(folder, "", zipOutputStream);
+    } catch (IOException | RuntimeException e) {
+      // The zip's directory is dropped, so that a zip cut short reads as
+      // broken, never as complete with files missing
+      target.discard();
+      throw e;
+    } finally {
+      // Frees the deflater; finishes the zip unless it was discarded
+      zipOutputStream.close();
+    }
+  }
+
+  /**
+   * The caller's stream, which closing the zip leaves open, and which drops
+   * what the zip writes once discarded.
+   */
+  private static final class ZipTarget extends FilterOutputStream {
+
+    private boolean discarded;
+
+    private ZipTarget(OutputStream outputStream) {
+      super(outputStream);
+    }
+
+    private void discard() {
+      discarded = true;
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+      if (!discarded) {
+        out.write(b);
+      }
+    }
+
+    @Override
+    public void write(byte[] bytes, int offset, int length) throws IOException {
+      if (!discarded) {
         out.write(bytes, offset, length);
       }
+    }
 
-      @Override
-      public void close() throws IOException {
-        // The caller owns the stream: closing the zip finishes it and frees
-        // its deflater only
-        flush();
+    @Override
+    public void flush() throws IOException {
+      if (!discarded) {
+        out.flush();
       }
-    })) {
-      zipFolder(folder, "", zipOutputStream);
+    }
+
+    @Override
+    public void close() throws IOException {
+      flush();
     }
   }
 
