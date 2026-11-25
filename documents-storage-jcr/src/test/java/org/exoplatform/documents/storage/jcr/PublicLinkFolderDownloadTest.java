@@ -47,6 +47,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
@@ -339,11 +340,9 @@ class PublicLinkFolderDownloadTest {
         throw new IOException("client gone");
       }
     };
-    assertThrows(IOException.class, () -> {
-      try (org.exoplatform.documents.model.FolderArchive archive = storage.getFolderArchive(sharedFolderId, MEMBER)) {
-        archive.writeZip(clientGone);
-      }
-    });
+    try (org.exoplatform.documents.model.FolderArchive archive = storage.getFolderArchive(sharedFolderId, MEMBER)) {
+      assertThrows(IOException.class, () -> archive.writeZip(clientGone));
+    }
     assertEquals(tempFoldersBefore, tempDownloadFolders(), "no copy is left behind");
   }
 
@@ -393,23 +392,14 @@ class PublicLinkFolderDownloadTest {
    * missing. The file is a link to nothing, which no user can open.
    */
   @Test
-  void aZipCutShortByAnUnreadableFileHasNoDirectory() throws Exception {
-    File folder = Files.createTempDirectory("zip-cut-short").toFile();
-    try {
-      Files.writeString(new File(folder, "a.txt").toPath(), "a");
-      Files.createSymbolicLink(new File(folder, "b.txt").toPath(), new File(folder, "missing").toPath());
-      java.io.ByteArrayOutputStream zip = new java.io.ByteArrayOutputStream();
-      assertThrows(IOException.class, () -> org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.zipFiles(folder, zip));
-      java.nio.file.Path written = Files.createTempFile("cut-short", ".zip");
-      try {
-        Files.write(written, zip.toByteArray());
-        assertThrows(java.util.zip.ZipException.class, () -> new ZipFile(written.toFile()).close(), "no zip directory");
-      } finally {
-        Files.deleteIfExists(written);
-      }
-    } finally {
-      org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanFiles(folder);
-    }
+  void aZipCutShortByAnUnreadableFileHasNoDirectory(@TempDir java.nio.file.Path tempDir) throws Exception {
+    File folder = Files.createDirectory(tempDir.resolve("zip-cut-short")).toFile();
+    Files.writeString(new File(folder, "a.txt").toPath(), "a");
+    Files.createSymbolicLink(new File(folder, "b.txt").toPath(), new File(folder, "missing").toPath());
+    java.io.ByteArrayOutputStream zip = new java.io.ByteArrayOutputStream();
+    assertThrows(IOException.class, () -> org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.zipFiles(folder, zip));
+    File written = Files.write(tempDir.resolve("cut-short.zip"), zip.toByteArray()).toFile();
+    assertThrows(java.util.zip.ZipException.class, () -> new ZipFile(written).close(), "no zip directory");
   }
 
   private static Map<String, String> zipContent(byte[] zip) throws IOException {
