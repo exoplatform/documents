@@ -55,7 +55,7 @@ class DocumentGadgetPortletTest {
   private final DocumentGadgetPortlet portlet = new DocumentGadgetPortlet() {
                                                 @Override
                                                 protected boolean canEdit(String name, Identity identity) {
-                                                  return canEdit && SETTING_NAME.equals(name);
+                                                  return canEdit;
                                                 }
                                               };
 
@@ -99,10 +99,13 @@ class DocumentGadgetPortletTest {
     canEdit = true;
     Map<String, String> settings = validSettings();
     post(settings);
-    when(preferences.getValue("name", null)).thenReturn(null);
+    for (String name : new String[] { null, "", "  " }) {
+      when(preferences.getValue("name", null)).thenReturn(name);
 
-    assertThrows(PortletException.class, () -> portlet.processAction(request, response));
+      assertThrows(PortletException.class, () -> portlet.processAction(request, response), "name=" + name);
+    }
 
+    verify(preferences, never()).setValue(anyString(), any());
     verify(preferences, never()).store();
   }
 

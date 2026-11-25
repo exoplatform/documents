@@ -91,14 +91,16 @@ public class DocumentGadgetPortlet extends CMSPortlet {
     preferences.store();
   }
 
-  private Identity getCurrentIdentity() {
-    return ConversationState.getCurrent() == null ? null : ConversationState.getCurrent().getIdentity();
-  }
-
   public TranslationService getTranslationService() {
     if (translationService == null) {
       translationService = ExoContainerContext.getService(TranslationService.class);
     }
     return translationService;
+  }
+
+  // The edit right is the base class's own check of the current ACL identity:
+  // CMSPortlet#canEdit(String, Identity) ignores its Identity argument.
+  private Identity getCurrentIdentity() {
+    return ConversationState.getCurrent() == null ? null : ConversationState.getCurrent().getIdentity();
   }
 }

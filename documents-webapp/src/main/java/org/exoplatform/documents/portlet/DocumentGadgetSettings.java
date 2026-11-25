@@ -24,9 +24,8 @@ import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The settings a Document List gadget stores, each with the shape its value
@@ -34,7 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public final class DocumentGadgetSettings {
 
-  private static final ObjectMapper                 MAPPER                 = new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+  private static final JsonMapper                   MAPPER                 = new JsonMapper();
 
   private static final Pattern                      IDENTIFIER             = Pattern.compile("[0-9]{1,19}");
 
@@ -124,7 +123,7 @@ public final class DocumentGadgetSettings {
       }
       for (JsonNode item : node) {
         boolean validItem = item.isIntegralNumber() && item.canConvertToLong() && item.asLong() >= 0
-                            || item.isTextual() && IDENTIFIER.matcher(item.asText()).matches();
+                            || item.isTextual() && IDENTIFIER.matcher(item.asString()).matches();
         if (!validItem) {
           return false;
         }
