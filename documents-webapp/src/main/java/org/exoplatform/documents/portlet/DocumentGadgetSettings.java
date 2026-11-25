@@ -123,7 +123,7 @@ public final class DocumentGadgetSettings {
       }
       for (JsonNode item : node) {
         boolean validItem = item.isIntegralNumber() && item.canConvertToLong() && item.asLong() >= 0
-                            || item.isTextual() && IDENTIFIER.matcher(item.asString()).matches();
+                            || item.isString() && IDENTIFIER.matcher(item.asString()).matches();
         if (!validItem) {
           return false;
         }
