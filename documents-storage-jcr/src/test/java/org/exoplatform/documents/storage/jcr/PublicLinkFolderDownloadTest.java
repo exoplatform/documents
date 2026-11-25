@@ -384,17 +384,14 @@ class PublicLinkFolderDownloadTest {
   /**
    * A file that cannot be read while it is zipped: the zip sent so far has no
    * directory, so that it reads as broken, never as complete with the file
-   * missing.
+   * missing. The file is a link to nothing, which no user can open.
    */
   @Test
   void aZipCutShortByAnUnreadableFileHasNoDirectory() throws Exception {
     File folder = Files.createTempDirectory("zip-cut-short").toFile();
     try {
       Files.writeString(new File(folder, "a.txt").toPath(), "a");
-      File unreadable = new File(folder, "b.txt");
-      Files.writeString(unreadable.toPath(), "b");
-      org.junit.jupiter.api.Assumptions.assumeTrue(unreadable.setReadable(false) && !unreadable.canRead(),
-                                                   "the file system lets this user read a file it made unreadable");
+      Files.createSymbolicLink(new File(folder, "b.txt").toPath(), new File(folder, "missing").toPath());
       java.io.ByteArrayOutputStream zip = new java.io.ByteArrayOutputStream();
       assertThrows(IOException.class, () -> org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.zipFiles(folder, zip));
       java.nio.file.Path written = Files.createTempFile("cut-short", ".zip");
@@ -405,7 +402,6 @@ class PublicLinkFolderDownloadTest {
         Files.deleteIfExists(written);
       }
     } finally {
-      new File(folder, "b.txt").setReadable(true);
       org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.cleanFiles(folder);
     }
   }
