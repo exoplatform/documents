@@ -52,6 +52,16 @@ public interface ExternalDownloadService {
   DownloadItem getDocumentDownloadInfo(String documentId);
 
   /**
+   * Gets the size of the content of a given document, without reading it
+   *
+   * @param documentId document id
+   * @return the content's size in bytes
+   * @throws ObjectNotFoundException when no document has this id, it has no
+   *           content or it is in the trash
+   */
+  long getDocumentContentLength(String documentId) throws ObjectNotFoundException;
+
+  /**
    * Writes the content of a given document as it is read, never held whole in
    * memory, whatever its size
    *

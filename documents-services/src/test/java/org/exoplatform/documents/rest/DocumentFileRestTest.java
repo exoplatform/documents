@@ -1796,12 +1796,18 @@ public class DocumentFileRestTest {
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     assertNoStore(response);
     when(externalDownloadService.getDocumentDownloadInfo("123")).thenReturn(null, downloadItem);
+    when(externalDownloadService.getDocumentContentLength("123")).thenReturn(4L);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     assertNoStore(response);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     assertEquals("application/pdf", String.valueOf(response.getMetadata().getFirst("Content-Type")));
+    assertEquals("the browser gets the size it shows and checks",
+                 "4",
+                 String.valueOf(response.getMetadata().getFirst("Content-Length")));
+    assertEquals("attachment; filename=\"test.pdf\"; filename*=UTF-8''test.pdf",
+                 String.valueOf(response.getMetadata().getFirst("Content-Disposition")));
     assertNoStore(response);
     // The content is copied into the response as it is read, never read
     // whole into memory
@@ -1815,12 +1821,18 @@ public class DocumentFileRestTest {
     assertEquals("test", documentSent.toString());
     verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
 
-    // The document is gone between the answer and its content
+    // The document is gone once the answer has started: the transfer is cut
+    // short
     doThrow(ObjectNotFoundException.class).when(externalDownloadService).writeDocumentContent(eq("123"), any());
     javax.ws.rs.core.StreamingOutput documentBody = (javax.ws.rs.core.StreamingOutput) response.getEntity();
-    javax.ws.rs.WebApplicationException notFound = assertThrows(javax.ws.rs.WebApplicationException.class,
-                                                                () -> documentBody.write(new ByteArrayOutputStream()));
-    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), notFound.getResponse().getStatus());
+    assertThrows(IOException.class, () -> documentBody.write(new ByteArrayOutputStream()));
+
+    // A document whose content cannot be read answers 404 before the answer
+    // starts
+    when(externalDownloadService.getDocumentContentLength("123")).thenThrow(ObjectNotFoundException.class);
+    response = documentFileRest.downloadDocument("123", null);
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNoStore(response);
 
     when(externalDownloadService.getDocumentDownloadInfo("123")).thenThrow(RuntimeException.class);
     response = documentFileRest.downloadDocument("123", null);
@@ -1895,11 +1907,12 @@ public class DocumentFileRestTest {
     DownloadItem folderItem = new DownloadItem("456", "folder", null, null);
     when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
     when(externalDownloadService.getDocumentDownloadInfo("456")).thenReturn(folderItem);
-    when(externalDownloadService.getFolderArchive("456")).thenThrow(ObjectNotFoundException.class);
+    doThrow(ObjectNotFoundException.class).when(externalDownloadService).checkDocumentDownload("456");
 
     Response response = documentFileRest.downloadDocument("456", null);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     assertNoStore(response);
+    verify(externalDownloadService, never()).getFolderArchive("456");
 
     reset(externalDownloadService);
     when(externalDownloadService.getDocumentDownloadInfo("456")).thenReturn(folderItem);
@@ -1918,8 +1931,24 @@ public class DocumentFileRestTest {
     response = documentFileRest.downloadDocument("456", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
     assertEquals("application/zip", String.valueOf(response.getMetadata().getFirst("Content-Type")));
-    ByteArrayOutputStream zipSent = new ByteArrayOutputStream();
+    assertEquals("attachment; filename=\"folder.zip\"; filename*=UTF-8''folder.zip",
+                 String.valueOf(response.getMetadata().getFirst("Content-Disposition")));
+    verify(externalDownloadService, never()).getFolderArchive("456");
+    // The answer starts before the folder is copied
+    java.util.concurrent.atomic.AtomicBoolean flushedBeforeCopy = new java.util.concurrent.atomic.AtomicBoolean();
+    ByteArrayOutputStream zipSent = new ByteArrayOutputStream() {
+      @Override
+      public void flush() {
+        if (mockingDetails(externalDownloadService).getInvocations()
+                                                   .stream()
+                                                   .noneMatch(invocation -> "getFolderArchive".equals(invocation.getMethod()
+                                                                                                               .getName()))) {
+          flushedBeforeCopy.set(true);
+        }
+      }
+    };
     ((javax.ws.rs.core.StreamingOutput) response.getEntity()).write(zipSent);
+    assertTrue("the answer starts before the folder is copied", flushedBeforeCopy.get());
     assertEquals("zip", zipSent.toString());
     assertTrue("the archive, whose closing deletes the folder's copy, is closed once sent", zipClosed.get());
 

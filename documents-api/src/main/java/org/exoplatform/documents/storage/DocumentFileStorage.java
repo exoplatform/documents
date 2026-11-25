@@ -550,6 +550,18 @@ public interface DocumentFileStorage {
   DownloadItem getDocumentDownloadItem(String documentId);
 
   /**
+   * Gets the size of the content of a given document, read whatever the
+   * caller's permissions, without reading the content: the caller checks
+   * access first, as for {@link #getDocumentDownloadInfo(String)}.
+   *
+   * @param documentId document id
+   * @return the content's size in bytes
+   * @throws ObjectNotFoundException when no document has this id, it has no
+   *           content, or its size cannot be read
+   */
+  long getDocumentContentLength(String documentId) throws ObjectNotFoundException;
+
+  /**
    * Writes the content of a given document, read whatever the caller's
    * permissions: the caller checks access first, as for
    * {@link #getDocumentDownloadInfo(String)}. The content is copied as it is

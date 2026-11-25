@@ -19,6 +19,7 @@ package org.exoplatform.documents.rest;
 import static org.exoplatform.documents.constant.DocumentSortField.getFromAlias;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -41,7 +42,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.CacheControl;
 import javax.ws.rs.core.EntityTag;
 import javax.ws.rs.core.MediaType;
@@ -1603,37 +1603,43 @@ public class DocumentFileRest implements ResourceContainer {
       }
       if(downloadItem.getMimeType() != null) {
         String documentId = downloadItem.getItemId();
+        // Read before the answer starts: a document without content answers
+        // 404, and the browser gets the size it shows and checks
+        long contentLength = externalDownloadService.getDocumentContentLength(documentId);
         // Copied from the repository as it is read, rather than read whole into
         // memory, which fails above 2 GiB
         StreamingOutput documentBody = output -> {
           try {
             externalDownloadService.writeDocumentContent(documentId, output);
           } catch (ObjectNotFoundException e) {
-            throw new WebApplicationException(e, Status.NOT_FOUND);
+            // The answer has started: the transfer is cut short, never a 404
+            throw new IOException("Document " + documentId + " is gone while it is sent", e);
           }
         };
         return Response.ok(documentBody)
                 .type(downloadItem.getMimeType())
                 .cacheControl(NO_STORE_CACHE_CONTROL)
-                .header("Content-Disposition",
-                        "attachment;filename=\""
-                                + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8)
-                                .replace("+", "%20") + "\"").build();
+                .header("Content-Length", contentLength)
+                .header("Content-Disposition", getAttachmentDisposition(downloadItem.getItemName())).build();
       } else {
-        String contentDisposition = "attachment; filename=\""
-            + URLEncoder.encode(downloadItem.getItemName(), StandardCharsets.UTF_8).replace("+", "%20") + ".zip\"";
-        FolderArchive folderArchive = externalDownloadService.getFolderArchive(downloadItem.getItemId());
-        // Zipped while it is sent, from the folder's copy, which closing the
-        // archive deletes: no zip is built before the first byte
+        String folderId = downloadItem.getItemId();
+        // Every reason to answer 404 is checked before the answer starts
+        externalDownloadService.checkDocumentDownload(folderId);
+        // The answer starts before the folder is copied, so that the browser
+        // shows the download from the first second; then the copy is zipped
+        // while it is sent, and closing the archive deletes it
         StreamingOutput zipBody = output -> {
-          try (FolderArchive archive = folderArchive) {
+          output.flush();
+          try (FolderArchive archive = externalDownloadService.getFolderArchive(folderId)) {
             archive.writeZip(output);
+          } catch (ObjectNotFoundException e) {
+            throw new IOException("Folder " + folderId + " is no longer downloadable", e);
           }
         };
         return Response.ok(zipBody)
                        .type("application/zip")
                        .cacheControl(NO_STORE_CACHE_CONTROL)
-                       .header("Content-Disposition", contentDisposition)
+                       .header("Content-Disposition", getAttachmentDisposition(downloadItem.getItemName() + ".zip"))
                        .build();
       }
     } catch (ObjectNotFoundException e) {
@@ -1643,6 +1649,15 @@ public class DocumentFileRest implements ResourceContainer {
       LOG.error("Error while downloading document", e);
       return Response.serverError().cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
+  }
+
+  /**
+   * The name in both forms: {@code filename*} gives the browsers that read it
+   * the name with its spaces and accents, {@code filename} the others.
+   */
+  private static String getAttachmentDisposition(String fileName) {
+    String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+    return "attachment; filename=\"" + encodedName + "\"; filename*=UTF-8''" + encodedName;
   }
 
   @POST
