@@ -4021,8 +4021,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   /**
    * Builds the query of the files, folders and shortcuts of a name under one
-   * drive, hidden ones left out. One path pattern only: eXo JCR refuses
-   * {@code jcr:path} clauses joined by OR whose steps differ.
+   * drive, hidden ones included: a user who shows hidden documents in
+   * Documents sees them, and asks for them by their name. One path pattern
+   * only: eXo JCR refuses {@code jcr:path} clauses joined by OR whose steps
+   * differ.
    *
    * @param pathPattern the {@code jcr:path LIKE} pattern of the drive
    * @param name the name, compared in lower case to the title and the name
@@ -4038,8 +4040,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return "SELECT * FROM nt:base WHERE (" + paths + ")"
         + " AND (" + types + ")"
         + " AND (LOWER(" + NodeTypeConstants.EXO_TITLE + ") = " + value
-        + " OR LOWER(" + NodeTypeConstants.EXO_NAME + ") = " + value + ")"
-        + " AND NOT jcr:mixinTypes LIKE 'exo:hiddenable'";
+        + " OR LOWER(" + NodeTypeConstants.EXO_NAME + ") = " + value + ")";
   }
 
   /**

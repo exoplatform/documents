@@ -17,6 +17,7 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -110,16 +111,17 @@ class DocumentNameQueryTest {
 
   /**
    * The statement searches its drive only, files, folders and shortcuts only,
-   * and leaves hidden nodes out; it parses with each drive's real path shape
-   * (a user bucket's underscores, a space's wildcard step), one per
-   * statement. Mutants: the hidden filter dropped; the type filter dropped;
+   * and keeps hidden nodes, which a user who shows hidden documents sees; it
+   * parses with each drive's real path shape (a user bucket's underscores, a
+   * space's wildcard step), one per statement. Mutants: the hidden filter
+   * added back; the type filter dropped;
    * the two drives joined by OR in one statement (refused by the engine).
    *
    * @throws Exception never
    */
   @Test
-  @DisplayName("The statement keeps to its drive, to files, folders and shortcuts, and leaves hidden nodes out")
-  void theStatementKeepsToTheDrivesAndLeavesHiddenNodesOut() throws Exception {
+  @DisplayName("The statement keeps to its drive, to files, folders and shortcuts, hidden ones included")
+  void theStatementKeepsToTheDrivesAndKeepsHiddenNodes() throws Exception {
     // each drive's statement parses: the engine refuses two jcr:path clauses joined by OR whose steps differ
     parse(JCRDocumentFileStorage.getNameQueryStatement(USER_DRIVE, "workflow"));
     String statement = JCRDocumentFileStorage.getNameQueryStatement(SPACES_DRIVES, "workflow");
@@ -128,7 +130,8 @@ class DocumentNameQueryTest {
     assertTrue(statement.contains("(jcr:path LIKE '/Groups/spaces/%/Documents/%')"), statement);
     assertTrue(statement.contains("jcr:primaryType = 'nt:file'") && statement.contains("jcr:primaryType = 'nt:folder'")
         && statement.contains("jcr:primaryType = 'exo:symlink'"), statement);
-    assertTrue(statement.endsWith(" AND NOT jcr:mixinTypes LIKE 'exo:hiddenable'"), statement);
+    assertFalse(statement.contains("jcr:mixinTypes"), statement);
+    assertTrue(statement.endsWith(" OR LOWER(exo:name) = 'workflow')"), statement);
   }
 
   /**
