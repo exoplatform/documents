@@ -84,7 +84,7 @@
       <name>RecycleBinItemsUpgradePlugin</name>
       <set-method>addUpgradePlugin</set-method>
       <type>org.exoplatform.documents.storage.jcr.upgrade.RecycleBinItemsUpgradePlugin</type>
-      <description>Gives the documents already in the trash the facts the Recycle Bin lists them with</description>
+      <description>Gives the documents already in the trash the facts the Recycle Bin lists them with, then counts the Recycle Bins again</description>
       <init-params>
         <value-param>
           <name>product.group.id</name>
