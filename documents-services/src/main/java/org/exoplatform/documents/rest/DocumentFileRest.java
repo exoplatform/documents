@@ -1622,18 +1622,14 @@ public class DocumentFileRest implements ResourceContainer {
                 .header("Content-Length", contentLength)
                 .header("Content-Disposition", getAttachmentDisposition(downloadItem.getItemName())).build();
       } else {
-        String folderId = downloadItem.getItemId();
-        // Every reason to answer 404 is checked before the answer starts
-        externalDownloadService.checkDocumentDownload(folderId);
-        // The answer starts before the folder is copied, so that the browser
-        // shows the download from the first second; then the copy is zipped
-        // while it is sent, and closing the archive deletes it
+        // Copied before the answer starts, so that a folder that cannot be
+        // copied answers 404 or 500 rather than a zip reported as complete;
+        // the copy is then zipped while it is sent, with no zip built before
+        // the first byte, and closing the archive deletes it
+        FolderArchive folderArchive = externalDownloadService.getFolderArchive(downloadItem.getItemId());
         StreamingOutput zipBody = output -> {
-          output.flush();
-          try (FolderArchive archive = externalDownloadService.getFolderArchive(folderId)) {
+          try (FolderArchive archive = folderArchive) {
             archive.writeZip(output);
-          } catch (ObjectNotFoundException e) {
-            throw new IOException("Folder " + folderId + " is no longer downloadable", e);
           }
         };
         return Response.ok(zipBody)

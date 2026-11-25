@@ -1913,12 +1913,20 @@ public class DocumentFileRestTest {
     DownloadItem folderItem = new DownloadItem("456", "folder", null, null);
     when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
     when(externalDownloadService.getDocumentDownloadInfo("456")).thenReturn(folderItem);
-    doThrow(ObjectNotFoundException.class).when(externalDownloadService).checkDocumentDownload("456");
+    when(externalDownloadService.getFolderArchive("456")).thenThrow(ObjectNotFoundException.class);
 
     Response response = documentFileRest.downloadDocument("456", null);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     assertNoStore(response);
-    verify(externalDownloadService, never()).getFolderArchive("456");
+
+    // A folder whose copy fails, a full disk for instance, answers 500 before
+    // anything is sent
+    reset(externalDownloadService);
+    when(externalDownloadService.getDocumentDownloadInfo("456")).thenReturn(folderItem);
+    when(externalDownloadService.getFolderArchive("456")).thenThrow(new IOException("No space left on device"));
+    response = documentFileRest.downloadDocument("456", null);
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+    assertNoStore(response);
 
     reset(externalDownloadService);
     when(externalDownloadService.getDocumentDownloadInfo("456")).thenReturn(folderItem);
@@ -1939,22 +1947,9 @@ public class DocumentFileRestTest {
     assertEquals("application/zip", String.valueOf(response.getMetadata().getFirst("Content-Type")));
     assertEquals("attachment; filename=\"folder.zip\"; filename*=UTF-8''folder.zip",
                  String.valueOf(response.getMetadata().getFirst("Content-Disposition")));
-    verify(externalDownloadService, never()).getFolderArchive("456");
-    // The answer starts before the folder is copied
-    java.util.concurrent.atomic.AtomicBoolean flushedBeforeCopy = new java.util.concurrent.atomic.AtomicBoolean();
-    ByteArrayOutputStream zipSent = new ByteArrayOutputStream() {
-      @Override
-      public void flush() {
-        if (mockingDetails(externalDownloadService).getInvocations()
-                                                   .stream()
-                                                   .noneMatch(invocation -> "getFolderArchive".equals(invocation.getMethod()
-                                                                                                               .getName()))) {
-          flushedBeforeCopy.set(true);
-        }
-      }
-    };
+    verify(externalDownloadService).getFolderArchive("456");
+    ByteArrayOutputStream zipSent = new ByteArrayOutputStream();
     ((javax.ws.rs.core.StreamingOutput) response.getEntity()).write(zipSent);
-    assertTrue("the answer starts before the folder is copied", flushedBeforeCopy.get());
     assertEquals("zip", zipSent.toString());
     assertTrue("the archive, whose closing deletes the folder's copy, is closed once sent", zipClosed.get());
 
