@@ -902,6 +902,29 @@ public interface DocumentFileStorage {
   }
 
   /**
+   * Finds the files and the folders of a name, compared without case, in the
+   * drives the user can read: their own drive and the spaces' drives, or the
+   * drive of one owner. The read goes through the user's own session, so only
+   * what the user can read is found. A shortcut of that name is answered as its
+   * target, with the shortcut's path.
+   *
+   * @param name the exact name, compared without case
+   * @param ownerId the identity id of the one drive's owner (space or user) to
+   *          search, null for every drive the user can read
+   * @param aclIdentity the user
+   * @param limit the most matches, ordered by their path
+   * @return the matches, in the order of their path
+   * @throws ObjectNotFoundException when the owner doesn't exist
+   * @throws IllegalArgumentException when the name is blank, too long or holds a control character
+   */
+  default List<DocumentNameMatch> findDocumentsByName(String name,
+                                                      Long ownerId,
+                                                      Identity aclIdentity,
+                                                      int limit) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Tells which space drive holds a node itself, read as the system. A
    * shortcut or a share link ({@code exo:symlink}) isn't the node it points
    * to: it holds nothing of its own, so it belongs to no space here.

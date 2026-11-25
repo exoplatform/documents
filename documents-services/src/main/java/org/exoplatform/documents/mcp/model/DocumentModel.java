@@ -75,6 +75,27 @@ public abstract class DocumentModel {
   private String    shortcutTargetId;
 
   /**
+   * The drive a name lookup found the document in: the space's name, or
+   * "personal drive" for the user's own; null for any other listing.
+   */
+  @JsonProperty("space_name")
+  private String    spaceName;
+
+  /**
+   * The folder holding the document, from its drive's root ("/" for the root
+   * itself), given by a name lookup only.
+   */
+  @JsonProperty("folder_path")
+  private String    folderPath;
+
+  /**
+   * What a name lookup found: "folder" or "file"; null for any other listing.
+   * Not an is_* flag, which an assistant's data digest leaves out.
+   */
+  @JsonProperty("type")
+  private String    type;
+
+  /**
    * Builds the document's common fields, its rights left unknown.
    *
    * @param id the document id

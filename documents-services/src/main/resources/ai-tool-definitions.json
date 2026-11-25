@@ -310,13 +310,17 @@
     {
       "name": "search_documents",
       "title": "Search for files",
-      "description": "Searches for documents matching the specified query and optional filters. With neither a query nor updated_since, lists the scope's files, the most recent first. With updated_since, returns the files changed since that date, the most recent first, with or without a query: use it to keep a folder in sync instead of opening each document. It searches the whole tree under the folder or the space, files only, as the search index holds them (a change can take a moment to show). Each file says whether you can edit or delete it (can_edit, can_delete); a shortcut the search finds is answered as its target, with the target's id and rights.",
+      "description": "Searches for documents matching the specified query and optional filters. With name, finds the files and folders of exactly that name (without case) in one call, in every drive you can read (your own and your spaces'), or in the one space given: at most 20, in the order of their path, each with its space_name, its folder_path and its type (folder or file); when several match, name each one with its space and folder and ask which one is meant. When no file or folder has exactly that name, it returns the text search's hits for that name without its extension instead (files only, without space_name or folder_path), so an empty list means neither found anything. To see what changed in a folder found by name, call it again with that folder's document_id as parent_folder_id and with updated_since. With neither a query nor updated_since, lists the scope's files, the most recent first. With updated_since, returns the files changed since that date, the most recent first, with or without a query: use it to keep a folder in sync instead of opening each document. Without name, it searches the whole tree under the folder or the space, files only, as the search index holds them (a change can take a moment to show). Each file says whether you can edit or delete it (can_edit, can_delete); a shortcut the search finds is answered as its target, with the target's id and rights.",
       "input_schema": {
         "type": "object",
         "properties": {
           "query": {
             "type": "string",
             "description": "Full-text search query string. Optional: without it, the files of the scope are listed, the most recent first."
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional exact name of a file or a folder the user named, such as zz-8416-form.pdf or workflow, compared without case. Pass it alone, or with space_id or space_name only: never with updated_since, which takes the found folder's document_id as parent_folder_id in a second call."
           },
           "updated_since": {
             "type": "string",
