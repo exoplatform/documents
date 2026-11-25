@@ -206,11 +206,18 @@ public class ExternalDownloadServiceImplTest {
     when(documentFileStorage.isDocumentInTrash(FOLDER_ID)).thenReturn(true);
 
     assertNull(externalDownloadService.getDocumentDownloadItem(FOLDER_ID));
+    assertNull(externalDownloadService.getDocumentDownloadInfo(FOLDER_ID));
     assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.checkDocumentDownload(FOLDER_ID));
     assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.downloadZippedFolder(FOLDER_ID));
+    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.getFolderArchive(FOLDER_ID));
+    assertThrows(ObjectNotFoundException.class,
+                 () -> externalDownloadService.writeDocumentContent(FOLDER_ID, new ByteArrayOutputStream()));
     verify(documentFileStorage, never()).getDocumentDownloadItem(anyString());
     verify(documentFileStorage, never()).getDocumentDownloadInfo(anyString());
     verify(documentFileStorage, never()).downloadFolder(anyString(), nullable(org.exoplatform.services.security.Identity.class));
+    verify(documentFileStorage, never()).getFolderArchive(anyString(),
+                                                          nullable(org.exoplatform.services.security.Identity.class));
+    verify(documentFileStorage, never()).writeDocumentContent(anyString(), any());
   }
 
   @Test
@@ -221,6 +228,32 @@ public class ExternalDownloadServiceImplTest {
     when(documentFileStorage.getDocumentDownloadInfo(FOLDER_ID)).thenReturn(item);
 
     assertSame(item, externalDownloadService.getDocumentDownloadItem(FOLDER_ID));
+    assertSame(item, externalDownloadService.getDocumentDownloadInfo(FOLDER_ID));
     externalDownloadService.checkDocumentDownload(FOLDER_ID);
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    externalDownloadService.writeDocumentContent(FOLDER_ID, outputStream);
+    verify(documentFileStorage).writeDocumentContent(FOLDER_ID, outputStream);
+  }
+
+  /**
+   * The folder's archive is prepared with the rights of the link's creator,
+   * resolved when the download runs, as the zip was (EXO-91530).
+   */
+  @Test
+  public void getFolderArchiveWalksWithTheCreatorRights() throws Exception {
+    org.exoplatform.services.security.Identity creatorAclIdentity = mockLinkCreator(true, false);
+    org.exoplatform.documents.model.FolderArchive archive = mock(org.exoplatform.documents.model.FolderArchive.class);
+    when(documentFileStorage.getFolderArchive(FOLDER_ID, creatorAclIdentity)).thenReturn(archive);
+
+    assertSame(archive, externalDownloadService.getFolderArchive(FOLDER_ID));
+    assertThrows(IllegalArgumentException.class, () -> externalDownloadService.getFolderArchive(null));
+  }
+
+  @Test
+  public void getFolderArchiveOfALinkWhoseCreatorIsDisabledIsNotFound() throws Exception {
+    mockLinkCreator(false, false);
+    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.getFolderArchive(FOLDER_ID));
+    verify(documentFileStorage, never()).getFolderArchive(anyString(),
+                                                          nullable(org.exoplatform.services.security.Identity.class));
   }
 }

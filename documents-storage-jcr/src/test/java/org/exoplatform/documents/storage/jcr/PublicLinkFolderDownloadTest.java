@@ -292,6 +292,101 @@ class PublicLinkFolderDownloadTest {
     }
   }
 
+  /**
+   * The archive written into a stream holds the same entries, with the same
+   * content, as the zip built into a file, for every rights layout; its copy
+   * stays until the archive is closed, and is deleted then.
+   */
+  @Test
+  void theArchiveHoldsTheZipEntriesAndClosingItDeletesItsCopy() throws Exception {
+    Object[][] cases = { { sharedFolderId, MEMBER }, { sharedFolderId, HOST }, { sharedWithMemberId, MEMBER } };
+    for (Object[] link : cases) {
+      String folderId = (String) link[0];
+      Identity creator = (Identity) link[1];
+      java.util.Set<String> tempFoldersBefore = tempDownloadFolders();
+      Map<String, String> archived;
+      try (org.exoplatform.documents.model.FolderArchive archive = storage.getFolderArchive(folderId, creator)) {
+        assertEquals(tempFoldersBefore.size() + 1, tempDownloadFolders().size(), "the copy is there until the archive is closed");
+        java.io.ByteArrayOutputStream zip = new java.io.ByteArrayOutputStream();
+        archive.writeZip(zip);
+        archived = zipContent(zip.toByteArray());
+      }
+      assertEquals(tempFoldersBefore, tempDownloadFolders(), "closing the archive deletes its copy");
+
+      String zipPath = storage.downloadFolder(folderId, creator);
+      Map<String, String> built;
+      try {
+        built = zipContent(Files.readAllBytes(new File(zipPath).toPath()));
+      } finally {
+        Files.deleteIfExists(new File(zipPath).toPath());
+      }
+      assertEquals(built, archived, "the archive holds the zip's entries for " + creator.getUserId());
+    }
+  }
+
+  /** A client that leaves mid-download: the copy is deleted all the same. */
+  @Test
+  void anArchiveWhoseWritingFailsIsDeletedOnClose() throws Exception {
+    java.util.Set<String> tempFoldersBefore = tempDownloadFolders();
+    java.io.OutputStream clientGone = new java.io.OutputStream() {
+      @Override
+      public void write(int b) throws IOException {
+        throw new IOException("client gone");
+      }
+
+      @Override
+      public void write(byte[] bytes, int offset, int length) throws IOException {
+        throw new IOException("client gone");
+      }
+    };
+    assertThrows(IOException.class, () -> {
+      try (org.exoplatform.documents.model.FolderArchive archive = storage.getFolderArchive(sharedFolderId, MEMBER)) {
+        archive.writeZip(clientGone);
+      }
+    });
+    assertEquals(tempFoldersBefore, tempDownloadFolders(), "no copy is left behind");
+  }
+
+  @Test
+  void aFolderTheCreatorCannotReadHasNoArchiveAndCopiesNothing() throws Exception {
+    java.util.Set<String> tempFoldersBefore = tempDownloadFolders();
+    assertThrows(ObjectNotFoundException.class, () -> storage.getFolderArchive(restrictedFolderId, MEMBER));
+    assertEquals(tempFoldersBefore, tempDownloadFolders(), "nothing is copied");
+  }
+
+  /** A document's content is copied into the stream, which is left open. */
+  @Test
+  void aDocumentContentIsWrittenIntoTheStream() throws Exception {
+    String fileId = ((ExtendedNode) systemSession.getRootNode().getNode("space1/Shared/public.txt")).getIdentifier();
+    java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
+    java.io.ByteArrayOutputStream content = new java.io.ByteArrayOutputStream() {
+      @Override
+      public void close() {
+        closed.set(true);
+      }
+    };
+    storage.writeDocumentContent(fileId, content);
+    assertEquals("visible to every member", content.toString(StandardCharsets.UTF_8));
+    assertFalse(closed.get(), "the caller owns the stream");
+
+    assertThrows(ObjectNotFoundException.class,
+                 () -> storage.writeDocumentContent(sharedFolderId, new java.io.ByteArrayOutputStream()),
+                 "a folder has no content");
+    assertThrows(ObjectNotFoundException.class,
+                 () -> storage.writeDocumentContent(UUID.randomUUID().toString(), new java.io.ByteArrayOutputStream()),
+                 "no document has this id");
+  }
+
+  private static Map<String, String> zipContent(byte[] zip) throws IOException {
+    Map<String, String> content = new java.util.TreeMap<>();
+    try (java.util.zip.ZipInputStream entries = new java.util.zip.ZipInputStream(new ByteArrayInputStream(zip))) {
+      for (ZipEntry entry = entries.getNextEntry(); entry != null; entry = entries.getNextEntry()) {
+        content.put(entry.getName(), new String(entries.readAllBytes(), StandardCharsets.UTF_8));
+      }
+    }
+    return content;
+  }
+
   private static org.exoplatform.services.jcr.core.ExtendedSession sessionOf(Identity identity) throws Exception {
     return (org.exoplatform.services.jcr.core.ExtendedSession) org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.openUserSession(
         StandaloneContainer.getInstance().getComponentInstanceOfType(RepositoryService.class), identity);

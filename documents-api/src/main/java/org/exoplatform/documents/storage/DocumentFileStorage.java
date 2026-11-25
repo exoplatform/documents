@@ -18,6 +18,7 @@ package org.exoplatform.documents.storage;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
 
 import javax.jcr.RepositoryException;
@@ -540,8 +541,27 @@ public interface DocumentFileStorage {
    *
    * @param documentId document id
    * @return {@link DownloadItem}
+   * @deprecated holds the whole content in memory, which fails above 2 GiB: use
+   *             {@link #getDocumentDownloadInfo(String)} and
+   *             {@link #writeDocumentContent(String, OutputStream)} instead.
+   *             Since 7.3.x.
    */
+  @Deprecated(since = "7.3.x")
   DownloadItem getDocumentDownloadItem(String documentId);
+
+  /**
+   * Writes the content of a given document, read whatever the caller's
+   * permissions: the caller checks access first, as for
+   * {@link #getDocumentDownloadInfo(String)}. The content is copied as it is
+   * read, never held whole in memory.
+   *
+   * @param documentId document id
+   * @param outputStream where the content is written; it is not closed
+   * @throws ObjectNotFoundException when no document has this id or it has no
+   *           content
+   * @throws IOException when the content cannot be read or written
+   */
+  void writeDocumentContent(String documentId, OutputStream outputStream) throws ObjectNotFoundException, IOException;
 
   /**
    * Gets the identifier, the name and the mime type of a given document
@@ -582,8 +602,26 @@ public interface DocumentFileStorage {
    * @return downloaded zip path, or null when the zip cannot be built
    * @throws ObjectNotFoundException when the user cannot read the folder or no
    *           node has this id
+   * @deprecated builds the whole zip in a file before it can be sent: use
+   *             {@link #getFolderArchive(String, Identity)} instead. Since
+   *             7.3.x.
    */
+  @Deprecated(since = "7.3.x")
   String downloadFolder(String folderId, Identity aclIdentity) throws ObjectNotFoundException;
+
+  /**
+   * Prepares a folder for a download, walked with the rights of the given user
+   * as {@link #downloadFolder(String, Identity)} walks it: the zip then holds
+   * the same entries, and is written as it is sent.
+   *
+   * @param folderId folder node id
+   * @param aclIdentity the user whose rights the walk applies
+   * @return the prepared folder, which the caller closes
+   * @throws ObjectNotFoundException when the user cannot read the folder or no
+   *           node has this id
+   * @throws IOException when the folder cannot be prepared
+   */
+  FolderArchive getFolderArchive(String folderId, Identity aclIdentity) throws ObjectNotFoundException, IOException;
 
   /**
    * Checks that the given user can read a given folder, as

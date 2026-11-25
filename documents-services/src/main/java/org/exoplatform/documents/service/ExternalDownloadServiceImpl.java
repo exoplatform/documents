@@ -18,6 +18,7 @@ package org.exoplatform.documents.service;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.documents.model.DownloadItem;
+import org.exoplatform.documents.model.FolderArchive;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.PublicDocumentAccessStorage;
@@ -27,6 +28,7 @@ import org.exoplatform.social.core.manager.IdentityManager;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -54,6 +56,7 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
    * {@inheritDoc}
    */
   @Override
+  @Deprecated(since = "7.3.x")
   public DownloadItem getDocumentDownloadItem(String documentId) {
     if (documentId == null) {
       throw new IllegalArgumentException("document id is mandatory");
@@ -68,6 +71,7 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
    * {@inheritDoc}
    */
   @Override
+  @Deprecated(since = "7.3.x")
   public InputStream downloadZippedFolder(String folderId) throws IOException, ObjectNotFoundException {
     if (folderId == null) {
       throw new IllegalArgumentException("folder id is mandatory");
@@ -96,6 +100,48 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
       Files.deleteIfExists(zip);
       throw e;
     }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DownloadItem getDocumentDownloadInfo(String documentId) {
+    if (documentId == null) {
+      throw new IllegalArgumentException("document id is mandatory");
+    }
+    if (documentFileStorage.isDocumentInTrash(documentId)) {
+      return null;
+    }
+    return documentFileStorage.getDocumentDownloadInfo(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void writeDocumentContent(String documentId, OutputStream outputStream) throws ObjectNotFoundException, IOException {
+    if (documentId == null) {
+      throw new IllegalArgumentException("document id is mandatory");
+    }
+    if (documentFileStorage.isDocumentInTrash(documentId)) {
+      throw new ObjectNotFoundException("No document has id " + documentId);
+    }
+    documentFileStorage.writeDocumentContent(documentId, outputStream);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public FolderArchive getFolderArchive(String folderId) throws IOException, ObjectNotFoundException {
+    if (folderId == null) {
+      throw new IllegalArgumentException("folder id is mandatory");
+    }
+    if (documentFileStorage.isDocumentInTrash(folderId)) {
+      throw new ObjectNotFoundException("No document has id " + folderId);
+    }
+    return documentFileStorage.getFolderArchive(folderId, getLinkCreatorAclIdentity(folderId));
   }
 
   /**

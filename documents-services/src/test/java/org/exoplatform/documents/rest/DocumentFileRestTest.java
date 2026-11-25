@@ -1779,14 +1779,10 @@ public class DocumentFileRestTest {
   }
 
   @Test
-  public void downloadDocument() {
+  public void downloadDocument() throws Exception {
     DownloadItem downloadItem = new DownloadItem();
     downloadItem.setItemName("test.pdf");
     downloadItem.setItemId("123");
-    byte[] bytes = "test".getBytes();
-    ByteArrayOutputStream outputStream = new ByteArrayOutputStream(bytes.length);
-    outputStream.write(bytes, 0, bytes.length);
-    downloadItem.setItemContent(outputStream);
     downloadItem.setMimeType("application/pdf");
     Response response = documentFileRest.downloadDocument(null, null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
@@ -1799,14 +1795,34 @@ public class DocumentFileRestTest {
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
     assertNoStore(response);
-    when(externalDownloadService.getDocumentDownloadItem("123")).thenReturn(null, downloadItem);
+    when(externalDownloadService.getDocumentDownloadInfo("123")).thenReturn(null, downloadItem);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     assertNoStore(response);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertEquals("application/pdf", String.valueOf(response.getMetadata().getFirst("Content-Type")));
     assertNoStore(response);
-    when(externalDownloadService.getDocumentDownloadItem("123")).thenThrow(RuntimeException.class);
+    // The content is copied into the response as it is read, never read
+    // whole into memory
+    verify(externalDownloadService, never()).writeDocumentContent(anyString(), any());
+    doAnswer(invocation -> {
+      invocation.getArgument(1, java.io.OutputStream.class).write("test".getBytes());
+      return null;
+    }).when(externalDownloadService).writeDocumentContent(eq("123"), any());
+    ByteArrayOutputStream documentSent = new ByteArrayOutputStream();
+    ((javax.ws.rs.core.StreamingOutput) response.getEntity()).write(documentSent);
+    assertEquals("test", documentSent.toString());
+    verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
+
+    // The document is gone between the answer and its content
+    doThrow(ObjectNotFoundException.class).when(externalDownloadService).writeDocumentContent(eq("123"), any());
+    javax.ws.rs.core.StreamingOutput documentBody = (javax.ws.rs.core.StreamingOutput) response.getEntity();
+    javax.ws.rs.WebApplicationException notFound = assertThrows(javax.ws.rs.WebApplicationException.class,
+                                                                () -> documentBody.write(new ByteArrayOutputStream()));
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), notFound.getResponse().getStatus());
+
+    when(externalDownloadService.getDocumentDownloadInfo("123")).thenThrow(RuntimeException.class);
     response = documentFileRest.downloadDocument("123", null);
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
     assertNoStore(response);
@@ -1865,8 +1881,8 @@ public class DocumentFileRestTest {
     response = documentFileRest.checkDocumentDownload("", null);
     assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
     assertNoStore(response);
-    verify(externalDownloadService, never()).getDocumentDownloadItem(anyString());
-    verify(externalDownloadService, never()).downloadZippedFolder(anyString());
+    verify(externalDownloadService, never()).getDocumentDownloadInfo(anyString());
+    verify(externalDownloadService, never()).getFolderArchive(anyString());
   }
 
   /**
@@ -1878,17 +1894,22 @@ public class DocumentFileRestTest {
   public void downloadFolderOfAPublicLinkTheCreatorCannotArchiveIsNotFound() throws Exception {
     DownloadItem folderItem = new DownloadItem("456", "folder", null, null);
     when(publicDocumentAccessService.isDocumentPublicAccessValid("456", null)).thenReturn(true);
-    when(externalDownloadService.getDocumentDownloadItem("456")).thenReturn(folderItem);
-    when(externalDownloadService.downloadZippedFolder("456")).thenThrow(ObjectNotFoundException.class);
+    when(externalDownloadService.getDocumentDownloadInfo("456")).thenReturn(folderItem);
+    when(externalDownloadService.getFolderArchive("456")).thenThrow(ObjectNotFoundException.class);
 
     Response response = documentFileRest.downloadDocument("456", null);
     assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     assertNoStore(response);
 
     reset(externalDownloadService);
-    when(externalDownloadService.getDocumentDownloadItem("456")).thenReturn(folderItem);
+    when(externalDownloadService.getDocumentDownloadInfo("456")).thenReturn(folderItem);
     java.util.concurrent.atomic.AtomicBoolean zipClosed = new java.util.concurrent.atomic.AtomicBoolean();
-    when(externalDownloadService.downloadZippedFolder("456")).thenReturn(new java.io.ByteArrayInputStream("zip".getBytes()) {
+    when(externalDownloadService.getFolderArchive("456")).thenReturn(new org.exoplatform.documents.model.FolderArchive() {
+      @Override
+      public void writeZip(java.io.OutputStream outputStream) throws IOException {
+        outputStream.write("zip".getBytes());
+      }
+
       @Override
       public void close() {
         zipClosed.set(true);
@@ -1900,17 +1921,33 @@ public class DocumentFileRestTest {
     ByteArrayOutputStream zipSent = new ByteArrayOutputStream();
     ((javax.ws.rs.core.StreamingOutput) response.getEntity()).write(zipSent);
     assertEquals("zip", zipSent.toString());
-    assertTrue("the zip's stream, whose closing deletes the zip, is closed once sent", zipClosed.get());
+    assertTrue("the archive, whose closing deletes the folder's copy, is closed once sent", zipClosed.get());
+
+    // An archive whose writing fails is closed all the same
+    zipClosed.set(false);
+    when(externalDownloadService.getFolderArchive("456")).thenReturn(new org.exoplatform.documents.model.FolderArchive() {
+      @Override
+      public void writeZip(java.io.OutputStream outputStream) throws IOException {
+        throw new IOException("client gone");
+      }
+
+      @Override
+      public void close() {
+        zipClosed.set(true);
+      }
+    });
+    javax.ws.rs.core.StreamingOutput failingBody = (javax.ws.rs.core.StreamingOutput) documentFileRest.downloadDocument("456", null)
+                                                                                                        .getEntity();
+    assertThrows(IOException.class, () -> failingBody.write(new ByteArrayOutputStream()));
+    assertTrue("the archive is closed when its writing fails", zipClosed.get());
     assertTrue("a zip is never kept by a cache", String.valueOf(response.getMetadata().getFirst("Cache-Control")).contains("no-store"));
 
-    ByteArrayOutputStream content = new ByteArrayOutputStream();
-    content.write(1);
-    DownloadItem fileItem = new DownloadItem("789", "file.txt", content, "text/plain");
+    DownloadItem fileItem = new DownloadItem("789", "file.txt", null, "text/plain");
     when(publicDocumentAccessService.isDocumentPublicAccessValid("789", null)).thenReturn(true);
-    when(externalDownloadService.getDocumentDownloadItem("789")).thenReturn(fileItem);
+    when(externalDownloadService.getDocumentDownloadInfo("789")).thenReturn(fileItem);
     response = documentFileRest.downloadDocument("789", null);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-    verify(externalDownloadService, never()).downloadZippedFolder("789");
+    verify(externalDownloadService, never()).getFolderArchive("789");
   }
 
   @Test
