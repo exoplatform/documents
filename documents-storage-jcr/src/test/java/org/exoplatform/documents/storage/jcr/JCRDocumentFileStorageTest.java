@@ -4982,4 +4982,387 @@ public class JCRDocumentFileStorageTest {
     assertEquals(22890488L, ((DocumentFileContent) fileContent).getSize());
   }
 
+
+  // ---------------------------------------------------------------------------
+  // Finding files and folders by their name (EXO-95137)
+  // ---------------------------------------------------------------------------
+
+  private static final String NAME_LOOKUP_PRIVATE = "/Users/j___/jo___/joh___/john/Private";
+
+  /**
+   * The lookup reads through the user's own session only, so a folder in a
+   * space the user isn't a member of, which the user's session doesn't
+   * return and a system session would, is never found. Mutant: the system
+   * session used instead of the user's (the Engineering folder is then
+   * found).
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameReadsThroughTheUserSessionOnly() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    ExtendedNode f2Folder = nameLookupFolder(userSession, "/Groups/spaces/f2_support/Documents/workflow", "f2", aclIdentity);
+    nameLookupRows(userSession, f2Folder);
+    // a system session would also return the folder of a space john isn't a member of
+    SessionProvider systemProvider = mock(SessionProvider.class);
+    Session systemSession = mock(Session.class);
+    lenient().when(systemProvider.getSession(anyString(), any())).thenReturn(systemSession);
+    SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(systemProvider);
+    try {
+      ExtendedNode engineeringFolder = nameLookupFolder(systemSession,
+                                                        "/Groups/spaces/engineering/Documents/workflow",
+                                                        "eng",
+                                                        aclIdentity);
+      nameLookupRows(systemSession, f2Folder, engineeringFolder);
+      nameLookupSpace("f2_support", "f2_support", 200L);
+      nameLookupSpace("engineering", "engineering", 300L);
+
+      List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 20);
+
+      assertEquals(List.of("f2"), matches.stream().map(match -> match.document().getId()).toList());
+      assertEquals(200L, matches.get(0).ownerIdentityId());
+      assertEquals("/", matches.get(0).folderPath());
+      verify(systemSession.getWorkspace().getQueryManager(), never()).createQuery(anyString(), anyString());
+    } finally {
+      // the static stub outlives the test: no other test gets this provider
+      SESSION_PROVIDER.when(SessionProvider::createSystemProvider).thenReturn(null);
+    }
+  }
+
+  /**
+   * A row the user's session lists but can't read by its id, a node outside a
+   * space's Documents drive, and a node in a group that is no space's are
+   * left out; the user's own drive is the user's, its Public folder included.
+   * Mutants: the Documents bound dropped from the drive check; a node the
+   * session can't read kept; the Public folder not searched.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameKeepsOnlyReadableNodesOfTheSearchedDrives() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    ExtendedNode own = nameLookupFolder(userSession, NAME_LOOKUP_PRIVATE + "/projects/workflow", "own", aclIdentity);
+    ExtendedNode unreadable = mock(ExtendedNode.class);
+    when(unreadable.getPath()).thenReturn("/Groups/spaces/f2_support/Documents/secret/workflow");
+    when(unreadable.getIdentifier()).thenReturn("unreadable");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(userSession, "unreadable")).thenReturn(null);
+    ExtendedNode applicationData = nameLookupFolder(userSession,
+                                                    "/Groups/spaces/f2_support/ApplicationData/Documents/workflow",
+                                                    "appdata",
+                                                    aclIdentity);
+    ExtendedNode noSpace = nameLookupFolder(userSession, "/Groups/spaces/gone/Documents/workflow", "gone", aclIdentity);
+    ExtendedNode published = nameLookupFolder(userSession,
+                                              "/Users/j___/jo___/joh___/john/Public/shared/workflow",
+                                              "public",
+                                              aclIdentity);
+    nameLookupRows(userSession, own, unreadable, applicationData, noSpace, published);
+    nameLookupSpace("f2_support", "f2_support", 200L);
+
+    List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 20);
+
+    assertEquals(List.of("own", "public"), matches.stream().map(match -> match.document().getId()).toList());
+    assertEquals(1L, matches.get(0).ownerIdentityId());
+    assertEquals("/projects", matches.get(0).folderPath());
+    // the user's Public folder, beside Private, is shown in the user's drive as /Public
+    assertEquals(1L, matches.get(1).ownerIdentityId());
+    assertEquals("/Public/shared", matches.get(1).folderPath());
+  }
+
+  /**
+   * Matches come in the order of their path, whatever order the repository
+   * returns them in, and the limit keeps the first ones: the same drives give
+   * the same answer. Mutants: the sort dropped; the limit dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameOrdersByPathAndKeepsTheLimit() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    ExtendedNode third = nameLookupFolder(userSession, "/Groups/spaces/f2_support/Documents/c/workflow", "c", aclIdentity);
+    ExtendedNode first = nameLookupFolder(userSession, "/Groups/spaces/f2_support/Documents/a/workflow", "a", aclIdentity);
+    ExtendedNode second = nameLookupFolder(userSession, "/Groups/spaces/f2_support/Documents/b/workflow", "b", aclIdentity);
+    nameLookupRows(userSession, third, first, second);
+    nameLookupSpace("f2_support", "f2_support", 200L);
+
+    List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 2);
+
+    assertEquals(List.of("a", "b"), matches.stream().map(match -> match.document().getId()).toList());
+    assertEquals("/a", matches.get(0).folderPath());
+    // a row past the limit is never read as a document
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByIdentifier(userSession, "c"), never());
+  }
+
+  /**
+   * A shortcut to a document the lookup also finds in its own place gives one
+   * match, the document's own: the assistant would otherwise ask the user to
+   * choose between a file and itself. Mutant: no de-duplication by id.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameKeepsADocumentOnceWithItsOwnPlace() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    ExtendedNode target = nameLookupFolder(userSession, "/Groups/spaces/f2_support/Documents/workflow", "f2", aclIdentity);
+    ExtendedNode shortcut = mock(ExtendedNode.class);
+    when(shortcut.getPath()).thenReturn(NAME_LOOKUP_PRIVATE + "/links/workflow");
+    when(shortcut.getIdentifier()).thenReturn("shortcut");
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    when(shortcut.getSession()).thenReturn(userSession);
+    Property targetId = mock(Property.class);
+    when(targetId.getString()).thenReturn("f2");
+    when(shortcut.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(targetId);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(userSession, "shortcut")).thenReturn(shortcut);
+    nameLookupRows(userSession, target, shortcut);
+    nameLookupSpace("f2_support", "f2_support", 200L);
+
+    List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 20);
+
+    assertEquals(1, matches.size());
+    assertEquals("f2", matches.get(0).document().getId());
+    assertEquals(200L, matches.get(0).ownerIdentityId());
+  }
+
+  /**
+   * A shortcut whose path sorts before its target's own gives way to the
+   * target's own row: the match keeps the target's drive and folder. Mutant:
+   * the shortcut's row kept once the target's comes.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameReplacesAShortcutByItsTargetsOwnRow() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    ExtendedNode target = nameLookupFolder(userSession, "/Groups/spaces/b_space/Documents/workflow", "doc", aclIdentity);
+    ExtendedNode shortcut = mock(ExtendedNode.class);
+    when(shortcut.getPath()).thenReturn("/Groups/spaces/a_space/Documents/links/workflow");
+    when(shortcut.getIdentifier()).thenReturn("shortcut");
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    when(shortcut.getSession()).thenReturn(userSession);
+    Property targetId = mock(Property.class);
+    when(targetId.getString()).thenReturn("doc");
+    when(shortcut.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(targetId);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(userSession, "shortcut")).thenReturn(shortcut);
+    nameLookupRows(userSession, target, shortcut);
+    nameLookupSpace("a_space", "a_space", 300L);
+    nameLookupSpace("b_space", "b_space", 400L);
+
+    List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 20);
+
+    assertEquals(1, matches.size());
+    assertEquals(400L, matches.get(0).ownerIdentityId());
+    assertEquals("/", matches.get(0).folderPath());
+  }
+
+  /**
+   * The folder a match lies in is named by the folders' titles, as Documents
+   * shows them, and a folder whose title can't be read keeps its node name.
+   * Mutant: the node names kept for every folder.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameNamesTheFolderByItsTitles() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    ExtendedNode folder = nameLookupFolder(userSession,
+                                           "/Groups/spaces/f2_support/Documents/contrats-clients/x2026/workflow",
+                                           "f2",
+                                           aclIdentity);
+    Node year = mock(Node.class);
+    Node contracts = mock(Node.class);
+    when(folder.getParent()).thenReturn(year);
+    when(year.getParent()).thenReturn(contracts);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(year)).thenReturn("2026");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(contracts)).thenThrow(new AccessDeniedException());
+    nameLookupRows(userSession, folder);
+    nameLookupSpace("f2_support", "f2_support", 200L);
+
+    List<DocumentNameMatch> matches = jcrDocumentFileStorage.findDocumentsByName("workflow", null, aclIdentity, 20);
+
+    assertEquals("/contrats-clients/2026", matches.get(0).folderPath());
+  }
+
+  /**
+   * One statement per drive runs, the engine refusing two jcr:path clauses
+   * joined by OR: the user's drive, its Public folder and the spaces'
+   * Documents drives, each
+   * holding the name as one literal, its quotes doubled, and reading a bounded
+   * number of rows; a given owner narrows the search to that drive's one
+   * statement. Mutants: the escape dropped; the row bound dropped; the owner
+   * ignored; the drives joined in one statement.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void findDocumentsByNameRunsOneBoundedStatementOnTheSearchedDrives() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    Session userSession = nameLookupSession(aclIdentity);
+    List<QueryImpl> queries = nameLookupRows(userSession);
+
+    jcrDocumentFileStorage.findDocumentsByName("O'Brien", null, aclIdentity, 20);
+
+    ArgumentCaptor<String> statement = ArgumentCaptor.forClass(String.class);
+    verify(userSession.getWorkspace().getQueryManager(), times(3)).createQuery(statement.capture(), eq(Query.SQL));
+    assertEquals(List.of("(jcr:path LIKE '" + NAME_LOOKUP_PRIVATE + "/%')",
+                         "(jcr:path LIKE '/Users/j___/jo___/joh___/john/Public/%')",
+                         "(jcr:path LIKE '/Groups/spaces/%/Documents/%')"),
+                 statement.getAllValues()
+                          .stream()
+                          .map(value -> value.substring(value.indexOf('('), value.indexOf(')') + 1))
+                          .toList());
+    assertTrue(statement.getAllValues().toString(),
+               statement.getAllValues().stream().allMatch(value -> value.contains("LOWER(exo:title) = 'o''brien'")));
+    assertEquals(3, queries.size());
+    for (QueryImpl query : queries) {
+      verify(query).setLimit(JCRDocumentFileStorage.MAX_NAME_ROWS);
+    }
+
+    Identity spaceIdentity = new Identity("space", "f2_support");
+    spaceIdentity.setId("200");
+    when(identityManager.getIdentity(200L)).thenReturn(spaceIdentity);
+    Node spaceDrive = mock(Node.class);
+    when(spaceDrive.getPath()).thenReturn("/Groups/spaces/f2_support/Documents");
+    JCR_DOCUMENTS_UTIL.when(() -> getIdentityRootNode(eq(spaceService), eq(nodeHierarchyCreator), eq("john"), eq(spaceIdentity), any()))
+                      .thenReturn(spaceDrive);
+
+    jcrDocumentFileStorage.findDocumentsByName("workflow", 200L, aclIdentity, 20);
+
+    verify(userSession.getWorkspace().getQueryManager(), times(4)).createQuery(statement.capture(), eq(Query.SQL));
+    assertTrue(statement.getValue(), statement.getValue().contains("(jcr:path LIKE '/Groups/spaces/f2_support/Documents/%')"));
+    assertFalse(statement.getValue(), statement.getValue().contains("/Groups/spaces/%"));
+  }
+
+  /**
+   * A blank name, a name longer than {@link JCRDocumentFileStorage#MAX_NAME_LENGTH}
+   * and a name holding a line break are refused before any read.
+   */
+  @Test
+  public void findDocumentsByNameRefusesABlankLongOrMultiLineName() {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+
+    assertThrows(IllegalArgumentException.class, () -> jcrDocumentFileStorage.findDocumentsByName(" ", null, aclIdentity, 20));
+    assertThrows(IllegalArgumentException.class,
+                 () -> jcrDocumentFileStorage.findDocumentsByName("a".repeat(JCRDocumentFileStorage.MAX_NAME_LENGTH + 1),
+                                                                  null,
+                                                                  aclIdentity,
+                                                                  20));
+    assertThrows(IllegalArgumentException.class,
+                 () -> jcrDocumentFileStorage.findDocumentsByName("work\nflow", null, aclIdentity, 20));
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity), never());
+  }
+
+  /**
+   * @param aclIdentity the user
+   * @return the user's session, with the user's own drive and the groups'
+   *         path set up
+   * @throws Exception never
+   */
+  private Session nameLookupSession(org.exoplatform.services.security.Identity aclIdentity) throws Exception {
+    SessionProvider userProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(userProvider);
+    ManageableRepository repository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    Session session = mock(Session.class);
+    when(userProvider.getSession("collaboration", repository)).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getGroupsPath(nodeHierarchyCreator)).thenReturn("/Groups");
+    Identity userIdentity = new Identity(OrganizationIdentityProvider.NAME, aclIdentity.getUserId());
+    userIdentity.setId("1");
+    when(identityManager.getOrCreateUserIdentity(aclIdentity.getUserId())).thenReturn(userIdentity);
+    Node privateDrive = mock(Node.class);
+    when(privateDrive.getPath()).thenReturn(NAME_LOOKUP_PRIVATE);
+    JCR_DOCUMENTS_UTIL.when(() -> getIdentityRootNode(eq(spaceService),
+                                                      eq(nodeHierarchyCreator),
+                                                      eq(aclIdentity.getUserId()),
+                                                      eq(userIdentity),
+                                                      any()))
+                      .thenReturn(privateDrive);
+    return session;
+  }
+
+  /**
+   * @param session the session the folder is read through
+   * @param path the folder's path
+   * @param id the folder's id
+   * @param aclIdentity the user
+   * @return a folder node that session reads by its id
+   * @throws Exception never
+   */
+  private ExtendedNode nameLookupFolder(Session session,
+                                        String path,
+                                        String id,
+                                        org.exoplatform.services.security.Identity aclIdentity) throws Exception {
+    ExtendedNode node = mock(ExtendedNode.class);
+    when(node.getPath()).thenReturn(path);
+    when(node.getIdentifier()).thenReturn(id);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, id)).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFile(node)).thenReturn(false);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(node)).thenReturn(true);
+    FolderNode folder = new FolderNode();
+    folder.setId(id);
+    folder.setPath(path);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(identityManager, aclIdentity, node, "", spaceService))
+                      .thenReturn(folder);
+    return node;
+  }
+
+  /**
+   * Answers each statement the session runs with the given rows that lie
+   * under its {@code jcr:path LIKE} pattern, in the given order, as one query
+   * per drive would.
+   *
+   * @param session the session the queries run in
+   * @param rows the nodes the repository holds
+   * @return the queries created, in the order they were
+   * @throws Exception never
+   */
+  private List<QueryImpl> nameLookupRows(Session session, Node... rows) throws Exception {
+    Workspace workspace = mock(Workspace.class);
+    lenient().when(session.getWorkspace()).thenReturn(workspace);
+    QueryManager queryManager = mock(QueryManager.class);
+    lenient().when(workspace.getQueryManager()).thenReturn(queryManager);
+    List<QueryImpl> queries = new ArrayList<>();
+    lenient().when(queryManager.createQuery(anyString(), eq(Query.SQL))).thenAnswer(invocation -> {
+      String statement = invocation.getArgument(0);
+      int start = statement.indexOf("jcr:path LIKE '") + "jcr:path LIKE '".length();
+      String pattern = statement.substring(start, statement.indexOf('\'', start));
+      String regex = Arrays.stream(pattern.split("%", -1)).map(java.util.regex.Pattern::quote).collect(java.util.stream.Collectors.joining(".*"));
+      List<Node> matching = new ArrayList<>();
+      for (Node row : rows) {
+        if (row.getPath().matches(regex)) {
+          matching.add(row);
+        }
+      }
+      QueryImpl query = mock(QueryImpl.class);
+      QueryResult result = mock(QueryResult.class);
+      when(query.execute()).thenReturn(result);
+      Iterator<Node> iterator = matching.iterator();
+      NodeIterator nodes = mock(NodeIterator.class);
+      when(nodes.hasNext()).thenAnswer(next -> iterator.hasNext());
+      when(nodes.nextNode()).thenAnswer(next -> iterator.next());
+      when(result.getNodes()).thenReturn(nodes);
+      queries.add(query);
+      return query;
+    });
+    return queries;
+  }
+
+  /**
+   * @param groupName the space's group name under /spaces
+   * @param prettyName the space's pretty name
+   * @param identityId the space's identity id
+   */
+  private void nameLookupSpace(String groupName, String prettyName, long identityId) {
+    Space space = new Space();
+    space.setPrettyName(prettyName);
+    when(spaceService.getSpaceByGroupId("/spaces/" + groupName)).thenReturn(space);
+    Identity spaceIdentity = new Identity("space", prettyName);
+    spaceIdentity.setId(String.valueOf(identityId));
+    when(identityManager.getOrCreateSpaceIdentity(prettyName)).thenReturn(spaceIdentity);
+  }
 }
