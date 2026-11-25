@@ -35,7 +35,7 @@ public interface ExternalDownloadService {
    *         is restored)
    * @deprecated holds the whole content in memory, which fails above 2 GiB: use
    *             {@link #getDocumentDownloadInfo(String)} and
-   *             {@link #writeDocumentContent(String, OutputStream)} instead.
+   *             {@link #writeDocumentContent(String, long, OutputStream)} instead.
    *             Since 7.3.x.
    */
   @Deprecated(since = "7.3.x")
@@ -66,12 +66,17 @@ public interface ExternalDownloadService {
    * memory, whatever its size
    *
    * @param documentId document id
+   * @param contentLength the size read by {@link #getDocumentContentLength(String)}
+   *          and announced to the reader: content of another size is not
+   *          written
    * @param outputStream where the content is written; it is not closed
    * @throws ObjectNotFoundException when no document has this id, it has no
    *           content or it is in the trash
-   * @throws IOException when the content cannot be read or written
+   * @throws IOException when the content cannot be read or written, or no
+   *           longer has the given size
    */
-  void writeDocumentContent(String documentId, OutputStream outputStream) throws ObjectNotFoundException, IOException;
+  void writeDocumentContent(String documentId, long contentLength, OutputStream outputStream) throws ObjectNotFoundException,
+                                                                                                    IOException;
 
   /**
    * Download a zipped folder shared by a public link, with the rights of the

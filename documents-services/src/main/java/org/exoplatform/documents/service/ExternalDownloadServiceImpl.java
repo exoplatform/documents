@@ -134,14 +134,16 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
    * {@inheritDoc}
    */
   @Override
-  public void writeDocumentContent(String documentId, OutputStream outputStream) throws ObjectNotFoundException, IOException {
+  public void writeDocumentContent(String documentId,
+                                   long contentLength,
+                                   OutputStream outputStream) throws ObjectNotFoundException, IOException {
     if (documentId == null) {
       throw new IllegalArgumentException("document id is mandatory");
     }
     if (documentFileStorage.isDocumentInTrash(documentId)) {
       throw new ObjectNotFoundException("No document has id " + documentId);
     }
-    documentFileStorage.writeDocumentContent(documentId, outputStream);
+    documentFileStorage.writeDocumentContent(documentId, contentLength, outputStream);
   }
 
   /**

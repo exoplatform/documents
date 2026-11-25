@@ -17,6 +17,7 @@ import java.nio.file.Files;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.*;
@@ -220,7 +221,7 @@ public class ExternalDownloadServiceImplTest {
     assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.downloadZippedFolder(FOLDER_ID));
     assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.getFolderArchive(FOLDER_ID));
     assertThrows(ObjectNotFoundException.class,
-                 () -> externalDownloadService.writeDocumentContent(FOLDER_ID, new ByteArrayOutputStream()));
+                 () -> externalDownloadService.writeDocumentContent(FOLDER_ID, 0, new ByteArrayOutputStream()));
     assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.getDocumentContentLength(FOLDER_ID));
     verify(documentFileStorage, never()).getDocumentContentLength(anyString());
     verify(documentFileStorage, never()).getDocumentDownloadItem(anyString());
@@ -228,7 +229,7 @@ public class ExternalDownloadServiceImplTest {
     verify(documentFileStorage, never()).downloadFolder(anyString(), nullable(org.exoplatform.services.security.Identity.class));
     verify(documentFileStorage, never()).getFolderArchive(anyString(),
                                                           nullable(org.exoplatform.services.security.Identity.class));
-    verify(documentFileStorage, never()).writeDocumentContent(anyString(), any());
+    verify(documentFileStorage, never()).writeDocumentContent(anyString(), anyLong(), any());
   }
 
   @Test
@@ -242,8 +243,8 @@ public class ExternalDownloadServiceImplTest {
     assertSame(item, externalDownloadService.getDocumentDownloadInfo(FOLDER_ID));
     externalDownloadService.checkDocumentDownload(FOLDER_ID);
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    externalDownloadService.writeDocumentContent(FOLDER_ID, outputStream);
-    verify(documentFileStorage).writeDocumentContent(FOLDER_ID, outputStream);
+    externalDownloadService.writeDocumentContent(FOLDER_ID, 3, outputStream);
+    verify(documentFileStorage).writeDocumentContent(FOLDER_ID, 3, outputStream);
     when(documentFileStorage.getDocumentContentLength(FOLDER_ID)).thenReturn(3L);
     assertEquals(3L, externalDownloadService.getDocumentContentLength(FOLDER_ID));
   }
