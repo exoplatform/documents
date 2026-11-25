@@ -94,8 +94,9 @@ public class RecycleBinDriveStorage {
   /**
    * Replaces the totals of every drive by the ones counted from the trash, in
    * one transaction: each drive counted gets its totals, and the row of a
-   * drive that was not counted is deleted. An item counted in or out between
-   * the count and this write is overwritten, until the next replacement.
+   * drive that was not counted is deleted. An item that enters or leaves a
+   * bin while the trash is counted and these totals written may be missed or
+   * counted twice, until the next replacement.
    *
    * @param totals the totals of the drives whose bin holds items
    */

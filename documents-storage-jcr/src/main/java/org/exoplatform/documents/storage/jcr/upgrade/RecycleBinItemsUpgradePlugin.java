@@ -18,33 +18,40 @@ package org.exoplatform.documents.storage.jcr.upgrade;
 
 import org.exoplatform.commons.upgrade.UpgradePluginException;
 import org.exoplatform.commons.upgrade.UpgradeProductPlugin;
+import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.container.component.RequestLifeCycle;
 import org.exoplatform.container.monitor.jvm.ServerStartupWaiter;
 import org.exoplatform.container.xml.InitParams;
-import org.exoplatform.documents.storage.TrashStorage;
+import org.exoplatform.documents.service.RecycleBinService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
 /**
  * Gives the documents already in the trash when the Recycle Bin is installed
  * the facts it lists them with, so that each one shows in the bin of its
- * drive. It is declared to run asynchronously, once the server has started:
- * the trash may hold many items and the upgrade must not hold the startup. A
- * failure is thrown, so that the upgrade is not recorded as done and runs
- * again at the next start; what it had already handled is skipped then.
+ * drive, then counts every bin again, so that the Bin Overview lists their
+ * drives and sizes. It is declared to run asynchronously, once the server has
+ * started: the trash may hold many items and the upgrade must not hold the
+ * startup. The Recycle Bin service is looked for then, as it lives in a
+ * container that starts after this plugin. An item that cannot be given its
+ * facts is logged and skipped: the upgrade is recorded as done all the same,
+ * and the daily run of the Recycle Bins tries that item again and counts it
+ * once it has them. A failure to read the trash or to count the bins, or a
+ * Recycle Bin service not found, is thrown, so that the upgrade is not
+ * recorded as done: it runs again at the next start and skips what it had
+ * already handled. Only a first run made at a version the server already had
+ * waits for an upgrade to a newer one. Meanwhile, the daily run gives the
+ * items their facts and counts the bins again.
  */
 public class RecycleBinItemsUpgradePlugin extends UpgradeProductPlugin {
 
   private static final Log      LOG = ExoLogger.getLogger(RecycleBinItemsUpgradePlugin.class);
 
-  private final TrashStorage    trashStorage;
-
   private final PortalContainer container;
 
-  public RecycleBinItemsUpgradePlugin(TrashStorage trashStorage, PortalContainer container, InitParams initParams) {
+  public RecycleBinItemsUpgradePlugin(PortalContainer container, InitParams initParams) {
     super(initParams);
-    this.trashStorage = trashStorage;
     this.container = container;
   }
 
@@ -56,13 +63,22 @@ public class RecycleBinItemsUpgradePlugin extends UpgradeProductPlugin {
       Thread.currentThread().interrupt();
       throw new UpgradePluginException("The upgrade of the items of the trash was interrupted before it started", e);
     }
+    RecycleBinService recycleBinService = getRecycleBinService();
+    if (recycleBinService == null) {
+      throw new UpgradePluginException("The Recycle Bin service is not available: the upgrade of the items of the trash is not recorded as done"
+          + " and is attempted again at the next start, unless this first run was made at a version the server already had");
+    }
     long start = System.currentTimeMillis();
     RequestLifeCycle.begin(container);
     try {
-      int normalized = trashStorage.normalizeRecycleBinItems();
-      LOG.info("{} item(s) of the trash were given their Recycle Bin facts in {} ms", normalized, System.currentTimeMillis() - start);
-    } catch (Exception e) {
-      throw new UpgradePluginException("The items of the trash could not be given their Recycle Bin facts", e);
+      int normalized = recycleBinService.normalizeItems();
+      recycleBinService.recountDrives();
+      LOG.info("{} item(s) of the trash were given their Recycle Bin facts and the Recycle Bins were counted again in {} ms",
+               normalized,
+               System.currentTimeMillis() - start);
+    } catch (RuntimeException e) {
+      throw new UpgradePluginException("The items of the trash could not be given their Recycle Bin facts, or the Recycle Bins could not be counted again",
+                                       e);
     } finally {
       RequestLifeCycle.end();
     }
@@ -70,6 +86,10 @@ public class RecycleBinItemsUpgradePlugin extends UpgradeProductPlugin {
 
   void awaitServerStartup() throws InterruptedException {
     ServerStartupWaiter.awaitServerStartup(container, "Recycle Bin items upgrade");
+  }
+
+  RecycleBinService getRecycleBinService() {
+    return ExoContainerContext.getService(RecycleBinService.class);
   }
 
 }
