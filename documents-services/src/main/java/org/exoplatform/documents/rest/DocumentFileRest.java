@@ -1656,7 +1656,8 @@ public class DocumentFileRest implements ResourceContainer {
    * the name with its spaces and accents, {@code filename} the others.
    */
   private static String getAttachmentDisposition(String fileName) {
-    String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+    // URLEncoder leaves "*" as is, which a filename* value must not hold
+    String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20").replace("*", "%2A");
     return "attachment; filename=\"" + encodedName + "\"; filename*=UTF-8''" + encodedName;
   }
 

@@ -161,6 +161,15 @@ public class ExternalDownloadServiceImplTest {
     assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.checkDocumentDownload("missing"));
   }
 
+  /** The check answers as the download does for a file whose content cannot be read. */
+  @Test
+  public void checkDocumentDownloadOfAFileWithoutReadableContentIsNotFound() throws Exception {
+    when(documentFileStorage.getDocumentDownloadInfo("file")).thenReturn(new DownloadItem("file", "a.pdf", null, "application/pdf"));
+    when(documentFileStorage.getDocumentContentLength("file")).thenThrow(ObjectNotFoundException.class);
+
+    assertThrows(ObjectNotFoundException.class, () -> externalDownloadService.checkDocumentDownload("file"));
+  }
+
   @Test
   public void checkDocumentDownloadOfAFolderChecksItWithTheCreatorRights() throws Exception {
     when(documentFileStorage.getDocumentDownloadInfo(FOLDER_ID)).thenReturn(new DownloadItem(FOLDER_ID, "folder", null, null));

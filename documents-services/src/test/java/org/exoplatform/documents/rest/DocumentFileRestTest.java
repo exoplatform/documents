@@ -1827,6 +1827,12 @@ public class DocumentFileRestTest {
     javax.ws.rs.core.StreamingOutput documentBody = (javax.ws.rs.core.StreamingOutput) response.getEntity();
     assertThrows(IOException.class, () -> documentBody.write(new ByteArrayOutputStream()));
 
+    // A name with characters a filename* value must encode
+    downloadItem.setItemName("a*b c.pdf");
+    response = documentFileRest.downloadDocument("123", null);
+    assertEquals("attachment; filename=\"a%2Ab%20c.pdf\"; filename*=UTF-8''a%2Ab%20c.pdf",
+                 String.valueOf(response.getMetadata().getFirst("Content-Disposition")));
+
     // A document whose content cannot be read answers 404 before the answer
     // starts
     when(externalDownloadService.getDocumentContentLength("123")).thenThrow(ObjectNotFoundException.class);
