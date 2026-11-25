@@ -1311,7 +1311,7 @@ public class DocumentMcpToolTest {
     assertEquals(FOLDER_ID, models.get(0).getId());
     assertEquals("F2 Support", models.get(0).getSpaceName());
     assertEquals("/", models.get(0).getFolderPath());
-    assertEquals(Boolean.TRUE, models.get(0).getFolder());
+    assertEquals(DocumentMcpTool.TYPE_FOLDER, models.get(0).getType());
     assertEquals(DocumentMcpTool.PERSONAL_DRIVE, models.get(1).getSpaceName());
     assertEquals("/projects", models.get(1).getFolderPath());
     verify(documentFileService, never()).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
@@ -1321,7 +1321,9 @@ public class DocumentMcpToolTest {
   }
 
   /**
-   * A file found by its name says it isn't a folder.
+   * A file found by its name says it is a file, as a type rather than an
+   * is_* flag, which an assistant's data digest leaves out. Mutant: the type
+   * left unset.
    */
   @Test
   public void searchDocumentsByNameTellsAFileIsNoFolder() throws Exception {
@@ -1331,8 +1333,80 @@ public class DocumentMcpToolTest {
     List<DocumentModel> models = documentMcpTool.searchDocuments(null, "zz-8416-form.pdf", null, null, null, null, null, null, null);
 
     assertEquals(1, models.size());
-    assertEquals(Boolean.FALSE, models.get(0).getFolder());
+    assertEquals(DocumentMcpTool.TYPE_FILE, models.get(0).getType());
     assertEquals("/workflow/12", models.get(0).getFolderPath());
+    verify(documentFileService, never()).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                                any(),
+                                                anyInt(),
+                                                anyInt());
+  }
+
+  /**
+   * A name no file or folder carries exactly falls back to the text search
+   * for that name without its extension, in the same space, through the
+   * same search and with the same cap, its hits returned as files. Whether
+   * the index matches « zz-8416-form » against « zz-8416-form - Root Root -
+   * 20261123.pdf » is the engine's, not checked here. The search reads as
+   * the user, as a query does. Mutants: another identity passed;
+   * the fallback removed; the extension kept; the space dropped; the cap
+   * dropped.
+   */
+  @Test
+  public void searchDocumentsByNameFallsBackToTheTextSearchWhenNoNameMatches() throws Exception {
+    Space space = new Space();
+    space.setId(String.valueOf(SPACE_ID));
+    space.setPrettyName("f2_support");
+    when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(space);
+    when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(true);
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity =
+                                                                      new org.exoplatform.social.core.identity.model.Identity("space",
+                                                                                                                              "f2_support");
+    spaceIdentity.setId("200");
+    when(identityManager.getOrCreateSpaceIdentity("f2_support")).thenReturn(spaceIdentity);
+    when(documentFileService.findDocumentsByName("zz-8416-form.pdf", 200L, USER_IDENTITY_ID, 5)).thenReturn(List.of());
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class), any(), anyInt(), anyInt()))
+        .thenReturn(List.of(fileNodeNamed(DOCUMENT_ID, "zz-8416-form - Root Root - 20261123.pdf")));
+
+    List<DocumentModel> models = documentMcpTool.searchDocuments(null, "zz-8416-form.pdf", SPACE_ID, null, null, null, 5, null, null);
+
+    ArgumentCaptor<org.exoplatform.documents.model.DocumentTimelineFilter> filter =
+                                                                                ArgumentCaptor.forClass(org.exoplatform.documents.model.DocumentTimelineFilter.class);
+    verify(documentFileService).search(filter.capture(), eq(currentIdentity), eq(0), eq(5));
+    assertEquals("zz-8416-form", filter.getValue().getQuery());
+    assertEquals(Long.valueOf(200L), filter.getValue().getOwnerId());
+    assertEquals(1, models.size());
+    assertEquals(DOCUMENT_ID, models.get(0).getId());
+    assertEquals(DocumentMcpTool.TYPE_FILE, models.get(0).getType());
+  }
+
+  /**
+   * A name's extension is dropped for the text search, but a name made of an
+   * extension alone, or with none, is searched as it is.
+   */
+  @Test
+  public void aNameIsSearchedAsTextWithoutItsExtension() {
+    assertEquals("zz-8416-form", DocumentMcpTool.withoutExtension("zz-8416-form.pdf"));
+    assertEquals("report v1", DocumentMcpTool.withoutExtension("report v1.2"));
+    assertEquals("workflow", DocumentMcpTool.withoutExtension("workflow"));
+    assertEquals(".pdf", DocumentMcpTool.withoutExtension(".pdf"));
+  }
+
+  /**
+   * The fallback's text drops the double quotes and backslashes a title
+   * search does not take, and a name left empty searches nothing. Mutant:
+   * the quotes kept.
+   */
+  @Test
+  public void aNameSearchedAsTextLosesItsQuotesAndBackslashes() throws Exception {
+    assertEquals("Rapport Q3", DocumentMcpTool.toTitleSearch("Rapport \"Q3\".docx"));
+    assertEquals("a b", DocumentMcpTool.toTitleSearch("a\\b.txt"));
+    assertEquals("", DocumentMcpTool.toTitleSearch("\"\".pdf"));
+
+    assertTrue(documentMcpTool.searchDocuments(null, "\"\".pdf", null, null, null, null, null, null, null).isEmpty());
+    verify(documentFileService, never()).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                                any(),
+                                                anyInt(),
+                                                anyInt());
   }
 
   /**
@@ -1388,7 +1462,10 @@ public class DocumentMcpToolTest {
 
   /**
    * A name combined with another kind of search is refused, saying what it
-   * combines with.
+   * combines with and what to send instead; with a date, the refusal names
+   * the second call that lists what changed in the found folder, once no
+   * other argument is refused. Mutants: the date refused with the generic
+   * message; the date checked before the other arguments.
    */
   @Test
   public void searchDocumentsByNameWithAnotherSearchFails() throws Exception {
@@ -1402,8 +1479,16 @@ public class DocumentMcpToolTest {
                  () -> documentMcpTool.searchDocuments(null, "workflow", null, null, null, 20, null, null, null));
     assertThrows(IllegalArgumentException.class,
                  () -> documentMcpTool.searchDocuments(null, "workflow", null, null, null, null, null, true, null));
-    assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.searchDocuments(null, "workflow", null, null, null, null, null, null, "2026-11-23"));
+    IllegalArgumentException withDate =
+                                      assertThrows(IllegalArgumentException.class,
+                                                   () -> documentMcpTool.searchDocuments(null, "workflow", null, null, null, null, null, null, "2026-11-23"));
+    assertEquals(DocumentMcpTool.MSG_NAME_THEN_CHANGES, withDate.getMessage());
+    assertTrue(withDate.getMessage(), withDate.getMessage().contains("document_id as parent_folder_id and with updated_since"));
+    assertTrue(DocumentMcpTool.MSG_NAME_ALONE, DocumentMcpTool.MSG_NAME_ALONE.contains("pass query without name"));
+    IllegalArgumentException withQueryAndDate =
+                                              assertThrows(IllegalArgumentException.class,
+                                                           () -> documentMcpTool.searchDocuments("report", "workflow", null, null, null, null, null, null, "2026-11-23"));
+    assertEquals(DocumentMcpTool.MSG_NAME_ALONE, withQueryAndDate.getMessage());
     verify(documentFileService, never()).findDocumentsByName(anyString(), any(), anyLong(), anyInt());
   }
 

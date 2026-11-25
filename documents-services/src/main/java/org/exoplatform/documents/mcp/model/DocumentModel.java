@@ -88,9 +88,12 @@ public abstract class DocumentModel {
   @JsonProperty("folder_path")
   private String    folderPath;
 
-  /** Whether a name lookup found a folder, null for any other listing. */
-  @JsonProperty("is_folder")
-  private Boolean   folder;
+  /**
+   * What a name lookup found: "folder" or "file"; null for any other listing.
+   * Not an is_* flag, which an assistant's data digest leaves out.
+   */
+  @JsonProperty("type")
+  private String    type;
 
   /**
    * Builds the document's common fields, its rights left unknown.

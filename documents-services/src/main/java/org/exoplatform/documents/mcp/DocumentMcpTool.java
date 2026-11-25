@@ -312,7 +312,20 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /** The refusal of a name lookup combined with another kind of search. */
   static final String              MSG_NAME_ALONE         =
-                                                  "Pass name alone, or with space_id or space_name: name doesn't combine with query, updated_since, parent_folder_id, is_favorites or offset.";
+                                                  "Pass name alone, or with space_id or space_name only: name doesn't combine with query, parent_folder_id, is_favorites or offset. To search the text instead, pass query without name.";
+
+  /**
+   * The refusal of a name lookup combined with a date, naming the two calls
+   * that answer what changed in a named folder.
+   */
+  static final String              MSG_NAME_THEN_CHANGES  =
+                                                         "Pass name alone: name doesn't combine with updated_since. To see what changed in a folder found by name, first call search_documents with name only (and space_name when a space is named), then call search_documents with that folder's document_id as parent_folder_id and with updated_since.";
+
+  /** The type a name lookup gives a folder it found. */
+  static final String              TYPE_FOLDER            = "folder";
+
+  /** The type a name lookup gives a file it found. */
+  static final String              TYPE_FILE              = "file";
 
   /** The refusal of a space given both by id and by name. */
   private static final String      MSG_SPACE_ID_OR_NAME   = "Pass either space_id or space_name, not both.";
@@ -1401,7 +1414,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    *          without case, blank for none: it finds folders too, in every
    *          drive the user can read or in the one space given, each with its
    *          drive and its folder, at most {@link #MAX_NAME_MATCHES}, in the
-   *          order of their path
+   *          order of their path; when none has exactly that name, the text
+   *          search's hits for it without its extension
    * @param spaceId the space to search in, null for none
    * @param spaceName the name of the space to search in, blank for none
    * @param parentFolderId the folder to search under, which wins over the
@@ -1472,7 +1486,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param limit the most matches, at most {@link #MAX_NAME_MATCHES}
    * @param isFavorites must be null or false
    * @param updatedSince must be blank
-   * @return the matches, in the order of their path
+   * @return the matches, in the order of their path; when no file or folder
+   *         has exactly that name, the text search's hits for it instead
+   *         ({@link #searchNameAsText})
    * @throws ObjectNotFoundException when the space doesn't exist, or no space
    *           of the user carries the name
    * @throws IllegalAccessException when the user can't view the space
@@ -1488,9 +1504,12 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                   Integer limit,
                                                   Boolean isFavorites,
                                                   String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
-    if (StringUtils.isNotBlank(query) || StringUtils.isNotBlank(updatedSince) || StringUtils.isNotBlank(parentFolderId)
-        || Boolean.TRUE.equals(isFavorites) || (offset != null && offset > 0)) {
+    if (StringUtils.isNotBlank(query) || StringUtils.isNotBlank(parentFolderId) || Boolean.TRUE.equals(isFavorites)
+        || (offset != null && offset > 0)) {
       throw new IllegalArgumentException(MSG_NAME_ALONE);
+    }
+    if (StringUtils.isNotBlank(updatedSince)) {
+      throw new IllegalArgumentException(MSG_NAME_THEN_CHANGES);
     }
     Long searchedSpaceId = resolveSpaceId(spaceId, spaceName, "search_documents");
     Long ownerId = searchedSpaceId == null ? null : getViewableSpaceIdentityId(searchedSpaceId);
@@ -1499,8 +1518,66 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                               ownerId,
                                                                               getCurrentUserIdentityId(),
                                                                               size);
+    if (matches.isEmpty()) {
+      return searchNameAsText(name.trim(), ownerId, size);
+    }
     Map<Long, String> driveNames = new HashMap<>();
     return matches.stream().map(match -> toNameMatchModel(match, driveNames)).toList();
+  }
+
+  /**
+   * Searches the text index for a name no file or folder carries exactly, so
+   * that a file whose title only holds it ("zz-8416-form - Root Root -
+   * 20261123.pdf" for "zz-8416-form.pdf") can still be found; whether the
+   * index matches such a title is the engine's, which no unit test runs. The
+   * name is searched as {@link #toTitleSearch} gives it, in the same scope
+   * and through the same search as a query, so the same read rights apply;
+   * the index holds files only, and this search reads their titles.
+   *
+   * @param name the name the lookup found nothing for
+   * @param ownerId the identity id of the one drive searched, null for every
+   *          drive
+   * @param size the most hits
+   * @return the hits, files only, each of type {@link #TYPE_FILE}
+   */
+  private List<DocumentModel> searchNameAsText(String name, Long ownerId, int size) {
+    String text = toTitleSearch(name);
+    if (text.isEmpty()) {
+      return List.of();
+    }
+    DocumentTimelineFilter filter = new DocumentTimelineFilter();
+    filter.setQuery(text);
+    if (ownerId != null) {
+      filter.setOwnerId(ownerId);
+    }
+    List<FileNode> files = documentFileService.search(filter, getCurrentUserAclIdentity(), DEFAULT_OFFSET, size);
+    return files.stream().map(file -> {
+      DocumentModel model = toDocumentFileModel(file);
+      model.setType(TYPE_FILE);
+      return model;
+    }).toList();
+  }
+
+  /**
+   * @param name a name no file or folder carries exactly
+   * @return the text the fallback searches: the name without its extension,
+   *         its double quotes and backslashes dropped, which a title search
+   *         does not take; empty when nothing is left
+   */
+  static String toTitleSearch(String name) {
+    return StringUtils.normalizeSpace(withoutExtension(name).replace('"', ' ').replace('\\', ' '));
+  }
+
+  /**
+   * @param name a file name
+   * @return the name without its last extension ("zz-8416-form" for
+   *         "zz-8416-form.pdf"), or the name itself when it has none or
+   *         nothing would be left
+   */
+  static String withoutExtension(String name) {
+    int dot = name.lastIndexOf('.');
+    String base = dot > 0 ? name.substring(0, dot).trim() : name;
+    return StringUtils.isBlank(base) ? name : base;
   }
 
   /**
@@ -1515,7 +1592,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     DocumentModel model = toDocumentModel(match.document());
     model.setSpaceName(driveNames.computeIfAbsent(match.ownerIdentityId(), this::getDriveName));
     model.setFolderPath(match.folderPath());
-    model.setFolder(match.document().isFolder());
+    model.setType(match.document().isFolder() ? TYPE_FOLDER : TYPE_FILE);
     return model;
   }
 

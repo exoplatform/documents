@@ -199,7 +199,9 @@ public class DocumentToolDefinitionsTest {
             "6439b74c3301e63f39ddc5048f4398b82bd66f11ea9c1b40d560254b6046e2ea",
             "3355a37e4de74828f7eaff2175d0341678c39488228055daf31dbb93c45a024c",
             // documents cd18fc178 (EXO-94927), replaced by the name lookup (EXO-95137)
-            "217914868e5e94688a4c3ed5e2d2f47e52878dbac8684dabaa1aeb7927a9ae95")
+            "217914868e5e94688a4c3ed5e2d2f47e52878dbac8684dabaa1aeb7927a9ae95",
+            // the name lookup's first text (EXO-95137)
+            "d2f7cb52b8ca1620446925ac96cf831d92e8ee0563a9cdff62ba2710083cac44")
         .forEach(digest -> assertTrue(digest + " not in " + replaced, replaced.contains(digest)));
     Map<String, Object> current = new TreeMap<>();
     current.put("description", description);
@@ -212,10 +214,13 @@ public class DocumentToolDefinitionsTest {
 
   /**
    * search_documents finds a file or a folder by its name (EXO-95137): it
-   * takes a name, its description states the cap the tool applies and the
-   * fields each match carries, and it stays a read that asks for no approval.
-   * Mutants: the name property dropped; the cap in the description and in
-   * the tool drifting apart; readOnlyHint false; require_approval set.
+   * takes a name, its description states the cap the tool applies, the
+   * fields each match carries, the text search it falls back to and the
+   * second call that lists what changed in a named folder, and it stays a
+   * read that asks for no approval. Mutants: the name property dropped; the
+   * cap in the description and in the tool drifting apart; the fallback
+   * sentence removed; the two-call sentence removed; is_folder named again;
+   * readOnlyHint false; require_approval set.
    *
    * @throws Exception never
    */
@@ -233,6 +238,15 @@ public class DocumentToolDefinitionsTest {
     String description = search.get("description").asString();
     assertTrue(description, description.contains("at most " + DocumentMcpTool.MAX_NAME_MATCHES + ", in the order of their path"));
     assertTrue(description, description.contains("space_name") && description.contains("folder_path"));
+    assertTrue(description, description.contains("its type (folder or file)") && !description.contains("is_folder"));
+    assertTrue(description,
+               description.contains("When no file or folder has exactly that name, it returns the text search's hits for that name "
+                   + "without its extension instead (files only, without space_name or folder_path), so an empty list means neither found anything."));
+    assertTrue(description,
+               description.contains("To see what changed in a folder found by name, call it again with that folder's document_id as "
+                   + "parent_folder_id and with updated_since."));
+    String name = search.get("input_schema").get("properties").get("name").get("description").asString();
+    assertTrue(name, name.contains("never with updated_since, which takes the found folder's document_id as parent_folder_id"));
     assertTrue(search.get("annotations").get("readOnlyHint").asBoolean());
     assertFalse(search.has("require_approval") && search.get("require_approval").asBoolean());
   }
