@@ -175,6 +175,9 @@ public class ExternalDownloadServiceImpl implements ExternalDownloadService {
     }
     if (downloadInfo.getMimeType() == null) {
       documentFileStorage.checkFolderReadable(documentId, getLinkCreatorAclIdentity(documentId));
+    } else {
+      // A file whose content cannot be read answers as the download does
+      documentFileStorage.getDocumentContentLength(documentId);
     }
   }
 
