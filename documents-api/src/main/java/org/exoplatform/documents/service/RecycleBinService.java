@@ -311,4 +311,30 @@ public interface RecycleBinService {
    */
   void purgeExpired(String requester);
 
+  /**
+   * Gives the items of the trash that lack them the facts the Recycle Bin
+   * lists them with, as {@link #purgeExpired()} does first: the items deleted
+   * before the Recycle Bin was installed, and those deleted by a mover that
+   * records none. An item that cannot be given its facts is reported and
+   * skipped: it is not counted in the number returned, and the next daily run
+   * tries it again.
+   *
+   * @return the number of items given their facts
+   * @throws IllegalStateException when the items of the trash cannot be read
+   */
+  int normalizeItems();
+
+  /**
+   * Counts again, from the trash itself, what the Recycle Bin of each drive
+   * holds, and puts these totals in place of the ones the Bin Overview lists,
+   * as {@link #purgeExpired()} does after {@link #normalizeItems()}: a drive
+   * whose bin holds nothing is no longer listed. An item that enters or
+   * leaves a bin while this count runs may be missed or counted twice, until
+   * the next count. A failure to write these totals is let out as it is, so
+   * that a caller does not take them for written.
+   *
+   * @throws IllegalStateException when the trash cannot be read
+   */
+  void recountDrives();
+
 }
