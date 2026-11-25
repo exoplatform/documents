@@ -1610,7 +1610,7 @@ public class DocumentFileRest implements ResourceContainer {
         // memory, which fails above 2 GiB
         StreamingOutput documentBody = output -> {
           try {
-            externalDownloadService.writeDocumentContent(documentId, output);
+            externalDownloadService.writeDocumentContent(documentId, contentLength, output);
           } catch (ObjectNotFoundException e) {
             // The answer has started: the transfer is cut short, never a 404
             throw new IOException("Document " + documentId + " is gone while it is sent", e);

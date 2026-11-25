@@ -3495,10 +3495,20 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * {@inheritDoc}
    */
   @Override
-  public void writeDocumentContent(String documentId, OutputStream outputStream) throws ObjectNotFoundException, IOException {
+  public void writeDocumentContent(String documentId,
+                                   long contentLength,
+                                   OutputStream outputStream) throws ObjectNotFoundException, IOException {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
-    try (InputStream inputStream = getContentData(sessionProvider, documentId).getStream()) {
-      inputStream.transferTo(outputStream);
+    try {
+      Property contentData = getContentData(sessionProvider, documentId);
+      if (contentData.getLength() != contentLength) {
+        // Replaced since its size was announced: nothing is written, so the
+        // reader gets fewer bytes than announced and sees a failed download
+        throw new IOException("The content of document " + documentId + " changed size since its download started");
+      }
+      try (InputStream inputStream = contentData.getStream()) {
+        inputStream.transferTo(outputStream);
+      }
     } catch (RepositoryException e) {
       throw new IOException("Content of document " + documentId + " cannot be read", e);
     } finally {

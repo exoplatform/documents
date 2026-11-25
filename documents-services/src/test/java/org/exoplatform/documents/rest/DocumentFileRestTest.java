@@ -1811,11 +1811,11 @@ public class DocumentFileRestTest {
     assertNoStore(response);
     // The content is copied into the response as it is read, never read
     // whole into memory
-    verify(externalDownloadService, never()).writeDocumentContent(anyString(), any());
+    verify(externalDownloadService, never()).writeDocumentContent(anyString(), anyLong(), any());
     doAnswer(invocation -> {
-      invocation.getArgument(1, java.io.OutputStream.class).write("test".getBytes());
+      invocation.getArgument(2, java.io.OutputStream.class).write("test".getBytes());
       return null;
-    }).when(externalDownloadService).writeDocumentContent(eq("123"), any());
+    }).when(externalDownloadService).writeDocumentContent(eq("123"), eq(4L), any());
     ByteArrayOutputStream documentSent = new ByteArrayOutputStream();
     ((javax.ws.rs.core.StreamingOutput) response.getEntity()).write(documentSent);
     assertEquals("test", documentSent.toString());
@@ -1823,7 +1823,7 @@ public class DocumentFileRestTest {
 
     // The document is gone once the answer has started: the transfer is cut
     // short
-    doThrow(ObjectNotFoundException.class).when(externalDownloadService).writeDocumentContent(eq("123"), any());
+    doThrow(ObjectNotFoundException.class).when(externalDownloadService).writeDocumentContent(eq("123"), anyLong(), any());
     javax.ws.rs.core.StreamingOutput documentBody = (javax.ws.rs.core.StreamingOutput) response.getEntity();
     assertThrows(IOException.class, () -> documentBody.write(new ByteArrayOutputStream()));
 

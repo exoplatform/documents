@@ -365,19 +365,25 @@ class PublicLinkFolderDownloadTest {
         closed.set(true);
       }
     };
-    storage.writeDocumentContent(fileId, content);
+    long length = storage.getDocumentContentLength(fileId);
+    storage.writeDocumentContent(fileId, length, content);
     assertEquals("visible to every member", content.toString(StandardCharsets.UTF_8));
     assertFalse(closed.get(), "the caller owns the stream");
+
+    // A content replaced since its size was announced is not written
+    java.io.ByteArrayOutputStream replaced = new java.io.ByteArrayOutputStream();
+    assertThrows(IOException.class, () -> storage.writeDocumentContent(fileId, length + 1, replaced));
+    assertEquals(0, replaced.size(), "nothing is written");
 
     assertEquals("visible to every member".getBytes(StandardCharsets.UTF_8).length,
                  storage.getDocumentContentLength(fileId),
                  "the size is read without the content");
     assertThrows(ObjectNotFoundException.class, () -> storage.getDocumentContentLength(sharedFolderId), "a folder has no content");
     assertThrows(ObjectNotFoundException.class,
-                 () -> storage.writeDocumentContent(sharedFolderId, new java.io.ByteArrayOutputStream()),
+                 () -> storage.writeDocumentContent(sharedFolderId, 0, new java.io.ByteArrayOutputStream()),
                  "a folder has no content");
     assertThrows(ObjectNotFoundException.class,
-                 () -> storage.writeDocumentContent(UUID.randomUUID().toString(), new java.io.ByteArrayOutputStream()),
+                 () -> storage.writeDocumentContent(UUID.randomUUID().toString(), 0, new java.io.ByteArrayOutputStream()),
                  "no document has this id");
   }
 
