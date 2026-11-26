@@ -120,6 +120,7 @@
               :space-id="templatesOwnerId"
               object-type="document"
               hide-on-empty
+              scrollable
               class="attachmentsTemplateCategories" />
           </div>
           <!-- Full-width reused Documents-app cards, stacked. click.capture keeps
