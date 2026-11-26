@@ -348,7 +348,7 @@ public interface DocumentFileService {
 
   /**
    * Writes the document's access list and shares it with the identities of
-   * {@link NodePermission#getToShare()}. The space of the document decides the
+   * {@code NodePermission#toShare}. The space of the document decides the
    * whole request before anything is written, for a user who may edit the
    * document: "Limit Access Management" as {@link #checkCanManageAccess}, then
    * "Keep documents inside the space", which refuses an identity outside the
