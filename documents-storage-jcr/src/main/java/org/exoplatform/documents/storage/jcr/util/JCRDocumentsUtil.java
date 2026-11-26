@@ -1392,7 +1392,8 @@ public class JCRDocumentsUtil {
    * @param folder the folder whose content is zipped, the folder itself left
    *          out of the entries' paths
    * @param outputStream where the zip is written; it is finished, not closed
-   * @throws IOException when a file cannot be read or the stream written
+   * @throws IOException when a file cannot be read, a folder cannot be listed
+   *           or the stream written
    */
   public static void zipFiles(File folder, OutputStream outputStream) throws IOException {
     ZipTarget target = new ZipTarget(outputStream);
@@ -1460,7 +1461,9 @@ public class JCRDocumentsUtil {
   private static void zipFolder(File folder, String folderName, ZipOutputStream zipOutputStream) throws IOException {
     File[] files = folder.listFiles();
     if (files == null) {
-      return;
+      // A folder that cannot be listed is a read failure: the zip fails rather
+      // than finishing without that folder's content
+      throw new IOException("Cannot list the folder " + folder);
     }
     for (File file : files) {
       if (file.isDirectory()) {
