@@ -150,7 +150,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
    */
   @Override
   public boolean isPublicDocumentAccessExpired(String documentId) {
-    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    PublicDocumentAccess publicDocumentAccess = getActivePublicDocumentAccess(documentId);
     if (publicDocumentAccess == null) {
       return true;
     }
@@ -162,7 +162,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
    */
   @Override
   public boolean isDocumentPublicAccessValid(String documentId, String password) {
-    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    PublicDocumentAccess publicDocumentAccess = getActivePublicDocumentAccess(documentId);
     if (publicDocumentAccess == null) {
       return false;
     }
@@ -188,7 +188,7 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
     if (documentId == null) {
       throw new IllegalArgumentException("document id is mandatory");
     }
-    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    PublicDocumentAccess publicDocumentAccess = getActivePublicDocumentAccess(documentId);
     if (publicDocumentAccess == null) {
       throw new ObjectNotFoundException("Document has no public access link");
     }
@@ -208,6 +208,19 @@ public class PublicDocumentAccessServiceImpl implements PublicDocumentAccessServ
   @Override
   public void revokeDocumentPublicAccess(String documentId) {
     publicDocumentAccessStorage.removePublicDocumentAccess(documentId);
+  }
+
+  /**
+   * Gets the link of a document as the public pages read it: a link whose
+   * document is in the trash is reported as absent, as a revoked link is, and
+   * answers again once the document is restored.
+   */
+  private PublicDocumentAccess getActivePublicDocumentAccess(String documentId) {
+    PublicDocumentAccess publicDocumentAccess = publicDocumentAccessStorage.getPublicDocumentAccessByNodeId(documentId);
+    if (publicDocumentAccess != null && documentFileStorage.isDocumentInTrash(documentId)) {
+      return null;
+    }
+    return publicDocumentAccess;
   }
 
   private static boolean isExpired(PublicDocumentAccess publicDocumentAccess) {

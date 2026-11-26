@@ -50,7 +50,9 @@ public interface PublicDocumentAccessService {
    * Checks if public access expired
    *
    * @param documentId node id
-   * @return true or false
+   * @return true when the link has expired, when the document has no link, or
+   *         when the document is in the trash (the link answers again once the
+   *         document is restored); false otherwise
    */
   boolean isPublicDocumentAccessExpired(String documentId);
 
@@ -81,7 +83,7 @@ public interface PublicDocumentAccessService {
    * @param documentId document id
    * @return {@link PublicDocumentInfo}
    * @throws ObjectNotFoundException when the document has no public access
-   *           link, no longer exists or cannot be read
+   *           link, is in the trash, no longer exists or cannot be read
    */
   PublicDocumentInfo getPublicDocumentInfo(String documentId) throws ObjectNotFoundException;
 

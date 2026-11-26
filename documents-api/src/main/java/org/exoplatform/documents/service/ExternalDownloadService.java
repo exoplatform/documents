@@ -28,7 +28,9 @@ public interface ExternalDownloadService {
    * Gets a download item of a given document
    *
    * @param documentId document id
-   * @return {@link DownloadItem}
+   * @return {@link DownloadItem}, or null when the document is in the trash
+   *         (a public link of a trashed document is inactive until the document
+   *         is restored)
    */
   DownloadItem getDocumentDownloadItem(String documentId);
 
@@ -42,8 +44,9 @@ public interface ExternalDownloadService {
    * @return the zipped folder, read from a file of its own that closing the
    *         stream deletes: the caller closes it
    * @throws ObjectNotFoundException when the folder has no public link, the
-   *           link records no creator, the creator is unknown, deleted or
-   *           disabled, or the creator cannot read the folder
+   *           folder is in the trash, the link records no creator, the creator
+   *           is unknown, deleted or disabled, or the creator cannot read the
+   *           folder
    * @throws IOException when the zip cannot be built or read
    */
   InputStream downloadZippedFolder(String folderId) throws IOException, ObjectNotFoundException;
@@ -55,9 +58,9 @@ public interface ExternalDownloadService {
    * document or building a folder's zip
    *
    * @param documentId the link's document id
-   * @throws ObjectNotFoundException when no document has this id, or, for a
-   *           folder, when its link records no active creator or the creator
-   *           cannot read it
+   * @throws ObjectNotFoundException when no document has this id, when the
+   *           document is in the trash, or, for a folder, when its link records
+   *           no active creator or the creator cannot read it
    */
   void checkDocumentDownload(String documentId) throws ObjectNotFoundException;
 }
