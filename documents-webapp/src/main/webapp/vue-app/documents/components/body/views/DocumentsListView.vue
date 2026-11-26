@@ -90,7 +90,7 @@
         #item="{item}">
         <v-hover v-slot="{ hover }">
           <tr
-            class="hover-reveal-parent"
+            class="documentsRow hover-reveal-parent"
             :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
             @mouseover="showSelectionInput(item)"
             @mouseleave="hideSelectionInput(item)"
@@ -126,7 +126,7 @@
         #item="{item}">
         <tr
           :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
-          class="v-data-table__mobile-table-row pb-2 pt-2">
+          class="documentsRow v-data-table__mobile-table-row pb-2 pt-2">
           <td
             class="v-data-table__mobile-row">
             <documents-table-cell
