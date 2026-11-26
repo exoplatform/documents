@@ -115,7 +115,7 @@
                   v-slot="{ hover }"
                   :key="item.id">
                   <tr
-                    class="hover-reveal-parent"
+                    class="documentsRow hover-reveal-parent"
                     :class="isDocumentSelected(item)? 'v-data-table__selected': ''"
                     :data-fileId="item.id"
                     :data-isFolder="item.folder? 'true': 'false'"
