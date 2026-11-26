@@ -113,7 +113,7 @@
           </div>
         </template>
       </application-toolbar>
-      <documents-header-menu v-if="!filterDispalyed" class="flex-shrink-0 mb-4 me-4 ms-n1" />
+      <documents-header-menu v-if="!filterDispalyed" class="flex-shrink-0" />
     </div>
     <documents-setting-drawer :view-list="viewList" />
   </div>
