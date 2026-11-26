@@ -1,5 +1,6 @@
 <template>
   <document-action-item
+    class="document-action-delete"
     icon="fas fa-trash"
     icon-extra-class="error-color"
     label-extra-class="error-color"
