@@ -901,6 +901,11 @@ export default {
         this.selectedFolder = {};
         return;
       }
+      if (name === '.' || name === '..') {
+        this.openWarningDialog(this.$t('attachments.valid.title.dots.error.message'));
+        this.cancelRenameNewFolder();
+        return;
+      }
       const nameExists = this.browseItems.some(item => item.folder && item.name === name);
       if (nameExists) {
         this.openWarningDialog(this.$t('attachments.renameFolder.error'));

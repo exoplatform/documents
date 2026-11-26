@@ -390,6 +390,11 @@ public class JCRDocumentsUtilTest {
     assertFalse(JCRDocumentsUtil.isValidDocumentTitle("   "));
     assertFalse(JCRDocumentsUtil.isValidDocumentTitle("   .docx"));
     assertTrue(JCRDocumentsUtil.isValidDocumentTitle("test.docx"));
+    assertFalse(JCRDocumentsUtil.isValidDocumentTitle("."));
+    assertFalse(JCRDocumentsUtil.isValidDocumentTitle(".."));
+    assertFalse(JCRDocumentsUtil.isValidDocumentTitle(" .. "));
+    assertTrue(JCRDocumentsUtil.isValidDocumentTitle("..txt"));
+    assertTrue(JCRDocumentsUtil.isValidDocumentTitle("a..b"));
   }
 
   @Test
@@ -672,6 +677,333 @@ public class JCRDocumentsUtilTest {
     }
   }
 
+  /**
+   * A folder titled ".." is left out of the download, with what it holds, and
+   * the rest of the folder is copied.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersKeepsEveryCopyInTheDownloadFolder() throws Exception {
+    ExtendedNode documents = folderNode("documentsId", "Documents", null);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode fileA = fileNode("fId", "kept.txt", folderA);
+    ExtendedNode dotsOne = folderNode("dotsOneId", "..", folderA);
+    ExtendedNode dotsTwo = folderNode("dotsTwoId", "..", dotsOne);
+    ExtendedNode deep = folderNode("deepId", "deep", dotsTwo);
+    ExtendedNode dotTitled = fileNode("eId", "dot-title.txt", deep);
+    childrenOf(folderA, fileA, dotsOne);
+    childrenOf(dotsOne, dotsTwo);
+    childrenOf(dotsTwo, deep);
+    childrenOf(deep, dotTitled);
+
+    Path parentFolder = Files.createTempDirectory("dot-title-test");
+    Path tempFolder = Files.createDirectory(parentFolder.resolve("download"));
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("download/A/kept.txt"), filesUnder(parentFolder));
+      try (Stream<Path> entries = Files.list(parentFolder)) {
+        assertEquals("the download folder is the only entry next to its parent",
+                     List.of(tempFolder),
+                     entries.toList());
+      }
+    } finally {
+      JCRDocumentsUtil.cleanFiles(parentFolder.toFile());
+    }
+  }
+
+  /**
+   * A document titled ".." or with a blank title is left out, and the rest of
+   * the folder is copied.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersLeavesOutADocumentTitledDotDot() throws Exception {
+    ExtendedNode documents = folderNode("documentsId", "Documents", null);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode dotDot = fileNode("dId", "..", folderA);
+    ExtendedNode blank = fileNode("bId", " ", folderA);
+    ExtendedNode fileA = fileNode("fId", "kept.txt", folderA);
+    childrenOf(folderA, dotDot, blank, fileA);
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("A/kept.txt"), filesUnder(tempFolder));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * A folder titled ".." inside the download is left out with what it holds:
+   * nothing it holds replaces a document of another folder.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersKeepsEachDocumentInItsOwnFolder() throws Exception {
+    ExtendedNode documents = folderNode("documentsId", "Documents", null);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode original = fileNode("oId", "report.txt", "original", folderA);
+    ExtendedNode folderB = folderNode("bId", "B", folderA);
+    ExtendedNode up = folderNode("upId", "..", folderB);
+    ExtendedNode replacement = fileNode("rId", "report.txt", "replacement", up);
+    childrenOf(folderA, original, folderB);
+    childrenOf(folderB, up);
+    childrenOf(up, replacement);
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("A/report.txt"), filesUnder(tempFolder));
+      assertEquals("original", Files.readString(tempFolder.resolve("A/report.txt")));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * A folder whose titles repeat those of the downloaded folder's parent keeps
+   * its documents in its own copy.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersKeepsAFolderNamedLikeAnAncestorInItsPlace() throws Exception {
+    ExtendedNode documents = folderNode("documentsId", "Documents", null);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode original = fileNode("oId", "report.txt", "original", folderA);
+    ExtendedNode namesake = folderNode("nId", "Documents", folderA);
+    ExtendedNode copy = fileNode("cId", "report.txt", "copy", namesake);
+    childrenOf(folderA, original, namesake);
+    childrenOf(namesake, copy);
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("A/report.txt", "A/Documents/report.txt"), filesUnder(tempFolder));
+      assertEquals("original", Files.readString(tempFolder.resolve("A/report.txt")));
+      assertEquals("copy", Files.readString(tempFolder.resolve("A/Documents/report.txt")));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * A shortcut met inside another shortcut's target folder has its target
+   * copied under it, in its place in the download.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersCopiesAShortcutInAShortcutTargetInItsPlace() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode root = folderNode("rootId", "", null);
+    ExtendedNode documents = folderNode("documentsId", "Documents", root);
+    ExtendedNode folderD = folderNode("dId", "D", documents);
+    ExtendedNode folderA = folderNode("aId", "A", folderD);
+    ExtendedNode folderS = folderNode("sId", "S", documents);
+    ExtendedNode folderC = folderNode("cId", "C", documents);
+    ExtendedNode fileS = fileNode("sfId", "s.txt", folderS);
+    ExtendedNode fileC = fileNode("cfId", "c.txt", folderC);
+    ExtendedNode shortcutToS = shortcutNode("l1Id", "L1", folderA, folderS, session);
+    ExtendedNode shortcutToC = shortcutNode("l2Id", "L2", folderS, folderC, session);
+    childrenOf(folderA, shortcutToS);
+    childrenOf(folderS, fileS, shortcutToC);
+    childrenOf(folderC, fileC);
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), folderD);
+      assertEquals(Set.of("A/L1/s.txt", "A/L1/L2/c.txt"), filesUnder(tempFolder));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * The own target of several shortcuts met inside other shortcuts' targets is
+   * copied once for the downloaded folder, at the place of the first one.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersCopiesANestedShortcutTargetOnce() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode root = folderNode("rootId", "", null);
+    ExtendedNode documents = folderNode("documentsId", "Documents", root);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode folder1 = folderNode("f1Id", "F1", documents);
+    ExtendedNode folder2 = folderNode("f2Id", "F2", documents);
+    ExtendedNode folder3 = folderNode("f3Id", "F3", documents);
+    ExtendedNode leaf = fileNode("leafId", "leaf.txt", folder3);
+    childrenOf(folderA, shortcutNode("a1Id", "a1", folderA, folder1, session), shortcutNode("a2Id", "a2", folderA, folder1, session));
+    childrenOf(folder1,
+               fileNode("f1fId", "f1.txt", folder1),
+               shortcutNode("b1Id", "b1", folder1, folder2, session),
+               shortcutNode("b2Id", "b2", folder1, folder2, session));
+    childrenOf(folder2, shortcutNode("c1Id", "c1", folder2, folder3, session), shortcutNode("c2Id", "c2", folder2, folder3, session));
+    childrenOf(folder3, leaf);
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      // each shortcut of the downloaded folder keeps its own copy of its target
+      assertEquals(Set.of("A/a1/f1.txt", "A/a2/f1.txt", "A/a1/b1/c1/leaf.txt"), filesUnder(tempFolder));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * A shortcut met inside another shortcut's target that has no place in the
+   * download leaves its target to the next shortcut that has one.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersCopiesANestedShortcutTargetUnderTheFirstShortcutWithAPlace() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode root = folderNode("rootId", "", null);
+    ExtendedNode documents = folderNode("documentsId", "Documents", root);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode folder1 = folderNode("f1Id", "F1", documents);
+    ExtendedNode folder2 = folderNode("f2Id", "F2", documents);
+    childrenOf(folderA, shortcutNode("a1Id", "a1", folderA, folder1, session));
+    childrenOf(folder1, shortcutNode("b1Id", "..", folder1, folder2, session), shortcutNode("b2Id", "b2", folder1, folder2, session));
+    childrenOf(folder2, fileNode("f2fId", "f2.txt", folder2));
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("A/a1/b2/f2.txt"), filesUnder(tempFolder));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * Shortcuts of the downloaded folder to the same shortcut each get a copy of
+   * its target.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersCopiesTheTargetOfEachShortcutToAShortcut() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode root = folderNode("rootId", "", null);
+    ExtendedNode documents = folderNode("documentsId", "Documents", root);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode folderT = folderNode("tId", "T", documents);
+    ExtendedNode shortcutToT = shortcutNode("s0Id", "s0", documents, folderT, session);
+    childrenOf(folderA, shortcutNode("s1Id", "s1", folderA, shortcutToT, session), shortcutNode("s2Id", "s2", folderA, shortcutToT, session));
+    childrenOf(folderT, fileNode("tfId", "t.txt", folderT));
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("A/s1/t.txt", "A/s2/t.txt"), filesUnder(tempFolder));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * A folder of a shortcut's target whose titles repeat the target's path keeps
+   * its documents in its own copy.
+   */
+  @Test(timeout = 30000)
+  public void createTempFilesAndFoldersKeepsAFolderNamedLikeAShortcutTargetInItsPlace() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode root = folderNode("rootId", "", null);
+    ExtendedNode documents = folderNode("documentsId", "Documents", root);
+    ExtendedNode folderA = folderNode("aId", "A", documents);
+    ExtendedNode folderT = folderNode("tId", "T", documents);
+    ExtendedNode original = fileNode("oId", "report.txt", "original", folderT);
+    ExtendedNode namesake = folderNode("nId", "Documents", folderT);
+    ExtendedNode namesakeT = folderNode("ntId", "T", namesake);
+    ExtendedNode copy = fileNode("cId", "report.txt", "copy", namesakeT);
+    ExtendedNode shortcutToT = shortcutNode("linkId", "toT", folderA, folderT, session);
+    childrenOf(folderA, shortcutToT);
+    childrenOf(folderT, original, namesake);
+    childrenOf(namesake, namesakeT);
+    childrenOf(namesakeT, copy);
+
+    Path tempFolder = Files.createTempDirectory("walk-test");
+    try {
+      JCRDocumentsUtil.createTempFilesAndFolders(folderA, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("A/toT/report.txt", "A/toT/Documents/T/report.txt"), filesUnder(tempFolder));
+      assertEquals("original", Files.readString(tempFolder.resolve("A/toT/report.txt")));
+      assertEquals("copy", Files.readString(tempFolder.resolve("A/toT/Documents/T/report.txt")));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * A file whose title starts with ".." is left out of a download of files.
+   */
+  @Test
+  public void createFileKeepsTheCopyInTheDownloadFolder() throws Exception {
+    ExtendedNode documents = folderNode("documentsId", "Documents", null);
+    ExtendedNode dotTitled = fileNode("eId", "../dot-title.txt", documents);
+    ExtendedNode kept = fileNode("fId", "kept.txt", documents);
+
+    Path parentFolder = Files.createTempDirectory("dot-title-test");
+    Path tempFolder = Files.createDirectory(parentFolder.resolve("download"));
+    try {
+      JCRDocumentsUtil.createFile(dotTitled, "", "", tempFolder.toString(), documents);
+      JCRDocumentsUtil.createFile(kept, "", "", tempFolder.toString(), documents);
+      assertEquals(Set.of("download/kept.txt"), filesUnder(parentFolder));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(parentFolder.toFile());
+    }
+  }
+
+  /**
+   * A shortcut to a shortcut of a file is copied in the download under the
+   * title of the downloaded shortcut.
+   */
+  @Test
+  public void createFileCopiesAShortcutToAShortcutUnderItsTitle() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode root = folderNode("rootId", "", null);
+    ExtendedNode documents = folderNode("documentsId", "Documents", root);
+    ExtendedNode folderD = folderNode("dId", "D", documents);
+    ExtendedNode folderS = folderNode("sId", "S", documents);
+    ExtendedNode folderC = folderNode("cId", "C", documents);
+    ExtendedNode file = fileNode("fId", "c.txt", "content", folderC);
+    ExtendedNode shortcutToFile = shortcutNode("l2Id", "link2", folderS, file, session);
+    ExtendedNode shortcut = shortcutNode("l1Id", "link1", folderD, shortcutToFile, session);
+
+    Path tempFolder = Files.createTempDirectory("shortcut-test");
+    try {
+      JCRDocumentsUtil.createFile(shortcut, "", "", tempFolder.toString(), folderD);
+      assertEquals(Set.of("link1"), filesUnder(tempFolder));
+      assertEquals("content", Files.readString(tempFolder.resolve("link1")));
+    } finally {
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
+  /**
+   * A shortcut whose own title gives it no place in the download is left out
+   * with a warning that names the shortcut, not its target.
+   */
+  @Test
+  public void createFileWarnsAboutAShortcutWithNoPlaceOfItsOwn() throws Exception {
+    ExtendedSession session = mock(ExtendedSession.class);
+    ExtendedNode root = folderNode("rootId", "", null);
+    ExtendedNode documents = folderNode("documentsId", "Documents", root);
+    ExtendedNode folderD = folderNode("dId", "D", documents);
+    ExtendedNode folderC = folderNode("cId", "C", documents);
+    ExtendedNode file = fileNode("fId", "c.txt", "content", folderC);
+    ExtendedNode shortcut = shortcutNode("l1Id", "..", folderD, file, session);
+
+    ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(JCRDocumentsUtil.class);
+    ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                                                                                             new ch.qos.logback.core.read.ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    Path tempFolder = Files.createTempDirectory("shortcut-test");
+    try {
+      JCRDocumentsUtil.createFile(shortcut, "", "", tempFolder.toString(), folderD);
+      assertEquals(Set.of(), filesUnder(tempFolder));
+      List<String> warnings = appender.list.stream().map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage).toList();
+      assertEquals(1, warnings.size());
+      assertTrue(warnings.get(0), warnings.get(0).startsWith("Shortcut "));
+    } finally {
+      logger.detachAppender(appender);
+      JCRDocumentsUtil.cleanFiles(tempFolder.toFile());
+    }
+  }
+
   private static ExtendedNode folderNode(String id, String name, ExtendedNode parent) throws RepositoryException {
     ExtendedNode node = namedNode(id, name, parent, NodeTypeConstants.NT_FOLDER);
     childrenOf(node);
@@ -679,12 +1011,16 @@ public class JCRDocumentsUtilTest {
   }
 
   private static ExtendedNode fileNode(String id, String name, ExtendedNode parent) throws RepositoryException {
+    return fileNode(id, name, name, parent);
+  }
+
+  private static ExtendedNode fileNode(String id, String name, String text, ExtendedNode parent) throws RepositoryException {
     ExtendedNode node = namedNode(id, name, parent, NodeTypeConstants.NT_FILE);
     Node content = mock(Node.class);
     Property data = mock(Property.class);
     when(node.getNode("jcr:content")).thenReturn(content);
     when(content.getProperty("jcr:data")).thenReturn(data);
-    when(data.getStream()).thenAnswer(invocation -> new ByteArrayInputStream(name.getBytes(StandardCharsets.UTF_8)));
+    when(data.getStream()).thenAnswer(invocation -> new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8)));
     return node;
   }
 

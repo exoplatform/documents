@@ -277,7 +277,7 @@ export default {
       MAX_DOCUMENT_TITLE_LENGTH: 510,
       titleRegex: /[<\\>:"/|?*]/,
       documentTitleRules: [title => !title || title && title.trim().length <= this.MAX_DOCUMENT_TITLE_LENGTH - this.activeExtension.length || this.newDocTitleMaxLengthLabel,
-        title => !this.titleRegex.test(title)],
+        title => !this.titleRegex.test(title) && !this.isDotTitle(title)],
     };
   },
   computed: {
@@ -304,7 +304,7 @@ export default {
       // Enabled once either a blank doc type OR a template is picked and the
       // (optional) title is valid.
       const nothingPicked = this.NewDocInputHidden && !this.selectedTemplate;
-      return nothingPicked || this.documentTitleMaxLengthReached || this.titleRegex.test(this.newDocumentTitle);
+      return nothingPicked || this.documentTitleMaxLengthReached || this.titleRegex.test(this.newDocumentTitle) || this.isDotTitle(this.cleanedNewDocumentTitle);
     },
     untitledNewDoc() {
       return `${this.$t('attachment.untitledDocument')}${this.activeExtension}`;
@@ -411,12 +411,21 @@ export default {
         }
       });
     },
+    // "." and ".." are refused once trimmed, as the server trims the title it checks.
+    isDotTitle(title) {
+      const trimmedTitle = title && title.trim();
+      return trimmedTitle === '.' || trimmedTitle === '..';
+    },
     createNewDoc() {
       if (this.documentTitleMaxLengthReached) {
         return;
       }
       if (this.titleRegex.test(this.newDocumentTitle)) {
         this.$root.$emit('alert-message', this.$t('attachments.valid.title.error.message'), 'warning');
+        return;
+      }
+      if (this.isDotTitle(this.cleanedNewDocumentTitle)) {
+        this.$root.$emit('alert-message', this.$t('attachments.valid.title.dots.error.message'), 'warning');
         return;
       }
       this.$root.$emit('start-loading-attachment-drawer');
@@ -644,6 +653,10 @@ export default {
     // (attachment list add / Drive refresh + OnlyOffice open).
     createFromTemplate(template) {
       if (this.templateCreating) {
+        return;
+      }
+      if (this.isDotTitle(this.cleanedNewDocumentTitle)) {
+        this.$root.$emit('alert-message', this.$t('attachments.valid.title.dots.error.message'), 'warning');
         return;
       }
       // Same max-files guard as the blank-create path (attachment host only).

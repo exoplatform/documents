@@ -35,11 +35,15 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.security.AccessControlException;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import javax.jcr.Node;
 import javax.jcr.Property;
 import javax.jcr.lock.Lock;
+import javax.xml.namespace.QName;
 import javax.jcr.version.Version;
 
 import org.junit.AfterClass;
@@ -55,7 +59,10 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
+import org.exoplatform.common.http.HTTPStatus;
 import org.exoplatform.documents.webdav.model.WebDavException;
+import org.exoplatform.documents.webdav.model.WebDavItemProperty;
+import org.exoplatform.documents.webdav.model.constant.PropertyConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
@@ -85,6 +92,7 @@ public class WebdavWriteCommandHandlerTest {
   private static final String       WEBDAV_PARENT_PATH = "/John%20Doe%20%281%29";     // NOSONAR
 
   private static final String       VISIBLE_NAME       = "New File.txt";
+  private static final String       EM_SPACE           = "\u2003";
 
   private static final String       TECHNICAL_NAME     = "New_File.txt";
 
@@ -697,6 +705,111 @@ public class WebdavWriteCommandHandlerTest {
     NodeImpl resolvedNode = org.mockito.Mockito.mock(NodeImpl.class);
     when(resolvedNode.getPath()).thenReturn(nodePath);
     when(session.getItem(resolvedPath)).thenReturn(resolvedNode);
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCreateFolderNamedWithDotsIsRefused() {
+    for (String name : new String[] { ".", "..", " .. " }) {
+      when(pathCommandHandler.getLastVisibleSegment(anyString())).thenReturn(name);
+      assertStatus(403, () -> handler.createFolder(session, WEBDAV_FILE_PATH, Collections.emptyList()));
+    }
+    verify(parentNode, never()).addNode(anyString(), anyString());
+    verify(session, never()).save();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testSaveFileNamedWithDotsIsRefused() {
+    for (String name : new String[] { ".", "..", " .. " }) {
+      when(pathCommandHandler.getLastVisibleSegment(anyString())).thenReturn(name);
+      assertStatus(403,
+                   () -> handler.saveFile(session,
+                                          WEBDAV_FILE_PATH,
+                                          "text/plain",
+                                          Collections.emptyList(),
+                                          new ByteArrayInputStream("data".getBytes())));
+    }
+    verify(parentNode, never()).addNode(anyString(), anyString());
+    verify(session, never()).save();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testSavePropertiesRefusesTitleNamedWithDots() {
+    when(pathCommandHandler.resolveToJcrPath(eq(session), eq(WEBDAV_FILE_PATH))).thenReturn(JCR_PATH);
+    QName titleName = new QName("http://www.exoplatform.com/jcr/exo/1.0", "title", "exo");
+    for (String title : new String[] { ".", "..", " .. " }) {
+      Map<String, Collection<WebDavItemProperty>> result =
+                                                         handler.saveProperties(session,
+                                                                                WEBDAV_FILE_PATH,
+                                                                                List.of(new WebDavItemProperty(titleName, title)),
+                                                                                Collections.emptyList());
+      assertEquals(Collections.singleton(PropertyConstants.getStatusDescription(HTTPStatus.FORBIDDEN)), result.keySet());
+    }
+    verify(node, never()).setProperty(eq("exo:title"), anyString());
+    Map<String, Collection<WebDavItemProperty>> result =
+                                                       handler.saveProperties(session,
+                                                                              WEBDAV_FILE_PATH,
+                                                                              List.of(new WebDavItemProperty(titleName,
+                                                                                                             "..txt")),
+                                                                              Collections.emptyList());
+    assertFalse(result.containsKey(PropertyConstants.getStatusDescription(HTTPStatus.FORBIDDEN)));
+  }
+
+  /**
+   * A move or copy onto a dot name padded with blanks is refused with a 403.
+   */
+  @Test
+  @SneakyThrows
+  public void testMoveOntoDotNamePaddedWithAnAcceptedBlankIsRefused() {
+    givenMoveSource();
+    givenTargetVisibleName(EM_SPACE + ".." + EM_SPACE);
+
+    assertStatus(403, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false));
+
+    assertTargetUntouched();
+  }
+
+  @Test
+  @SneakyThrows
+  public void testCopyOntoDotNamePaddedWithAnAcceptedBlankIsRefused() {
+    givenCopySource();
+    givenTargetVisibleName(EM_SPACE + "." + EM_SPACE);
+
+    assertStatus(403, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false, false));
+
+    verify(workspace, never()).copy(anyString(), anyString());
+    assertTargetUntouched();
+  }
+
+  /**
+   * A move or copy onto a dot name padded with spaces is refused with a 400
+   * and leaves any existing target untouched.
+   */
+  @Test
+  @SneakyThrows
+  public void testMoveAndCopyOntoDotNamePaddedWithASpaceAreRefusedAsUnstorable() {
+    givenCopySource();
+    givenTargetVisibleName(" .. ");
+
+    assertStatus(400, () -> handler.move(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false));
+    assertStatus(400, () -> handler.copy(session, WEBDAV_SOURCE_PATH, WEBDAV_FILE_PATH, false, false));
+
+    verify(workspace, never()).copy(anyString(), anyString());
+    assertTargetUntouched();
+  }
+
+  /**
+   * Stubs the target name the way the real handler maps it: the visible name
+   * of the path's last segment, and its technical name, which {@code Utils#encodeNodeName}
+   * leaves as is for a name without {@code | [ ] *} or {@code :}.
+   */
+  @SneakyThrows
+  private void givenTargetVisibleName(String visibleName) {
+    when(pathCommandHandler.getLastVisibleSegment(anyString())).thenReturn(visibleName);
+    when(pathCommandHandler.toTechnicalName(visibleName)).thenReturn(visibleName);
+    when(pathCommandHandler.resolveToJcrPath(session, WEBDAV_FILE_PATH)).thenThrow(new WebDavException(404, "missing"));
   }
 
   @SneakyThrows

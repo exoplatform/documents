@@ -73,10 +73,11 @@ export default {
     nameRules: [],
     workspace: 'collaboration',
     oldPath: '',
-    nameRegex: /[<\\>:"/|?*]/
+    nameRegex: /[<\\>:"/|?*]/,
+    dotNames: ['.', '..'],
   }),
   created() {
-    this.nameRules = [v => !!v.trim(), v => !this.nameRegex.test(v)];
+    this.nameRules = [v => !!v.trim(), v => !this.nameRegex.test(v), v => !this.isDotName(v)];
     this.$root.$on('document-renamed', (file) => {
       if (file.id === this.file.id) {
         this.file.name = this.fileName.concat(this.fileType);
@@ -105,8 +106,7 @@ export default {
     checkInput: function(e,newTitle) {
       if (e.keyCode === 13 || e === 13) {
         if (this.file.folder && this.file.id === -1) {
-          if (this.nameRegex.test(newTitle)) {
-            this.$root.$emit('alert-message', this.$t('document.valid.name.error.message'),'warning');
+          if (this.showInvalidNameMessage(newTitle)) {
             return;
           }
           this.$root.$emit('documents-create-folder', newTitle);
@@ -118,9 +118,22 @@ export default {
         this.cancelEditNameMode(newTitle);
       }
     },
+    isDotName(title) {
+      return this.dotNames.includes((title || '').trim());
+    },
+    showInvalidNameMessage(title) {
+      if (this.nameRegex.test(title)) {
+        this.$root.$emit('alert-message', this.$t('document.valid.name.error.message'), 'warning');
+        return true;
+      }
+      if (this.isDotName(title)) {
+        this.$root.$emit('alert-message', this.$t('document.valid.name.dots.error.message'), 'warning');
+        return true;
+      }
+      return false;
+    },
     renameFile(newTitle){
-      if (this.nameRegex.test(newTitle)) {
-        this.$root.$emit('alert-message',this.$t('document.valid.name.error.message'),'warning');
+      if (this.showInvalidNameMessage(newTitle)) {
         return;
       }
       //concat the file type to the new tilte when renaming file
