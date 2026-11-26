@@ -92,7 +92,7 @@
     </td>
     <td
       v-if="!mobile"
-      class="recycle-bin-item-deleter"
+      class="recycle-bin-item-deletion-author"
       style="border-bottom: none">
       <div
         v-if="deleter"

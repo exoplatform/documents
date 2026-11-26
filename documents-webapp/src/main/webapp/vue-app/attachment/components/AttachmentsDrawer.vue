@@ -92,12 +92,12 @@
         <div class="d-flex">
           <v-spacer />
           <v-btn
-            class="btn me-3"
+            class="attachments-drawer-cancel btn me-3"
             @click="closeDrawer">
             {{ $t('attachments.drawer.cancel') }}
           </v-btn>
           <v-btn
-            class="btn btn-primary"
+            class="attachments-drawer-done btn btn-primary"
             @click="closeDrawer">
             {{ $t('attachments.drawer.done') }}
           </v-btn>
