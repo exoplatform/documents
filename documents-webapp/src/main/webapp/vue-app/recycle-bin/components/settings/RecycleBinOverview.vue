@@ -18,10 +18,10 @@
 -->
 <template>
   <div id="recycleBinOverview" class="recycle-bin-overview">
-    <div class="pb-4">{{ $t('recycleBin.overview.info') }}</div>
+    <div id="recycleBinOverviewInfo" class="pb-4">{{ $t('recycleBin.overview.info') }}</div>
     <div class="d-flex align-center text-header pb-2">
-      <div class="flex-grow-1 text-start">{{ $t('recycleBin.overview.column.drive') }}</div>
-      <div class="recycle-bin-drive-size text-end text-no-wrap">
+      <div id="recycleBinOverviewColumnDrive" class="flex-grow-1 text-start">{{ $t('recycleBin.overview.column.drive') }}</div>
+      <div id="recycleBinOverviewColumnSize" class="recycle-bin-drive-size text-end text-no-wrap">
         {{ $t('recycleBin.overview.column.size') }}
         <v-icon
           class="icon-default-color ms-1"
@@ -54,7 +54,7 @@
               alt="">
           </v-list-item-avatar>
           <v-list-item-content class="py-1">
-            <v-list-item-title :title="drive.name" class="text-body-1">
+            <v-list-item-title :title="drive.name" class="recycle-bin-drive-name text-body-1">
               {{ drive.name }}
               <span v-if="drive.deleted" class="text-subtitle">{{ $t('recycleBin.overview.drive.deleted') }}</span>
             </v-list-item-title>
@@ -80,6 +80,7 @@
     <div ref="more" class="d-flex justify-center py-2">
       <v-btn
         v-if="hasMore"
+        id="recycleBinOverviewLoadMore"
         :loading="loading"
         class="btn"
         @click="loadMore">

@@ -25,6 +25,7 @@
       :selected-documents="selectedDocuments" />
     <documents-list-view
       v-else
+      id="timelineView"
       :files="files"
       :page-size="pageSize"
       :offset="offset"
