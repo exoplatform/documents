@@ -17,30 +17,36 @@
 
 -->
 <template>
-  <div v-if="displayed" class="documents-header-menu d-flex">
-    <v-menu
-      v-model="menu"
-      :left="!$vuetify.rtl"
-      offset-y>
-      <template #activator="{on, attrs}">
-        <v-btn
-          id="documentsHeaderMenuButton"
-          :title="$t('recycleBin.menu.more')"
-          :aria-label="$t('recycleBin.menu.more')"
-          small
-          icon
-          v-bind="attrs"
-          v-on="on">
-          <v-icon size="20">fa-ellipsis-v</v-icon>
-        </v-btn>
-      </template>
-      <v-list class="pa-0" dense>
-        <v-list-item id="documentsRecycleBinMenuItem" @click="$root.$emit('documents-recycle-bin-open', bin)">
-          <v-icon size="16" class="me-2 icon-default-color">fa-trash</v-icon>
-          <v-list-item-title>{{ $t('recycleBin.title') }}</v-list-item-title>
-        </v-list-item>
-      </v-list>
-    </v-menu>
+  <!-- Rendered, empty when the user holds no bin, once the drive's bin is known -->
+  <div
+    v-if="decided"
+    id="documentsHeaderMenu"
+    class="documents-header-menu d-flex">
+    <div v-if="bin" class="d-flex mb-4 me-4 ms-n1">
+      <v-menu
+        v-model="menu"
+        :left="!$vuetify.rtl"
+        offset-y>
+        <template #activator="{on, attrs}">
+          <v-btn
+            id="documentsHeaderMenuButton"
+            :title="$t('recycleBin.menu.more')"
+            :aria-label="$t('recycleBin.menu.more')"
+            small
+            icon
+            v-bind="attrs"
+            v-on="on">
+            <v-icon size="20">fa-ellipsis-v</v-icon>
+          </v-btn>
+        </template>
+        <v-list class="pa-0" dense>
+          <v-list-item id="documentsRecycleBinMenuItem" @click="$root.$emit('documents-recycle-bin-open', bin)">
+            <v-icon size="16" class="me-2 icon-default-color">fa-trash</v-icon>
+            <v-list-item-title>{{ $t('recycleBin.title') }}</v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </v-menu>
+    </div>
   </div>
 </template>
 <script>
@@ -49,6 +55,7 @@ export default {
     menu: false,
     ready: false,
     space: null,
+    spaceResolved: false,
   }),
   computed: {
     ownerId() {
@@ -70,8 +77,9 @@ export default {
       const spaceDrive = this.space && String(this.space.identityId) === this.ownerId;
       return spaceDrive && (this.space.isManager || this.space.isPublisher) && {spaceId: this.space.id} || null;
     },
-    displayed() {
-      return this.ready && !this.$root.driveView && !!this.bin;
+    // Whether the drive displayed and, for a space, the user's role in it are known: the bin can be decided.
+    decided() {
+      return this.ready && !this.$root.driveView && !!this.ownerId && (this.ownDrive || !this.spaceId || this.spaceResolved);
     },
   },
   watch: {
@@ -80,14 +88,21 @@ export default {
       handler() {
         const spaceId = this.spaceId;
         this.space = null;
+        this.spaceResolved = false;
         if (spaceId) {
           this.$spaceService.getSpaceById(spaceId)
             .then(space => {
               if (String(this.spaceId) === String(spaceId)) {
                 this.space = space;
+                this.spaceResolved = true;
               }
             })
-            .catch(() => this.space = null);
+            .catch(() => {
+              if (String(this.spaceId) === String(spaceId)) {
+                this.space = null;
+                this.spaceResolved = true;
+              }
+            });
         }
       },
     },
