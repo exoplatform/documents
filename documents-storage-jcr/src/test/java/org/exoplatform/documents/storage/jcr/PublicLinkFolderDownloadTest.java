@@ -422,11 +422,11 @@ class PublicLinkFolderDownloadTest {
       IOException failure = assertThrows(IOException.class,
                                          () -> org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.zipFiles(folder, zip));
       assertTrue(failure.getMessage().contains(subFolder.toString()), "the failure names the folder");
-      File written = Files.write(tempDir.resolve("unlistable.zip"), zip.toByteArray()).toFile();
-      assertThrows(java.util.zip.ZipException.class, () -> new ZipFile(written).close(), "no zip directory");
     } finally {
       Files.setPosixFilePermissions(subFolder, java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
     }
+    File written = Files.write(tempDir.resolve("unlistable.zip"), zip.toByteArray()).toFile();
+    assertThrows(java.util.zip.ZipException.class, () -> new ZipFile(written).close(), "no zip directory");
   }
 
   private static Map<String, String> zipContent(byte[] zip) throws IOException {
