@@ -1502,6 +1502,25 @@ public class DocumentMcpToolTest {
     verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
   }
 
+  /**
+   * A file sent in pieces is refused at its start under a macOS metadata
+   * name, before its name is checked in the folder and before any upload is
+   * opened, as a file sent in one call is.
+   * Mutant: the refusal removed from the start.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void startDocumentUploadWithMacOsMetadataNameFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    for (String name : new String[] { "__MACOSX", "._photo.png", ".DS_Store" }) {
+      IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.startDocumentUpload(FOLDER_ID, name, 5L, null));
+      assertTrue(ex.getMessage().contains("'" + name + "' is a macOS metadata name"));
+    }
+    verify(documentFileService, never()).checkUploadConflict(any(), any(), any(), anyLong());
+  }
+
   @Test
   public void createDocumentOfficeExtensionFails() {
     // .docx / .xlsx / .pptx / .pdf are structured/binary formats that cannot be
