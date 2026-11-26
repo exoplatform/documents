@@ -150,6 +150,8 @@ public class JCRDocumentFileStorageTest {
                                                              activityManager,
                                                              bulkStorageActionService,
                                                              documentService);
+    // countNodeAccessList reads the owner rule from JCRDocumentsUtil, which this class mocks statically
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isAclOwner(any(), any(), any())).thenCallRealMethod();
   }
 
   @Test
@@ -1604,7 +1606,7 @@ public class JCRDocumentFileStorageTest {
     org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
     lenient().when(aclIdentity.getUserId()).thenReturn("john");
     AccessControlEntry accessControlEntry = new AccessControlEntry("*:/spaces/testspace", PermissionType.READ);
-    AccessControlList acl1 = new AccessControlList("john", Arrays.asList(accessControlEntry));
+    AccessControlList acl1 = new AccessControlList("admin", Arrays.asList(accessControlEntry));
     lenient().when(aclIdentity.isMemberOf(accessControlEntry.getMembershipEntry())).thenReturn(true);
     lenient().when(extendedNode.getACL()).thenReturn(acl1);
     //when
@@ -1616,7 +1618,7 @@ public class JCRDocumentFileStorageTest {
     assertEquals(false, accessList.get("canDelete"));
 
     AccessControlEntry accessControlEntry1 = new AccessControlEntry("*:/spaces/testspace", PermissionType.SET_PROPERTY);
-    AccessControlList acl2 = new AccessControlList("john", Arrays.asList(accessControlEntry,accessControlEntry1));
+    AccessControlList acl2 = new AccessControlList("admin", Arrays.asList(accessControlEntry,accessControlEntry1));
     lenient().when(aclIdentity.isMemberOf(accessControlEntry1.getMembershipEntry())).thenReturn(true);
     lenient().when(extendedNode.getACL()).thenReturn(acl2);
 
@@ -1629,6 +1631,132 @@ public class JCRDocumentFileStorageTest {
     assertEquals(true, accessList1.get("canEdit"));
   }
   
+  @Test
+  public void countNodeAccessListGivesTheOwnerEveryRight() throws RepositoryException {
+    ExtendedNode extendedNode = mock(ExtendedNode.class);
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    // the owner's entries grant nothing but a membership it does not hold
+    AccessControlEntry other = new AccessControlEntry("mary", PermissionType.READ);
+    when(extendedNode.getACL()).thenReturn(new AccessControlList("john", Arrays.asList(other)));
+
+    Map<String, Boolean> owner = jcrDocumentFileStorage.countNodeAccessList(extendedNode, aclIdentity);
+    assertEquals(true, owner.get("canAccess"));
+    assertEquals(true, owner.get("canEdit"));
+    assertEquals(true, owner.get("canDelete"));
+
+    Map<String, Boolean> stranger =
+                                  jcrDocumentFileStorage.countNodeAccessList(extendedNode,
+                                                                             new org.exoplatform.services.security.Identity("bob"));
+    assertEquals(false, stranger.get("canAccess"));
+    assertEquals(false, stranger.get("canEdit"));
+    assertEquals(false, stranger.get("canDelete"));
+  }
+
+  @Test
+  public void countNodeAccessListCountsAnAnyEntryForEveryUser() throws RepositoryException {
+    ExtendedNode extendedNode = mock(ExtendedNode.class);
+    AccessControlList acl =
+                          new AccessControlList("john",
+                                                Arrays.asList(new AccessControlEntry("any", PermissionType.READ),
+                                                              new AccessControlEntry("any", PermissionType.ADD_NODE),
+                                                              new AccessControlEntry("any", PermissionType.REMOVE)));
+    when(extendedNode.getACL()).thenReturn(acl);
+
+    Map<String, Boolean> accessList =
+                                    jcrDocumentFileStorage.countNodeAccessList(extendedNode,
+                                                                               new org.exoplatform.services.security.Identity("mary"));
+    assertEquals(true, accessList.get("canAccess"));
+    assertEquals(true, accessList.get("canEdit"));
+    assertEquals(true, accessList.get("canDelete"));
+  }
+
+  @Test
+  public void countNodeAccessListDoesNotGrantAccessFromAnAnyEntryWithoutRead() throws RepositoryException {
+    ExtendedNode extendedNode = mock(ExtendedNode.class);
+    // the JCR grants read only through an any:read entry
+    when(extendedNode.getACL()).thenReturn(new AccessControlList("john",
+                                                                 Arrays.asList(new AccessControlEntry("any",
+                                                                                                      PermissionType.ADD_NODE))));
+
+    Map<String, Boolean> accessList =
+                                    jcrDocumentFileStorage.countNodeAccessList(extendedNode,
+                                                                               new org.exoplatform.services.security.Identity("mary"));
+    assertEquals(false, accessList.get("canAccess"));
+    assertEquals(true, accessList.get("canEdit"));
+  }
+
+  @Test
+  public void countNodeAccessListDoesNotGiveAShortcutItsCreatorTheOwnersRights() throws RepositoryException {
+    ExtendedNode symlink = mock(ExtendedNode.class);
+    when(symlink.isNodeType("exo:symlink")).thenReturn(true);
+    // the shortcut is owned by its creator, its entries are copied from a read-only target
+    when(symlink.getACL()).thenReturn(new AccessControlList("john",
+                                                            Arrays.asList(new AccessControlEntry("john",
+                                                                                                 PermissionType.READ))));
+
+    Map<String, Boolean> accessList =
+                                    jcrDocumentFileStorage.countNodeAccessList(symlink,
+                                                                               new org.exoplatform.services.security.Identity("john"));
+    assertEquals(true, accessList.get("canAccess"));
+    assertEquals(false, accessList.get("canEdit"));
+    assertEquals(false, accessList.get("canDelete"));
+  }
+
+  @Test
+  public void createFolderIsRefusedToANonOwnerWithOnlyAReadEntry() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("mary");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle("Reports")).thenReturn(true);
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(folderNode);
+    when(folderNode.getACL()).thenReturn(new AccessControlList("john",
+                                                               Arrays.asList(new AccessControlEntry("mary",
+                                                                                                    PermissionType.READ))));
+
+    assertThrows(IllegalAccessException.class,
+                 () -> jcrDocumentFileStorage.createFolder(0L, "1", null, "Reports", aclIdentity));
+    verify(folderNode, never()).addNode(anyString(), anyString());
+  }
+
+  @Test
+  public void createFolderInAFolderTheUserOwnsWithoutAnEditEntry() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isValidDocumentTitle("Reports")).thenReturn(true);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.cleanName(anyString(), anyString())).thenCallRealMethod();
+
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(folderNode);
+    // owned by john, whose only entry is a read one
+    when(folderNode.getACL()).thenReturn(new AccessControlList("john",
+                                                               Arrays.asList(new AccessControlEntry("john",
+                                                                                                    PermissionType.READ))));
+    Node addedNode = mock(Node.class);
+    when(folderNode.addNode(anyString(), anyString())).thenReturn(addedNode);
+    FolderNode expected = new FolderNode();
+    expected.setId("folder-1");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(identityManager, aclIdentity, addedNode, "", spaceService))
+                      .thenReturn(expected);
+
+    AbstractNode result = jcrDocumentFileStorage.createFolder(0L, "1", null, "Reports", aclIdentity);
+
+    assertNotNull(result);
+    assertEquals("folder-1", result.getId());
+    verify(folderNode).addNode(anyString(), anyString());
+  }
+
   @Test
   public void createNewVersion() throws Exception {
     org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
