@@ -546,9 +546,11 @@ public class ActionThread implements Runnable {
     try {
       for (Node node : nodes) {
         if (checkCanceled()) {
+          // The cancel is already broadcast and the temp folder deleted:
+          // there is nothing left to zip
           File folder = new File(tempFolderPath);
           cleanFiles(folder);
-          break;
+          return;
         }
         parentNode = node.getParent();
         if (hasFolders) {
