@@ -18,6 +18,7 @@ package org.exoplatform.documents.service;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
@@ -49,6 +50,7 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.HTMLSanitizer;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.plugin.DocumentCategoryPlugin;
 import org.exoplatform.documents.storage.DocumentFileStorage;
@@ -220,6 +222,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public DocumentTextContent getFileTextContent(String documentId) {
     return documentFileStorage.getFileTextContent(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DocumentTextPage getFileTextPage(String documentId, long offset, int maxChars) {
+    return documentFileStorage.getFileTextPage(documentId, offset, maxChars);
   }
 
   @Override
@@ -454,6 +464,36 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  public void validateUploadedContent(String fileName, String mimeType, byte[] content) {
+    documentFileStorage.validateUploadedContent(fileName, mimeType, content);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void validateUploadedFile(String fileName, String mimeType, Path file) {
+    documentFileStorage.validateUploadedFile(fileName, mimeType, file);
+  }
+
+  @Override
+  public void checkUploadConflict(String folderId,
+                                  String name,
+                                  UploadConflictAction conflictAction,
+                                  long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    documentFileStorage.checkUploadConflict(folderId, name, conflictAction, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
+  public AbstractNode saveUploadedDocument(String folderId,
+                                           String uploadId,
+                                           String name,
+                                           UploadConflictAction conflictAction,
+                                           long authenticatedUserId) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.saveUploadedDocument(folderId, uploadId, name, conflictAction, getAclUserIdentity(authenticatedUserId));
+  }
+
+  @Override
   public String getNewName(long ownerId, String folderId, String folderPath, String name) throws IllegalAccessException, ObjectAlreadyExistsException, ObjectNotFoundException {
     return documentFileStorage.getNewName(ownerId, folderId, folderPath, name);
   }
@@ -600,6 +640,163 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   @Override
   public String getAudioTranscription(String documentId) {
     return documentFileStorage.getAudioTranscription(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public TranscriptionState getTranscriptionState(String documentId,
+                                                  long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionState(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public TranscriptionState getTranscriptionState(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionState(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void updateTranscriptionState(String documentId, TranscriptionState state) throws ObjectNotFoundException {
+    documentFileStorage.updateTranscriptionState(documentId, state);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean markTranscriptionQueued(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.markTranscriptionQueued(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean clearTranscriptionState(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.clearTranscriptionState(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void completeTranscription(String documentId,
+                                    String transcription,
+                                    String segments,
+                                    TranscriptionState state) throws ObjectNotFoundException {
+    documentFileStorage.completeTranscription(documentId, transcription, segments, state);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionSegments(String documentId,
+                                         long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSegments(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionSegments(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSegments(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean saveTranscriptionChapters(String documentId,
+                                           String chapters,
+                                           long transcriptUpdated) throws ObjectNotFoundException {
+    return documentFileStorage.saveTranscriptionChapters(documentId, chapters, transcriptUpdated);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionChapters(String documentId,
+                                         long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionChapters(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, String> getTranscriptionSpeakers(String documentId,
+                                                      long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSpeakers(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void setTranscriptionSpeaker(String documentId,
+                                      String speaker,
+                                      String identityId,
+                                      long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    documentFileStorage.setTranscriptionSpeaker(documentId, speaker, identityId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DocumentAudience getDocumentAudience(String documentId) throws ObjectNotFoundException {
+    return documentFileStorage.getDocumentAudience(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean saveTranscriptionSpeakerSuggestions(String documentId,
+                                                     List<TranscriptionSpeakerSuggestion> suggestions,
+                                                     long transcriptUpdated) throws ObjectNotFoundException {
+    return documentFileStorage.saveTranscriptionSpeakerSuggestions(documentId, suggestions, transcriptUpdated);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
+                                                                                 long aclIdentity) throws IllegalAccessException,
+                                                                                                   ObjectNotFoundException {
+    return documentFileStorage.getTranscriptionSpeakerSuggestions(documentId, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void removeTranscriptionSpeakerSuggestion(String documentId,
+                                                   String speaker,
+                                                   long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    documentFileStorage.removeTranscriptionSpeakerSuggestion(documentId, speaker, getAclUserIdentity(aclIdentity));
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean applyTranscriptionSpeakerSuggestion(String documentId,
+                                                     TranscriptionSpeakerSuggestion suggestion,
+                                                     long transcriptUpdated,
+                                                     long aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return documentFileStorage.applyTranscriptionSpeakerSuggestion(documentId, suggestion, transcriptUpdated, getAclUserIdentity(aclIdentity));
   }
 
   @Override
@@ -948,6 +1145,14 @@ public class DocumentFileServiceImpl implements DocumentFileService {
 
   public AbstractNode getDocumentById(String documentId) {
     return documentFileStorage.getDocumentById(documentId);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getDocumentSpaceGroupId(String documentId) {
+    return documentFileStorage.getDocumentSpaceGroupId(documentId);
   }
 
   @Override

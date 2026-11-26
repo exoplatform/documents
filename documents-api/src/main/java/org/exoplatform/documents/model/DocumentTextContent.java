@@ -23,8 +23,10 @@ package org.exoplatform.documents.model;
  *
  * @param text the text of the file, null when none could be obtained
  * @param status where the text came from, or why there is none
+ * @param truncated true when the text was cut at the most characters read on
+ *          the fly, so its end is missing
  */
-public record DocumentTextContent(String text, Status status) {
+public record DocumentTextContent(String text, Status status, boolean truncated) {
 
   /**
    * Where the text of a file came from, or why there is none.
@@ -58,7 +60,18 @@ public record DocumentTextContent(String text, Status status) {
    * @return the content holding that text
    */
   public static DocumentTextContent of(String text, Status status) {
-    return new DocumentTextContent(text, status);
+    return new DocumentTextContent(text, status, false);
+  }
+
+  /**
+   * Builds the content of a file whose text was extracted and cut at the most
+   * characters read on the fly.
+   *
+   * @param text the beginning of the text of the file
+   * @return the content holding that text, marked as cut
+   */
+  public static DocumentTextContent truncated(String text) {
+    return new DocumentTextContent(text, Status.EXTRACTED, true);
   }
 
   /**
@@ -68,7 +81,7 @@ public record DocumentTextContent(String text, Status status) {
    * @return the content holding no text
    */
   public static DocumentTextContent none(Status status) {
-    return new DocumentTextContent(null, status);
+    return new DocumentTextContent(null, status, false);
   }
 
   /**

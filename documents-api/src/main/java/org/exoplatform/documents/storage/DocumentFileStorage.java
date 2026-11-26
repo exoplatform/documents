@@ -18,13 +18,17 @@ package org.exoplatform.documents.storage;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.documents.constant.TranscriptionStatus;
+import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.social.core.space.model.Space;
@@ -131,11 +135,16 @@ public interface DocumentFileStorage {
   /**
    * Retrieves a list of accessible files, for a selected user, by applying the
    * designated filter. The parentForlderId of filter object will be used to
-   * select the list of Nodes to retrieve.
+   * select the list of Nodes to retrieve. Without a search criterion, the
+   * folder's children are listed folders first, then files, a shortcut with
+   * its target's kind, and a shortcut whose target is gone or can't be read
+   * left out; the offset and the limit page over that listing, so successive
+   * pages neither skip nor repeat a child.
    * 
    * @param filter {@link DocumentFolderFilter} that contains filtering criteria
    * @param offset Offset of the result list
-   * @param limit Limit of the result list
+   * @param limit Limit of the result list; without a search criterion, none
+   *          when zero or less
    * @param aclIdentity {@link Identity} of the user acessing files
    * @return {@link List} of {@link AbstractNode}
    * @throws IllegalAccessException when the user isn't allowed to access
@@ -318,6 +327,86 @@ public interface DocumentFileStorage {
                                                                                ObjectNotFoundException,
                                                                                ObjectAlreadyExistsException;
 
+  /**
+   * Checks a file's content with the platform's upload validators, as a new
+   * file uploaded from a browser is checked.
+   *
+   * @param fileName the file name
+   * @param mimeType the file's type
+   * @param content the file's content
+   * @throws IllegalArgumentException when a validator refuses the file, with
+   *           its message
+   */
+  default void validateUploadedContent(String fileName, String mimeType, byte[] content) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Checks a file on disk with the platform's upload validators, as a new file
+   * uploaded from a browser is checked, each validator reading it from a fresh
+   * stream: the file is never read whole into memory.
+   *
+   * @param fileName the file name the validators check
+   * @param mimeType the file's type
+   * @param file the file's location on disk
+   * @throws IllegalArgumentException when a validator refuses the file, with
+   *           its message
+   * @throws IllegalStateException when the file can't be read
+   */
+  default void validateUploadedFile(String fileName, String mimeType, Path file) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Checks an upload can be filed under a name in a folder with a conflict
+   * action, as {@link #saveUploadedDocument} checks it when it files it.
+   *
+   * @param folderId the folder
+   * @param name the file name, with its extension
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @param aclIdentity the user
+   * @throws IllegalArgumentException when the folder is not a folder, or a
+   *           new version is asked of a document of that name that is not a
+   *           file (a folder or a shortcut), or keeps no versions
+   * @throws IllegalStateException when the folder can't be read
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   */
+  default void checkUploadConflict(String folderId,
+                                   String name,
+                                   UploadConflictAction conflictAction,
+                                   Identity aclIdentity) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Files an uploaded file into a folder the way the Documents app files an
+   * upload, as the user: under the user's own session, with the same activity,
+   * events, hidden state and name handling.
+   *
+   * @param folderId the folder the file is filed into
+   * @param uploadId the upload, registered in the platform's upload service;
+   *          it is consumed once the file is filed
+   * @param name the file name, with its extension
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @param aclIdentity the user filing it
+   * @return the filed document
+   * @throws IllegalArgumentException when the name is blank, the folder is
+   *           not a folder, or a new version is asked of a document of that
+   *           name that is not a file (a folder or a shortcut), or keeps no versions
+   * @throws IllegalStateException when the file couldn't be filed, or read
+   *           back once filed
+   * @throws IllegalAccessException when the user can't add documents to the
+   *           folder
+   * @throws ObjectNotFoundException when the folder or the upload doesn't exist
+   */
+  default FileNode saveUploadedDocument(String folderId,
+                                        String uploadId,
+                                        String name,
+                                        UploadConflictAction conflictAction,
+                                        Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
   String getNewName(long ownerId,
                     String folderId,
                     String folderPath,
@@ -404,6 +493,298 @@ public interface DocumentFileStorage {
   }
 
   /**
+   * The transcription state of a media file, read with the rights of the given
+   * user. A file transcribed before the state existed, which holds a transcript
+   * but no state, reads as {@link TranscriptionStatus#DONE}; a file never sent
+   * to transcription reads with a null status.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the user reading it
+   * @return the state, never null
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default TranscriptionState getTranscriptionState(String documentId,
+                                                   Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The transcription state of a media file, read as the system.
+   *
+   * @param documentId the file's UUID
+   * @return the state, never null
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default TranscriptionState getTranscriptionState(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Writes the transcription state of a media file as the system: every field
+   * of the state is written, a null one removed, and the update time set to now.
+   *
+   * @param documentId the file's UUID
+   * @param state the state to write
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default void updateTranscriptionState(String documentId, TranscriptionState state) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Marks a media file QUEUED as the system, only when it has no transcription
+   * state yet: the read and the write are made in one session, so a run's state is
+   * never written over.
+   *
+   * @param documentId the file's UUID
+   * @return true when the state was written, false when the file had one
+   * @throws ObjectNotFoundException when the file does not exist, or the session
+   *           creating it is not saved yet
+   */
+  default boolean markTranscriptionQueued(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Removes, as the system, the transcription state of a media file not
+   * transcribed yet, so that the file reads as never transcribed and can be
+   * queued again; a transcribed file, or one with no state, is left as it is.
+   *
+   * @param documentId the file's UUID
+   * @return true when a state was removed
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default boolean clearTranscriptionState(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Writes, as the system and in one save, the transcript of a media file, its
+   * timed segments and its final state.
+   *
+   * @param documentId the file's UUID
+   * @param transcription the transcript's text
+   * @param segments the timed segments as a JSON list, or null when there are
+   *          none
+   * @param state the state to write, {@link TranscriptionStatus#DONE}
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default void completeTranscription(String documentId,
+                                     String transcription,
+                                     String segments,
+                                     TranscriptionState state) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The timed segments of a media file's transcript, read with the rights of
+   * the given user.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the user reading it
+   * @return the segments as a JSON list, or null when there are none
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default String getTranscriptionSegments(String documentId,
+                                          Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The timed segments of a media file's transcript, read as the system, for
+   * the platform's own background work on a transcript.
+   *
+   * @param documentId the file's UUID
+   * @return the segments as a JSON list, or null when there are none
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default String getTranscriptionSegments(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Writes, as the system, the chapters a media file's transcript is grouped
+   * into (EXO-92122), only while the transcript they were made from is still
+   * the stored one: done, and with the update time read before making them.
+   *
+   * @param documentId the file's UUID
+   * @param chapters the chapters as a JSON list
+   * @param transcriptUpdated the update time of the transcription state the
+   *          chapters were made from, in milliseconds since the epoch
+   * @return true when written, false when the transcript changed since, or is
+   *         not done
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default boolean saveTranscriptionChapters(String documentId,
+                                            String chapters,
+                                            long transcriptUpdated) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The chapters a media file's transcript is grouped into, read with the
+   * rights of the given user.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the user reading it
+   * @return the chapters as a JSON list, or null when there are none
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default String getTranscriptionChapters(String documentId,
+                                          Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The person each named speaker of a media file's transcript is, read with
+   * the rights of the given user (EXO-92123).
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the user reading it
+   * @return who each named speaker is, by speaker number: an identity id, or a
+   *         guest's name after {@link org.exoplatform.documents.model.TranscriptSpeakers#GUEST_PREFIX};
+   *         empty when none is named
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default Map<String, String> getTranscriptionSpeakers(String documentId,
+                                                       Identity aclIdentity) throws IllegalAccessException,
+                                                                             ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Says which person a speaker of a media file's transcript is, or that it is
+   * nobody named any more, as a user who can edit the file (EXO-92123). A
+   * proposal the platform applied to that speaker is dropped in the same save
+   * (EXO-92126): the name is a person's from then on.
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param identityId who the speaker is: the identity id of the person, or a
+   *          guest's name after
+   *          {@link org.exoplatform.documents.model.TranscriptSpeakers#GUEST_PREFIX};
+   *          null to unname the speaker. The value is stored as given: a
+   *          guest's name is validated by
+   *          {@code DocumentTranscriptionService#setGuestSpeaker}, which callers
+   *          go through
+   * @param aclIdentity the user naming it
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default void setTranscriptionSpeaker(String documentId,
+                                       String speaker,
+                                       String identityId,
+                                       Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Who a file is for, read as the system: its owner, the users it is shared
+   * with one by one, and the space whose documents hold it (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @return who the file is for
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default DocumentAudience getDocumentAudience(String documentId) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Replaces, as the system, the proposals of who the speakers of a media
+   * file's transcript are (EXO-92126), only while the transcript they were made
+   * from is still the stored one; none removes them.
+   *
+   * @param documentId the file's UUID
+   * @param suggestions the proposals, one per speaker at most
+   * @param transcriptUpdated the update time of the transcription state the
+   *          proposals were made from, in milliseconds since the epoch
+   * @return true when written, false when the transcript changed since, or is
+   *         not done
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  default boolean saveTranscriptionSpeakerSuggestions(String documentId,
+                                                      List<TranscriptionSpeakerSuggestion> suggestions,
+                                                      long transcriptUpdated) throws ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * The proposals of who the speakers of a media file's transcript are, read
+   * with the rights of the given user (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the user reading them
+   * @return the proposals, in the order they were saved; empty when none
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
+                                                                                  Identity aclIdentity) throws IllegalAccessException,
+                                                                                                         ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Removes the proposal for one speaker of a media file's transcript, as a
+   * user who can edit the file (EXO-92126).
+   *
+   * @param documentId the file's UUID
+   * @param speaker the speaker's number in the transcript
+   * @param aclIdentity the user removing it
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default void removeTranscriptionSpeakerSuggestion(String documentId,
+                                                    String speaker,
+                                                    Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Names a speaker of a media file's transcript after a proposal the platform
+   * made, as a user who can edit the file, and marks that proposal applied, in
+   * one save under the file's lock (EXO-92126). What the proposal rests on in
+   * the file is read again at that moment: the transcript must still be the
+   * one it was made from, the proposal must still be stored (not dismissed),
+   * and neither the speaker nor the person may be named. A proposal made by
+   * elimination is never applied: it is only ever suggested, since the voice
+   * left over may be a guest's. A name applied this way never replaces one a
+   * person gave, nor
+   * names a voice of another transcript. Whether the person is still an
+   * enabled user is not read here: the caller checks it just before, so a
+   * person disabled in between is still named.
+   *
+   * @param documentId the file's UUID
+   * @param suggestion the proposal
+   * @param transcriptUpdated the update time of the transcription state the
+   *          proposal was made from, in milliseconds since the epoch
+   * @param aclIdentity the user naming it
+   * @return true when the speaker was named; false when any of these no longer
+   *         holds
+   * @throws IllegalAccessException when the user may not edit the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  default boolean applyTranscriptionSpeakerSuggestion(String documentId,
+                                                      TranscriptionSpeakerSuggestion suggestion,
+                                                      long transcriptUpdated,
+                                                      Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Creates a shortcut for a document
    *
    * @param documentId     document id
@@ -458,6 +839,20 @@ public interface DocumentFileStorage {
   default String getDocumentPathInDrive(String documentId, long ownerId, Identity aclIdentity) throws ObjectNotFoundException {
     throw new UnsupportedOperationException();
   }
+
+  /**
+   * Tells which space drive holds a node itself, read as the system. A
+   * shortcut or a share link ({@code exo:symlink}) isn't the node it points
+   * to: it holds nothing of its own, so it belongs to no space here.
+   *
+   * @param documentId the node id
+   * @return the group id ({@code /spaces/<name>}) of the space whose
+   *         {@code Documents} drive holds the node, or null when the node is
+   *         missing, is a shortcut or a share link, lies outside a space's
+   *         {@code Documents} drive (a personal drive, the trash, any other
+   *         place), or can't be read
+   */
+  String getDocumentSpaceGroupId(String documentId);
 
   /**
    * Retrieves a document content By its Id
@@ -604,6 +999,23 @@ public interface DocumentFileStorage {
    * @return the text of the file and where it came from, or why there is none
    */
   default DocumentTextContent getFileTextContent(String documentId) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Returns a part of the text of a document file, with the length of the
+   * whole text and the document's outline, so a document too large to be read
+   * in one go is read part by part, or one section at a time. The whole text
+   * is extracted from the file once per version of it and kept for the next
+   * parts. No permission is checked here: the caller checks the user can
+   * access the document first.
+   *
+   * @param documentId Document identifier
+   * @param offset the first character to read
+   * @param maxChars the most characters to read, 0 for the outline only
+   * @return the part read, or why there is no text
+   */
+  default DocumentTextPage getFileTextPage(String documentId, long offset, int maxChars) {
     throw new UnsupportedOperationException();
   }
 

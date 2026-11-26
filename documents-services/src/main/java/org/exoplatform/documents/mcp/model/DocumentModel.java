@@ -22,12 +22,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.meeds.mcp.server.tool.model.UserModel;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@AllArgsConstructor
 @NoArgsConstructor
 @JsonInclude(Include.NON_EMPTY)
 public abstract class DocumentModel {
@@ -49,5 +47,58 @@ public abstract class DocumentModel {
 
   @JsonProperty("created_username")
   private UserModel createdUser;
+
+  /**
+   * Whether the current user can change the document: for a file, edit it or
+   * add a version; for a folder, create, upload or rename documents in it.
+   * Null when the rights weren't computed for the listing that returned it,
+   * or for a listed shortcut.
+   */
+  @JsonProperty("can_edit")
+  private Boolean   canEdit;
+
+  /**
+   * Whether the current user can delete the document, null when the rights
+   * weren't computed for the listing that returned it, for a listed shortcut,
+   * or for a shortcut asked by its id, which resolves to its target: deleting
+   * the shortcut removes only the shortcut.
+   */
+  @JsonProperty("can_delete")
+  private Boolean   canDelete;
+
+  /**
+   * The id of the document a listed shortcut points to, null for any other
+   * document. A listed shortcut carries no rights: the shortcut's own aren't
+   * its target's, which the target's id tells.
+   */
+  @JsonProperty("shortcut_target_id")
+  private String    shortcutTargetId;
+
+  /**
+   * Builds the document's common fields, its rights left unknown.
+   *
+   * @param id the document id
+   * @param name the document title
+   * @param path the document path
+   * @param url the document URL in the Documents app
+   * @param parentFolderId the id of the folder holding it
+   * @param createdDate the creation date, formatted
+   * @param createdUser the creator
+   */
+  protected DocumentModel(String id,
+                          String name,
+                          String path,
+                          String url,
+                          String parentFolderId,
+                          String createdDate,
+                          UserModel createdUser) {
+    this.id = id;
+    this.name = name;
+    this.path = path;
+    this.url = url;
+    this.parentFolderId = parentFolderId;
+    this.createdDate = createdDate;
+    this.createdUser = createdUser;
+  }
 
 }

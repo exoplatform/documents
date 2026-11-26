@@ -21,20 +21,37 @@ import static io.meeds.mcp.server.util.McpToolUtils.formatDate;
 import static org.exoplatform.documents.util.MacOsMetadataUtils.isMacOsMetadata;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.time.DateTimeException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
+import java.util.UUID;
 
 import javax.jcr.RepositoryException;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
@@ -42,22 +59,36 @@ import org.exoplatform.commons.ObjectAlreadyExistsException;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
 import org.exoplatform.container.ExoContainerContext;
+import org.exoplatform.documents.constant.DocumentSortField;
+import org.exoplatform.documents.constant.DocumentUploadLimit;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.mcp.model.BreadcrumbItemModel;
 import org.exoplatform.documents.mcp.model.DocumentFileModel;
+import org.exoplatform.documents.mcp.model.ChunkedUpload;
 import org.exoplatform.documents.mcp.model.DocumentFolderModel;
 import org.exoplatform.documents.mcp.model.DocumentModel;
+import org.exoplatform.documents.mcp.model.DocumentPermissionsModel;
+import org.exoplatform.documents.mcp.model.DocumentOutlineModel;
+import org.exoplatform.documents.mcp.model.DocumentHeadingModel;
 import org.exoplatform.documents.mcp.model.DocumentPublicLinkModel;
+import org.exoplatform.documents.mcp.model.DocumentTextPartModel;
 import org.exoplatform.documents.mcp.model.DocumentTreeItemModel;
+import org.exoplatform.documents.mcp.model.DocumentUploadModel;
 import org.exoplatform.documents.mcp.model.DocumentVersionModel;
 import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentOutlineEntry;
 import org.exoplatform.documents.model.DocumentTextContent;
+import org.exoplatform.documents.model.DocumentTextPage;
 import org.exoplatform.documents.model.DocumentTimelineFilter;
 import org.exoplatform.documents.model.DocumentsSize;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.TranscriptSpeakers;
+import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
@@ -71,6 +102,8 @@ import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.attachments.service.AttachmentService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
@@ -78,12 +111,15 @@ import org.exoplatform.social.core.space.model.Space;
 import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.social.metadata.favorite.FavoriteService;
 import org.exoplatform.social.metadata.favorite.model.Favorite;
+import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
 import org.exoplatform.wiki.WikiException;
 import org.exoplatform.wiki.model.Page;
 import org.exoplatform.wiki.service.NoteService;
 
+import io.meeds.mcp.server.model.ActingIdentity;
 import io.meeds.mcp.server.plugin.McpToolPlugin;
+import io.meeds.mcp.server.util.McpToolUtils;
 import io.meeds.mcp.server.tool.model.UserModel;
 import io.meeds.mcp.server.tool.util.UploadToolUtils;
 import io.meeds.mcp.server.tool.util.UserToolUtils;
@@ -114,6 +150,38 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
 
+  /** The characters {@code read_document_text} returns when the caller sets no number. */
+  static final int                 DEFAULT_TEXT_PART_CHARS = 40_000;
+
+  /** The most characters {@code read_document_text} returns in one call. */
+  static final int                 MAX_TEXT_PART_CHARS     = 200_000;
+
+  /**
+   * The most children {@code list_folder_children} reads to keep those changed
+   * since a date.
+   */
+  static final int                 MAX_SCANNED_CHILDREN   = 1000;
+
+  /** The most children one folder listing returns, whatever limit is asked */
+  static final int                 MAX_PAGE_SIZE          = 100;
+
+  /** The most base64 characters of one piece of a file sent in pieces. */
+  static final int                 MAX_CHUNK_CHARS        = 1024 * 1024;
+
+  /** The base64 characters of one piece an assistant is told to send. */
+  static final int                 CHUNK_CHARS            = 20000;
+
+  /** How long an upload in pieces is kept without a piece. */
+  static final Duration            UPLOAD_TIME_TO_LIVE    = Duration.ofMinutes(30);
+
+  /** The most uploads in pieces a user keeps in progress. */
+  static final int                 MAX_OPEN_UPLOADS       = 3;
+
+  /** The directory, under the temporary directory, of the pieces of the uploads in progress. */
+  static final String              UPLOAD_DIRECTORY       = "documents-mcp-uploads";
+
+  private static final Log        LOG = ExoLogger.getLogger(DocumentMcpTool.class);
+
   /**
    * Same password policy DocumentFileRest applies to public-link passwords
    * (min length 9), so a link created here is openable with the given password.
@@ -130,6 +198,56 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   private static final String      FAVORITE_TYPE_FILE     = "file";
 
+  private static final String      MSG_DESTINATION_OUTSIDE_SCOPE_SPACE =
+                                                                       "The destination folder %s isn't in the space this call is limited to. Pick a folder of that space (get_root_folder_by_space, get_documents_by_folder_id).";
+
+  private static final String      MSG_SCOPE_UNREADABLE   =
+                                                          "The space this call is limited to can't be read, so it can't rename, move, copy, link, duplicate, hide or version a document";
+
+  private static final String      MSG_SYSTEM_NODE        =
+                                                          "The document %s was created by the platform for the space; a digital worker can't rename, move, copy, link, duplicate, hide or version it.";
+
+  private static final String      MSG_HIDE_FOLDER_ONLY   =
+                                                          "Only a folder can be hidden or shown; %s is a file.";
+
+  /**
+   * The note ending a text cut at the most characters read on the fly. It
+   * gives no offset: read_document_text lays out a Word document, a
+   * presentation, a PDF or a spreadsheet its own way, so this text's length is no position
+   * in that one.
+   */
+  private static final String      MSG_TEXT_CONTINUES      =
+                                                           "\n\n[The text continues past this point. To read the rest, call get_document_outline and read_document_text with the sections that follow, or read_document_text by offset from the start: its text is laid out its own way, so this text's length is not an offset in it.]";
+
+  /** The answer while a large document's text is being extracted, or others' fill the queue. */
+  private static final String      MSG_TEXT_BEING_READ     =
+                                                           "The document with id %s is being read, or other large documents are, which takes a while. Call the same tool again in a minute.";
+
+  /** The note ending the first part of a document too large to be read in one go: its length, where to read on. */
+  private static final String      MSG_FIRST_PART_CONTINUES =
+                                                            "\n\n[This is the first part of a large document, whose text is %d characters long%s. To read the rest, call read_document_text with offset=%d, or get_document_outline to find a chapter.]";
+
+  /** Said of a text read part by part that was cut at the most characters read from one document. */
+  private static final String      MSG_TEXT_CUT_AT_MOST     = " once cut at the most characters read from one document, so its end is missing";
+
+  /** The note ending a text read part by part that was cut at the most characters read from one document. */
+  private static final String      MSG_PAGED_TEXT_CUT       =
+                                                            "\n\n[The document's text stops here: it was cut at the most characters read from one document.]";
+
+  /** The refusal of a document too large even to be read part by part. */
+  private static final String      MSG_TOO_LARGE_FOR_PARTS =
+                                                           "The document with id %s is over the largest size whose text is read, even part by part.";
+
+  /** The refusal of a section the outline doesn't have. */
+  private static final String      MSG_NO_SUCH_SECTION     =
+                                                           "There is no section %d in the document %s: its outline has %d headings, numbered from 0. Call get_document_outline to list them.";
+
+  private static final String      MSG_CONTENT_TOO_LARGE  =
+                                                          "The new version content is %d bytes, over the %d bytes limit.";
+
+  /** The creator of the nodes the platform creates for a space. */
+  private static final String      SYSTEM_USER            = "__system";
+
   /**
    * The error the model reads when {@code create_folder} names a parent folder
    * id no folder has, typically one it composed for a folder it creates in the
@@ -137,6 +255,147 @@ public class DocumentMcpTool implements McpToolPlugin {
    */
   private static final String      PARENT_FOLDER_NOT_FOUND_MESSAGE =
                                                                    "No folder has the id %s. Use only a document_id a tool returned (create_folder, get_root_folder_for_user, get_root_folder_by_space, get_documents_by_folder_id), never a composed one. To create nested folders, call create_folder once with their path in 'name', such as 'Finances/Factures/Entrantes', under a folder that exists.";
+
+  /** The refusal of an unknown space id, saying how to find the space. */
+  private static final String      MSG_SPACE_NOT_FOUND    =
+                                                          "Space with id %s doesn't exist. Pass space_name (the space's name) or find it with get_my_spaces.";
+
+  /** The refusal of a space given both by id and by name. */
+  private static final String      MSG_SPACE_ID_OR_NAME   = "Pass either space_id or space_name, not both.";
+
+  /** The refusal of a call that gives no space where one is required. */
+  private static final String      MSG_SPACE_REQUIRED     =
+                                                          "Pass the space: its space_name (the space's name) or its space_id; get_my_spaces lists your spaces.";
+
+  /**
+   * The refusal of a space name naming another space than the one the call is
+   * limited to, worded as the space scope refuses another space's id.
+   */
+  private static final String      MSG_NAME_OUTSIDE_SCOPE =
+                                                          "Not executed: while this run is limited to the space with id %s, '%s' can only reach that space, and the space_name '%s' names another one. Call it again without space_name, or answer from what you already have.";
+
+  /** The refusal of a space name when the call's space can't be read. */
+  private static final String      MSG_NAME_SCOPE_UNREADABLE =
+                                                             "The space this call is limited to can't be read, so a space can't be named by its space_name. Call it again with its space_id.";
+
+  /** The refusal of a copy into a folder holding too many children to find the copy in. */
+  private static final String      MSG_TOO_MANY_CHILDREN_TO_COPY_INTO =
+                                                                      "The target folder holds %d items or more, too many to find the copy in afterwards, so nothing was copied. Copy into a folder holding fewer items.";
+
+  /** The refusal of a duplicate in a folder holding too many children to find the duplicate in. */
+  private static final String      MSG_TOO_MANY_CHILDREN_TO_DUPLICATE_IN =
+                                                                         "The document's folder holds %d items or more, too many to find the duplicate in afterwards, so nothing was duplicated. Call copy_document to copy it into a folder holding fewer items instead.";
+
+  /** The failure of a copy or a duplicate made in a folder that has grown too large to find it in. */
+  private static final String      MSG_ADDED_CHILD_NOT_SCANNED =
+                                                               "The document was %s in folder %s, but the folder now holds more than %d items, too many to find it among them. Call list_folder_children on that folder to find it.";
+
+  /** The refusal of a date-limited listing of a folder holding too many children. */
+  private static final String      MSG_TOO_MANY_CHILDREN  =
+                                                          "The folder holds more than %d documents, too many to keep the changed ones here. Call search_documents with parent_folder_id and updated_since instead (it searches the whole folder tree, files only).";
+
+  /** The refusal of an unreadable {@code updated_since}. */
+  private static final String      MSG_UPDATED_SINCE_UNREADABLE =
+                                                                "The date '%s' can't be read. Pass updated_since as an ISO-8601 date or date-time, such as 2026-10-01 or 2026-10-01T08:00:00Z.";
+
+  /** The refusal of a shortcut's id given as the folder a tool writes in. */
+  private static final String      MSG_FOLDER_IS_SHORTCUT  =
+                                                           "The folder id %s is a shortcut to the folder %s: pass that folder's id as %s to write there (get_document_permissions tells whether you can write in it).";
+
+  /** The refusal of a shortcut to a file given as the folder a tool writes in. */
+  private static final String      MSG_FILE_SHORTCUT_IS_NO_FOLDER =
+                                                                  "The id %s is a shortcut to the file %s, not a folder: pass a folder's id as %s.";
+
+  /** The refusal of a file's id given as the folder a tool writes in. */
+  private static final String      MSG_FILE_IS_NO_FOLDER   =
+                                                           "The id %s is a file, not a folder: pass a folder's id as %s.";
+
+  /** The argument of the tools that add a document or a folder to a folder. */
+  private static final String      PARENT_FOLDER_ID_ARG      = "parent_folder_id";
+
+  /** The argument of the tools that move, copy or link a document to a folder. */
+  private static final String      DESTINATION_FOLDER_ID_ARG = "destination_folder_id";
+
+
+  /**
+   * The refusal of a base64 file too long for one upload_document call: a
+   * larger one is sent through an upload link, or in pieces without a shell.
+   */
+  private static final String      MSG_UPLOAD_BASE64_TOO_LONG =
+                                                              "'base64' is at most %d characters in one upload_document call, and this one is %d. For a file on your machine, open an upload link with start_upload, run its curl command in your shell, then call upload_document with its upload_id. With no shell, send a small file in pieces: start_document_upload, then append_document_upload_chunk for each piece of at most %d characters.";
+
+  /**
+   * The refusal of a base64 new version too long for one add_document_version
+   * call: a larger one is sent through an upload link, or, without a shell,
+   * in pieces into the file's folder, under the file's name, as a new version
+   * of the file of that name.
+   */
+  private static final String      MSG_VERSION_BASE64_TOO_LONG =
+                                                               "'base64' is at most %d characters in one add_document_version call, and this one is %d. For a file on your machine, open an upload link with start_upload, run its curl command in your shell, then call add_document_version with its upload_id. With no shell, send a small new version in pieces: start_document_upload into the file's folder (its parent_folder_id), with the file's exact name and on_conflict=new_version, then append_document_upload_chunk for each piece of at most %d characters. That adds a version to the file of that name in that folder (a new file if the folder holds none of that name), without a version_summary.";
+
+  /**
+   * The refusal of a base64 new version too long for one add_document_version
+   * call in a call limited to a space, where the tools that send a file in
+   * pieces are not offered.
+   */
+  private static final String      MSG_VERSION_BASE64_TOO_LONG_IN_SPACE =
+                                                                        "'base64' is at most %d characters in one add_document_version call, and this one is %d. While this run is limited to a space, a larger new version can't be sent from here: sending a file in pieces isn't available in it. Ask the user to add the new version from the Documents app.";
+
+  /**
+   * Appended to the fetcher's refusal of a URL over
+   * {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES}, or the upload size
+   * limit when it is lower: what to do with a larger file.
+   */
+  private static final String      MSG_URL_TOO_LARGE_HINT =
+                                                          " A file is read from a URL up to %d MB. For a larger file on your machine, open an upload link with start_upload, run its curl command in your shell, then pass its upload_id; otherwise ask the user to attach it in the conversation.";
+
+  /**
+   * How mcp-server's shared fetcher words its refusal of a body over the
+   * limit asked ({@code UploadToolUtils#fetchInternal}, failure
+   * {@code TOO_LARGE}): the one refusal this tool completes with what to do
+   * instead.
+   */
+  private static final String      FETCH_TOO_LARGE_MARKER = "exceeds the maximum allowed size";
+
+  /**
+   * The refusal of an upload id that names no upload of the user's on this
+   * node, worded alike whether the id is unknown or another user's.
+   */
+  private static final String      MSG_UPLOAD_ID_UNKNOWN  =
+                                                          "No upload '%s' of yours is waiting on this server: it expired, a tool already consumed it, or its curl command reached another server node. Check it with get_upload, or open a new one with start_upload and run its curl command again.";
+
+  /** The refusal of an upload still being sent, left for a later call. */
+  private static final String      MSG_UPLOAD_ID_UPLOADING =
+                                                           "The upload '%s' is still being sent: wait for its curl command to answer {\"status\":\"uploaded\"} (get_upload tells where it stands), then call this tool again with it.";
+
+  /** The refusal of an upload that failed, or whose file is gone. */
+  private static final String      MSG_UPLOAD_ID_FAILED   =
+                                                          "The upload '%s' did not complete, and is dropped: open a new one with start_upload and run its curl command again.";
+
+  /**
+   * The refusal of an upload id in a call limited to a space, where
+   * start_upload is not offered.
+   */
+  private static final String      MSG_UPLOAD_ID_IN_SPACE =
+                                                          "While this run is limited to a space, a file sent through an upload link can't be used: start_upload isn't available in it. Ask the user to add the file from the Documents app.";
+
+  /** The refusal of an attached file over the upload size limit. */
+  private static final String      MSG_ATTACHMENT_TOO_LARGE =
+                                                            "The attached file is %d bytes, over the %d MB a file uploaded can be.";
+
+  /** The type an upload is staged under: the filing resolves the file's own from its name. */
+  private static final String      DEFAULT_UPLOAD_MIME_TYPE = "application/octet-stream";
+
+  /** The refusal of an upload into a document that is not a folder. */
+  private static final String      MSG_UPLOAD_NOT_A_FOLDER =
+                                                           "'%s' (%s) is a file, not a folder: a file is uploaded into a folder. To add a new version of this file, use add_document_version.";
+
+  /** Said of an upload in pieces whose file couldn't be filed. */
+  private static final String      MSG_UPLOAD_ENDED       = " The upload is ended: start it again with start_document_upload.";
+
+  /** The refusal of an upload into a folder the user can't write in. */
+  private static final String      MSG_UPLOAD_FOLDER_NOT_WRITABLE =
+                                                                  "You can't add documents to the folder '%s' (%s): you can read it but not write in it. Pick a folder whose can_edit is true (get_document_permissions tells it), or ask a space manager for the right.";
 
 
   /**
@@ -191,6 +450,12 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   private final FavoriteService     favoriteService;
 
+  /** Finds a space by its name among the calling user's spaces. */
+  private final SpaceNameResolver   spaceNameResolver;
+
+  /** The uploads in pieces in progress on this node. */
+  private final ChunkedUploadStore  chunkedUploads;
+
   public DocumentMcpTool(DocumentFileService documentFileService,
                          AttachmentService attachmentService,
                          org.exoplatform.social.attachment.AttachmentService socialAttachmentService,
@@ -217,11 +482,156 @@ public class DocumentMcpTool implements McpToolPlugin {
     this.uploadService = uploadService;
     this.publicDocumentAccessService = publicDocumentAccessService;
     this.favoriteService = favoriteService;
+    this.spaceNameResolver = new SpaceNameResolver(spaceService);
+    this.chunkedUploads = new ChunkedUploadStore(DocumentUploadLimit.getMaxBytes(),
+                                                 MAX_OPEN_UPLOADS,
+                                                 UPLOAD_TIME_TO_LIVE,
+                                                 Clock.systemUTC(),
+                                                 Path.of(System.getProperty("java.io.tmpdir"), UPLOAD_DIRECTORY));
   }
 
-  public DocumentFolderModel getRootFolderBySpace(long spaceId) throws ObjectNotFoundException, IllegalAccessException {
-    FolderNode spaceRootFolder = documentFileService.getSpaceRootFolder(spaceId, getCurrentUserAclIdentity());
+  /**
+   * @return the space the current call is limited to, null when it isn't
+   * @throws IllegalStateException when the call's identity can't be read
+   */
+  protected Long getScopeSpaceId() {
+    ActingIdentity identity = McpToolUtils.getCurrentActingIdentity();
+    return identity == null ? null : identity.spaceScope();
+  }
+
+  /**
+   * Checks the destination folder of a call limited to a space is in that
+   * space, by the same mapping the {@value DocumentSpaceScopeResolver#NAME}
+   * resolver gives the moved, copied or linked node: the space scope checks
+   * that node only, and the destination is a second node, so a move, a copy
+   * or a shortcut could otherwise take the node out of the space. A call that
+   * isn't limited is not checked; one whose space can't be read is refused.
+   *
+   * @param destinationFolderId the destination folder
+   * @throws IllegalAccessException when the call is limited to a space the
+   *           destination folder isn't in, or its space can't be read
+   */
+  private void checkDestinationInScopeSpace(String destinationFolderId) throws IllegalAccessException {
+    Long spaceId;
+    try {
+      spaceId = getScopeSpaceId();
+    } catch (IllegalStateException e) {
+      throw new IllegalAccessException(MSG_SCOPE_UNREADABLE);
+    }
+    if (spaceId == null) {
+      return;
+    }
+    Long destinationSpaceId = new DocumentSpaceScopeResolver(documentFileService, spaceService).spaceOf(destinationFolderId);
+    if (!spaceId.equals(destinationSpaceId)) {
+      throw new IllegalAccessException(MSG_DESTINATION_OUTSIDE_SCOPE_SPACE.formatted(destinationFolderId));
+    }
+  }
+
+  /**
+   * Checks a call limited to a space may rename, move, copy, link, duplicate,
+   * hide or version a node, as the Documents application lets a space member
+   * who isn't an administrator do: not a node the platform created for the space (creator
+   * {@value #SYSTEM_USER}), and, for a visibility change, a folder only. A call
+   * that isn't limited is not checked; one whose space can't be read is
+   * refused.
+   *
+   * @param documentId the node
+   * @param folderOnly true when only a folder may be changed
+   * @throws IllegalAccessException when the call is limited to a space and the
+   *           node was created by the platform, or isn't a folder when one is
+   *           required, or the call's space can't be read
+   * @throws ObjectNotFoundException when the node doesn't exist
+   */
+  private void checkScopedChange(String documentId, boolean folderOnly) throws IllegalAccessException,
+                                                                         ObjectNotFoundException {
+    Long spaceId;
+    try {
+      spaceId = getScopeSpaceId();
+    } catch (IllegalStateException e) {
+      throw new IllegalAccessException(MSG_SCOPE_UNREADABLE);
+    }
+    if (spaceId == null) {
+      return;
+    }
+    AbstractNode node = getNode(documentId);
+    if (SYSTEM_USER.equals(node.getCreatorUserName())) {
+      throw new IllegalAccessException(MSG_SYSTEM_NODE.formatted(documentId));
+    } else if (folderOnly && !(node instanceof FolderNode)) {
+      throw new IllegalAccessException(MSG_HIDE_FOLDER_ONLY.formatted(documentId));
+    }
+  }
+
+  /**
+   * Reads the root folder of a space's documents, the space given by its id
+   * or by its name, exactly one of them. A name is looked up among the spaces
+   * the user is a member of, and nothing is guessed.
+   *
+   * @param spaceId the space's id, null when the space is given by its name
+   * @param spaceName the space's name, blank when the space is given by its
+   *          id
+   * @return the space's root folder
+   * @throws ObjectNotFoundException when the space doesn't exist, or no space
+   *           of the user carries the name: the message says how to find it
+   * @throws IllegalAccessException when the user can't view the space, or a
+   *           call limited to a space names another one
+   * @throws IllegalArgumentException when both or neither are given, or
+   *           several of the user's spaces carry the name
+   */
+  public DocumentFolderModel getRootFolderBySpace(Long spaceId, String spaceName) throws ObjectNotFoundException,
+                                                                                  IllegalAccessException {
+    Long resolvedSpaceId = resolveSpaceId(spaceId, spaceName, "get_root_folder_by_space");
+    if (resolvedSpaceId == null) {
+      throw new IllegalArgumentException(MSG_SPACE_REQUIRED);
+    }
+    FolderNode spaceRootFolder;
+    try {
+      spaceRootFolder = documentFileService.getSpaceRootFolder(resolvedSpaceId, getCurrentUserAclIdentity());
+    } catch (ObjectNotFoundException e) {
+      throw new ObjectNotFoundException(MSG_SPACE_NOT_FOUND.formatted(resolvedSpaceId));
+    }
     return toDocumentFolderModel(spaceRootFolder);
+  }
+
+  /**
+   * Tells which space a call names, by its id or by its name, at most one of
+   * them. A name is looked up among the spaces the user is a member of; in a
+   * call limited to a space, a name of another space is refused as the space
+   * scope refuses another space's id, and one whose space can't be read is
+   * refused too.
+   *
+   * @param spaceId the space's id, null or not positive when not given
+   * @param spaceName the space's name, blank when not given
+   * @param toolName the tool the call runs, named in a refusal
+   * @return the space's id, null when neither is given
+   * @throws ObjectNotFoundException when no space of the user carries the name
+   * @throws IllegalAccessException when a call limited to a space names
+   *           another one, or its space can't be read
+   * @throws IllegalArgumentException when both are given, or several of the
+   *           user's spaces carry the name
+   */
+  private Long resolveSpaceId(Long spaceId, String spaceName, String toolName) throws ObjectNotFoundException,
+                                                                               IllegalAccessException {
+    boolean hasId = spaceId != null && spaceId > 0;
+    boolean hasName = StringUtils.isNotBlank(spaceName);
+    if (hasId && hasName) {
+      throw new IllegalArgumentException(MSG_SPACE_ID_OR_NAME);
+    } else if (hasId) {
+      return spaceId;
+    } else if (!hasName) {
+      return null;
+    }
+    Long scopeSpaceId;
+    try {
+      scopeSpaceId = getScopeSpaceId();
+    } catch (IllegalStateException e) {
+      throw new IllegalAccessException(MSG_NAME_SCOPE_UNREADABLE);
+    }
+    Space space = spaceNameResolver.resolve(spaceName, getCurrentUserName());
+    Long resolvedSpaceId = Long.valueOf(space.getId());
+    if (scopeSpaceId != null && !scopeSpaceId.equals(resolvedSpaceId)) {
+      throw new IllegalAccessException(MSG_NAME_OUTSIDE_SCOPE.formatted(scopeSpaceId, toolName, spaceName.trim()));
+    }
+    return resolvedSpaceId;
   }
 
   /**
@@ -251,19 +661,39 @@ public class DocumentMcpTool implements McpToolPlugin {
     documentFileService.updateDocumentDescription(ownerId, documentId, htmlDescription, getCurrentUserIdentityId());
   }
 
+  /**
+   * Lists a page of a folder's children, folders first. A negative limit
+   * lists nothing, as list_folder_children does: the storage would read every
+   * child.
+   *
+   * @param folderId the folder
+   * @param filesOnly whether only the files are kept
+   * @param foldersOnly whether only the folders are kept
+   * @param offset the first child listed, 0 by default
+   * @param limit the most children listed, the default page size when null
+   *          or 0, at most {@value #MAX_PAGE_SIZE}
+   * @return the folder's children on that page
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read the folder
+   */
   public List<DocumentModel> getDocumentsByFolderId(String folderId,
                                                     Boolean filesOnly,
                                                     Boolean foldersOnly,
                                                     Integer offset,
                                                     Integer limit) throws ObjectNotFoundException,
                                                                    IllegalAccessException {
+    int size = Math.clamp(getInteger(limit, DEFAULT_LIMIT), 0, MAX_PAGE_SIZE);
+    if (size == 0) {
+      // a negative limit; the storage reads every child when given none
+      return List.of();
+    }
     List<? extends AbstractNode> documentItems = documentFileService.getDocumentItems(FileListingType.FOLDER,
                                                                                       new DocumentFolderFilter(folderId,
                                                                                                                null,
                                                                                                                null,
                                                                                                                null),
                                                                                       getInteger(offset, DEFAULT_OFFSET),
-                                                                                      getInteger(limit, DEFAULT_LIMIT),
+                                                                                      size,
                                                                                       getCurrentUserIdentityId(),
                                                                                       true);
     return documentItems.stream()
@@ -278,10 +708,26 @@ public class DocumentMcpTool implements McpToolPlugin {
     return toDocumentFolderModel(personalRootFolder);
   }
 
+  /**
+   * Returns a document's metadata, with the user's rights on it. A shortcut
+   * resolves to its target, whose metadata and edit right are returned; its
+   * delete right is left out, deleting the shortcut removing only the
+   * shortcut.
+   *
+   * @param documentId the document id
+   * @return the document
+   * @throws IllegalAccessException when the user can't read it
+   * @throws ObjectNotFoundException when it doesn't exist
+   */
   public DocumentModel getDocumentById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
     AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
-    return toDocumentModel(document);
+    DocumentModel model = toDocumentModel(document);
+    if (!StringUtils.equals(documentId, document.getId())) {
+      // a shortcut resolves to its target: deleting the shortcut removes only the shortcut
+      model.setCanDelete(null);
+    }
+    return model;
   }
 
   /**
@@ -294,6 +740,10 @@ public class DocumentMcpTool implements McpToolPlugin {
    * service exposes no way to know whether an indexing operation is pending for
    * a file, and the file itself was just read without success. Only a busy
    * extractor, a fact known for certain, is worded as worth another attempt.
+   * <p>
+   * A file too large to be read in one go is read as {@code read_document_text}
+   * reads it, up to the largest file a user can attach: its first part is
+   * returned, with the length of its text and the offset to read on.
    *
    * @param documentId the document identifier
    * @return the text of the document
@@ -305,11 +755,32 @@ public class DocumentMcpTool implements McpToolPlugin {
     checkCanAccessDocument(documentId);
     DocumentTextContent content = documentFileService.getFileTextContent(documentId);
     if (content != null && content.hasText()) {
-      return content.text();
+      return content.truncated() ? content.text() + MSG_TEXT_CONTINUES : content.text();
+    }
+    if (content != null && content.status() == DocumentTextContent.Status.TOO_LARGE) {
+      return readFirstPart(documentId);
     }
     throw new IllegalStateException(getNoTextMessage(documentId,
                                                      content == null ? DocumentTextContent.Status.UNREADABLE
                                                                      : content.status()));
+  }
+
+  /**
+   * Reads the first part of a document too large to be read in one go, as
+   * {@code read_document_text} reads it, ending with how to read on.
+   *
+   * @param documentId the document id
+   * @return the first part, with its note
+   * @throws IllegalStateException when the document has no readable text, with
+   *           the reason
+   */
+  private String readFirstPart(String documentId) {
+    DocumentTextPage page = getTextPage(documentId, 0, MAX_TEXT_PART_CHARS);
+    long partEnd = page.offset() + page.text().length();
+    if (partEnd < page.totalChars()) {
+      return page.text() + MSG_FIRST_PART_CONTINUES.formatted(page.totalChars(), page.truncated() ? MSG_TEXT_CUT_AT_MOST : "", partEnd);
+    }
+    return page.truncated() ? page.text() + MSG_PAGED_TEXT_CUT : page.text();
   }
 
   /**
@@ -323,7 +794,6 @@ public class DocumentMcpTool implements McpToolPlugin {
     String prefix = "The text of the document with id %s could not be extracted: ".formatted(documentId);
     return switch (status) {
     case UNSUPPORTED_FORMAT -> prefix + "its format is not supported for text extraction.";
-    case TOO_LARGE -> prefix + "the file is too large for its text to be read.";
     case NO_TEXT -> prefix + "no text was found in the file (a scanned document or an image, for instance).";
     case NOT_A_FILE -> "The document with id %s is not a file with a content, so it has no text.".formatted(documentId);
     case BUSY -> prefix + "too many documents are being read at the moment; asking again in a little while may succeed.";
@@ -332,40 +802,592 @@ public class DocumentMcpTool implements McpToolPlugin {
     };
   }
 
-  public String getDocumentTranscriptionById(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+  /**
+   * Reads a part of a document's text: from an offset, or the section of one
+   * heading of {@code get_document_outline}, at most a given number of
+   * characters, and says where the next part starts. A document too large to
+   * be read in one go is read this way, part by part.
+   *
+   * @param documentId the document id
+   * @param offset the first character, from 0, in the whole text, as
+   *          next_offset gives it; within a section, brought into it: the
+   *          section's start when before it
+   * @param maxChars the most characters returned
+   * @param section the index of the heading whose section is read, null to
+   *          read by offset
+   * @return the part read
+   * @throws IllegalAccessException when the user cannot access the document
+   * @throws ObjectNotFoundException when the document does not exist
+   * @throws IllegalStateException when the document has no readable text, with
+   *           the reason
+   * @throws IllegalArgumentException when the section isn't one of the outline
+   */
+  public DocumentTextPartModel readDocumentText(String documentId,
+                                                Long offset,
+                                                Integer maxChars,
+                                                Integer section) throws IllegalAccessException, ObjectNotFoundException {
+    checkDocumentIdParameter(documentId);
     AbstractNode document = checkCanAccessDocument(documentId);
-    String audioTranscription = documentFileService.getAudioTranscription(documentId, getCurrentUserIdentityId());
+    int size = Math.clamp(maxChars == null ? DEFAULT_TEXT_PART_CHARS : maxChars, 1, MAX_TEXT_PART_CHARS);
+    long start = offset == null ? 0 : Math.max(0, offset);
+    DocumentHeadingModel heading = null;
+    long end = Long.MAX_VALUE;
+    if (section != null) {
+      List<DocumentHeadingModel> headings = toHeadings(getTextPage(documentId, 0, 0));
+      if (section < 0 || section >= headings.size()) {
+        throw new IllegalArgumentException(MSG_NO_SUCH_SECTION.formatted(section, documentId, headings.size()));
+      }
+      heading = headings.get(section);
+      end = heading.endOffset();
+      start = Math.clamp(start, heading.offset(), Math.max(heading.offset(), end));
+    }
+    DocumentTextPage page = getTextPage(documentId, start, (int) Math.max(0, Math.min(size, end - start)));
+    end = Math.min(end, page.totalChars());
+    long partEnd = page.offset() + page.text().length();
+    return new DocumentTextPartModel(documentId,
+                                     document.getName(),
+                                     heading,
+                                     page.offset(),
+                                     partEnd,
+                                     page.totalChars(),
+                                     partEnd < end ? partEnd : null,
+                                     page.truncated(),
+                                     page.text());
+  }
+
+  /**
+   * Lists a document's headings: a Word document's headings, a PDF's bookmarks,
+   * a presentation's slide titles, a spreadsheet's sheets, each with where its
+   * section starts and ends in the text {@code read_document_text} reads.
+   *
+   * @param documentId the document id
+   * @return the outline, empty when the document has no heading
+   * @throws IllegalAccessException when the user cannot access the document
+   * @throws ObjectNotFoundException when the document does not exist
+   * @throws IllegalStateException when the document has no readable text, with
+   *           the reason
+   */
+  public DocumentOutlineModel getDocumentOutline(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+    checkDocumentIdParameter(documentId);
+    AbstractNode document = checkCanAccessDocument(documentId);
+    DocumentTextPage page = getTextPage(documentId, 0, 0);
+    return new DocumentOutlineModel(documentId, document.getName(), page.totalChars(), page.truncated(), toHeadings(page));
+  }
+
+  /**
+   * Reads a part of a document's text, raising why when it has none.
+   *
+   * @param documentId the document id
+   * @param offset the first character
+   * @param maxChars the most characters
+   * @return the part, with the text's length and outline
+   * @throws IllegalStateException when the document has no readable text
+   */
+  private DocumentTextPage getTextPage(String documentId, long offset, int maxChars) {
+    DocumentTextPage page = documentFileService.getFileTextPage(documentId, offset, maxChars);
+    if (page == null || !page.hasText()) {
+      DocumentTextContent.Status status = page == null ? DocumentTextContent.Status.UNREADABLE : page.status();
+      throw new IllegalStateException(switch (status) {
+      case BUSY -> MSG_TEXT_BEING_READ.formatted(documentId);
+      case TOO_LARGE -> MSG_TOO_LARGE_FOR_PARTS.formatted(documentId);
+      default -> getNoTextMessage(documentId, status);
+      });
+    }
+    return page;
+  }
+
+  /**
+   * Turns a document's outline into headings, each section ending at the next
+   * heading of the same or a higher level that starts after it, or at the end
+   * of the text: a heading sharing its start with the next one, two bookmarks
+   * on one PDF page, covers that page too.
+   *
+   * @param page a part of the text, carrying the outline
+   * @return the headings
+   */
+  private static List<DocumentHeadingModel> toHeadings(DocumentTextPage page) {
+    List<DocumentOutlineEntry> outline = page.outline();
+    List<DocumentHeadingModel> headings = new ArrayList<>(outline.size());
+    for (int i = 0; i < outline.size(); i++) {
+      DocumentOutlineEntry entry = outline.get(i);
+      long end = page.totalChars();
+      for (int j = i + 1; j < outline.size(); j++) {
+        DocumentOutlineEntry next = outline.get(j);
+        if (next.level() <= entry.level() && next.offset() > entry.offset()) {
+          end = next.offset();
+          break;
+        }
+      }
+      headings.add(new DocumentHeadingModel(i, entry.level(), entry.title(), entry.offset(), end, entry.page()));
+    }
+    return headings;
+  }
+
+  /**
+   * The transcript of an audio or video file, read with the user's rights. When
+   * there is none, the answer says why, from the file's transcription state
+   * (EXO-92097): queued, in progress with its progress, stopped when its run was
+   * lost (running, unchanged for {@link TranscriptionState#STALE_MILLIS}), failed
+   * with its reason, transcribed with no speech heard; a file never
+   * sent to transcription answers as before. A transcript grouped into
+   * chapters (EXO-92122) is given after the list of its chapters, each with the
+   * moment it starts, its title and its summary, so that the assistant can say
+   * where in the recording a subject was discussed.
+   * Asked with timestamps, a transcript that has timed segments is given one
+   * segment per line, each starting with the moment it was said,
+   * {@code [mm:ss · Ns]} ({@code [h:mm:ss · Ns]} past an hour), where N is that
+   * moment in whole seconds (EXO-92112); without segments, the plain transcript
+   * is given, as without timestamps, or its turns when it tells who speaks. A
+   * transcript whose segments tell who speaks (EXO-92123) is given after the
+   * list of its speakers, each with its talk time, and each of its lines names
+   * who said it: the person named for the speaker, the guest's name, or
+   * {@code Speaker N}; without timestamps, it is given one turn per line,
+   * {@code Name: text}, with no moment.
+   *
+   * @param documentId the file's UUID
+   * @param timestamps true to have each segment start with its moment
+   * @return the transcript
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   * @throws IllegalStateException when the file has no transcript, saying why
+   */
+  public String getDocumentTranscriptionById(String documentId,
+                                             Boolean timestamps) throws IllegalAccessException, ObjectNotFoundException {
+    AbstractNode document = checkCanAccessDocument(documentId);
+    long identityId = getCurrentUserIdentityId();
+    String audioTranscription = documentFileService.getAudioTranscription(documentId, identityId);
     if (StringUtils.isNotBlank(audioTranscription)) {
-      return audioTranscription;
-    } else if (document instanceof FileNode fileNode
-               && StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
-      throw new IllegalStateException("No transcription is available yet for this audio/video file. "
-          + "Transcriptions are generated automatically once the media is processed; tell the user to try again later.");
-    } else {
+      String chapters = toChaptersOutline(documentId, identityId);
+      JSONArray segments = readSegments(documentId, identityId);
+      Map<String, String> speakers = hasSpeaker(segments) ? readSpeakers(documentId, identityId) : null;
+      Map<String, String> namesBySpeaker = new HashMap<>();
+      Map<String, String> keysBySpeaker = new HashMap<>();
+      if (speakers != null) {
+        resolveSpeakers(segments, speakers, namesBySpeaker, keysBySpeaker);
+      }
+      String speakersList = speakers == null ? null : toSpeakersList(segments, namesBySpeaker, keysBySpeaker);
+      String lines = null;
+      if (segments != null && Boolean.TRUE.equals(timestamps)) {
+        lines = toTimedLines(segments, namesBySpeaker);
+      }
+      if (lines == null && speakers != null) {
+        lines = toTurns(segments, namesBySpeaker, keysBySpeaker);
+      }
+      String transcription = lines == null ? audioTranscription : lines;
+      String outline = chapters == null ? speakersList : speakersList == null ? chapters : chapters + "\n\n" + speakersList;
+      return outline == null ? transcription : outline + "\n\nTranscript:\n" + transcription;
+    } else if (!(document instanceof FileNode fileNode)
+               || !StringUtils.startsWithAny(fileNode.getMimeType(), "video/", "audio/")) {
       throw new IllegalStateException("The document with id %s isn't an audio nor a video file, so it has no transcription."
           .formatted(documentId));
     }
+    TranscriptionState state = documentFileService.getTranscriptionState(documentId, identityId);
+    TranscriptionStatus status = state == null ? null : state.status();
+    if (status == null) {
+      throw new IllegalStateException("No transcription is available yet for this audio/video file. "
+          + "Transcriptions are generated automatically once the media is processed; tell the user to try again later.");
+    } else if (status == TranscriptionStatus.PROCESSING && !state.isInProgress(System.currentTimeMillis())) {
+      // A running transcription writes its progress after each piece: unchanged for long, its run was lost.
+      // A queued one may wait that long behind other runs, and is not.
+      throw new IllegalStateException("The transcription of this audio/video file stopped without finishing: "
+          + "tell the user it did not complete.");
+    }
+    throw new IllegalStateException(switch (status) {
+    case QUEUED -> StringUtils.isBlank(state.error()) ? "The transcription of this audio/video file is queued and has not started yet: "
+        + "tell the user it is on its way and to ask again later."
+                                                      : "The last attempt to transcribe this audio/video file failed (%s), and a new attempt is scheduled: tell the user it will be tried again and to ask later."
+                                                          .formatted(toTranscriptionFailure(state.error()));
+    case PROCESSING -> "The transcription of this audio/video file is in progress%s: tell the user it is being produced and to ask again in a few minutes."
+        .formatted(StringUtils.isBlank(state.progress()) ? "" : " (" + state.progress() + " pieces transcribed)");
+    case FAILED -> "The transcription of this audio/video file failed: %s. Tell the user it failed, and why."
+        .formatted(toTranscriptionFailure(state.error()));
+    case DONE -> "This audio/video file was transcribed, but no speech was heard in it.";
+    });
   }
 
+  /**
+   * Writes the chapters a transcript is grouped into, one per line, each with
+   * the moment it starts, its title and its summary.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the outline, starting with {@code Chapters:}, or null when the
+   *         transcript has no chapter, none that can be read, or its chapters
+   *         cannot be read now
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private String toChaptersOutline(String documentId, long identityId) throws IllegalAccessException, ObjectNotFoundException {
+    String chapters;
+    try {
+      chapters = documentFileService.getTranscriptionChapters(documentId, identityId);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its chapters never takes it away
+      LOG.debug("The chapters of media file {} cannot be read, its transcript is given alone", documentId, e);
+      return null;
+    }
+    if (StringUtils.isBlank(chapters)) {
+      return null;
+    }
+    StringBuilder outline = new StringBuilder("Chapters:");
+    try {
+      JSONArray chaptersArray = new JSONArray(chapters);
+      for (int i = 0; i < chaptersArray.length(); i++) {
+        JSONObject chapter = chaptersArray.optJSONObject(i);
+        String title = chapter == null ? null : StringUtils.trimToNull(chapter.optString("title", null));
+        double start = chapter == null ? Double.NaN : chapter.optDouble("start", Double.NaN);
+        if (title != null && Double.isFinite(start) && start >= 0) {
+          String summary = StringUtils.trimToNull(chapter.optString("summary", null));
+          outline.append("\n- ").append(toMoment((long) start)).append(' ').append(title);
+          if (summary != null) {
+            outline.append(": ").append(summary);
+          }
+        }
+      }
+    } catch (JSONException e) {
+      LOG.debug("The chapters of media file {} cannot be read, its transcript is given alone", documentId, e);
+      return null;
+    }
+    return outline.length() == "Chapters:".length() ? null : outline.toString();
+  }
+
+  /**
+   * Reads a transcript's timed segments.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the segments, or null when the file has none, they cannot be
+   *         parsed, or they cannot be read now
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private JSONArray readSegments(String documentId, long identityId) throws IllegalAccessException, ObjectNotFoundException {
+    String segments;
+    try {
+      segments = documentFileService.getTranscriptionSegments(documentId, identityId);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its segments never takes it away
+      LOG.debug("The timed segments of media file {} cannot be read, its plain transcript is given", documentId, e);
+      return null;
+    }
+    if (StringUtils.isBlank(segments)) {
+      return null;
+    }
+    try {
+      JSONArray segmentsArray = new JSONArray(segments);
+      return segmentsArray.isEmpty() ? null : segmentsArray;
+    } catch (JSONException e) {
+      LOG.debug("The timed segments of media file {} cannot be read, its plain transcript is given", documentId, e);
+      return null;
+    }
+  }
+
+  /**
+   * Reads who each named speaker of a transcript is.
+   *
+   * @param documentId the file's UUID
+   * @param identityId the identity id of the user reading it
+   * @return the stored value of each named speaker, by speaker number; empty
+   *         when none is named or they cannot be read now, every speaker then
+   *         being {@code Speaker N}
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist
+   */
+  private Map<String, String> readSpeakers(String documentId, long identityId) throws IllegalAccessException,
+                                                                               ObjectNotFoundException {
+    try {
+      Map<String, String> speakers = documentFileService.getTranscriptionSpeakers(documentId, identityId);
+      return speakers == null ? Map.of() : speakers;
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on its speakers' names never takes it away
+      LOG.debug("The speakers of media file {} cannot be read, they are given by their number", documentId, e);
+      return Map.of();
+    }
+  }
+
+  /**
+   * @param segments a transcript's segments, or null
+   * @return true when one of the usable segments tells who said it
+   */
+  private static boolean hasSpeaker(JSONArray segments) {
+    if (segments == null) {
+      return false;
+    }
+    for (int i = 0; i < segments.length(); i++) {
+      if (getSegmentText(segments.optJSONObject(i)) != null && getSegmentSpeaker(segments.optJSONObject(i)) != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Names each speaker of a transcript once per answer, so that the list of
+   * speakers, the lines and the turns always agree, and tells who each speaker
+   * is: two numbers named after the same person or the same guest are one
+   * speaker. A number named after a person who is gone, or cannot be read now,
+   * is a speaker of its own, {@code Speaker N}, as the transcript's other
+   * readers show it; a guest is known by its name, whatever that name.
+   *
+   * @param segments the transcript's segments
+   * @param speakers the stored value of each named speaker, by speaker number
+   * @param namesBySpeaker filled with the name of each speaker number: the
+   *          person's full name, the guest's name or {@code Speaker N}
+   * @param keysBySpeaker filled with who each speaker number is: its stored
+   *          value, or {@code speaker:<number>} when it is given by its number
+   */
+  private void resolveSpeakers(JSONArray segments,
+                               Map<String, String> speakers,
+                               Map<String, String> namesBySpeaker,
+                               Map<String, String> keysBySpeaker) {
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String speaker = getSegmentSpeaker(segment);
+      if (speaker != null && getSegmentText(segment) != null && !namesBySpeaker.containsKey(speaker)) {
+        String value = speakers.get(speaker);
+        boolean guest = TranscriptSpeakers.isGuest(value);
+        String fullName = guest || StringUtils.isBlank(value) ? null : getIdentityFullName(value.trim());
+        namesBySpeaker.put(speaker, TranscriptSpeakers.speakerName(speaker, speakers, identityId -> fullName));
+        boolean named = guest ? StringUtils.isNotBlank(TranscriptSpeakers.guestName(value)) : fullName != null;
+        keysBySpeaker.put(speaker, named ? value : "speaker:" + speaker);
+      }
+    }
+  }
+
+  /**
+   * Writes the speakers of a transcript, one per line, in the order they first
+   * speak, each with its talk time.
+   *
+   * @param segments the transcript's segments
+   * @param namesBySpeaker the name of each speaker number
+   * @param keysBySpeaker who each speaker number is, two numbers of one person
+   *          or guest sharing it
+   * @return the list, starting with {@code Speakers:}
+   */
+  private String toSpeakersList(JSONArray segments, Map<String, String> namesBySpeaker, Map<String, String> keysBySpeaker) {
+    Map<String, String> names = new LinkedHashMap<>();
+    Map<String, Double> talkTimes = new HashMap<>();
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String speaker = getSegmentSpeaker(segment);
+      if (speaker != null && getSegmentText(segment) != null) {
+        String key = keysBySpeaker.get(speaker);
+        names.computeIfAbsent(key, k -> namesBySpeaker.get(speaker));
+        double start = segment.optDouble("start", Double.NaN);
+        double end = segment.optDouble("end", Double.NaN);
+        double talkTime = Double.isFinite(start) && Double.isFinite(end) && end > start ? end - start : 0;
+        talkTimes.merge(key, talkTime, Double::sum);
+      }
+    }
+    StringBuilder list = new StringBuilder("Speakers:");
+    names.forEach((key, name) -> list.append("\n- ")
+                                     .append(name)
+                                     .append(" (talk time ")
+                                     .append(TranscriptSpeakers.formatMoment(talkTimes.get(key)))
+                                     .append(')'));
+    return list.toString();
+  }
+
+  /**
+   * Writes a transcript's timed segments one per line, each starting with the
+   * moment it was said, then who said it when the transcript tells.
+   *
+   * @param segments the transcript's segments
+   * @param namesBySpeaker the name of each speaker number, empty when the
+   *          transcript does not tell who speaks
+   * @return the timed transcript, or null when no segment can be used
+   */
+  private String toTimedLines(JSONArray segments, Map<String, String> namesBySpeaker) {
+    StringBuilder timedTranscription = new StringBuilder();
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String text = getSegmentText(segment);
+      double start = segment == null ? Double.NaN : segment.optDouble("start", Double.NaN);
+      if (text != null && Double.isFinite(start) && start >= 0) {
+        if (!timedTranscription.isEmpty()) {
+          timedTranscription.append('\n');
+        }
+        String name = namesBySpeaker.get(getSegmentSpeaker(segment));
+        timedTranscription.append(TranscriptSpeakers.formatLine(start, name, text));
+      }
+    }
+    return timedTranscription.isEmpty() ? null : timedTranscription.toString();
+  }
+
+  /**
+   * Writes a transcript one turn per line, {@code Name: text}, with no moment:
+   * the following segments of one speaker make one turn.
+   *
+   * @param segments the transcript's segments
+   * @param namesBySpeaker the name of each speaker number
+   * @param keysBySpeaker who each speaker number is, two numbers of one person
+   *          or guest sharing it
+   * @return the transcript in turns, or null when no segment can be used
+   */
+  private String toTurns(JSONArray segments, Map<String, String> namesBySpeaker, Map<String, String> keysBySpeaker) {
+    StringBuilder turns = new StringBuilder();
+    String turnKey = null;
+    StringBuilder turnText = null;
+    String turnName = null;
+    for (int i = 0; i < segments.length(); i++) {
+      JSONObject segment = segments.optJSONObject(i);
+      String text = getSegmentText(segment);
+      if (text != null) {
+        String speaker = getSegmentSpeaker(segment);
+        String key = speaker == null ? null : keysBySpeaker.get(speaker);
+        if (turnText != null && StringUtils.equals(key, turnKey)) {
+          turnText.append(' ').append(text);
+        } else {
+          appendTurn(turns, turnName, turnText);
+          turnKey = key;
+          turnName = speaker == null ? null : namesBySpeaker.get(speaker);
+          turnText = new StringBuilder(text);
+        }
+      }
+    }
+    appendTurn(turns, turnName, turnText);
+    return turns.isEmpty() ? null : turns.toString();
+  }
+
+  /**
+   * Adds a turn, on its own line, to a transcript in turns.
+   *
+   * @param turns the transcript written so far
+   * @param name who said the turn, or null when the transcript does not tell
+   * @param text what was said, or null when there is no turn yet
+   */
+  private static void appendTurn(StringBuilder turns, String name, StringBuilder text) {
+    if (text != null) {
+      if (!turns.isEmpty()) {
+        turns.append('\n');
+      }
+      turns.append(TranscriptSpeakers.formatTurn(name, text.toString()));
+    }
+  }
+
+  /**
+   * The full name of the person named for a speaker.
+   *
+   * @param identityId the stored identity id
+   * @return the full name, or null when the identity is gone or has no
+   *         profile, the id is not one, or the identity cannot be read now
+   */
+  private String getIdentityFullName(String identityId) {
+    long id = NumberUtils.toLong(identityId, 0);
+    if (id <= 0) {
+      return null;
+    }
+    Identity identity;
+    try {
+      identity = identityManager.getIdentity(id);
+    } catch (RuntimeException e) {
+      // the transcript was read: a failure on a speaker's name gives it by its number
+      LOG.debug("The identity {} named for a speaker cannot be read, it is given by its number", identityId, e);
+      return null;
+    }
+    if (identity == null || identity.isDeleted() || identity.getProfile() == null) {
+      return null;
+    }
+    return StringUtils.trimToNull(identity.getProfile().getFullName());
+  }
+
+  /**
+   * @param segment a transcript's segment, or null
+   * @return what was said, or null when the segment says nothing
+   */
+  private static String getSegmentText(JSONObject segment) {
+    return segment == null ? null : StringUtils.trimToNull(segment.optString("text", null));
+  }
+
+  /**
+   * @param segment a transcript's segment, or null
+   * @return the segment's speaker number, or null when it does not tell
+   */
+  private static String getSegmentSpeaker(JSONObject segment) {
+    return segment == null ? null : StringUtils.trimToNull(segment.optString("speaker", null));
+  }
+
+  /**
+   * @param seconds a moment, in whole seconds from the beginning of the media
+   * @return the moment as a marker: {@code [mm:ss · Ns]}, or
+   *         {@code [h:mm:ss · Ns]} past an hour, N being the moment in seconds
+   *         so that the assistant links to it without converting
+   */
+  static String toMoment(long seconds) {
+    return TranscriptSpeakers.formatMarker(seconds);
+  }
+
+  /**
+   * Says in words why a transcription failed, from its failure code.
+   *
+   * @param error the failure's message code
+   * @return the reason, for the assistant to tell the user
+   */
+  private String toTranscriptionFailure(String error) {
+    return switch (StringUtils.defaultString(error)) {
+    case "ffmpeg.unavailable" -> "the server has no tool to convert this recording, which its format or its size needs";
+    case "media.unreadable" -> "the file could not be read";
+    case "transcription.disabled" -> "transcription is switched off, or its transcription assistant is not available";
+    case "attempts.exhausted" -> "every attempt failed";
+    case "provider.timeout" -> "the transcription service did not answer in time";
+    case "provider.rejected" -> "the transcription service refused it";
+    default -> "no reason was recorded";
+    };
+  }
+
+  /**
+   * Searches the documents the user can read, optionally in one space, given
+   * by its id or by its name (at most one of them), or under one folder.
+   *
+   * @param query the full-text query
+   * @param spaceId the space to search in, null for none
+   * @param spaceName the name of the space to search in, blank for none
+   * @param parentFolderId the folder to search under, which wins over the
+   *          space
+   * @param offset the first result
+   * @param limit the most results
+   * @param isFavorites true to search the user's favorites only
+   * @param updatedSince an ISO-8601 date or date-time: only the files changed
+   *          since then, the most recent first; blank for any date
+   * @return the matching documents
+   * @throws ObjectNotFoundException when the space doesn't exist, or no space
+   *           of the user carries the name
+   * @throws IllegalAccessException when the user can't view the space
+   * @throws IllegalArgumentException when both a space id and a name are
+   *           given, several of the user's spaces carry the name, the date
+   *           can't be read, or neither a query nor a date is given
+   */
   public List<DocumentFileModel> searchDocuments(String query,
                                                  Long spaceId,
+                                                 String spaceName,
                                                  String parentFolderId,
                                                  Integer offset,
                                                  Integer limit,
-                                                 Boolean isFavorites) throws ObjectNotFoundException, IllegalAccessException {
+                                                 Boolean isFavorites,
+                                                 String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
+    Long updatedSinceTime = parseUpdatedSince(updatedSince);
+    if (StringUtils.isBlank(query) && updatedSinceTime == null) {
+      throw new IllegalArgumentException("Pass a 'query', or 'updated_since' to list the files changed since a date.");
+    }
     DocumentTimelineFilter filter = new DocumentTimelineFilter();
     filter.setQuery(query);
     if (isFavorites != null && isFavorites.booleanValue()) {
       filter.setFavorites(true);
     }
+    if (updatedSinceTime != null) {
+      filter.setAfterDate(updatedSinceTime);
+      filter.setSortField(DocumentSortField.MODIFIED_DATE);
+      filter.setAscending(false);
+    }
+    Long searchedSpaceId = resolveSpaceId(spaceId, spaceName, "search_documents");
     if (StringUtils.isNotBlank(parentFolderId)) {
       filter.setParentFolderId(parentFolderId);
-    } else if (spaceId != null && spaceId > 0) {
-      Space space = spaceService.getSpaceById(String.valueOf(spaceId));
+    } else if (searchedSpaceId != null) {
+      Space space = spaceService.getSpaceById(String.valueOf(searchedSpaceId));
       if (space == null) {
-        throw new ObjectNotFoundException("Space with id %s not found. Use 'search_my_spaces' tool to check accessible spaces");
+        throw new ObjectNotFoundException(MSG_SPACE_NOT_FOUND.formatted(searchedSpaceId));
       } else if (!spaceService.canViewSpace(space, getCurrentUserName())) {
-        throw new IllegalAccessException("Space with id %s not accessbile for current user. Use 'search_my_spaces' tool to check accessible spaces");
+        throw new IllegalAccessException("Space with id %s isn't accessible to you. Use get_my_spaces to find your spaces.".formatted(searchedSpaceId));
       }
       Identity spaceIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
       filter.setOwnerId(spaceIdentity.getIdentityId());
@@ -381,16 +1403,96 @@ public class DocumentMcpTool implements McpToolPlugin {
   // Folder navigation and metadata (reads)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Lists the direct children of a folder, folders first, or with a date only
+   * the children changed since then, the most recent first.
+   * <p>
+   * Without a date, the storage pages over the listing itself. A date is
+   * checked against the same last-change date the listing shows, over the
+   * folder's children read in one go, up to {@link #MAX_SCANNED_CHILDREN}: the
+   * storage fills a page up to its limit whenever the folder holds more
+   * children, however many rows it leaves out (a shortcut whose target is
+   * gone), so a listing asked for one child more than the bound returns it
+   * exactly when the folder holds more, and such a folder is refused rather
+   * than answered with part of its changes.
+   *
+   * @param folderId the folder id
+   * @param offset the first child
+   * @param limit the most children, at most {@value #MAX_PAGE_SIZE}
+   * @param updatedSince an ISO-8601 date or date-time, blank for any date
+   * @return the children
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read the folder
+   * @throws IllegalArgumentException when the folder id is blank, the date
+   *           can't be read, or the folder holds too many children to filter
+   */
   public List<DocumentModel> listFolderChildren(String folderId,
                                                 Integer offset,
-                                                Integer limit) throws ObjectNotFoundException, IllegalAccessException {
+                                                Integer limit,
+                                                String updatedSince) throws ObjectNotFoundException, IllegalAccessException {
     checkFolderIdParameter(folderId);
+    Long updatedSinceTime = parseUpdatedSince(updatedSince);
+    int first = Math.max(getInteger(offset, DEFAULT_OFFSET), 0);
+    int size = Math.clamp(getInteger(limit, DEFAULT_LIMIT), 0, MAX_PAGE_SIZE);
     DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
+    if (size == 0) {
+      // a negative limit; the storage reads every child when given none
+      return List.of();
+    } else if (updatedSinceTime == null) {
+      return documentFileService.getFolderChildNodes(filter, first, size, getCurrentUserIdentityId())
+                                .stream()
+                                .map(this::toDocumentModel)
+                                .toList();
+    }
     List<AbstractNode> children = documentFileService.getFolderChildNodes(filter,
-                                                                          getInteger(offset, DEFAULT_OFFSET),
-                                                                          getInteger(limit, DEFAULT_LIMIT),
+                                                                          0,
+                                                                          MAX_SCANNED_CHILDREN + 1,
                                                                           getCurrentUserIdentityId());
-    return children.stream().map(this::toDocumentModel).toList();
+    if (children.size() > MAX_SCANNED_CHILDREN) {
+      throw new IllegalArgumentException(MSG_TOO_MANY_CHILDREN.formatted(MAX_SCANNED_CHILDREN));
+    }
+    return children.stream()
+                   .filter(child -> child.getModifiedDate() >= updatedSinceTime)
+                   .sorted(Comparator.comparingLong(AbstractNode::getModifiedDate).reversed())
+                   .skip(first)
+                   .limit(size)
+                   .map(this::toDocumentModel)
+                   .toList();
+  }
+
+  /**
+   * Tells what the current user may do on a folder or a file: the edit right
+   * as the repository checks it for the user; the delete right as the
+   * storage computes it (the document's permission entries, and any document
+   * of the user's own drive), plus the owner's, whom the repository grants
+   * every right although that computation leaves the owner out. For a
+   * shortcut, the rights are its target's, named in the answer, and the delete
+   * right is left out: deleting the shortcut removes only the shortcut.
+   *
+   * @param documentId the folder or file id
+   * @return the user's rights on it
+   * @throws ObjectNotFoundException when the document doesn't exist
+   * @throws IllegalAccessException when the user can't read the document
+   */
+  public DocumentPermissionsModel getDocumentPermissions(String documentId) throws ObjectNotFoundException,
+                                                                            IllegalAccessException {
+    checkDocumentIdParameter(documentId);
+    AbstractNode document = documentFileService.getDocumentById(documentId, getCurrentUserName());
+    if (document == null) {
+      throw new ObjectNotFoundException("No document has the id %s.".formatted(documentId));
+    }
+    // a shortcut's id resolves to its target: the rights are the target's, but
+    // deleting the shortcut removes only the shortcut, so its delete right isn't the target's
+    boolean shortcut = !StringUtils.equals(documentId, document.getId());
+    boolean canEdit = documentFileService.hasEditPermissionOnDocument(document.getId(), getCurrentUserIdentityId());
+    NodePermission acl = document.getAcl();
+    return new DocumentPermissionsModel(documentId,
+                                        document.getName(),
+                                        document.isFolder(),
+                                        shortcut ? document.getId() : null,
+                                        true,
+                                        canEdit,
+                                        shortcut ? null : isOwner(document) || (acl != null && acl.isCanDelete()));
   }
 
   public List<BreadcrumbItemModel> getFolderBreadcrumb(String folderId) throws ObjectNotFoundException,
@@ -477,7 +1579,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     // fails with a clean ObjectNotFoundException / IllegalAccessException before
     // reaching the JCR storage.
     try {
-      getNode(parentFolderId);
+      getDestinationFolder(parentFolderId, PARENT_FOLDER_ID_ARG);
     } catch (ObjectNotFoundException e) {
       throw new ObjectNotFoundException(PARENT_FOLDER_NOT_FOUND_MESSAGE.formatted(parentFolderId));
     }
@@ -532,7 +1634,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(content)) {
       throw new IllegalArgumentException("content is required to create a document (the text to write into the file).");
     }
-    return importContent(parentFolderId, name, content.getBytes(StandardCharsets.UTF_8));
+    return fileContent(parentFolderId, name, content.getBytes(StandardCharsets.UTF_8), UploadConflictAction.KEEP_BOTH);
   }
 
   /**
@@ -575,7 +1677,7 @@ public class DocumentMcpTool implements McpToolPlugin {
     // Validate the parent folder exists and is readable by the user, so a bad id
     // fails with a clean ObjectNotFoundException / IllegalAccessException before
     // reaching the JCR storage.
-    getNode(parentFolderId);
+    getDestinationFolder(parentFolderId, PARENT_FOLDER_ID_ARG);
     // ecms names the file after the title and does NOT append the extension, so
     // build a title that ends with '.<type>' (stripping a duplicate extension the
     // user may have typed to avoid 'report.docx.docx').
@@ -604,11 +1706,12 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /**
    * Uploads a real / binary document (PDF, image, office file…) from exactly one
-   * of three sources: a file/image the user attached in the chat conversation
+   * of four sources: a file/image the user attached in the chat conversation
    * (resolved server-side as the current user via
    * <code>attachment_object_type</code> / <code>attachment_object_id</code>), a
-   * base64 payload, or an http(s) URL (fetched server-side behind an SSRF
-   * guard).
+   * file the user sent through an upload link (<code>upload_id</code>, filed
+   * from its staged file, never read into memory), a base64 payload, or an
+   * http(s) URL (fetched server-side behind an SSRF guard).
    *
    * @param parentFolderId the destination folder id (get it from
    *          get_root_folder_for_user / get_root_folder_by_space /
@@ -616,54 +1719,75 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param name the document file name including its extension (e.g.
    *          'report.pdf'); when uploading from a URL or a chat attachment it may
    *          be left blank to reuse the source file name
-   * @param base64 the file bytes encoded in base64 (mutually exclusive with url /
-   *          the chat attachment)
-   * @param url an http(s) URL to download the file from (mutually exclusive with
-   *          base64 / the chat attachment)
+   * @param base64 the file bytes encoded in base64, at most
+   *          {@code CHUNK_CHARS} (20000) characters, a larger file being sent in
+   *          pieces (mutually exclusive with url / the chat attachment)
+   * @param url an http(s) URL to download the file from, read up to
+   *          {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES}, or the upload size
+   *          limit when it is lower (mutually exclusive with base64 / the chat
+   *          attachment)
    * @param attachmentObjectType the object type of the file the user attached in
    *          chat; set automatically by the client — do not fill it from the
    *          model
    * @param attachmentObjectId the object id of the file the user attached in
    *          chat; set automatically by the client — do not fill it from the
    *          model
+   * @param onConflict what to do when the folder holds a file of that name:
+   *          keep_both (the default) or new_version
+   * @param uploadId the id start_upload returned, once its curl command sent
+   *          the file: one of the user's own uploads, consumed by this call
+   *          once read, whether it succeeds or fails (mutually exclusive with
+   *          the other sources)
    * @return the created document
+   * @throws IllegalArgumentException when a parameter is missing or wrong (the
+   *           folder id, the source, the name, the conflict action), the file
+   *           is empty or over the upload size limit, the upload id names no
+   *           upload of the user's, or a new version is asked of a folder, a
+   *           shortcut or a file that keeps no versions
+   * @throws IllegalStateException when the file can't be read from its source
+   *           or filed, or the upload is still being sent or failed
+   * @throws ObjectNotFoundException when the folder or the attachment doesn't
+   *           exist
+   * @throws IllegalAccessException when the user can't read the attachment,
+   *           or read the folder or add documents to it
    */
   public DocumentModel uploadDocument(String parentFolderId,
                                       String name,
                                       String base64,
                                       String url,
                                       String attachmentObjectType,
-                                      String attachmentObjectId) throws IllegalAccessException, ObjectNotFoundException {
+                                      String attachmentObjectId,
+                                      String onConflict,
+                                      String uploadId) throws IllegalAccessException, ObjectNotFoundException {
     checkFolderIdParameter(parentFolderId);
+    UploadConflictAction conflictAction = toConflictAction(onConflict);
     boolean hasAttachment = StringUtils.isNotBlank(attachmentObjectId);
     boolean hasBase64 = StringUtils.isNotBlank(base64);
     boolean hasUrl = StringUtils.isNotBlank(url);
-    int sources = (hasAttachment ? 1 : 0) + (hasBase64 ? 1 : 0) + (hasUrl ? 1 : 0);
+    boolean hasUploadId = StringUtils.isNotBlank(uploadId);
+    int sources = (hasAttachment ? 1 : 0) + (hasBase64 ? 1 : 0) + (hasUrl ? 1 : 0) + (hasUploadId ? 1 : 0);
     if (sources == 0) {
       throw new IllegalArgumentException("""
           Provide a file to upload from exactly one source:
-          a file/image the user attached in the conversation, a 'base64' payload, or an http(s) 'url'.
+          a file/image the user attached in the conversation, an 'upload_id' from start_upload, a 'base64' payload, or an http(s) 'url'.
           """);
     }
     if (sources > 1) {
-      throw new IllegalArgumentException("Provide the file to upload from only one source: the chat attachment, 'base64' or 'url' — not several.");
+      throw new IllegalArgumentException("Provide the file to upload from only one source: the chat attachment, 'upload_id', 'base64' or 'url' — not several.");
+    }
+    if (hasUploadId) {
+      return fileStagedUpload(parentFolderId, uploadId.trim(), name, conflictAction);
+    }
+    if (hasBase64) {
+      checkBase64Length(base64, MSG_UPLOAD_BASE64_TOO_LONG);
     }
     byte[] bytes;
     String fileName = name;
     try {
       if (hasAttachment) {
-        // Reuse UploadToolUtils.resolveImage's attachment branch: it resolves the
-        // referenced file to its raw bytes as the current user (ACL enforced) and,
-        // unlike its base64/url branches, does NOT constrain to image mime types —
-        // so any attached file works. Pass null url/base64 to stay on that branch.
-        UploadToolUtils.FetchedContent fetched = UploadToolUtils.resolveImage(socialAttachmentService,
-                                                                            fileService,
-                                                                            getCurrentUserAclIdentity(),
-                                                                            new UploadToolUtils.ImageSource(null,
-                                                                                                            null,
-                                                                                                            attachmentObjectType,
-                                                                                                            attachmentObjectId),
-                                                                            UploadToolUtils.DEFAULT_MAX_BYTES);
+        UploadToolUtils.FetchedContent fetched = readChatAttachment(attachmentObjectType,
+                                                                    attachmentObjectId,
+                                                                    DocumentUploadLimit.getMaxBytes());
         bytes = fetched.bytes();
         if (StringUtils.isBlank(fileName)) {
           fileName = fetched.fileName();
@@ -674,7 +1798,7 @@ public class DocumentMcpTool implements McpToolPlugin {
         }
         bytes = UploadToolUtils.decodeBase64(base64);
       } else {
-        UploadToolUtils.FetchedContent fetched = UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, name);
+        UploadToolUtils.FetchedContent fetched = fetchUrl(url, name);
         bytes = fetched.bytes();
         if (StringUtils.isBlank(fileName)) {
           fileName = fetched.fileName();
@@ -689,14 +1813,206 @@ public class DocumentMcpTool implements McpToolPlugin {
       // LLM-directed type so it isn't swallowed by the generic wrapper message.
       throw new IllegalStateException("Could not read the file to upload from the given source: " + e.getMessage());
     }
-    return importContent(parentFolderId, fileName, bytes);
+    return fileContent(parentFolderId, fileName, bytes, conflictAction);
   }
 
+  /**
+   * Starts sending a file in pieces, for a file too large to be sent whole in
+   * one tool call: checks the folder, the user's right to add a document to
+   * it, the file's size and that its name can take the conflict action,
+   * before any piece is sent. The piece that completes the size files the
+   * document.
+   *
+   * @param parentFolderId the folder the file is filed into
+   * @param name the file name, with its extension
+   * @param size the file's size, in bytes
+   * @param onConflict what to do when the folder holds a file of that name:
+   *          keep_both (the default) or new_version
+   * @return the upload, with how to send its pieces
+   * @throws IllegalArgumentException when a parameter is missing or wrong (the
+   *           folder id, the name, the size, the conflict action), the size is
+   *           over the upload size limit, or a new version is asked of a folder, a shortcut or a file that
+   *           keeps no versions
+   * @throws IllegalStateException when the user has too many uploads in
+   *           progress, the folder can't be read to check the name, or the
+   *           upload can't be stored on this server
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read the folder or add
+   *           documents to it
+   */
+  public DocumentUploadModel startDocumentUpload(String parentFolderId,
+                                                 String name,
+                                                 Long size,
+                                                 String onConflict) throws IllegalAccessException, ObjectNotFoundException {
+    checkFolderIdParameter(parentFolderId);
+    if (StringUtils.isBlank(name)) {
+      throw new IllegalArgumentException("The 'name' parameter is mandatory: it becomes the document file name (e.g. 'grid.xlsx').");
+    }
+    if (size == null) {
+      throw new IllegalArgumentException("The 'size' parameter is mandatory: the file's size in bytes, before base64 encoding.");
+    }
+    UploadConflictAction conflictAction = toConflictAction(onConflict);
+    checkUploadFolder(parentFolderId);
+    String fileName = sanitizeFileName(name);
+    checkNotMacOsMetadata(fileName);
+    // the name is checked again when the file is filed: the folder may change in between
+    documentFileService.checkUploadConflict(parentFolderId, fileName, conflictAction, getCurrentUserIdentityId());
+    return toUploadModel(chunkedUploads.start(getCurrentUserName(), parentFolderId, fileName, size, conflictAction));
+  }
+
+  /**
+   * Adds the next piece of a file sent in pieces; the piece that completes
+   * the file files it, and returns the document. A piece sent again after a
+   * lost answer is acknowledged without being added twice, and the last one
+   * returns the document it was filed as.
+   *
+   * @param uploadId the upload
+   * @param index the piece's number, from 0
+   * @param base64 the piece, base64-encoded
+   * @return the upload, with the next piece expected, or with its document
+   *         once filed
+   * @throws IllegalStateException when the last piece is sent again while
+   *           its file is being filed, which leaves the upload open, to be sent
+   *           again; or when the piece can't be stored, or the file can't be
+   *           filed, its folder gone included, which ends the upload
+   * @throws IllegalArgumentException when the piece is refused, which leaves
+   *           the upload open, or when the file is refused at its filing, a
+   *           new version asked of a folder, a shortcut or a file that keeps no
+   *           versions, which
+   *           ends the upload
+   * @throws IllegalAccessException when the user can no longer add documents
+   *           to the folder, which ends the upload
+   */
+  public DocumentUploadModel appendDocumentUploadChunk(String uploadId,
+                                                       Integer index,
+                                                       String base64) throws IllegalAccessException {
+    if (index == null || StringUtils.isBlank(base64)) {
+      throw new IllegalArgumentException("Pass the piece's 'index' (from 0) and its 'base64' content.");
+    }
+    if (base64.length() > MAX_CHUNK_CHARS) {
+      throw new IllegalArgumentException("A piece is at most %d base64 characters; send this one in smaller pieces.".formatted(MAX_CHUNK_CHARS));
+    }
+    ChunkedUpload upload = chunkedUploads.append(getCurrentUserName(), uploadId, index, decodePiece(index, base64));
+    if (upload.filing() && upload.document() == null) {
+      DocumentModel document = fileChunkedUpload(upload);
+      upload = upload.filedAs(document, upload.touched());
+    }
+    return toUploadModel(upload);
+  }
+
+  /**
+   * Decodes a piece as upload_document decodes base64, and refuses a piece
+   * cut inside a 4-character group: decoded alone, it would give wrong bytes.
+   * Such a piece decodes, unpadded, to a number of bytes that is not a
+   * multiple of 3, which only a padded last piece does.
+   *
+   * @param index the piece's number
+   * @param base64 the piece
+   * @return its bytes
+   */
+  private static byte[] decodePiece(int index, String base64) {
+    byte[] bytes;
+    try {
+      bytes = UploadToolUtils.decodeBase64(base64);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("The piece %d is not valid base64.".formatted(index));
+    }
+    if (bytes.length % 3 != 0 && !base64.strip().endsWith("=")) {
+      throw new IllegalArgumentException(("The piece %d was cut inside a group of 4 base64 characters: cut the file's padded "
+          + "base64 into pieces whose lengths are multiples of 4, and send this one again.").formatted(index));
+    }
+    return bytes;
+  }
+
+  /**
+   * Files an upload in pieces whose last piece came: its temporary file is
+   * handed to the platform's upload service, which the filing consumes. The
+   * upload keeps the document to answer its last piece sent again, or ends
+   * when the file can't be filed.
+   *
+   * @param upload the upload
+   * @return the document it was filed as
+   * @throws IllegalStateException when the file can't be filed, its folder
+   *           gone included
+   * @throws IllegalArgumentException when the file is refused at its
+   *           filing, a new version asked of a folder, a shortcut or a file that keeps no
+   *           versions
+   * @throws IllegalAccessException when the user can no longer add documents
+   *           to the folder
+   */
+  private DocumentModel fileChunkedUpload(ChunkedUpload upload) throws IllegalAccessException {
+    DocumentModel document = null;
+    String uploadResourceId = UUID.randomUUID().toString();
+    try {
+      UploadResource resource = new UploadResource(uploadResourceId);
+      resource.setFileName(upload.name());
+      resource.setMimeType(DEFAULT_UPLOAD_MIME_TYPE);
+      resource.setStoreLocation(upload.file().toString());
+      resource.setEstimatedSize(upload.size());
+      resource.setStatus(UploadResource.UPLOADED_STATUS);
+      uploadService.createUploadResource(resource);
+      document = fileUpload(upload.folderId(), uploadResourceId, upload.name(), upload.conflictAction());
+      return document;
+    } catch (IllegalStateException e) {
+      throw new IllegalStateException(e.getMessage() + MSG_UPLOAD_ENDED);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(e.getMessage() + MSG_UPLOAD_ENDED);
+    } catch (IllegalAccessException e) {
+      throw new IllegalAccessException(e.getMessage() + MSG_UPLOAD_ENDED);
+    } finally {
+      UploadToolUtils.release(uploadService, uploadResourceId);
+      if (document == null) {
+        chunkedUploads.failed(upload.id());
+      } else {
+        chunkedUploads.filed(upload.id(), document);
+      }
+    }
+  }
+
+  /**
+   * Maps an upload to the model the tools return.
+   *
+   * @param upload the upload
+   * @return the model
+   */
+  private DocumentUploadModel toUploadModel(ChunkedUpload upload) {
+    return new DocumentUploadModel(upload.id(),
+                                   upload.folderId(),
+                                   upload.name(),
+                                   upload.size(),
+                                   upload.received(),
+                                   upload.nextIndex(),
+                                   DocumentUploadLimit.getMaxBytes(),
+                                   CHUNK_CHARS,
+                                   UPLOAD_TIME_TO_LIVE.toMinutes(),
+                                   upload.document());
+  }
+
+  /**
+   * The uploads in pieces in progress on this node, for tests.
+   *
+   * @return the store
+   */
+  ChunkedUploadStore getChunkedUploads() {
+    return chunkedUploads;
+  }
+
+  /**
+   * Renames a file or a folder.
+   *
+   * @param documentId the file or folder
+   * @param newName its new name
+   * @throws IllegalAccessException when the user can't rename the node, or, in
+   *           a call limited to a space, the node was created by the platform
+   *           for the space or the call's space can't be read
+   * @throws ObjectNotFoundException when the node doesn't exist
+   */
   public void renameDocument(String documentId, String newName) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
     if (StringUtils.isBlank(newName)) {
       throw new IllegalArgumentException("The 'newName' parameter is mandatory to rename a document.");
     }
+    checkScopedChange(documentId, false);
     try {
       documentFileService.renameDocument(getOwnerId(documentId), documentId, newName, getCurrentUserIdentityId());
     } catch (ObjectAlreadyExistsException e) {
@@ -705,6 +2021,20 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * Moves a file or a folder into another folder; in a call limited to a
+   * space, the destination folder must be in that space.
+   *
+   * @param documentId the file or folder to move
+   * @param destinationFolderId the destination folder
+   * @param conflictAction what to do when the destination holds a node of the
+   *          same name, {@code keepBoth} by default
+   * @throws IllegalAccessException when the user can't move the node there,
+   *           or, in a call limited to a space, the destination folder isn't in
+   *           that space, the node was created by the platform for the space,
+   *           or the call's space can't be read
+   * @throws ObjectNotFoundException when a node doesn't exist
+   */
   public void moveDocument(String documentId,
                            String destinationFolderId,
                            String conflictAction) throws IllegalAccessException, ObjectNotFoundException {
@@ -712,7 +2042,9 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_document_by_id or get_documents_by_folder_id to find the target folder id.");
     }
-    AbstractNode destination = getNode(destinationFolderId);
+    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
+    checkDestinationInScopeSpace(destinationFolderId);
+    checkScopedChange(documentId, false);
     try {
       documentFileService.moveDocument(getOwnerId(documentId),
                                        documentId,
@@ -724,32 +2056,76 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * Copies a file into another folder; in a call limited to a space, the
+   * destination folder must be in that space.
+   *
+   * @param documentId the file to copy
+   * @param destinationFolderId the destination folder
+   * @return the copy
+   * @throws IllegalAccessException when the user can't copy the node there,
+   *           or, in a call limited to a space, the destination folder isn't in
+   *           that space, the node was created by the platform for the space,
+   *           or the call's space can't be read
+   * @throws ObjectNotFoundException when a node doesn't exist
+   * @throws IllegalArgumentException when the destination folder holds
+   *           {@value #MAX_SCANNED_CHILDREN} items or more: the copy could not
+   *           be found among them afterwards, so nothing is copied
+   * @throws IllegalStateException when the copy is made but cannot be found:
+   *           the folder grew past {@value #MAX_SCANNED_CHILDREN} items
+   *           meanwhile, or no added node carries the expected name
+   */
   public DocumentModel copyDocument(String documentId,
                                     String destinationFolderId) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_document_by_id or get_documents_by_folder_id to find the target folder id.");
     }
+    getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
+    checkDestinationInScopeSpace(destinationFolderId);
+    checkScopedChange(documentId, false);
     // The storage copyDocument returns the DESTINATION folder node, not the copy,
-    // so snapshot the destination's file ids first and resolve the newly added
-    // file by NAME afterwards to return the actual copied document. The copy keeps
-    // the source's name (or, when copied into the source's own folder, gets a
-    // " (n)" counter suffix), so it is matched name-aware: this stays correct even
-    // if another file lands in the destination concurrently (a blind folder-diff
-    // would otherwise return the wrong document).
+    // so snapshot the destination's children of the source's kind first and
+    // resolve the newly added one by NAME afterwards to return the actual copied
+    // document or folder. The copy keeps the source's name, or gets a " (n)"
+    // counter suffix when the destination already holds that name, so it is
+    // matched name-aware: this stays correct even if another node lands in the
+    // destination concurrently (a blind folder-diff would otherwise return the
+    // wrong document).
     AbstractNode source = getNode(documentId);
     String expectedName = source.getName();
-    Set<String> beforeFileIds = currentChildFileIds(destinationFolderId);
+    Class<? extends AbstractNode> kind = kindOf(source);
+    Set<String> beforeIds = currentChildIds(destinationFolderId, kind, MSG_TOO_MANY_CHILDREN_TO_COPY_INTO);
     documentFileService.copyDocument(documentId, destinationFolderId, getCurrentUserIdentityId());
-    return requireResolvedChildFile(destinationFolderId, beforeFileIds, expectedName, "copied");
+    return requireResolvedChild(destinationFolderId, beforeIds, expectedName, kind, "copied");
   }
 
+  /**
+   * Duplicates a file or a folder in its own folder, with an optional prefix
+   * and a " (n)" counter, and returns the duplicate.
+   *
+   * @param documentId the file or folder to duplicate
+   * @param prefix an optional prefix of the duplicate's name
+   * @return the duplicate, a file or a folder like the source
+   * @throws IllegalAccessException when the user can't read or duplicate the
+   *           node, or, in a call limited to a space, the node was created by
+   *           the platform for the space or the call's space can't be read
+   * @throws ObjectNotFoundException when the node doesn't exist
+   * @throws IllegalArgumentException when the source's folder holds
+   *           {@value #MAX_SCANNED_CHILDREN} items or more: the duplicate could
+   *           not be found among them afterwards, so nothing is duplicated
+   * @throws IllegalStateException when the duplicate is made but cannot be
+   *           found: the folder grew past {@value #MAX_SCANNED_CHILDREN} items
+   *           meanwhile, or no added node carries the expected name
+   */
   public DocumentModel duplicateDocument(String documentId,
                                          String prefix) throws IllegalAccessException, ObjectNotFoundException {
     checkDocumentIdParameter(documentId);
+    checkScopedChange(documentId, false);
     // The storage duplicateDocument returns the PARENT folder node, not the
-    // duplicate, so snapshot the parent's file ids first and resolve the newly
-    // added file by NAME afterwards to return the actual duplicate. The duplicate
+    // duplicate, so snapshot the parent's children of the source's kind first and
+    // resolve the newly added node by NAME afterwards to return the actual
+    // duplicate. The duplicate
     // is named "[<prefix> ]<source name>" with a " (n)" counter appended on a name
     // clash (there is always at least one, since the source itself is present), so
     // it is matched name-aware to stay correct under a concurrent add.
@@ -766,9 +2142,10 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                            getCurrentUserIdentityId());
       return toDocumentModel(duplicateReturn);
     }
-    Set<String> beforeFileIds = currentChildFileIds(parentFolderId);
+    Class<? extends AbstractNode> kind = kindOf(source);
+    Set<String> beforeIds = currentChildIds(parentFolderId, kind, MSG_TOO_MANY_CHILDREN_TO_DUPLICATE_IN);
     documentFileService.duplicateDocument(getOwnerId(documentId), documentId, prefix, getCurrentUserIdentityId());
-    return requireResolvedChildFile(parentFolderId, beforeFileIds, expectedName, "duplicated");
+    return requireResolvedChild(parentFolderId, beforeIds, expectedName, kind, "duplicated");
   }
 
   public void deleteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
@@ -829,12 +2206,26 @@ public class DocumentMcpTool implements McpToolPlugin {
     return toVersionModel(full);
   }
 
+  /**
+   * Hides a file or a folder from the listings, or shows it again; hiding a
+   * folder may also hide some of its direct children. In a call limited to a
+   * space, only a folder the platform didn't create for the space.
+   *
+   * @param documentId the file or folder
+   * @param hidden true to hide it, false to show it
+   * @throws IllegalAccessException in a call limited to a space, when the node
+   *           is a file or was created by the platform, or the call's space
+   *           can't be read
+   * @throws IllegalStateException when the storage refuses the change, the
+   *           user's refused access included, which it reports wrapped
+   */
   @SneakyThrows
   public void setDocumentVisibility(String documentId, Boolean hidden) throws IllegalAccessException {
     checkDocumentIdParameter(documentId);
     if (hidden == null) {
       throw new IllegalArgumentException("The 'hidden' parameter is mandatory (true to hide the document, false to make it visible).");
     }
+    checkScopedChange(documentId, true);
     documentFileService.setDocumentVisibility(getOwnerId(documentId), documentId, hidden, getCurrentUserIdentityId());
   }
 
@@ -847,8 +2238,10 @@ public class DocumentMcpTool implements McpToolPlugin {
    * (the previous content stays retrievable via list_document_versions /
    * restore_document_version). The new bytes come from exactly one source: a
    * chat-authored text <code>content</code> string, a <code>base64</code>
-   * payload, an http(s) <code>url</code>, or a file the user attached in the
-   * conversation. The file's name and type are unchanged; only its content and
+   * payload, an http(s) <code>url</code>, a file the user attached in the
+   * conversation, or a file the user sent through an upload link
+   * (<code>upload_id</code>, streamed from its staged file, never read into
+   * memory). The file's name and type are unchanged; only its content and
    * version history are updated.
    *
    * @param documentId the id of the existing file to add a version to (get it
@@ -856,15 +2249,33 @@ public class DocumentMcpTool implements McpToolPlugin {
    *          search_documents)
    * @param content plain text / markdown / HTML body to write as the new version
    *          (use for text files)
-   * @param base64 the new file bytes encoded in base64
+   * @param base64 the new file bytes encoded in base64, at most
+   *          {@code CHUNK_CHARS} (20000) characters
    * @param url an http(s) URL to download the new content from (fetched
-   *          server-side behind an SSRF guard)
+   *          server-side behind an SSRF guard, up to
+   *          {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES}, or the upload
+   *          size limit when it is lower)
    * @param attachmentObjectType the object type of the file the user attached in
    *          chat; set automatically by the client — do not fill it from the model
    * @param attachmentObjectId the object id of the file the user attached in
    *          chat; set automatically by the client — do not fill it from the model
    * @param versionSummary an optional change note stored on the new version
+   * @param uploadId the id start_upload returned, once its curl command sent
+   *          the file: one of the user's own uploads, consumed by this call
+   *          once read, whether it succeeds or fails; refused in a call
+   *          limited to a space
    * @return the updated document (with its refreshed size / modification info)
+   * @throws IllegalArgumentException when not exactly one source is given,
+   *           the document is a folder, the content is over the upload size
+   *           limit or refused by a validator, or the upload id names no
+   *           upload of the user's
+   * @throws IllegalStateException when the content can't be read from its
+   *           source, or the upload is still being sent or failed
+   * @throws IllegalAccessException when the user can't edit the document, or
+   *           an upload id is given in a call limited to a space, or, in a
+   *           call limited to a space, the file was created by the platform
+   *           for the space, or the call's space can't be read
+   * @throws ObjectNotFoundException when the document doesn't exist
    */
   public DocumentModel addDocumentVersion(String documentId,
                                           String content,
@@ -872,22 +2283,33 @@ public class DocumentMcpTool implements McpToolPlugin {
                                           String url,
                                           String attachmentObjectType,
                                           String attachmentObjectId,
-                                          String versionSummary) throws IllegalAccessException, ObjectNotFoundException {
+                                          String versionSummary,
+                                          String uploadId) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode node = checkCanAccessDocument(documentId);
     if (!(node instanceof FileNode)) {
       throw new IllegalArgumentException("Only a file can have versions; the id %s points to a folder. Provide a file document_id."
           .formatted(documentId));
     }
-    if (!documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId())) {
+    checkScopedChange(documentId, false);
+    // a shortcut's node is the file it targets, which is the one versioned
+    String fileId = node.getId();
+    if (!documentFileService.hasEditPermissionOnDocument(fileId, getCurrentUserIdentityId())) {
       throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot add a new version to it."
           .formatted(documentId));
     }
-    byte[] bytes = resolveContentBytes(content, base64, url, attachmentObjectType, attachmentObjectId);
-    documentFileService.createNewVersion(documentId, getCurrentUserName(), new ByteArrayInputStream(bytes));
-    if (StringUtils.isNotBlank(versionSummary)) {
-      applyVersionSummary(documentId, versionSummary);
+    checkOneVersionSource(content, base64, url, attachmentObjectId, uploadId);
+    if (StringUtils.isNotBlank(uploadId)) {
+      addVersionFromStagedUpload((FileNode) node, fileId, uploadId.trim());
+    } else {
+      byte[] bytes = resolveContentBytes(content, base64, url, attachmentObjectType, attachmentObjectId);
+      // checked as a new file uploaded from a browser is, before it replaces the file's content
+      documentFileService.validateUploadedContent(node.getName(), ((FileNode) node).getMimeType(), bytes);
+      documentFileService.createNewVersion(fileId, getCurrentUserName(), new ByteArrayInputStream(bytes));
     }
-    return getDocumentById(documentId);
+    if (StringUtils.isNotBlank(versionSummary)) {
+      applyVersionSummary(fileId, versionSummary);
+    }
+    return getDocumentById(fileId);
   }
 
   /**
@@ -950,6 +2372,11 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param conflictAction behaviour when a node with the same name already exists
    *          in the destination; only 'keepBoth' is honoured, defaults to
    *          'keepBoth'
+   * @throws IllegalAccessException when the user can't read the nodes, or, in
+   *           a call limited to a space, the destination folder isn't in that
+   *           space, the node was created by the platform for the space, or the
+   *           call's space can't be read
+   * @throws ObjectNotFoundException when a node doesn't exist
    */
   public void createDocumentShortcut(String documentId,
                                      String destinationFolderId,
@@ -958,10 +2385,12 @@ public class DocumentMcpTool implements McpToolPlugin {
     if (StringUtils.isBlank(destinationFolderId)) {
       throw new IllegalArgumentException("The 'destinationFolderId' parameter is mandatory. Call get_documents_by_folder_id or get_root_folder_for_user to find the target folder id.");
     }
-    // Validate the source and the destination folder exist and are readable by
-    // the user before touching the JCR storage.
+    AbstractNode destination = getDestinationFolder(destinationFolderId, DESTINATION_FOLDER_ID_ARG);
+    checkDestinationInScopeSpace(destinationFolderId);
+    checkScopedChange(documentId, false);
+    // Validate the source exists and is readable by the user before touching
+    // the JCR storage.
     checkCanAccessDocument(documentId);
-    AbstractNode destination = getNode(destinationFolderId);
     try {
       documentFileService.createShortcut(documentId,
                                          destination.getPath(),
@@ -975,25 +2404,34 @@ public class DocumentMcpTool implements McpToolPlugin {
   /**
    * Shares a document with another user or with a space: the recipient is GRANTED
    * read access to the file and gets it in their "Shared" folder. Provide exactly
-   * one of <code>username</code> or <code>spaceId</code>. Requires edit permission
-   * on the document.
+   * one of <code>username</code>, <code>spaceId</code> or <code>spaceName</code>.
+   * Requires edit permission on the document.
    *
    * @param documentId the id of the file to share (get it from the read tools)
    * @param username the username to share the document with (mutually exclusive
-   *          with space_id)
+   *          with spaceId and spaceName)
    * @param spaceId the id of the space to share the document with (mutually
-   *          exclusive with username)
+   *          exclusive with username and spaceName)
+   * @param spaceName the name of the space to share the document with, one of
+   *          the spaces the user is a member of (mutually exclusive with
+   *          username and spaceId)
    * @param notify whether to notify the recipient; defaults to true
+   * @throws IllegalAccessException when the user can't edit the document
+   * @throws ObjectNotFoundException when the document, the user or the space
+   *           doesn't exist, or no space of the user carries the name
+   * @throws IllegalArgumentException when not exactly one recipient is given,
+   *           or several of the user's spaces carry the name
    */
   public void shareDocument(String documentId,
                             String username,
                             Long spaceId,
+                            String spaceName,
                             Boolean notify) throws IllegalAccessException, ObjectNotFoundException {
     AbstractNode node = checkCanAccessDocument(documentId);
     boolean hasUser = StringUtils.isNotBlank(username);
-    boolean hasSpace = spaceId != null && spaceId > 0;
+    boolean hasSpace = spaceId != null && spaceId > 0 || StringUtils.isNotBlank(spaceName);
     if (hasUser == hasSpace) {
-      throw new IllegalArgumentException("Provide exactly one recipient: either 'username' or 'space_id', not both and not none.");
+      throw new IllegalArgumentException("Provide exactly one recipient: either 'username', 'space_id' or 'space_name', not several and not none.");
     }
     if (!documentFileService.hasEditPermissionOnDocument(documentId, getCurrentUserIdentityId())) {
       throw new IllegalAccessException("You are not allowed to edit the document %s, so you cannot share it.".formatted(documentId));
@@ -1006,10 +2444,10 @@ public class DocumentMcpTool implements McpToolPlugin {
             .formatted(username));
       }
     } else {
-      Space space = spaceService.getSpaceById(String.valueOf(spaceId));
+      Long recipientSpaceId = resolveSpaceId(spaceId, spaceName, "share_document");
+      Space space = spaceService.getSpaceById(String.valueOf(recipientSpaceId));
       if (space == null) {
-        throw new ObjectNotFoundException("Space with id %s not found. Use get_my_spaces to check accessible spaces."
-            .formatted(spaceId));
+        throw new ObjectNotFoundException(MSG_SPACE_NOT_FOUND.formatted(recipientSpaceId));
       }
       destIdentity = identityManager.getOrCreateSpaceIdentity(space.getPrettyName());
     }
@@ -1145,10 +2583,57 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
-   * Resolves the raw bytes for a new file version from exactly one of the
-   * supported sources (chat text, base64, url or a chat attachment), reusing
+   * Checks a new file version names exactly one source: chat text, base64, a
+   * url, a chat attachment or an upload id.
+   *
+   * @param content chat text
+   * @param base64 base64-encoded bytes
+   * @param url an http(s) url
+   * @param attachmentObjectId the chat attachment's object id
+   * @param uploadId the id of one of the user's uploads
+   * @throws IllegalArgumentException when no source, or several, are given
+   */
+  private static void checkOneVersionSource(String content,
+                                            String base64,
+                                            String url,
+                                            String attachmentObjectId,
+                                            String uploadId) {
+    int sources = (StringUtils.isNotBlank(content) ? 1 : 0) + (StringUtils.isNotBlank(base64) ? 1 : 0)
+        + (StringUtils.isNotBlank(url) ? 1 : 0) + (StringUtils.isNotBlank(attachmentObjectId) ? 1 : 0)
+        + (StringUtils.isNotBlank(uploadId) ? 1 : 0);
+    if (sources == 0) {
+      throw new IllegalArgumentException("""
+          Provide the new version content from exactly one source:
+          a text 'content' string, an 'upload_id' from start_upload, a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation.
+          """);
+    }
+    if (sources > 1) {
+      throw new IllegalArgumentException("Provide the new version content from only one source: 'content', 'upload_id', 'base64', 'url' or the chat attachment — not several.");
+    }
+  }
+
+  /**
+   * Resolves the raw bytes for a new file version from the one source given
+   * (chat text, base64, url or a chat attachment), {@link #checkOneVersionSource}
+   * having checked there is exactly one, reusing
    * {@code upload_document}'s attachment/url resolution so the same ACL and SSRF
-   * guards apply.
+   * guards apply. Every source is capped at the upload size limit,
+   * {@link DocumentUploadLimit#getMaxBytes()}, as a new file is; base64 at
+   * {@link #CHUNK_CHARS} characters, checked before it is decoded; a url read up to
+   * {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES} at most. A base64 one
+   * too long names the tools that send it in pieces, which a call limited to
+   * a space does not offer.
+   *
+   * @param content chat text
+   * @param base64 base64-encoded bytes, at most {@link #CHUNK_CHARS}
+   *          characters
+   * @param url an http(s) url
+   * @param attachmentObjectType the chat attachment's object type
+   * @param attachmentObjectId the chat attachment's object id
+   * @return the bytes
+   * @throws IllegalArgumentException when the content is over the limit
+   * @throws IllegalAccessException when the attachment can't be read
+   * @throws ObjectNotFoundException when the attachment doesn't exist
    */
   private byte[] resolveContentBytes(String content,
                                      String base64,
@@ -1157,40 +2642,142 @@ public class DocumentMcpTool implements McpToolPlugin {
                                      String attachmentObjectId) throws IllegalAccessException, ObjectNotFoundException {
     boolean hasContent = StringUtils.isNotBlank(content);
     boolean hasBase64 = StringUtils.isNotBlank(base64);
-    boolean hasUrl = StringUtils.isNotBlank(url);
     boolean hasAttachment = StringUtils.isNotBlank(attachmentObjectId);
-    int sources = (hasContent ? 1 : 0) + (hasBase64 ? 1 : 0) + (hasUrl ? 1 : 0) + (hasAttachment ? 1 : 0);
-    if (sources == 0) {
-      throw new IllegalArgumentException("""
-          Provide the new version content from exactly one source:
-          a text 'content' string, a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation.
-          """);
+    if (hasBase64) {
+      checkBase64Length(base64, isLimitedToASpace() ? MSG_VERSION_BASE64_TOO_LONG_IN_SPACE : MSG_VERSION_BASE64_TOO_LONG);
     }
-    if (sources > 1) {
-      throw new IllegalArgumentException("Provide the new version content from only one source: 'content', 'base64', 'url' or the chat attachment — not several.");
-    }
+    long maxBytes = DocumentUploadLimit.getMaxBytes();
     try {
       if (hasContent) {
-        return content.getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > maxBytes) {
+          throw new IllegalArgumentException(MSG_CONTENT_TOO_LARGE.formatted(bytes.length, maxBytes));
+        }
+        return bytes;
       } else if (hasBase64) {
+        // within the limit: checkBase64Length bounds it far below the smallest one, 1 MB
         return UploadToolUtils.decodeBase64(base64);
       } else if (hasAttachment) {
-        return UploadToolUtils.resolveImage(socialAttachmentService,
-                                            fileService,
-                                            getCurrentUserAclIdentity(),
-                                            new UploadToolUtils.ImageSource(null,
-                                                                            null,
-                                                                            attachmentObjectType,
-                                                                            attachmentObjectId),
-                                            UploadToolUtils.DEFAULT_MAX_BYTES)
-                              .bytes();
+        return readChatAttachment(attachmentObjectType, attachmentObjectId, maxBytes).bytes();
       } else {
-        return UploadToolUtils.fetchUrl(url, UploadToolUtils.DEFAULT_MAX_BYTES, null).bytes();
+        return fetchUrl(url, null).bytes();
       }
     } catch (IllegalArgumentException | IllegalStateException e) {
       throw e;
     } catch (RuntimeException e) {
       throw new IllegalStateException("Could not read the new version content from the given source: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Reads the first file attached to a platform object, as the current user
+   * (the attachment's ACL is enforced), whatever its type: any attached file
+   * can be filed or versioned, not only an image. Its size is checked on the
+   * stored size before the file is read, and on the bytes read.
+   *
+   * @param attachmentObjectType the type of the object holding the attachment
+   * @param attachmentObjectId the id of the object holding the attachment
+   * @param maxBytes the most bytes accepted
+   * @return the file's bytes, its stored type and its name
+   * @throws IllegalArgumentException when the object type is missing, or the
+   *           file is over the limit
+   * @throws IllegalStateException when the file can't be read
+   * @throws IllegalAccessException when the user can't read the object
+   * @throws ObjectNotFoundException when the object has no file, or its file
+   *           is empty
+   */
+  private UploadToolUtils.FetchedContent readChatAttachment(String attachmentObjectType,
+                                                            String attachmentObjectId,
+                                                            long maxBytes) throws IllegalAccessException,
+                                                                           ObjectNotFoundException {
+    if (StringUtils.isBlank(attachmentObjectType)) {
+      throw new IllegalArgumentException("attachment_object_type is required together with attachment_object_id.");
+    }
+    List<String> fileIds = socialAttachmentService.getAttachmentFileIds(attachmentObjectType,
+                                                                        attachmentObjectId,
+                                                                        getCurrentUserAclIdentity());
+    if (fileIds == null || fileIds.isEmpty()) {
+      throw new ObjectNotFoundException("No file attachment found for %s/%s.".formatted(attachmentObjectType, attachmentObjectId));
+    }
+    org.exoplatform.commons.file.model.FileItem file;
+    try {
+      file = fileService.getFile(Long.parseLong(fileIds.get(0)));
+    } catch (Exception e) {
+      throw new IllegalStateException("Could not read the referenced attachment file: " + e.getMessage());
+    }
+    org.exoplatform.commons.file.model.FileInfo fileInfo = file == null ? null : file.getFileInfo();
+    if (fileInfo != null && fileInfo.getSize() > maxBytes) {
+      throw new IllegalArgumentException(MSG_ATTACHMENT_TOO_LARGE.formatted(fileInfo.getSize(), maxBytes / (1024 * 1024)));
+    }
+    byte[] bytes;
+    try {
+      bytes = file == null ? null : file.getAsByte();
+    } catch (Exception e) {
+      throw new IllegalStateException("Could not read the referenced attachment file: " + e.getMessage());
+    }
+    if (bytes == null || bytes.length == 0) {
+      throw new ObjectNotFoundException("The referenced attachment file is empty or could not be read.");
+    }
+    if (bytes.length > maxBytes) {
+      throw new IllegalArgumentException(MSG_ATTACHMENT_TOO_LARGE.formatted((long) bytes.length, maxBytes / (1024 * 1024)));
+    }
+    return new UploadToolUtils.FetchedContent(bytes,
+                                              fileInfo == null ? null : fileInfo.getMimetype(),
+                                              fileInfo == null ? null : fileInfo.getName());
+  }
+
+  /**
+   * Refuses a base64 file longer than one tool call carries, before it is
+   * decoded: a larger file is sent in pieces, which the refusal names.
+   *
+   * @param base64 the base64 file, not blank
+   * @param message the refusal, formatted with the most characters, the
+   *          file's characters and the most characters of a piece
+   * @throws IllegalArgumentException when the file is longer than
+   *           {@link #CHUNK_CHARS} characters
+   */
+  private static void checkBase64Length(String base64, String message) {
+    if (base64.length() > CHUNK_CHARS) {
+      throw new IllegalArgumentException(message.formatted(CHUNK_CHARS, base64.length(), CHUNK_CHARS));
+    }
+  }
+
+  /**
+   * Tells whether this call is limited to a space; a call whose space can't
+   * be read is taken as limited, as the space checks take it.
+   *
+   * @return true when the call is limited to a space, or its space can't be
+   *         read
+   */
+  private boolean isLimitedToASpace() {
+    try {
+      return getScopeSpaceId() != null;
+    } catch (RuntimeException e) {
+      return true;
+    }
+  }
+
+  /**
+   * Downloads a file through mcp-server's guarded fetcher, reading at most
+   * {@link DocumentUploadLimit#URL_FETCH_MAX_BYTES}, or the upload size
+   * limit when it is lower, and completes the refusal of a larger file with
+   * what to do instead.
+   *
+   * @param url the http(s) URL
+   * @param defaultFileName the file name when the URL's path has none
+   * @return the downloaded bytes, type and file name
+   * @throws IllegalArgumentException when the fetcher refuses the URL or its
+   *           answer, the file over the limit included
+   */
+  private static UploadToolUtils.FetchedContent fetchUrl(String url, String defaultFileName) {
+    long maxBytes = Math.min(DocumentUploadLimit.URL_FETCH_MAX_BYTES, DocumentUploadLimit.getMaxBytes());
+    try {
+      return UploadToolUtils.fetchUrl(url, maxBytes, defaultFileName);
+    } catch (IllegalArgumentException e) {
+      if (StringUtils.contains(e.getMessage(), FETCH_TOO_LARGE_MARKER)) {
+        throw new IllegalArgumentException(e.getMessage() + MSG_URL_TOO_LARGE_HINT.formatted(maxBytes / (1024 * 1024)), e);
+      }
+      throw e;
     }
   }
 
@@ -1252,6 +2839,38 @@ public class DocumentMcpTool implements McpToolPlugin {
     return documentFileService.getDocumentById(documentId, getCurrentUserName());
   }
 
+  /**
+   * Resolves the folder a tool writes in, refusing a shortcut's id with a
+   * message naming the folder it points to. A shortcut's id resolves to its
+   * target for the reads and the rights, while the storage writes under the
+   * node of the id it is given, the shortcut node itself, which takes no
+   * child: the right would be checked on one node and the write attempted on
+   * another. A file, or a shortcut to one, is refused as no folder: the
+   * storage would otherwise try to write under a file node.
+   *
+   * @param folderId the folder id the tool was given
+   * @param argumentName the tool argument that carries it, named in the
+   *          refusal
+   * @return the folder
+   * @throws IllegalAccessException when the user can't read the folder
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalArgumentException when the id is a file's or a shortcut's
+   */
+  private AbstractNode getDestinationFolder(String folderId,
+                                            String argumentName) throws IllegalAccessException, ObjectNotFoundException {
+    AbstractNode folder = getNode(folderId);
+    if (StringUtils.equals(folderId, folder.getId())) {
+      if (!(folder instanceof FolderNode)) {
+        throw new IllegalArgumentException(MSG_FILE_IS_NO_FOLDER.formatted(folderId, argumentName));
+      }
+      return folder;
+    } else if (folder instanceof FolderNode) {
+      throw new IllegalArgumentException(MSG_FOLDER_IS_SHORTCUT.formatted(folderId, folder.getId(), argumentName));
+    } else {
+      throw new IllegalArgumentException(MSG_FILE_SHORTCUT_IS_NO_FOLDER.formatted(folderId, folder.getId(), argumentName));
+    }
+  }
+
   private long getOwnerId(String documentId) {
     return documentFileService.getRootFolderOwnerId(documentId);
   }
@@ -1302,6 +2921,28 @@ public class DocumentMcpTool implements McpToolPlugin {
           .formatted(name));
     }
     return segments;
+  }
+
+  /**
+   * Reads the children of a folder a copy or a duplicate adds a node to, to
+   * find that node afterwards: at most {@value #MAX_SCANNED_CHILDREN} plus one,
+   * so a larger folder is never listed whole. The callers decide what a full
+   * read means: before the operation, a refusal; after it, a failure saying
+   * the node was made.
+   *
+   * @param folderId the folder
+   * @return its children, as the current user sees them, more than
+   *         {@value #MAX_SCANNED_CHILDREN} when the folder holds more
+   * @throws IllegalAccessException when the user cannot read the folder
+   * @throws ObjectNotFoundException when the folder cannot be read
+   */
+  private List<AbstractNode> scannedChildNodes(String folderId) throws IllegalAccessException, ObjectNotFoundException {
+    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
+    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter,
+                                                                          0,
+                                                                          MAX_SCANNED_CHILDREN + 1,
+                                                                          getCurrentUserIdentityId());
+    return children == null ? List.of() : children;
   }
 
   /**
@@ -1356,9 +2997,16 @@ public class DocumentMcpTool implements McpToolPlugin {
     }
   }
 
+  /**
+   * Maps a file to the model the tools return, with the user's rights when the
+   * listing computed them.
+   *
+   * @param fileNode the file
+   * @return the model
+   */
   private DocumentFileModel toDocumentFileModel(FileNode fileNode) {
     String documentId = fileNode.getId();
-    return new DocumentFileModel(documentId,
+    DocumentFileModel model = new DocumentFileModel(documentId,
                                  fileNode.getName(),
                                  fileNode.getPath(),
                                  getUrl(fileNode),
@@ -1371,6 +3019,45 @@ public class DocumentMcpTool implements McpToolPlugin {
                                  fileNode.getDescription(),
                                  formatDate(fileNode.getModifiedDate()),
                                  toUserModel(fileNode.getModifierId()));
+    setPermissions(model, fileNode);
+    return model;
+  }
+
+  /**
+   * Copies the user's edit and delete rights the storage computed on a
+   * document into its model, leaving them unknown when it computed none. The
+   * storage computes them from the document's permission entries, and a
+   * delete right on any document of the user's own drive, while the
+   * repository grants every right to the document's owner: the owner's rights
+   * are added here, as {@link #getDocumentPermissions} adds them. A shortcut
+   * listed in a folder is the shortcut node itself, whose rights aren't its
+   * target's: its rights are left unknown and its target named, for
+   * {@link #getDocumentPermissions} to tell them. A shortcut asked by its id
+   * resolves to its target, whose rights the storage returned.
+   *
+   * @param model the model to complete
+   * @param document the document it maps
+   */
+  private void setPermissions(DocumentModel model, AbstractNode document) {
+    NodePermission acl = document.getAcl();
+    if (StringUtils.isNotBlank(document.getSourceID())) {
+      model.setShortcutTargetId(document.getSourceID());
+    } else if (acl != null) {
+      boolean owner = isOwner(document);
+      model.setCanEdit(owner || acl.isCanEdit());
+      model.setCanDelete(owner || acl.isCanDelete());
+    }
+  }
+
+  /**
+   * Tells whether the current user owns a document, the repository granting
+   * its owner every right whatever its permission entries say.
+   *
+   * @param document the document
+   * @return true when the user is its owner
+   */
+  private boolean isOwner(AbstractNode document) {
+    return StringUtils.equals(document.getCreatorUserName(), getCurrentUserName());
   }
 
   private String getAudioTranscription(String documentId) {
@@ -1383,14 +3070,68 @@ public class DocumentMcpTool implements McpToolPlugin {
     return audioTranscription;
   }
 
+  /**
+   * Maps a folder to the model the tools return, with its last change and the
+   * user's rights when the listing computed them.
+   *
+   * @param folder the folder
+   * @return the model
+   */
   private DocumentFolderModel toDocumentFolderModel(AbstractNode folder) {
-    return new DocumentFolderModel(folder.getId(),
-                                   folder.getName(),
-                                   folder.getPath(),
-                                   getUrl(folder),
-                                   folder.getParentFolderId(),
-                                   formatDate(folder.getCreatedDate()),
-                                   toUserModel(folder.getCreatorUserName()));
+    DocumentFolderModel model = new DocumentFolderModel(folder.getId(),
+                                                        folder.getName(),
+                                                        folder.getPath(),
+                                                        getUrl(folder),
+                                                        folder.getParentFolderId(),
+                                                        formatDate(folder.getCreatedDate()),
+                                                        toUserModel(folder.getCreatorUserName()));
+    if (folder.getModifiedDate() > 0) {
+      model.setUpdatedDate(formatDate(folder.getModifiedDate()));
+    }
+    setPermissions(model, folder);
+    return model;
+  }
+
+  /**
+   * Reads the date a listing is limited to, as the model passes it: an
+   * ISO-8601 date-time with an offset, or a date-time or a date taken in UTC.
+   *
+   * @param updatedSince the date, blank for none
+   * @return the date in milliseconds, null for none
+   * @throws IllegalArgumentException when the date can't be read
+   */
+  private static Long parseUpdatedSince(String updatedSince) {
+    if (StringUtils.isBlank(updatedSince)) {
+      return null;
+    }
+    String value = updatedSince.trim();
+    try {
+      Instant instant;
+      try {
+        instant = OffsetDateTime.parse(value).toInstant();
+      } catch (DateTimeParseException e) {
+        instant = parseWithoutOffset(value);
+      }
+      return instant.toEpochMilli();
+    } catch (DateTimeException | ArithmeticException e) {
+      // unreadable, or a year too far for a date in milliseconds
+      throw new IllegalArgumentException(MSG_UPDATED_SINCE_UNREADABLE.formatted(updatedSince));
+    }
+  }
+
+  /**
+   * Reads a date-time or a date without an offset, in UTC.
+   *
+   * @param value the date-time or the date
+   * @return the instant
+   * @throws DateTimeParseException when it is neither
+   */
+  private static Instant parseWithoutOffset(String value) {
+    try {
+      return LocalDateTime.parse(value).toInstant(ZoneOffset.UTC);
+    } catch (DateTimeParseException e) {
+      return LocalDate.parse(value).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
   }
 
   // FIXME should be removed once Notes refactored and cleaned
@@ -1421,145 +3162,335 @@ public class DocumentMcpTool implements McpToolPlugin {
   // Content creation / upload helpers
   // ---------------------------------------------------------------------------
 
-  private static final int  IMPORT_POLL_MAX_ATTEMPTS = 20;
-
-  private static final long IMPORT_POLL_INTERVAL_MS  = 500L;
-
-  private static final int  IMPORT_POLL_PAGE_SIZE    = 200;
-
   /**
-   * Stages the given bytes as a single file and imports it into the folder,
-   * then resolves and returns the created document. {@code importFiles} expects
-   * a zip and unzips it, so the file is wrapped in a one-entry zip whose entry
-   * name becomes the created document title.
+   * Files the given bytes into a folder the way the Documents app files an
+   * upload: staged in the platform's upload service, then filed at once as
+   * the user.
+   *
+   * @param parentFolderId the folder
+   * @param fileName the file name, with its extension
+   * @param bytes the file's bytes
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @return the filed document
+   * @throws IllegalArgumentException when the file is empty or over the upload
+   *           size limit, or a new version is asked of a folder, a shortcut or a
+   *           file that keeps no versions
+   * @throws IllegalStateException when the file can't be filed
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't add documents to it
    */
-  private DocumentModel importContent(String parentFolderId,
-                                      String fileName,
-                                      byte[] bytes) throws IllegalAccessException, ObjectNotFoundException {
+  private DocumentModel fileContent(String parentFolderId,
+                                    String fileName,
+                                    byte[] bytes,
+                                    UploadConflictAction conflictAction) throws IllegalAccessException, ObjectNotFoundException {
     if (bytes == null || bytes.length == 0) {
       throw new IllegalArgumentException("The document content is empty; there is nothing to create.");
     }
-    String entryName = sanitizeFileName(fileName);
-    // The import skips macOS metadata names, so such a document would never be created.
-    if (isMacOsMetadata(entryName)) {
-      throw new IllegalArgumentException("""
-          The document name '%s' is a macOS metadata name (.DS_Store, a name starting with '._', or __MACOSX),
-          which Documents does not create. Ask the user for another name.
-          """.formatted(entryName));
+    long maxBytes = DocumentUploadLimit.getMaxBytes();
+    if (bytes.length > maxBytes) {
+      throw new IllegalArgumentException("The file is %d bytes, over the %d MB a file uploaded can be.".formatted(bytes.length,
+                                                                                                                maxBytes / (1024 * 1024)));
     }
-    // Validate the parent folder exists and is readable before staging anything,
-    // so a bad id fails with a clean ObjectNotFoundException / IllegalAccessException.
-    getNode(parentFolderId);
-    String ownerId = String.valueOf(getOwnerId(parentFolderId));
-    long userIdentityId = getCurrentUserIdentityId();
-    // Snapshot the destination file ids before the import so the created node can
-    // be identified even when a same-name file already exists and the import
-    // creates a renamed ("duplicate") copy with a different, suffixed name.
-    Set<String> beforeFileIds = currentChildFileIds(parentFolderId);
-    String uploadId = null;
+    String name = sanitizeFileName(fileName);
+    checkNotMacOsMetadata(name);
+    checkUploadFolder(parentFolderId);
+    String uploadId = UploadToolUtils.materialize(uploadService, bytes, name, DEFAULT_UPLOAD_MIME_TYPE);
     try {
-      uploadId = UploadToolUtils.materialize(uploadService,
-                                             zipSingleEntry(entryName, bytes),
-                                             entryName + ".zip",
-                                             "application/zip");
-      // folderPath stays null: parentFolderId already identifies the JCR node
-      // (same rule as createFolder). conflict "duplicate": on a name clash the
-      // import creates a renamed (keep-both) copy. NOT "rename" — the async import
-      // thread only understands "updateAll"/"duplicate", so "rename" would fall
-      // through to ignoredFiles and silently create nothing.
-      documentFileService.importFiles(ownerId,
-                                      parentFolderId,
-                                      null,
-                                      uploadId,
-                                      "duplicate",
-                                      getCurrentUserAclIdentity(),
-                                      userIdentityId);
-      // On success the asynchronous import owns the upload resource and releases
-      // it once the file is created, so it must not be released here.
-      uploadId = null;
-    } catch (IllegalAccessException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new IllegalStateException("Could not create the document '%s': %s".formatted(entryName, e.getMessage()));
+      return fileUpload(parentFolderId, uploadId, name, conflictAction);
     } finally {
-      if (uploadId != null) {
-        UploadToolUtils.release(uploadService, uploadId);
-      }
+      UploadToolUtils.release(uploadService, uploadId);
     }
-    return findImportedDocument(parentFolderId, entryName, beforeFileIds);
   }
 
   /**
-   * The import runs on a background thread, so the created file is polled for in
-   * the destination folder until it appears (or a short timeout elapses). The
-   * newly created node is identified as the file whose id was not present before
-   * the import, so it resolves the just-created (possibly suffixed) file rather
-   * than a pre-existing same-name document.
+   * Files one of the user's uploads, sent through an upload link, into a
+   * folder: its staged file is handed to the filing as it is, never read into
+   * memory, under the name given or, when none is, the name it was uploaded
+   * under; the upload takes the name it is filed under, which the filing
+   * types the file from. The folder is checked first, which leaves the upload in place
+   * when it is refused; once read, the upload is consumed, whether the filing
+   * succeeds or fails.
+   *
+   * @param parentFolderId the folder
+   * @param uploadId the upload
+   * @param name the file name, blank for the upload's own
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @return the filed document
+   * @throws IllegalArgumentException when the upload id names no upload of
+   *           the user's, the file is empty, over the upload size limit or
+   *           refused by a validator, it has no name or a macOS metadata
+   *           name, or a new version is asked of a folder, a shortcut or a
+   *           file that keeps no versions
+   * @throws IllegalStateException when the upload is still being sent or
+   *           failed, or the file can't be read or filed
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't add documents to it,
+   *           or the call is limited to a space
    */
-  private DocumentModel findImportedDocument(String parentFolderId,
-                                             String fileName,
-                                             Set<String> beforeFileIds) throws ObjectNotFoundException,
-                                                                        IllegalAccessException {
-    for (int attempt = 0; attempt < IMPORT_POLL_MAX_ATTEMPTS; attempt++) {
-      DocumentModel match = resolveAddedChildFile(parentFolderId, beforeFileIds, fileName);
-      if (match != null) {
-        return match;
+  private DocumentModel fileStagedUpload(String parentFolderId,
+                                         String uploadId,
+                                         String name,
+                                         UploadConflictAction conflictAction) throws IllegalAccessException,
+                                                                              ObjectNotFoundException {
+    checkUploadFolder(parentFolderId);
+    UploadResource upload = readStagedUpload(uploadId);
+    try {
+      checkStagedFile(upload, uploadId);
+      String fileName = StringUtils.isBlank(name) ? upload.getFileName() : name;
+      if (StringUtils.isBlank(fileName)) {
+        throw new IllegalArgumentException("The upload '%s' carries no file name: pass 'name', the document file name with its extension (e.g. 'report.pdf')."
+            .formatted(uploadId));
       }
-      sleepQuietly(IMPORT_POLL_INTERVAL_MS);
+      fileName = sanitizeFileName(fileName);
+      checkNotMacOsMetadata(fileName);
+      // the filing types the file from the upload's own name: the upload is the user's, and consumed by this call
+      upload.setFileName(fileName);
+      // the filing reads the staged file, runs the upload validators on it and removes the upload once filed
+      return fileUpload(parentFolderId, uploadId, fileName, conflictAction);
+    } finally {
+      uploadService.removeUploadResource(uploadId, getCurrentUserName());
     }
-    throw new IllegalStateException("""
-        The document '%s' was uploaded and is being created in the background.
-        Call list_folder_children on folder %s in a few seconds to retrieve it.
-        """.formatted(fileName, parentFolderId));
   }
 
   /**
-   * Lists the file ids currently under a folder, used to snapshot a destination
-   * before an operation that adds a file (import / copy / duplicate) so the newly
-   * created node can be identified afterwards.
+   * Adds a new version to a file from one of the user's uploads, sent through
+   * an upload link: its staged file is checked by the upload validators under
+   * the file's name and type, as the other sources are, then streamed into
+   * the version, never read into memory. The file is checked by the caller
+   * before, which leaves the upload in place when it is refused; once read,
+   * the upload is consumed, whether the version is added or not.
+   *
+   * @param file the file versioned
+   * @param fileId the id of the file versioned, a shortcut's target
+   * @param uploadId the upload
+   * @throws IllegalArgumentException when the upload id names no upload of
+   *           the user's, or the file is empty, over the upload size limit or
+   *           refused by a validator
+   * @throws IllegalStateException when the upload is still being sent or
+   *           failed, or its file can't be read
+   * @throws IllegalAccessException when the call is limited to a space
    */
-  private Set<String> currentChildFileIds(String folderId) throws ObjectNotFoundException, IllegalAccessException {
-    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    return documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE, getCurrentUserIdentityId())
-                              .stream()
-                              .filter(FileNode.class::isInstance)
+  private void addVersionFromStagedUpload(FileNode file, String fileId, String uploadId) throws IllegalAccessException {
+    UploadResource upload = readStagedUpload(uploadId);
+    try {
+      Path stagedFile = checkStagedFile(upload, uploadId);
+      documentFileService.validateUploadedFile(file.getName(), file.getMimeType(), stagedFile);
+      try (InputStream content = Files.newInputStream(stagedFile)) {
+        documentFileService.createNewVersion(fileId, getCurrentUserName(), content);
+      } catch (IOException e) {
+        throw new IllegalStateException("The file of the upload '%s' can't be read: open a new one with start_upload.".formatted(uploadId),
+                                        e);
+      }
+    } finally {
+      uploadService.removeUploadResource(uploadId, getCurrentUserName());
+    }
+  }
+
+  /**
+   * Reads one of the user's uploads through the owner-checked accessor: an
+   * id that is unknown on this node and one owned by another user are
+   * refused alike, so the refusal tells nothing of another user's uploads.
+   * An upload still being sent is refused and left in place, for its curl
+   * command to complete and a later call to consume: removing it would delete
+   * a file still being written. An upload id is refused in a call limited to
+   * a space, where start_upload is not offered.
+   *
+   * @param uploadId the upload
+   * @return the upload, sent or failed
+   * @throws IllegalArgumentException when the id names no upload of the
+   *           user's on this node
+   * @throws IllegalStateException when the upload is still being sent
+   * @throws IllegalAccessException when the call is limited to a space
+   */
+  private UploadResource readStagedUpload(String uploadId) throws IllegalAccessException {
+    if (isLimitedToASpace()) {
+      throw new IllegalAccessException(MSG_UPLOAD_ID_IN_SPACE);
+    }
+    UploadResource upload = uploadService.getUploadResource(uploadId, getCurrentUserName());
+    if (upload == null) {
+      throw new IllegalArgumentException(MSG_UPLOAD_ID_UNKNOWN.formatted(uploadId));
+    }
+    if (upload.getStatus() == UploadResource.UPLOADING_STATUS) {
+      throw new IllegalStateException(MSG_UPLOAD_ID_UPLOADING.formatted(uploadId));
+    }
+    return upload;
+  }
+
+  /**
+   * Checks an upload read for this call is complete, and that its file is
+   * on disk, not empty and within the upload size limit, measured on the file
+   * itself.
+   *
+   * @param upload the upload
+   * @param uploadId its id
+   * @return its file
+   * @throws IllegalArgumentException when the file is empty or over the upload
+   *           size limit
+   * @throws IllegalStateException when the upload failed, or its file is
+   *           missing or can't be read
+   */
+  private static Path checkStagedFile(UploadResource upload, String uploadId) {
+    if (upload.getStatus() != UploadResource.UPLOADED_STATUS || StringUtils.isBlank(upload.getStoreLocation())) {
+      throw new IllegalStateException(MSG_UPLOAD_ID_FAILED.formatted(uploadId));
+    }
+    Path stagedFile = Path.of(upload.getStoreLocation());
+    long size;
+    try {
+      size = Files.size(stagedFile);
+    } catch (IOException e) {
+      throw new IllegalStateException(MSG_UPLOAD_ID_FAILED.formatted(uploadId), e);
+    }
+    if (size == 0) {
+      throw new IllegalArgumentException("The upload '%s' holds an empty file; there is nothing to file.".formatted(uploadId));
+    }
+    long maxBytes = DocumentUploadLimit.getMaxBytes();
+    if (size > maxBytes) {
+      throw new IllegalArgumentException("The upload '%s' is %d bytes, over the %d MB a document can be, and is dropped: only a file within that size can be filed, through a new start_upload.".formatted(uploadId,
+                                                                                                                      size,
+                                                                                                                      maxBytes
+                                                                                                                          / (1024 * 1024)));
+    }
+    return stagedFile;
+  }
+
+  /**
+   * Files an upload staged in the platform's upload service into a folder.
+   *
+   * @param folderId the folder
+   * @param uploadId the staged upload
+   * @param name the file name
+   * @param conflictAction what to do when the folder holds a file of that name
+   * @return the filed document
+   * @throws IllegalAccessException when the user can't add documents to the
+   *           folder
+   */
+  private DocumentModel fileUpload(String folderId,
+                                   String uploadId,
+                                   String name,
+                                   UploadConflictAction conflictAction) throws IllegalAccessException {
+    try {
+      return toDocumentModel(documentFileService.saveUploadedDocument(folderId,
+                                                                      uploadId,
+                                                                      name,
+                                                                      conflictAction,
+                                                                      getCurrentUserIdentityId()));
+    } catch (ObjectNotFoundException e) {
+      throw new IllegalStateException("The file '%s' couldn't be filed: the folder %s, or the file staged for it, is gone.".formatted(name,
+                                                                                                                                   folderId));
+    }
+  }
+
+  /**
+   * Checks a folder exists, is readable, is a folder, and takes the user's
+   * documents.
+   *
+   * @param folderId the folder
+   * @throws IllegalArgumentException when it is a file
+   * @throws ObjectNotFoundException when it doesn't exist
+   * @throws IllegalAccessException when the user can't read it or add
+   *           documents to it
+   */
+  private void checkUploadFolder(String folderId) throws IllegalAccessException, ObjectNotFoundException {
+    AbstractNode folder = getNode(folderId);
+    if (!(folder instanceof FolderNode)) {
+      throw new IllegalArgumentException(MSG_UPLOAD_NOT_A_FOLDER.formatted(folder.getName(), folderId));
+    }
+    // a shortcut's node is the folder it targets, which is the one written in
+    if (!documentFileService.hasEditPermissionOnDocument(folder.getId(), getCurrentUserIdentityId())) {
+      throw new IllegalAccessException(MSG_UPLOAD_FOLDER_NOT_WRITABLE.formatted(folder.getName(), folderId));
+    }
+  }
+
+  /**
+   * Reads what an upload does when its folder holds a file of its name.
+   *
+   * @param onConflict keep_both or new_version, in any case; blank
+   *          for keep_both
+   * @return the action
+   */
+  static UploadConflictAction toConflictAction(String onConflict) {
+    if (StringUtils.isBlank(onConflict)) {
+      return UploadConflictAction.KEEP_BOTH;
+    }
+    try {
+      return UploadConflictAction.valueOf(onConflict.trim().toUpperCase(java.util.Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("'on_conflict' is keep_both or new_version, not '%s'.".formatted(onConflict));
+    }
+  }
+
+  /**
+   * Lists the ids of the children of one kind currently under a folder, used
+   * to snapshot a destination before an operation that adds a node of that
+   * kind (copy, duplicate) so the newly created node can be identified
+   * afterwards.
+   *
+   * @param folderId the folder
+   * @param kind {@link FileNode} or {@link FolderNode}, the kind of the added
+   *          node
+   * @param refusal the refusal when the folder holds
+   *          {@value #MAX_SCANNED_CHILDREN} children or more: the added node
+   *          could then fall outside the read made after the operation
+   * @return the ids of its children of that kind
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read it
+   * @throws IllegalArgumentException when the folder holds
+   *           {@value #MAX_SCANNED_CHILDREN} children or more
+   */
+  private Set<String> currentChildIds(String folderId,
+                                      Class<? extends AbstractNode> kind,
+                                      String refusal) throws ObjectNotFoundException, IllegalAccessException {
+    List<AbstractNode> children = scannedChildNodes(folderId);
+    if (children.size() >= MAX_SCANNED_CHILDREN) {
+      throw new IllegalArgumentException(refusal.formatted(MAX_SCANNED_CHILDREN));
+    }
+    return children.stream()
+                              .filter(kind::isInstance)
                               .map(AbstractNode::getId)
                               .collect(java.util.stream.Collectors.toSet());
   }
 
   /**
-   * Resolves the file that was just added to a folder by an operation (import /
-   * copy / duplicate) as the child file whose id is not in the pre-operation
-   * snapshot AND whose name matches the expected created name. Narrowing by name
-   * (rather than blindly collapsing the id-diff with {@code reduce((a,b)->b)})
-   * keeps the result correct when the folder gains another, differently-named file
-   * concurrently (a parallel upload, a copy/import by another user, a retry).
-   * <p>
-   * Returns {@code null} when no added file matches yet (so a poller can retry),
-   * and throws an {@link IllegalStateException} when MORE THAN ONE added file
-   * matches the expected name — the operation cannot then be resolved
-   * deterministically, and guessing one would risk returning the wrong document.
-   *
-   * @param folderId the folder to resolve the created file in
-   * @param beforeFileIds the folder's file ids snapshotted before the operation
-   * @param expectedName the name the created file is expected to carry (the source
-   *          name for copy/duplicate, the uploaded file name for import); may be
-   *          blank, in which case any single added file is accepted
-   * @return the resolved created document, or {@code null} if none matches yet
+   * @param node a file or a folder
+   * @return {@link FolderNode} for a folder, {@link FileNode} otherwise: the
+   *         kind of node a copy or a duplicate of it adds
    */
-  private DocumentModel resolveAddedChildFile(String folderId,
-                                              Set<String> beforeFileIds,
-                                              String expectedName) throws ObjectNotFoundException,
-                                                                   IllegalAccessException {
-    DocumentFolderFilter filter = new DocumentFolderFilter(folderId, null, null, null);
-    List<AbstractNode> children = documentFileService.getFolderChildNodes(filter, 0, IMPORT_POLL_PAGE_SIZE,
-                                                                          getCurrentUserIdentityId());
-    List<FileNode> candidates = children.stream()
-                                        .filter(FileNode.class::isInstance)
-                                        .map(FileNode.class::cast)
-                                        .filter(file -> !beforeFileIds.contains(file.getId()))
-                                        .filter(file -> nameMatchesExpected(file.getName(), expectedName))
-                                        .toList();
+  private static Class<? extends AbstractNode> kindOf(AbstractNode node) {
+    return node instanceof FolderNode ? FolderNode.class : FileNode.class;
+  }
+
+  /**
+   * Resolves the node of one kind just added to a folder: the child of that kind
+   * whose id is not in the pre-operation snapshot and whose name matches the
+   * expected created name.
+   *
+   * @param folderId the folder to resolve the created node in
+   * @param beforeIds the folder's ids of that kind snapshotted before the
+   *          operation
+   * @param expectedName the name the created node is expected to carry
+   * @param kind {@link FileNode} or {@link FolderNode}
+   * @param operation "copied" or "duplicated", for the failure message
+   * @return the resolved created node, or {@code null} if none matches yet
+   * @throws ObjectNotFoundException when the folder doesn't exist
+   * @throws IllegalAccessException when the user can't read it
+   * @throws IllegalStateException when the folder now holds more than
+   *           {@value #MAX_SCANNED_CHILDREN} children: the node was made but
+   *           may be outside the read
+   */
+  private DocumentModel resolveAddedChild(String folderId,
+                                          Set<String> beforeIds,
+                                          String expectedName,
+                                          Class<? extends AbstractNode> kind,
+                                          String operation) throws ObjectNotFoundException, IllegalAccessException {
+    List<AbstractNode> children = scannedChildNodes(folderId);
+    if (children.size() > MAX_SCANNED_CHILDREN) {
+      throw new IllegalStateException(MSG_ADDED_CHILD_NOT_SCANNED.formatted(operation, folderId, MAX_SCANNED_CHILDREN));
+    }
+    List<AbstractNode> candidates = children.stream()
+                                            .filter(kind::isInstance)
+                                            .filter(node -> !beforeIds.contains(node.getId()))
+                                            .filter(node -> nameMatchesExpected(node.getName(), expectedName))
+                                            .toList();
     if (candidates.isEmpty()) {
       return null;
     }
@@ -1567,29 +3498,34 @@ public class DocumentMcpTool implements McpToolPlugin {
       throw new IllegalStateException(("Could not unambiguously resolve the created document in folder %s "
           + "(multiple candidates matched '%s'); please retry.").formatted(folderId, expectedName));
     }
-    return toDocumentFileModel(candidates.get(0));
+    return toDocumentModel(candidates.get(0));
   }
 
   /**
-   * Resolves the single file added to a folder by a synchronous operation
-   * (copy / duplicate) and fails clearly when it cannot be found, rather than
-   * returning the storage's folder node or silently guessing. The ambiguity guard
-   * (more than one match) is enforced by {@link #resolveAddedChildFile}; a
-   * {@code null} here means no added file matched the expected name, which is
-   * surfaced as an actionable error instead of a wrong document.
+   * Resolves the single file or folder added to a folder by a synchronous
+   * operation (copy / duplicate) and fails clearly when it cannot be found,
+   * rather than returning the storage's folder node or silently guessing. The
+   * ambiguity guard (more than one match) is enforced by
+   * {@link #resolveAddedChild}; a {@code null} here means no added node matched
+   * the expected name, which is surfaced as an actionable error instead of a
+   * wrong document.
    *
-   * @param folderId the folder the operation added a file to
-   * @param beforeFileIds the folder's file ids snapshotted before the operation
-   * @param expectedName the expected name of the created file
+   * @param folderId the folder the operation added a node to
+   * @param beforeIds the folder's ids of that kind snapshotted before the
+   *          operation
+   * @param expectedName the expected name of the created node
+   * @param kind {@link FileNode} or {@link FolderNode}, the kind of the
+   *          created node
    * @param operation a short label for the operation ("copied" / "duplicated"),
    *          used only in the error message
    * @return the resolved created document (never {@code null})
    */
-  private DocumentModel requireResolvedChildFile(String folderId,
-                                                 Set<String> beforeFileIds,
-                                                 String expectedName,
-                                                 String operation) throws ObjectNotFoundException, IllegalAccessException {
-    DocumentModel resolved = resolveAddedChildFile(folderId, beforeFileIds, expectedName);
+  private DocumentModel requireResolvedChild(String folderId,
+                                             Set<String> beforeIds,
+                                             String expectedName,
+                                             Class<? extends AbstractNode> kind,
+                                             String operation) throws ObjectNotFoundException, IllegalAccessException {
+    DocumentModel resolved = resolveAddedChild(folderId, beforeIds, expectedName, kind, operation);
     if (resolved == null) {
       throw new IllegalStateException(("Could not locate the %s document '%s' in folder %s after the operation. "
           + "Call list_folder_children on that folder to find it.").formatted(operation, expectedName, folderId));
@@ -1651,6 +3587,23 @@ public class DocumentMcpTool implements McpToolPlugin {
   }
 
   /**
+   * Refuses a macOS metadata name (.DS_Store, a name starting with '._', or
+   * __MACOSX): the Documents import skips such names, and the tools create no
+   * file under one.
+   *
+   * @param name the sanitized file name
+   * @throws IllegalArgumentException when the name is a macOS metadata name
+   */
+  private static void checkNotMacOsMetadata(String name) {
+    if (isMacOsMetadata(name)) {
+      throw new IllegalArgumentException("""
+          The document name '%s' is a macOS metadata name (.DS_Store, a name starting with '._', or __MACOSX),
+          which Documents does not create. Ask the user for another name.
+          """.formatted(name));
+    }
+  }
+
+  /**
    * Returns the lower-cased extension of a file name (everything after the last
    * dot), or an empty string when it has none.
    */
@@ -1660,29 +3613,9 @@ public class DocumentMcpTool implements McpToolPlugin {
     return dot > 0 ? StringUtils.lowerCase(trimmed.substring(dot + 1)) : "";
   }
 
-  private static byte[] zipSingleEntry(String entryName, byte[] content) {
-    ByteArrayOutputStream output = new ByteArrayOutputStream();
-    try (ZipOutputStream zip = new ZipOutputStream(output)) {
-      zip.putNextEntry(new ZipEntry(entryName));
-      zip.write(content);
-      zip.closeEntry();
-    } catch (IOException e) {
-      throw new IllegalStateException("Could not package the document content: " + e.getMessage());
-    }
-    return output.toByteArray();
-  }
-
   private static String sanitizeFileName(String fileName) {
     String cleaned = StringUtils.trimToEmpty(fileName).replaceAll("[/\\\\]", "_");
     return cleaned.isEmpty() ? "document" : cleaned;
-  }
-
-  private static void sleepQuietly(long millis) {
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
   }
 
   private long getCurrentUserIdentityId() {

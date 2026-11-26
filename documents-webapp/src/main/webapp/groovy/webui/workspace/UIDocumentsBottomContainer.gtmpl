@@ -2,5 +2,6 @@
   def rcontext = _ctx.getRequestContext();
   rcontext.getJavascriptManager().require("SHARED/AttachmentPreviewListener", "AttachmentPreviewListener");
 rcontext.getJavascriptManager().require("SHARED/DocumentsInfoDrawerListener", "DocumentsInfoDrawerListener");
+rcontext.getJavascriptManager().require("SHARED/DocumentsTranscriptDrawerListener", "DocumentsTranscriptDrawerListener");
 
 %>

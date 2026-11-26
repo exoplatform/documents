@@ -1,0 +1,31 @@
+/*
+ * Copyright (C) 2026 eXo Platform SAS
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <gnu.org/licenses>.
+ */
+package org.exoplatform.documents.constant;
+
+/**
+ * Where the transcription of an audio or video file stands (EXO-92097).
+ */
+public enum TranscriptionStatus {
+  /** Waiting for a transcription slot. */
+  QUEUED,
+  /** Being transcribed, piece by piece. */
+  PROCESSING,
+  /** Transcribed: the transcript can be read. */
+  DONE,
+  /** Not transcribed, for the reason the state names; a user may retry it. */
+  FAILED;
+}

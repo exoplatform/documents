@@ -10,3 +10,307 @@
 #biggestDocumentsDrawer .uploadedFileDetails .document-time {
   display:inline;
 }
+
+.documentInfoDrawer {
+  .documentMediaThumbnailVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .documentMediaThumbnailPlay {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.85;
+    pointer-events: none;
+  }
+  .documentMediaThumbnailBadge {
+    right: 8px;
+    bottom: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+  }
+}
+
+.documentInfoDrawer {
+  .documentInfoName {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-all;
+    line-height: 1.4;
+  }
+  .documentInfoPreview {
+    height: 204px;
+    max-height: 204px;
+    img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+  }
+  .documentInfoGroupTitle {
+    margin: 18px 0 6px;
+    font-weight: bold;
+  }
+  .documentInfoRow {
+    min-height: 32px;
+    .documentInfoRowLabel {
+      width: 112px;
+      text-align: start;
+      margin-inline-end: 12px;
+    }
+    .documentInfoRowValue {
+      min-width: 0;
+    }
+  }
+  .documentInfoContentPane {
+    min-width: 0;
+  }
+  .documentInfoContent {
+    .documentInfoContentOpen {
+      flex: 1 1 auto;
+      width: 100%;
+      min-height: 0;
+      cursor: pointer;
+    }
+    .documentInfoContentImage,
+    .documentInfoContentMedia {
+      max-width: 100%;
+      max-height: calc(~"100vh - 120px");
+      object-fit: contain;
+    }
+    .documentInfoContentMedia {
+      width: 100%;
+    }
+    &.documentInfoContentWithTimeline {
+      justify-content: flex-start !important;
+      overflow-y: auto;
+      video.documentInfoContentMedia {
+        flex: 1 1 0;
+        min-height: 160px;
+        max-height: none;
+      }
+    }
+  }
+  .documentRecordingTimeline {
+    border: 1px solid @borderColor;
+    flex: 0 0 auto;
+    .documentTimelineGrid {
+      position: relative;
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr);
+      column-gap: 12px;
+      row-gap: 8px;
+      align-items: center;
+    }
+    .documentTimelineScale {
+      height: 16px;
+      font-variant-numeric: tabular-nums;
+      // a mark's label is centred on it, the scale's start and end aside, which
+      // the label starts at and ends at, in either direction of the text
+      .documentTimelineTick {
+        position: absolute;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        .v-application--is-rtl & {
+          transform: translateX(50%);
+        }
+        &:first-child, &:last-child {
+          transform: none;
+        }
+      }
+    }
+    .documentTimelineTrack {
+      position: relative;
+      &.documentTimelineBlocks {
+        height: 40px;
+      }
+      &.documentTimelineLane {
+        height: 18px;
+        border-radius: 9px;
+        background: @greyColorLighten1Opacity2;
+        .documentTimelineItem {
+          top: 3px;
+          bottom: 3px;
+          min-width: 3px;
+          padding: 0;
+          border: 0;
+          border-radius: 6px;
+        }
+      }
+    }
+    .documentTimelineItem {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      margin: 0;
+      padding: 0 10px;
+      border: 0;
+      border-inline-end: 2px solid @white;
+      border-radius: 6px;
+      color: @textColor;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: start;
+      overflow: hidden;
+      cursor: pointer;
+      &:focus-visible {
+        outline: 2px solid @primaryColor;
+        outline-offset: 1px;
+        z-index: 1;
+      }
+      &.documentTimelineActive {
+        box-shadow: inset 0 0 0 2px fade(@black, 45%);
+      }
+    }
+    // laid over the tracks' column, from the first track to the last: placed
+    // absolutely in that grid area, it takes none of the tracks' cells
+    .documentTimelineNow {
+      grid-column: 2;
+      // two properties: LESS would compute « 2 / -1 » as a division
+      grid-row-start: 2;
+      grid-row-end: -1;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .documentTimelinePlayhead {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      width: 2px;
+      margin-inline-start: -1px;
+      background: @textColor;
+    }
+  }
+  .documentInfoTranscriptSearch {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .documentInfoSidePane {
+    width: 460px;
+    flex: 0 0 460px;
+    min-height: 0;
+    border-inline-start: 1px solid @borderColor;
+  }
+}
+
+// the menu's content is rendered at the application's root, outside the drawer
+.documentInfoMenu {
+  .documentInfoMenuDivider:first-child,
+  .documentInfoMenuContributions:first-child:not(:has(.v-list-item)) + .documentInfoMenuDivider {
+    display: none;
+  }
+}
+
+// A transcript's chapters (EXO-92122), in the details and the transcript drawer.
+// A heading is a 20px chevron column, a 44px time column and the title, the
+// summary under the title; the sizes are the theme's typography classes. An
+// unfolded chapter's lines run along a 2px guide at the chevron's column, in the
+// chapter's colour (lighter for a chapter not being read), each a 44px time
+// column under the heading's time, then the text.
+.documentTranscriptChapterListItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  .documentTranscriptChapterTime {
+    flex: 0 0 40px;
+  }
+}
+.documentTranscriptChapterDot {
+  flex: 0 0 8px;
+  height: 8px;
+  border-radius: 4px;
+  background-color: @primaryColor;
+}
+.documentTranscriptChapter {
+  margin-top: 12px;
+  .documentTranscriptChapterHeading {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    column-gap: 8px;
+    align-items: start;
+  }
+  .documentTranscriptChapterHeadingText {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    column-gap: 8px;
+  }
+  .documentTranscriptChapterTime {
+    padding-top: 3px;
+  }
+  .documentTranscriptChapterSummary {
+    grid-column: 2;
+    margin-top: 2px;
+  }
+  .documentTranscriptChapterLines {
+    position: relative;
+    margin-top: 8px;
+    margin-bottom: 6px;
+    margin-inline-start: 9px;
+    padding: 2px 0 4px;
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      inset-inline-start: 0;
+      width: 2px;
+      background-color: @primaryColor;
+      background-color: var(--documentTranscriptChapterColor, @primaryColor);
+      opacity: 0.4;
+    }
+  }
+  &.documentTranscriptChapterCurrent .documentTranscriptChapterLines::before {
+    opacity: 1;
+  }
+  .documentTranscriptChapterLine {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    column-gap: 8px;
+    margin-inline-start: 18px;
+    padding: 4px 0;
+  }
+  .documentTranscriptLineTime {
+    padding-top: 2px;
+  }
+}
+
+// a transcript's change-speaker button: a light pencil right after the name, darker on the speaker's hover or focus, its button 24px square;
+// under .VuetifyApp, as Vuetify's own rules are, to outrank them though Vuetify's stylesheet loads after this one, and on the button, whose colour its icon inherits
+@transcriptSpeakerChangeColor: #8a949e;
+@transcriptSpeakerChangeActiveColor: #4a5560;
+.VuetifyApp .documentTranscriptSpeaker {
+  .documentTranscriptSpeakerChange.v-btn.v-btn--icon {
+    width: 24px;
+    height: 24px;
+    color: @transcriptSpeakerChangeColor;
+  }
+  &:hover,
+  &:focus-within {
+    .documentTranscriptSpeakerChange.v-btn.v-btn--icon {
+      color: @transcriptSpeakerChangeActiveColor;
+    }
+  }
+  // a speaker's chip shows the keyboard focus with a ring in its own colour, not the browser's heavy outline
+  [role=button] {
+    outline: none;
+    &:focus-visible .v-chip {
+      box-shadow: 0 0 0 2px currentColor;
+    }
+  }
+}
+
+// a guest speaker's initials, in the neutral 20px avatar beside the name
+.documentTranscriptSpeakerInitials {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}

@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -32,16 +33,21 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import org.exoplatform.commons.ObjectAlreadyExistsException;
@@ -59,6 +65,8 @@ import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.DocumentTextContent;
 import org.exoplatform.documents.model.DocumentsSize;
 import org.exoplatform.documents.model.FileNode;
+import org.exoplatform.documents.model.TranscriptionState;
+import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.FileVersion;
 import org.exoplatform.documents.model.FolderNode;
 import org.exoplatform.documents.model.FullTreeItem;
@@ -80,7 +88,19 @@ import org.exoplatform.social.metadata.favorite.FavoriteService;
 import org.exoplatform.social.metadata.favorite.model.Favorite;
 import org.exoplatform.upload.UploadService;
 
+import io.meeds.mcp.server.constant.Origin;
+import io.meeds.mcp.server.model.ActingIdentity;
+import io.meeds.mcp.server.tool.util.UploadToolUtils;
+import io.meeds.mcp.server.util.McpToolUtils;
 import io.meeds.social.translation.service.TranslationService;
+import static org.junit.Assert.assertArrayEquals;
+import static org.mockito.Mockito.doAnswer;
+import java.util.HashMap;
+import java.util.Map;
+import org.mockito.ArgumentCaptor;
+import org.exoplatform.documents.constant.DocumentUploadLimit;
+import org.exoplatform.documents.constant.UploadConflictAction;
+import org.exoplatform.documents.mcp.model.DocumentUploadModel;
 
 public class DocumentMcpToolTest {
 
@@ -93,6 +113,17 @@ public class DocumentMcpToolTest {
   private static final String            DOCUMENT_ID  = "be0688cd7f00010134384ab7e1b15a48";
 
   private static final String            FOLDER_ID    = "folder-42";
+
+  /**
+   * A transcript's segments: speaker 1 then 4 are the same person, 2 a guest, 3
+   * and 5 nobody named (5 named after an identity that is gone in one test),
+   * and one segment tells no speaker.
+   */
+  private static final String SPEAKER_SEGMENTS = """
+      [{"start":0.4,"end":10,"text":"Bonjour.","speaker":"1"},{"start":10,"end":60,"text":"Le budget.","speaker":"1"},\
+      {"start":60,"end":80,"text":"Merci.","speaker":"2"},{"start":80,"end":85,"text":"Une question.","speaker":"3"},\
+      {"start":85,"end":90,"text":"Applause."},{"start":90,"end":105.5,"text":"Fin.","speaker":"4"},\
+      {"start":150,"end":151,"text":"Au revoir.","speaker":"5"}]""";
 
   private DocumentFileService            documentFileService;
 
@@ -114,8 +145,12 @@ public class DocumentMcpToolTest {
 
   private DocumentMcpTool                documentMcpTool;
 
+  private Long                           scopeSpaceId;
+
+  private boolean                        scopeUnreadable;
+
   @Before
-  public void setUp() {
+  public void setUp() throws Exception {
     documentFileService = Mockito.mock(DocumentFileService.class);
     attachmentService = Mockito.mock(AttachmentService.class);
     socialAttachmentService = Mockito.mock(org.exoplatform.social.attachment.AttachmentService.class);
@@ -126,7 +161,7 @@ public class DocumentMcpToolTest {
     ProfilePropertyService profilePropertyService = Mockito.mock(ProfilePropertyService.class);
     UserACL userAcl = Mockito.mock(UserACL.class);
     UserPortalConfigService portalConfigService = Mockito.mock(UserPortalConfigService.class);
-    UploadService uploadService = Mockito.mock(UploadService.class);
+    uploadService = Mockito.mock(UploadService.class);
     publicDocumentAccessService = Mockito.mock(PublicDocumentAccessService.class);
     favoriteService = Mockito.mock(FavoriteService.class);
     currentIdentity = new Identity(USERNAME);
@@ -134,6 +169,8 @@ public class DocumentMcpToolTest {
     org.exoplatform.social.core.identity.model.Identity socialIdentity =
                                                                        new org.exoplatform.social.core.identity.model.Identity(String.valueOf(USER_IDENTITY_ID));
     lenient().when(identityManager.getOrCreateUserIdentity(USERNAME)).thenReturn(socialIdentity);
+    // A folder a test writes into is writable unless the test says otherwise
+    lenient().when(documentFileService.hasEditPermissionOnDocument(eq(FOLDER_ID), anyLong())).thenReturn(true);
 
     documentMcpTool = new DocumentMcpTool(documentFileService,
                                           attachmentService,
@@ -157,7 +194,249 @@ public class DocumentMcpToolTest {
       public Locale getCurrentUserLocale() {
         return Locale.ENGLISH;
       }
+
+      @Override
+      protected Long getScopeSpaceId() {
+        if (scopeUnreadable) {
+          throw new IllegalStateException("No acting identity");
+        }
+        return scopeSpaceId;
+      }
     };
+  }
+
+  /**
+   * In a call limited to a space, a move, a copy or a shortcut goes only into
+   * a folder of that space: a folder of another space, a folder in no space's
+   * drive, and any folder when the call's space can't be read are refused
+   * before the storage is touched. A call that isn't limited doesn't look the
+   * destination's space up.
+   * Mutants: the check removed from one of the three tools, the comparison
+   * inverted, a destination in no space accepted, an unreadable space taken
+   * as unlimited, or an unlimited call checked.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceMovesCopiesAndLinksIntoThatSpaceOnly() throws Exception {
+    String spaceFolder = "ae0688cd7f00010134384ab7e1b15a49";
+    String otherSpaceFolder = "00000000000000000000000000000003";
+    String driveLessFolder = "00000000000000000000000000000004";
+    Space space = new Space();
+    space.setId("12");
+    Space otherSpace = new Space();
+    otherSpace.setId("13");
+    when(documentFileService.getDocumentSpaceGroupId(spaceFolder)).thenReturn("/spaces/legal");
+    when(documentFileService.getDocumentSpaceGroupId(otherSpaceFolder)).thenReturn("/spaces/hr");
+    when(documentFileService.getDocumentSpaceGroupId(driveLessFolder)).thenReturn(null);
+    when(spaceService.getSpaceByGroupId("/spaces/legal")).thenReturn(space);
+    when(spaceService.getSpaceByGroupId("/spaces/hr")).thenReturn(otherSpace);
+    lenient().when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    lenient().when(documentFileService.getDocumentById(spaceFolder, USERNAME)).thenReturn(folderNode(spaceFolder));
+    lenient().when(documentFileService.getDocumentById(otherSpaceFolder, USERNAME)).thenReturn(folderNode(otherSpaceFolder));
+    lenient().when(documentFileService.getDocumentById(driveLessFolder, USERNAME)).thenReturn(folderNode(driveLessFolder));
+    lenient().when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
+
+    scopeSpaceId = 12L;
+    for (String outside : List.of(otherSpaceFolder, driveLessFolder)) {
+      assertThrows(IllegalAccessException.class, () -> documentMcpTool.moveDocument(DOCUMENT_ID, outside, null));
+      assertThrows(IllegalAccessException.class, () -> documentMcpTool.copyDocument(DOCUMENT_ID, outside));
+      assertThrows(IllegalAccessException.class, () -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, outside, null));
+    }
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.moveDocument(DOCUMENT_ID, spaceFolder, null));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.copyDocument(DOCUMENT_ID, spaceFolder));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, spaceFolder, null));
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+    verify(documentFileService, never()).copyDocument(any(), any(), anyLong());
+    verify(documentFileService, never()).createShortcut(any(), any(), any(), any());
+
+    scopeUnreadable = false;
+    documentMcpTool.moveDocument(DOCUMENT_ID, spaceFolder, null);
+    documentMcpTool.createDocumentShortcut(DOCUMENT_ID, spaceFolder, null);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(Collections.emptyList())
+        .thenReturn(List.of(fileNodeNamed("copy-1", "report.pdf")));
+    assertEquals("copy-1", documentMcpTool.copyDocument(DOCUMENT_ID, spaceFolder).getId());
+    verify(documentFileService).moveDocument(eq(OWNER_ID), eq(DOCUMENT_ID), any(), eq(USER_IDENTITY_ID), eq("keepBoth"));
+    verify(documentFileService).createShortcut(eq(DOCUMENT_ID), any(), eq(USERNAME), eq("keepBoth"));
+    verify(documentFileService).copyDocument(DOCUMENT_ID, spaceFolder, USER_IDENTITY_ID);
+
+    scopeSpaceId = null;
+    Mockito.clearInvocations(documentFileService);
+    documentMcpTool.moveDocument(DOCUMENT_ID, spaceFolder, null);
+    verify(documentFileService, never()).getDocumentSpaceGroupId(any());
+  }
+
+  /**
+   * In a call limited to a space, a node the platform created for the space
+   * (creator {@code __system}) is neither moved, copied, linked nor hidden, and
+   * a file is neither hidden nor shown: only a folder is. A folder created by
+   * a user is hidden. A call that isn't limited keeps the storage's own rules,
+   * with no lookup of the node; one whose space can't be read is refused.
+   * Mutants: the creator check removed or applied to one tool only, the
+   * folder-only rule removed or applied to a move, an unlimited call checked,
+   * or an unreadable space taken as unlimited.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceLeavesThePlatformsNodesAndHidesFoldersOnly() throws Exception {
+    String spaceFolder = "ae0688cd7f00010134384ab7e1b15a49";
+    String systemFolderId = "ce0688cd7f00010134384ab7e1b15a50";
+    String userFolderId = "de0688cd7f00010134384ab7e1b15a51";
+    Space space = new Space();
+    space.setId("12");
+    FolderNode systemFolder = folderNode(systemFolderId);
+    systemFolder.setCreatorUserName("__system");
+    FolderNode userFolder = folderNode(userFolderId);
+    userFolder.setCreatorUserName(USERNAME);
+    FileNode userFile = fileNode(DOCUMENT_ID, "application/pdf");
+    userFile.setCreatorUserName(USERNAME);
+    lenient().when(documentFileService.getDocumentSpaceGroupId(spaceFolder)).thenReturn("/spaces/legal");
+    lenient().when(spaceService.getSpaceByGroupId("/spaces/legal")).thenReturn(space);
+    lenient().when(documentFileService.getDocumentById(spaceFolder, USERNAME)).thenReturn(folderNode(spaceFolder));
+    when(documentFileService.getDocumentById(systemFolderId, USERNAME)).thenReturn(systemFolder);
+    when(documentFileService.getDocumentById(userFolderId, USERNAME)).thenReturn(userFolder);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(userFile);
+    lenient().when(documentFileService.getRootFolderOwnerId(any())).thenReturn(OWNER_ID);
+
+    scopeSpaceId = 12L;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.moveDocument(systemFolderId, spaceFolder, null));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.copyDocument(systemFolderId, spaceFolder));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.createDocumentShortcut(systemFolderId, spaceFolder, null));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.setDocumentVisibility(systemFolderId, true));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.setDocumentVisibility(DOCUMENT_ID, true));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.setDocumentVisibility(DOCUMENT_ID, false));
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+    verify(documentFileService, never()).copyDocument(any(), any(), anyLong());
+    verify(documentFileService, never()).createShortcut(any(), any(), any(), any());
+    verify(documentFileService, never()).setDocumentVisibility(anyLong(), any(), anyBoolean(), anyLong());
+
+    documentMcpTool.setDocumentVisibility(userFolderId, true);
+    documentMcpTool.moveDocument(DOCUMENT_ID, spaceFolder, null);
+    verify(documentFileService).setDocumentVisibility(OWNER_ID, userFolderId, true, USER_IDENTITY_ID);
+    verify(documentFileService).moveDocument(eq(OWNER_ID), eq(DOCUMENT_ID), any(), eq(USER_IDENTITY_ID), eq("keepBoth"));
+
+    scopeSpaceId = null;
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.setDocumentVisibility(userFolderId, false));
+
+    scopeUnreadable = false;
+    Mockito.clearInvocations(documentFileService);
+    documentMcpTool.setDocumentVisibility(DOCUMENT_ID, true);
+    documentMcpTool.moveDocument(systemFolderId, spaceFolder, null);
+    verify(documentFileService).setDocumentVisibility(OWNER_ID, DOCUMENT_ID, true, USER_IDENTITY_ID);
+    verify(documentFileService, never()).getDocumentById(eq(DOCUMENT_ID), any());
+    verify(documentFileService, never()).getDocumentById(eq(systemFolderId), any());
+  }
+
+  /**
+   * In a call limited to a space, a node the platform created for the space
+   * (creator {@code __system}) is not duplicated, and a node a user created
+   * is; a call that isn't limited duplicates either.
+   * Mutants: the creator check removed from the duplicate, or run on an
+   * unlimited call.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceDuplicatesNoNodeOfThePlatform() throws Exception {
+    FileNode systemFile = fileNode(DOCUMENT_ID, "application/pdf");
+    systemFile.setCreatorUserName("__system");
+    systemFile.setParentFolderId(FOLDER_ID);
+    FileNode userFile = fileNode("fe0688cd7f00010134384ab7e1b15a52", "application/pdf");
+    userFile.setCreatorUserName(USERNAME);
+    userFile.setParentFolderId(FOLDER_ID);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(systemFile);
+    when(documentFileService.getDocumentById(userFile.getId(), USERNAME)).thenReturn(userFile);
+    lenient().when(documentFileService.getRootFolderOwnerId(any())).thenReturn(OWNER_ID);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of())
+        .thenReturn(List.of(fileNodeNamed("dup-1", "report.pdf")))
+        .thenReturn(List.of())
+        .thenReturn(List.of(fileNodeNamed("dup-2", "report.pdf")));
+
+    scopeSpaceId = 12L;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.duplicateDocument(DOCUMENT_ID, null));
+    verify(documentFileService, never()).duplicateDocument(anyLong(), any(), any(), anyLong());
+    assertEquals("dup-1", documentMcpTool.duplicateDocument(userFile.getId(), null).getId());
+
+    scopeSpaceId = null;
+    assertEquals("dup-2", documentMcpTool.duplicateDocument(DOCUMENT_ID, null).getId());
+    verify(documentFileService).duplicateDocument(OWNER_ID, DOCUMENT_ID, null, USER_IDENTITY_ID);
+  }
+
+  /**
+   * In a call limited to a space, a node the platform created for the space
+   * (creator {@code __system}) is not renamed, and a folder or a file a user
+   * created is; a call that isn't limited renames either.
+   * Mutants: the creator check removed from the rename, the rename checked as
+   * a folder-only change, or every folder refused whatever its creator.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceRenamesNoNodeOfThePlatform() throws Exception {
+    FolderNode systemFolder = folderNode(FOLDER_ID);
+    systemFolder.setCreatorUserName("__system");
+    FileNode userFile = fileNode(DOCUMENT_ID, "application/pdf");
+    userFile.setCreatorUserName(USERNAME);
+    String userFolderId = "user-folder";
+    FolderNode userFolder = folderNode(userFolderId);
+    userFolder.setCreatorUserName(USERNAME);
+    when(documentFileService.getDocumentById(userFolderId, USERNAME)).thenReturn(userFolder);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(systemFolder);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(userFile);
+    lenient().when(documentFileService.getRootFolderOwnerId(any())).thenReturn(OWNER_ID);
+
+    scopeSpaceId = 12L;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.renameDocument(FOLDER_ID, "Minutes"));
+    verify(documentFileService, never()).renameDocument(anyLong(), any(), any(), anyLong());
+    documentMcpTool.renameDocument(DOCUMENT_ID, "contract.pdf");
+    documentMcpTool.renameDocument(userFolderId, "Agreements");
+    verify(documentFileService).renameDocument(OWNER_ID, DOCUMENT_ID, "contract.pdf", USER_IDENTITY_ID);
+    verify(documentFileService).renameDocument(OWNER_ID, userFolderId, "Agreements", USER_IDENTITY_ID);
+
+    scopeSpaceId = null;
+    documentMcpTool.renameDocument(FOLDER_ID, "Minutes");
+    verify(documentFileService).renameDocument(OWNER_ID, FOLDER_ID, "Minutes", USER_IDENTITY_ID);
+  }
+
+  /**
+   * The space a call is limited to is the one its acting identity carries,
+   * none for an identity without a scope or no identity, and an identity that
+   * can't be read fails the read rather than passing for an unlimited call.
+   * Runs the real {@code getScopeSpaceId}, which the other tests stub.
+   * Mutants: the scope not read, or the read failure swallowed.
+   */
+  @Test
+  public void theScopeSpaceIsTheOneTheActingIdentityCarries() {
+    DocumentMcpTool realTool = new DocumentMcpTool(documentFileService,
+                                                   attachmentService,
+                                                   socialAttachmentService,
+                                                   fileService,
+                                                   identityManager,
+                                                   spaceService,
+                                                   Mockito.mock(TranslationService.class),
+                                                   Mockito.mock(ProfilePropertyService.class),
+                                                   Mockito.mock(UserACL.class),
+                                                   Mockito.mock(UserPortalConfigService.class),
+                                                   Mockito.mock(UploadService.class),
+                                                   publicDocumentAccessService,
+                                                   favoriteService);
+    ActingIdentity limited = ActingIdentity.agent("agent-docs", "DOCS", Origin.PROPOSAL, 7L);
+    ActingIdentity unlimited = ActingIdentity.person(USERNAME, Origin.CHAT);
+    try (MockedStatic<McpToolUtils> mocked = Mockito.mockStatic(McpToolUtils.class)) {
+      mocked.when(McpToolUtils::getCurrentActingIdentity).thenReturn(limited);
+      assertEquals(Long.valueOf(7L), realTool.getScopeSpaceId());
+      mocked.when(McpToolUtils::getCurrentActingIdentity).thenReturn(unlimited);
+      assertEquals(null, realTool.getScopeSpaceId());
+      mocked.when(McpToolUtils::getCurrentActingIdentity).thenReturn(null);
+      assertEquals(null, realTool.getScopeSpaceId());
+      mocked.when(McpToolUtils::getCurrentActingIdentity).thenThrow(new IllegalStateException("refused"));
+      assertThrows(IllegalStateException.class, realTool::getScopeSpaceId);
+    }
   }
 
   private FileNode fileNode(String id, String mimeType) {
@@ -182,7 +461,7 @@ public class DocumentMcpToolTest {
   public void getRootFolderBySpace() throws Exception {
     when(documentFileService.getSpaceRootFolder(eq(SPACE_ID), eq(currentIdentity))).thenReturn(folderNode(FOLDER_ID));
 
-    DocumentFolderModel model = documentMcpTool.getRootFolderBySpace(SPACE_ID);
+    DocumentFolderModel model = documentMcpTool.getRootFolderBySpace(SPACE_ID, null);
 
     assertNotNull(model);
     assertEquals(FOLDER_ID, model.getId());
@@ -245,7 +524,6 @@ public class DocumentMcpToolTest {
   public void getDocumentContentByIdStatesWhyThereIsNoText() throws Exception {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     assertNoTextMessage(DocumentTextContent.Status.UNSUPPORTED_FORMAT, "its format is not supported for text extraction.");
-    assertNoTextMessage(DocumentTextContent.Status.TOO_LARGE, "the file is too large for its text to be read.");
     assertNoTextMessage(DocumentTextContent.Status.NO_TEXT, "no text was found in the file");
     assertNoTextMessage(DocumentTextContent.Status.UNREADABLE, "the file could not be read.");
     assertNoTextMessage(DocumentTextContent.Status.NOT_A_FILE, "is not a file with a content, so it has no text.");
@@ -299,7 +577,378 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
 
-    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  /**
+   * Asked with timestamps, a transcript with segments is given one segment per
+   * line, each starting with its moment in minutes and seconds and in whole
+   * seconds; past an hour the moment carries the hours.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsGivesEachSegmentItsMoment() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("Bonjour. Le pilote démarre.");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
+        [{"start":0.1,"end":3.4,"text":"Bonjour."},{"start":754.6,"end":758,"text":" Le pilote démarre. "},\
+        {"start":3725,"end":3730,"text":"Fin."}]""");
+
+    assertEquals("[00:00 · 0s] Bonjour.\n[12:34 · 754s] Le pilote démarre.\n[1:02:05 · 3725s] Fin.",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Segments with no text or no usable start are left out; when none is left,
+   * the plain transcript is given.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsSkipsUnusableSegments() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
+        [{"start":1,"text":"kept"},{"start":2,"text":"  "},{"text":"no start"},{"start":-1,"text":"negative"},\
+        {"start":"x","text":"not a number"},42]""",
+                                                                                               """
+        [{"text":"no start"},{"start":2,"text":""}]""");
+
+    assertEquals("[00:01 · 1s] kept", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Asked with timestamps, a transcript without segments, or with segments that
+   * cannot be read, is given as without timestamps.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsAndNoSegmentsGivesThePlainTranscript() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn(null, " ", "[]", "{not json");
+
+    for (int i = 0; i < 4; i++) {
+      assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+    }
+  }
+
+  /**
+   * Asked with timestamps, a transcript whose segments fail to be read from the
+   * repository is given as without timestamps: the failure never takes the
+   * transcript away.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsWhenTheSegmentsReadFailsGivesThePlainTranscript() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+
+    assertEquals("Expected a failure on the segments never to take the transcript away",
+                 "the transcription",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Without timestamps, a transcript whose segments do not tell who speaks, or
+   * that has no segment, is given plain, and its speakers are never read.
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithoutTimestampsNorSpeakersGivesThePlainTranscript() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/mp3"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.2,\"end\":1,\"text\":\"Bonjour.\"},{\"start\":2,\"end\":3,\"text\":\" \",\"speaker\":\"1\"}]", null);
+
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+
+    verify(documentFileService, never()).getTranscriptionSpeakers(anyString(), anyLong());
+  }
+
+  /**
+   * Asked with timestamps, a transcript whose segments tell who speaks gives,
+   * after its chapters, its speakers in the order they first speak with their
+   * talk time, then each line with its moment and who said it: the person named
+   * for the speaker, the guest's name, or Speaker N when nobody is named or the
+   * person is gone. Two numbers named after the same person are one speaker
+   * (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsGivesTheSpeakersThenEachLineItsSpeaker() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Who is here.\"}]");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn(SPEAKER_SEGMENTS);
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "25", "2", "name:Jean-Luc", "4", "25", "5", "404"));
+    mockFullName(25L, "Speakers Editor");
+
+    assertEquals("""
+        Chapters:
+        - [00:00 · 0s] Welcome: Who is here.
+
+        Speakers:
+        - Speakers Editor (talk time 01:15)
+        - Jean-Luc (talk time 00:20)
+        - Speaker 3 (talk time 00:05)
+        - Speaker 5 (talk time 00:01)
+
+        Transcript:
+        [00:00 · 0s] Speakers Editor: Bonjour.
+        [00:10 · 10s] Speakers Editor: Le budget.
+        [01:00 · 60s] Jean-Luc: Merci.
+        [01:20 · 80s] Speaker 3: Une question.
+        [01:25 · 85s] Applause.
+        [01:30 · 90s] Speakers Editor: Fin.
+        [02:30 · 150s] Speaker 5: Au revoir.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Without timestamps, a transcript whose segments tell who speaks is given
+   * one turn per line, Name: text, with no moment: the following segments of
+   * one speaker make one turn (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithoutTimestampsGivesOneTurnPerLine() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn(SPEAKER_SEGMENTS);
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "25", "2", "name:Jean-Luc", "4", "25"));
+    mockFullName(25L, "Speakers Editor");
+
+    assertEquals("""
+        Speakers:
+        - Speakers Editor (talk time 01:15)
+        - Jean-Luc (talk time 00:20)
+        - Speaker 3 (talk time 00:05)
+        - Speaker 5 (talk time 00:01)
+
+        Transcript:
+        Speakers Editor: Bonjour. Le budget.
+        Jean-Luc: Merci.
+        Speaker 3: Une question.
+        Applause.
+        Speakers Editor: Fin.
+        Speaker 5: Au revoir.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  /**
+   * Speakers whose names cannot be read are given by their number: the
+   * failure never takes the transcript away (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWhenTheSpeakersReadFailsGivesSpeakersByNumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:02)
+
+        Transcript:
+        Speaker 1: Bonjour.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * Two speaker numbers named after the same person who is gone, a deleted
+   * identity still carrying its full name, are each a speaker of their own, by
+   * their number, as the transcript's other readers show them, in the list as
+   * in the lines and the turns; an identity that cannot be read gives its
+   * speaker by its number (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesTheNumbersOfOneGonePersonByTheirNumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong())).thenReturn("""
+        [{"start":0,"end":2,"text":"Bonjour.","speaker":"1"},{"start":2,"end":5,"text":"Encore moi.","speaker":"4"},\
+        {"start":5,"end":6,"text":"Merci.","speaker":"2"}]""");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong())).thenReturn(Map.of("1", "404", "4", "404", "2", "26"));
+    mockFullName(404L, "Gone Person");
+    when(identityManager.getIdentity(404L).isDeleted()).thenReturn(true);
+    when(identityManager.getIdentity(26L)).thenThrow(new IllegalStateException("social"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:02)
+        - Speaker 4 (talk time 00:03)
+        - Speaker 2 (talk time 00:01)
+
+        Transcript:
+        [00:00 · 0s] Speaker 1: Bonjour.
+        [00:02 · 2s] Speaker 4: Encore moi.
+        [00:05 · 5s] Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:02)
+        - Speaker 4 (talk time 00:03)
+        - Speaker 2 (talk time 00:01)
+
+        Transcript:
+        Speaker 1: Bonjour.
+        Speaker 4: Encore moi.
+        Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * A guest is known by its name, even a name that reads as a speaker's number:
+   * two numbers named after that guest are one speaker (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesOneSpeakerToTheNumbersOfOneGuestNamedLikeANumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":2,\"end\":5,\"text\":\"Encore moi.\",\"speaker\":\"3\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "name:Speaker 1", "3", "name:Speaker 1"));
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:05)
+
+        Transcript:
+        Speaker 1: Bonjour. Encore moi.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * A person who can be read is known by their name, even a name that reads as
+   * a speaker's number: two numbers named after that person are one speaker
+   * (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdGivesOneSpeakerToTheNumbersOfOnePersonNamedLikeANumber() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0,\"end\":2,\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":2,\"end\":5,\"text\":\"Encore moi.\",\"speaker\":\"3\"}]");
+    when(documentFileService.getTranscriptionSpeakers(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn(Map.of("1", "25", "3", "25"));
+    mockFullName(25L, "Speaker 1");
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:05)
+
+        Transcript:
+        Speaker 1: Bonjour. Encore moi.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, false));
+  }
+
+  /**
+   * Asked with timestamps, a transcript whose segments tell who speaks but
+   * have no usable moment is given in turns, so that its lines still name who
+   * said them (EXO-92123).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsAndNoUsableMomentGivesTurns() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"text\":\"Bonjour.\",\"speaker\":\"1\"},{\"start\":-1,\"text\":\"Merci.\",\"speaker\":\"2\"}]");
+
+    assertEquals("""
+        Speakers:
+        - Speaker 1 (talk time 00:00)
+        - Speaker 2 (talk time 00:00)
+
+        Transcript:
+        Speaker 1: Bonjour.
+        Speaker 2: Merci.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Gives the full name of a person from their identity id.
+   *
+   * @param identityId the person's identity id
+   * @param fullName the person's full name
+   */
+  private void mockFullName(long identityId, String fullName) {
+    org.exoplatform.social.core.identity.model.Identity identity =
+                                                                Mockito.mock(org.exoplatform.social.core.identity.model.Identity.class);
+    org.exoplatform.social.core.identity.model.Profile profile =
+                                                              Mockito.mock(org.exoplatform.social.core.identity.model.Profile.class);
+    when(identity.getProfile()).thenReturn(profile);
+    when(profile.getFullName()).thenReturn(fullName);
+    when(identityManager.getIdentity(identityId)).thenReturn(identity);
+  }
+
+  @Test
+  public void toMomentWritesMinutesAndSecondsThenHours() {
+    assertEquals("[00:00 · 0s]", DocumentMcpTool.toMoment(0));
+    assertEquals("[00:59 · 59s]", DocumentMcpTool.toMoment(59));
+    assertEquals("[59:59 · 3599s]", DocumentMcpTool.toMoment(3599));
+    assertEquals("[1:00:00 · 3600s]", DocumentMcpTool.toMoment(3600));
+    assertEquals("[10:00:01 · 36001s]", DocumentMcpTool.toMoment(36001));
+  }
+
+  /**
+   * A transcript grouped into chapters is given after the list of its chapters,
+   * each with the moment it starts, in the marker the assistant links from, its
+   * title and its summary; a chapter with no title or no start is left out
+   * (EXO-92122).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdStartsWithTheChapters() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Who is here.\"},"
+            + "{\"start\":3725.6,\"index\":40,\"title\":\"Budget\",\"summary\":\"\"},"
+            + "{\"index\":41,\"title\":\"No start\"},{\"start\":3800.0,\"title\":\" \"}]");
+
+    assertEquals("""
+        Chapters:
+        - [00:00 · 0s] Welcome: Who is here.
+        - [1:02:05 · 3725s] Budget
+
+        Transcript:
+        the transcription""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  /**
+   * Asked with timestamps, a transcript grouped into chapters gives its chapters,
+   * then its segments, each starting with its moment (EXO-92112, EXO-92122).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdWithTimestampsGivesTheChaptersThenTheTimedSegments() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("Bonjour. Le budget.");
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Who is here.\"}]");
+    when(documentFileService.getTranscriptionSegments(eq(DOCUMENT_ID), anyLong()))
+        .thenReturn("[{\"start\":0.2,\"end\":1,\"text\":\"Bonjour.\"},{\"start\":65.9,\"end\":70,\"text\":\"Le budget.\"}]");
+
+    assertEquals("""
+        Chapters:
+        - [00:00 · 0s] Welcome: Who is here.
+
+        Transcript:
+        [00:00 · 0s] Bonjour.
+        [01:05 · 65s] Le budget.""", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, true));
+  }
+
+  /**
+   * Chapters that cannot be read, that hold no usable chapter, or whose read
+   * fails, leave the transcript alone (EXO-92122).
+   */
+  @Test
+  public void getDocumentTranscriptionByIdIgnoresUnreadableChapters() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn("the transcription");
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenReturn("not json");
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenReturn("[{\"summary\":\"untitled\"}]");
+    assertEquals("the transcription", documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+
+    when(documentFileService.getTranscriptionChapters(eq(DOCUMENT_ID), anyLong())).thenThrow(new IllegalStateException("repository"));
+    assertEquals("Expected a failure on the chapters never to take the transcript away",
+                 "the transcription",
+                 documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
   }
 
   @Test
@@ -307,7 +956,111 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
     when(documentFileService.getAudioTranscription(eq(DOCUMENT_ID), anyLong())).thenReturn(null);
 
-    assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID));
+    assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAQueuedOrRunningTranscription() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build(),
+                                                                                         TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.PROCESSING)
+                                                                                                   .progress("3/9")
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage().contains("queued"));
+    String running = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+    assertTrue(running, running.contains("in progress (3/9 pieces transcribed)"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsARunLostLongAgoAsStopped() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.PROCESSING)
+                                                                                                   .progress("3/9")
+                                                                                                   .updated(System.currentTimeMillis()
+                                                                                                       - TranscriptionState.STALE_MILLIS
+                                                                                                       - 1000)
+                                                                                                   .build());
+
+    String stopped = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue(stopped, stopped.contains("stopped without finishing"));
+    assertFalse("Expected a lost run never told as in progress", stopped.contains("in progress"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFileQueuedForLongAsStillQueued() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .updated(System.currentTimeMillis()
+                                                                                                       - TranscriptionState.STALE_MILLIS
+                                                                                                       - 1000)
+                                                                                                   .build());
+
+    String queued = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue("Expected a file waiting behind other runs told queued, not stopped: " + queued, queued.contains("queued"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFailedAttemptAsScheduledAgain() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.QUEUED)
+                                                                                                   .error("provider.timeout")
+                                                                                                   .updated(System.currentTimeMillis())
+                                                                                                   .build());
+
+    String retried = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue(retried, retried.contains("failed (the transcription service did not answer in time), and a new attempt is scheduled"));
+    assertFalse("Expected a pending retry never told as failed for good", retried.contains("Tell the user it failed"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsAFailedTranscriptionAndWhy() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "video/mp4"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.FAILED)
+                                                                                                   .error("ffmpeg.unavailable")
+                                                                                                   .build());
+
+    String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue(failed, failed.contains("failed: the server has no tool to convert this recording, which its format or its size needs"));
+    assertFalse("Expected a failed transcription never told as not ready yet", failed.contains("try again later"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsADisabledTranscriptionAsSwitchedOffOrUnavailable() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/ogg"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.FAILED)
+                                                                                                   .error("transcription.disabled")
+                                                                                                   .build());
+
+    String failed = assertThrows(IllegalStateException.class, () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage();
+
+    assertTrue(failed, failed.contains("transcription is switched off, or its transcription assistant is not available"));
+  }
+
+  @Test
+  public void getDocumentTranscriptionByIdTellsATranscriptWithNoSpeech() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "audio/ogg"));
+    when(documentFileService.getTranscriptionState(eq(DOCUMENT_ID), anyLong())).thenReturn(TranscriptionState.builder()
+                                                                                                   .status(TranscriptionStatus.DONE)
+                                                                                                   .build());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentTranscriptionById(DOCUMENT_ID, null)).getMessage().contains("no speech"));
   }
 
   @Test
@@ -320,6 +1073,35 @@ public class DocumentMcpToolTest {
 
     assertNotNull(models);
     assertEquals(2, models.size());
+  }
+
+  /**
+   * A negative limit lists nothing and reads nothing, as list_folder_children
+   * does: given to the storage, it would read every child of the folder.
+   * Mutant: the clamp dropped.
+   *
+   * @throws Exception never
+   */
+  /**
+   * A limit above the page bound reads at most that bound, on both folder
+   * listings. Mutant: the bound dropped from either clamp.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void folderListingsReadAtMostOneHundredChildren() throws Exception {
+    documentMcpTool.listFolderChildren(FOLDER_ID, 0, 5000, null);
+    documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, null, 0, 5000);
+
+    verify(documentFileService).getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_PAGE_SIZE), anyLong());
+    verify(documentFileService).getDocumentItems(any(), any(), eq(0), eq(DocumentMcpTool.MAX_PAGE_SIZE), anyLong(), anyBoolean());
+  }
+
+  @Test
+  public void getDocumentsByFolderIdWithANegativeLimitListsNothing() throws Exception {
+    assertEquals(List.of(), documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, null, null, -1));
+
+    verify(documentFileService, never()).getDocumentItems(any(), any(), anyInt(), anyInt(), anyLong(), anyBoolean());
   }
 
   @Test
@@ -355,7 +1137,7 @@ public class DocumentMcpToolTest {
                                     anyInt(),
                                     anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
 
-    List<DocumentFileModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null);
+    List<DocumentFileModel> models = documentMcpTool.searchDocuments("report", null, null, null, null, null, null, null);
 
     assertNotNull(models);
     assertEquals(1, models.size());
@@ -367,7 +1149,7 @@ public class DocumentMcpToolTest {
     when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(null);
 
     assertThrows(ObjectNotFoundException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null, null));
   }
 
   @Test
@@ -379,7 +1161,7 @@ public class DocumentMcpToolTest {
     when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(false);
 
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null));
+                 () -> documentMcpTool.searchDocuments("report", SPACE_ID, null, null, null, null, null, null));
   }
 
   @Test
@@ -433,7 +1215,7 @@ public class DocumentMcpToolTest {
                                                                                                                     "application/pdf"),
                                                                                                            folderNode(FOLDER_ID)));
 
-    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null);
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
 
     assertNotNull(models);
     assertEquals(2, models.size());
@@ -441,7 +1223,7 @@ public class DocumentMcpToolTest {
 
   @Test
   public void listFolderChildrenBlankFolderFails() {
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.listFolderChildren(" ", null, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.listFolderChildren(" ", null, null, null));
   }
 
   @Test
@@ -678,49 +1460,7 @@ public class DocumentMcpToolTest {
     return fileNode;
   }
 
-  @Test
-  public void createDocumentTextExtensionSucceeds() throws Exception {
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    // First call = pre-import snapshot (empty), second call = after import (the new file).
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
-        .thenReturn(Collections.emptyList())
-        .thenReturn(List.of(fileNodeNamed("doc-txt", "notes.txt")));
 
-    // The name is used as-is (it already carries a .txt extension).
-    DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "plain text body");
-
-    assertNotNull(model);
-    assertEquals("doc-txt", model.getId());
-    // folderPath must be null (parent resolved from the folder id) and conflict
-    // "duplicate" (NOT "rename": the async import thread only understands
-    // "updateAll"/"duplicate", so "rename" silently creates nothing on a clash).
-    verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
-                                            eq(FOLDER_ID),
-                                            isNull(),
-                                            any(),
-                                            eq("duplicate"),
-                                            eq(currentIdentity),
-                                            eq(USER_IDENTITY_ID));
-  }
-
-  @Test
-  public void createDocumentResolvesByNameIgnoringConcurrentDifferentFile() throws Exception {
-    // Concurrency on the import/create path: while "notes.txt" is being created,
-    // another user drops a DIFFERENT-named file ("other.txt") into the same folder.
-    // The name-aware resolver must return the created "notes.txt", not the last
-    // added id ("other.txt") that the old reduce((a,b)->b) heuristic would pick.
-    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
-        .thenReturn(Collections.emptyList())
-        .thenReturn(List.of(fileNodeNamed("doc-txt", "notes.txt"), fileNodeNamed("concurrent-1", "other.txt")));
-
-    DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "plain text body");
-
-    assertNotNull(model);
-    assertEquals("doc-txt", model.getId());
-  }
 
   @Test
   public void createDocumentBlankNameFails() {
@@ -756,10 +1496,29 @@ public class DocumentMcpToolTest {
     for (String name : new String[] { "__MACOSX", "._photo.png", ".DS_Store" }) {
       IllegalArgumentException ex =
                                   assertThrows(IllegalArgumentException.class,
-                                               () -> documentMcpTool.uploadDocument(FOLDER_ID, name, base64, null, null, null));
+                                               () -> documentMcpTool.uploadDocument(FOLDER_ID, name, base64, null, null, null, null, null));
       assertTrue(ex.getMessage().contains("'" + name + "' is a macOS metadata name"));
     }
     verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+  }
+
+  /**
+   * A file sent in pieces is refused at its start under a macOS metadata
+   * name, before its name is checked in the folder and before any upload is
+   * opened, as a file sent in one call is.
+   * Mutant: the refusal removed from the start.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void startDocumentUploadWithMacOsMetadataNameFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    for (String name : new String[] { "__MACOSX", "._photo.png", ".DS_Store" }) {
+      IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.startDocumentUpload(FOLDER_ID, name, 5L, null));
+      assertTrue(ex.getMessage().contains("'" + name + "' is a macOS metadata name"));
+    }
+    verify(documentFileService, never()).checkUploadConflict(any(), any(), any(), anyLong());
   }
 
   @Test
@@ -893,35 +1652,43 @@ public class DocumentMcpToolTest {
     assertTrue(ex.getMessage().contains("already exists"));
   }
 
+  /**
+   * A file sent whole is filed at once with the conflict action asked, its
+   * bytes the decoded base64, and the staged upload is released; an unknown
+   * conflict action is refused before anything is staged.
+   * Mutants: the conflict action dropped or defaulted, the bytes not the
+   * decoded ones, the upload not released, an unknown action accepted.
+   *
+   * @throws Exception never
+   */
   @Test
   public void uploadDocumentFromBase64() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
-        .thenReturn(Collections.emptyList())
-        .thenReturn(List.of(fileNodeNamed("upl-1", "hello.txt")));
+    fileUploadsAs(fileNodeNamed("upl-1", "hello.txt"));
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
 
-    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null, null, null);
+    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null, null, null, "New_Version", null);
 
-    assertNotNull(model);
     assertEquals("upl-1", model.getId());
-    verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
-                                            eq(FOLDER_ID),
-                                            isNull(),
-                                            any(),
-                                            eq("duplicate"),
-                                            eq(currentIdentity),
-                                            eq(USER_IDENTITY_ID));
+    ArgumentCaptor<String> uploadId = ArgumentCaptor.forClass(String.class);
+    verify(documentFileService).saveUploadedDocument(eq(FOLDER_ID),
+                                                     uploadId.capture(),
+                                                     eq("hello.txt"),
+                                                     eq(UploadConflictAction.NEW_VERSION),
+                                                     eq(USER_IDENTITY_ID));
+    assertArrayEquals("hello".getBytes(), filedBytes.get(uploadId.getValue()));
+    verify(uploadService).removeUploadResource(uploadId.getValue());
+
+    assertTrue(assertThrows(IllegalArgumentException.class,
+                            () -> documentMcpTool.uploadDocument(FOLDER_ID, "hello.txt", base64, null, null, null, "merge", null)).getMessage()
+                                                                                                                         .contains("keep_both"));
+    verify(documentFileService).saveUploadedDocument(any(), any(), any(), any(), anyLong());
   }
 
   @Test
   public void uploadDocumentFromChatAttachment() throws Exception {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
-    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
-    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
-        .thenReturn(Collections.emptyList())
-        .thenReturn(List.of(fileNodeNamed("upl-att", "screenshot.png")));
+    fileUploadsAs(fileNodeNamed("upl-att", "screenshot.png"));
     // The client injects a platform attachment reference; the tool resolves its
     // bytes as the current user (ACL enforced) via the social AttachmentService.
     when(socialAttachmentService.getAttachmentFileIds(eq("activity"), eq("77"), eq(currentIdentity)))
@@ -935,17 +1702,15 @@ public class DocumentMcpToolTest {
     when(fileService.getFile(999L)).thenReturn(fileItem);
 
     // name left blank -> reused from the resolved attachment file name.
-    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77");
+    DocumentModel model = documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null, null);
 
     assertNotNull(model);
     assertEquals("upl-att", model.getId());
-    verify(documentFileService).importFiles(eq(String.valueOf(OWNER_ID)),
-                                            eq(FOLDER_ID),
-                                            isNull(),
-                                            any(),
-                                            eq("duplicate"),
-                                            eq(currentIdentity),
-                                            eq(USER_IDENTITY_ID));
+    verify(documentFileService).saveUploadedDocument(eq(FOLDER_ID),
+                                                     anyString(),
+                                                     eq("screenshot.png"),
+                                                     eq(UploadConflictAction.KEEP_BOTH),
+                                                     eq(USER_IDENTITY_ID));
   }
 
   @Test
@@ -954,26 +1719,26 @@ public class DocumentMcpToolTest {
         .thenReturn(java.util.Collections.emptyList());
 
     assertThrows(ObjectNotFoundException.class,
-                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77"));
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null, null));
   }
 
   @Test
   public void uploadDocumentRequiresExactlyOneSource() {
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
     // no source at all
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", null, null, null, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", null, null, null, null, null, null));
     // both base64 and url
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, "https://example.com/x.txt", null, null));
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, "https://example.com/x.txt", null, null, null, null));
     // both an attachment and base64
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, null, "activity", "77"));
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, null, "activity", "77", null, null));
   }
 
   @Test
   public void uploadDocumentBase64RequiresName() {
     String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, " ", base64, null, null, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.uploadDocument(FOLDER_ID, " ", base64, null, null, null, null, null));
   }
 
   @Test
@@ -1012,6 +1777,7 @@ public class DocumentMcpToolTest {
     // the tool must re-resolve the newly added file in the destination folder, by
     // name (the copy keeps the source's "report.pdf" name).
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -1025,6 +1791,112 @@ public class DocumentMcpToolTest {
     assertFalse(FOLDER_ID.equals(model.getId()));
   }
 
+  /**
+   * A copy into a folder already holding as many items as the scan reads is
+   * refused before anything is copied: the copy would make one more, outside
+   * the read made afterwards. The destination is read once and bounded, not
+   * listed whole. Mutants: the bound tested with {@code >} instead of
+   * {@code >=}; the copy run before the check; the duplicate's wording.
+   *
+   * @throws Exception when the tool fails
+   */
+  @Test
+  public void copyDocumentIntoAFolderAtTheScanBoundIsRefusedBeforeCopying() throws Exception {
+    when(documentFileService.getDocumentById(eq(DOCUMENT_ID), anyString())).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(eq(FOLDER_ID), anyString())).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN));
+
+    IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                    () -> documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID));
+
+    assertTrue(refusal.getMessage(), refusal.getMessage().startsWith("The target folder holds 1000 items or more"));
+    assertTrue(refusal.getMessage(), refusal.getMessage().contains("nothing was copied"));
+    verify(documentFileService, never()).copyDocument(anyString(), anyString(), anyLong());
+  }
+
+  /**
+   * A duplicate in a folder already holding as many items as the scan reads is
+   * refused before anything is duplicated, with advice the agent can follow:
+   * duplicate takes no target folder. Mutants: the bound tested with {@code >};
+   * the copy's wording.
+   *
+   * @throws Exception when the tool fails
+   */
+  @Test
+  public void duplicateDocumentInAFolderAtTheScanBoundIsRefusedBeforeDuplicating() throws Exception {
+    FileNode source = fileNode(DOCUMENT_ID, "application/pdf");
+    source.setParentFolderId(FOLDER_ID);
+    when(documentFileService.getDocumentById(eq(DOCUMENT_ID), anyString())).thenReturn(source);
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN));
+
+    IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                    () -> documentMcpTool.duplicateDocument(DOCUMENT_ID, "Copy of"));
+
+    assertTrue(refusal.getMessage(), refusal.getMessage().startsWith("The document's folder holds 1000 items or more"));
+    assertTrue(refusal.getMessage(), refusal.getMessage().contains("nothing was duplicated"));
+    assertTrue(refusal.getMessage(), refusal.getMessage().contains("copy_document"));
+    verify(documentFileService, never()).duplicateDocument(anyLong(), any(), any(), anyLong());
+  }
+
+  /**
+   * A copy into a folder one item under the bound goes through and is found:
+   * the folder then holds exactly as many items as the scan reads. Mutant: the
+   * read after the copy refused at {@code >=}.
+   *
+   * @throws Exception when the tool fails
+   */
+  @Test
+  public void copyDocumentIntoAFolderJustUnderTheScanBoundIsFound() throws Exception {
+    when(documentFileService.getDocumentById(eq(DOCUMENT_ID), anyString())).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(eq(FOLDER_ID), anyString())).thenReturn(folderNode(FOLDER_ID));
+    List<AbstractNode> before = scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN - 1);
+    List<AbstractNode> after = new ArrayList<>(before);
+    after.add(fileNodeNamed("copy-1", "report.pdf"));
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(before)
+        .thenReturn(after);
+
+    assertEquals("copy-1", documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID).getId());
+  }
+
+  /**
+   * When the destination grows past the bound between the two reads (another
+   * user adds an item), the copy has been made: the failure says so, names the
+   * folder and the tool to find it, and never says nothing was copied.
+   * Mutants: the overflow after the copy raised as the pre-copy refusal; the
+   * check dropped, so a copy outside the read is reported as not found.
+   *
+   * @throws Exception when the tool fails
+   */
+  @Test
+  public void aCopyMadeInAFolderThatGrewPastTheScanBoundSaysItWasMade() throws Exception {
+    when(documentFileService.getDocumentById(eq(DOCUMENT_ID), anyString())).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(eq(FOLDER_ID), anyString())).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN - 1))
+        .thenReturn(scannedFiles(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1));
+
+    IllegalStateException failure = assertThrows(IllegalStateException.class,
+                                                  () -> documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID));
+
+    assertTrue(failure.getMessage(), failure.getMessage().startsWith("The document was copied in folder " + FOLDER_ID));
+    assertTrue(failure.getMessage(), failure.getMessage().contains("list_folder_children"));
+    assertFalse(failure.getMessage(), failure.getMessage().contains("nothing was"));
+    verify(documentFileService).copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID);
+  }
+
+  /**
+   * @param count the number of files
+   * @return that many distinctly named files, as a folder read returns them
+   */
+  private List<AbstractNode> scannedFiles(int count) {
+    return java.util.stream.IntStream.range(0, count)
+                                     .mapToObj(i -> (AbstractNode) fileNodeNamed("f-" + i, "file" + i + ".pdf"))
+                                     .toList();
+  }
+
   @Test
   public void copyDocumentResolvesByNameIgnoringConcurrentDifferentFile() throws Exception {
     // Concurrency: while the copy of "report.pdf" is created, another user drops a
@@ -1032,6 +1904,7 @@ public class DocumentMcpToolTest {
     // folder-diff + reduce((a,b)->b) heuristic returns the last added id (here the
     // concurrent "other.pdf"); the name-aware resolver must return the real copy.
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -1049,6 +1922,7 @@ public class DocumentMcpToolTest {
     // ("report.pdf" and its " (1)" counter variant). The resolver must refuse to
     // guess and throw a clear error rather than silently return one of them.
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.copyDocument(DOCUMENT_ID, FOLDER_ID, USER_IDENTITY_ID)).thenReturn(folderNode(FOLDER_ID));
     when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
         .thenReturn(Collections.emptyList())
@@ -1057,6 +1931,37 @@ public class DocumentMcpToolTest {
     IllegalStateException ex = assertThrows(IllegalStateException.class,
                                             () -> documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID));
     assertTrue(ex.getMessage().contains("multiple candidates"));
+  }
+
+  /**
+   * A copied folder and a duplicated folder are found after the operation and
+   * returned, by their kind and their name. A file of the same name added
+   * meanwhile is not taken for the folder, and a
+   * file is still resolved among files only.
+   * Mutants: the copied node read among files only again, for the copy or the
+   * duplicate, or the kind ignored.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCopiedOrDuplicatedFolderIsFoundAfterTheOperation() throws Exception {
+    FolderNode source = folderNode(DOCUMENT_ID);
+    source.setParentFolderId(FOLDER_ID);
+    FolderNode copied = folderNode("copy-folder");
+    FolderNode duplicated = folderNode("dup-folder");
+    duplicated.setName("Copy of Projects");
+    FileNode sameNamedFile = fileNodeNamed("file-1", "Projects");
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(source);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(DOCUMENT_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong()))
+        .thenReturn(List.of())
+        .thenReturn(List.of(sameNamedFile, copied))
+        .thenReturn(List.of(source))
+        .thenReturn(List.of(source, duplicated));
+
+    assertEquals("copy-folder", documentMcpTool.copyDocument(DOCUMENT_ID, FOLDER_ID).getId());
+    assertEquals("dup-folder", documentMcpTool.duplicateDocument(DOCUMENT_ID, "Copy of").getId());
   }
 
   @Test
@@ -1217,7 +2122,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
 
-    DocumentModel model = documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, null);
+    DocumentModel model = documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, null, null);
 
     assertNotNull(model);
     assertEquals(DOCUMENT_ID, model.getId());
@@ -1232,10 +2137,80 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
     when(documentFileService.getFileVersions(DOCUMENT_ID, USERNAME)).thenReturn(List.of(fileVersion()));
 
-    documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, "reworded intro");
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, "updated body", null, null, null, null, "reworded intro", null);
 
     verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
     verify(documentFileService).updateVersionSummary(eq(DOCUMENT_ID), eq("version-1"), eq("reworded intro"), eq(USERNAME));
+  }
+
+  /**
+   * A new version's text content is capped at the upload size limit a new
+   * file is capped at, read from the same property: one byte over is refused
+   * before anything is stored, the limit itself is accepted. A base64 one is
+   * refused well below, by its length
+   * ({@link #aBase64FileLongerThanOneCallIsRefusedBeforeItIsDecoded}).
+   * Mutants: the cap removed, not the upload limit, or off by one.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aNewVersionsInlineContentIsCapped() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    int limit = 1024 * 1024;
+    String overText = "a".repeat(limit + 1);
+
+    org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
+    try {
+      assertThrows(IllegalArgumentException.class,
+                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, overText, null, null, null, null, null, null));
+      verify(documentFileService, never()).createNewVersion(any(), any(), any());
+
+      documentMcpTool.addDocumentVersion(DOCUMENT_ID, "a".repeat(limit), null, null, null, null, null, null);
+    } finally {
+      org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
+    }
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
+  }
+
+  /**
+   * In a call limited to a space, a file the platform created for the space
+   * (creator {@code __system}) gets no new version, as the Documents
+   * application lets no space member who isn't an administrator edit it, and
+   * a file a user created does; a call that isn't limited versions either,
+   * and one whose space can't be read is refused.
+   * Mutants: the creator check removed from the versioning, run on an
+   * unlimited call, or an unreadable space taken as unlimited.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceVersionsNoFileOfThePlatform() throws Exception {
+    String userFileId = "fe0688cd7f00010134384ab7e1b15a52";
+    FileNode systemFile = fileNode(DOCUMENT_ID, "text/plain");
+    systemFile.setCreatorUserName("__system");
+    FileNode userFile = fileNode(userFileId, "text/plain");
+    userFile.setCreatorUserName("jane");
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(systemFile);
+    when(documentFileService.getDocumentById(userFileId, USERNAME)).thenReturn(userFile);
+    lenient().when(documentFileService.hasEditPermissionOnDocument(any(), eq(USER_IDENTITY_ID))).thenReturn(true);
+
+    scopeSpaceId = 12L;
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null, null));
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+    documentMcpTool.addDocumentVersion(userFileId, "body", null, null, null, null, null, null);
+    verify(documentFileService).createNewVersion(eq(userFileId), eq(USERNAME), any());
+
+    scopeSpaceId = null;
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(userFileId, "body", null, null, null, null, null, null));
+    verify(documentFileService, times(1)).createNewVersion(eq(userFileId), any(), any());
+
+    scopeUnreadable = false;
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null, null);
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
   }
 
   @Test
@@ -1244,7 +2219,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
 
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null));
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, null));
   }
 
   @Test
@@ -1252,7 +2227,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
 
     assertThrows(IllegalArgumentException.class,
-                 () -> documentMcpTool.addDocumentVersion(FOLDER_ID, "body", null, null, null, null, null));
+                 () -> documentMcpTool.addDocumentVersion(FOLDER_ID, "body", null, null, null, null, null, null));
   }
 
   @Test
@@ -1261,7 +2236,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
 
     assertThrows(IllegalAccessException.class,
-                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null));
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "body", null, null, null, null, null, null));
   }
 
   @Test
@@ -1328,7 +2303,7 @@ public class DocumentMcpToolTest {
                                                              new org.exoplatform.social.core.identity.model.Identity("200");
     when(identityManager.getOrCreateUserIdentity("bob")).thenReturn(bob);
 
-    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null);
+    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null, null);
 
     // Must route through updatePermissions (grant + share), not the bare shareDocument
     // that only copies the recipient's pre-existing permissions onto the symlink.
@@ -1356,7 +2331,7 @@ public class DocumentMcpToolTest {
                                                                        new org.exoplatform.social.core.identity.model.Identity("300");
     when(identityManager.getOrCreateSpaceIdentity("engineering")).thenReturn(spaceIdentity);
 
-    documentMcpTool.shareDocument(DOCUMENT_ID, null, SPACE_ID, false);
+    documentMcpTool.shareDocument(DOCUMENT_ID, null, SPACE_ID, null, false);
 
     // notify=false -> the recipient is in toShare (granted access) but not in toNotify.
     verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
@@ -1370,9 +2345,9 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
 
     // neither recipient
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, null, null, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, null, null, null, null));
     // both recipients
-    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", SPACE_ID, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", SPACE_ID, null, null));
   }
 
   @Test
@@ -1380,7 +2355,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
 
-    assertThrows(IllegalAccessException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null, null));
   }
 
   @Test
@@ -1411,7 +2386,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(node);
     when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
 
-    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null);
+    documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, null, null);
 
     verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
                                                   argThat((NodePermission np) -> np.getPermissions()
@@ -1481,6 +2456,1825 @@ public class DocumentMcpToolTest {
     doThrow(new ObjectNotFoundException("not a favorite")).when(favoriteService).deleteFavorite(any());
 
     assertThrows(IllegalStateException.class, () -> documentMcpTool.unfavoriteDocument(DOCUMENT_ID));
+  }
+
+  /**
+   * The root folder of a space is found by the space's name, whatever its
+   * case and surrounding whitespace, among the user's spaces, and read by the
+   * id the name resolves to.
+   * Mutants: the name ignored, or resolved to another space.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getRootFolderBySpaceName() throws Exception {
+    memberOfLegalAndMarketing();
+    when(documentFileService.getSpaceRootFolder(eq(6L), eq(currentIdentity))).thenReturn(folderNode(FOLDER_ID));
+
+    assertEquals(FOLDER_ID, documentMcpTool.getRootFolderBySpace(null, "  legal ").getId());
+    assertEquals(FOLDER_ID, documentMcpTool.getRootFolderBySpace(0L, "LEGAL").getId());
+  }
+
+  /**
+   * A space given both by id and by name, or by neither, is refused before
+   * any space is read.
+   * Mutants: one of the two taken silently, or a missing space read as 0.
+   */
+  @Test
+  public void getRootFolderBySpaceTakesExactlyOneOfIdAndName() throws Exception {
+    memberOfLegalAndMarketing();
+
+    IllegalArgumentException both = assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.getRootFolderBySpace(6L, "Legal"));
+    assertTrue(both.getMessage(), both.getMessage().contains("not both"));
+    IllegalArgumentException neither = assertThrows(IllegalArgumentException.class,
+                                                    () -> documentMcpTool.getRootFolderBySpace(null, " "));
+    assertTrue(neither.getMessage(), neither.getMessage().contains("space_name"));
+    verify(documentFileService, never()).getSpaceRootFolder(anyLong(), any());
+  }
+
+  /**
+   * An unknown space id is answered with how to find the space: by its name,
+   * or with get_my_spaces.
+   * Mutants: the storage's bare message passed through.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getRootFolderBySpaceWithUnknownIdSaysHowToFindTheSpace() throws Exception {
+    when(documentFileService.getSpaceRootFolder(eq(7L), eq(currentIdentity))).thenThrow(new ObjectNotFoundException("Space with id 7 doesn't exist"));
+
+    ObjectNotFoundException e = assertThrows(ObjectNotFoundException.class, () -> documentMcpTool.getRootFolderBySpace(7L, null));
+
+    assertEquals("Space with id 7 doesn't exist. Pass space_name (the space's name) or find it with get_my_spaces.", e.getMessage());
+  }
+
+  /**
+   * A name of a space the user isn't a member of, or of no space, is refused
+   * with the user's closest spaces, and no root folder is read.
+   * Mutants: a space searched outside the user's spaces.
+   */
+  @Test
+  public void getRootFolderBySpaceNameOutsideTheUsersSpacesIsRefused() throws Exception {
+    memberOfLegalAndMarketing();
+
+    ObjectNotFoundException e = assertThrows(ObjectNotFoundException.class,
+                                             () -> documentMcpTool.getRootFolderBySpace(null, "Finance"));
+
+    assertTrue(e.getMessage(), e.getMessage().contains("'Legal' (space_id 6)"));
+    verify(documentFileService, never()).getSpaceRootFolder(anyLong(), any());
+  }
+
+  /**
+   * In a call limited to a space, a name of that space is read, a name of
+   * another space of the user is refused as the space scope refuses another
+   * space's id, before any root folder is read, and a name is refused when
+   * the call's space can't be read.
+   * Mutants: the scope not compared, the comparison inverted, or an
+   * unreadable scope taken as unlimited.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceNamesThatSpaceOnly() throws Exception {
+    memberOfLegalAndMarketing();
+    when(documentFileService.getSpaceRootFolder(eq(6L), eq(currentIdentity))).thenReturn(folderNode(FOLDER_ID));
+    scopeSpaceId = 6L;
+
+    assertEquals(FOLDER_ID, documentMcpTool.getRootFolderBySpace(null, "Legal").getId());
+    IllegalAccessException e = assertThrows(IllegalAccessException.class,
+                                            () -> documentMcpTool.getRootFolderBySpace(null, "Marketing"));
+    assertTrue(e.getMessage(), e.getMessage().contains("limited to the space with id 6"));
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.searchDocuments("report", null, "Marketing", null, null, null, null, null));
+    verify(documentFileService, never()).getSpaceRootFolder(eq(5L), any());
+
+    scopeSpaceId = null;
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.getRootFolderBySpace(null, "Legal"));
+  }
+
+  /**
+   * A search in a space given by its name searches that space's documents.
+   * Mutants: the name ignored.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsBySpaceName() throws Exception {
+    Space legal = memberOfLegalAndMarketing();
+    when(spaceService.getSpaceById("6")).thenReturn(legal);
+    when(spaceService.canViewSpace(eq(legal), eq(USERNAME))).thenReturn(true);
+    when(identityManager.getOrCreateSpaceIdentity("legal")).thenReturn(new org.exoplatform.social.core.identity.model.Identity("306"));
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                    eq(currentIdentity),
+                                    anyInt(),
+                                    anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
+
+    assertEquals(1, documentMcpTool.searchDocuments("report", null, "legal", null, null, null, null, null).size());
+
+    verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> Long.valueOf(306L).equals(filter.getOwnerId())),
+                                       eq(currentIdentity),
+                                       anyInt(),
+                                       anyInt());
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.searchDocuments("report", 6L, "legal", null, null, null, null, null));
+  }
+
+  /**
+   * A document is shared with a space given by its name, and a name is one
+   * more recipient: with a username or a space id, it is refused.
+   * Mutants: the name ignored, or counted apart from the other recipients.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void shareDocumentWithSpaceByName() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    Space legal = memberOfLegalAndMarketing();
+    when(spaceService.getSpaceById("6")).thenReturn(legal);
+    when(identityManager.getOrCreateSpaceIdentity("legal")).thenReturn(new org.exoplatform.social.core.identity.model.Identity("306"));
+
+    documentMcpTool.shareDocument(DOCUMENT_ID, null, null, "Legal", false);
+
+    verify(documentFileService).updatePermissions(eq(DOCUMENT_ID),
+                                                  argThat((NodePermission np) -> np.getToShare().containsKey(306L)),
+                                                  eq(USER_IDENTITY_ID));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, "bob", null, "Legal", null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.shareDocument(DOCUMENT_ID, null, 6L, "Legal", null));
+  }
+
+  /**
+   * Makes the user a member of the spaces Legal (id 6) and Marketing (id 5).
+   *
+   * @return the Legal space
+   */
+  private Space memberOfLegalAndMarketing() {
+    Space legal = new Space();
+    legal.setId("6");
+    legal.setDisplayName("Legal");
+    legal.setPrettyName("legal");
+    Space marketing = new Space();
+    marketing.setId("5");
+    marketing.setDisplayName("Marketing");
+    marketing.setPrettyName("marketing");
+    when(spaceService.getMemberSpaces(USERNAME)).thenReturn(SpaceNameResolverTest.listAccessOf(marketing, legal));
+    return legal;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reading a large document part by part, and its outline
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Builds a part of a document's text with an outline: "Intro" (level 1) at
+   * 0, "Sub" (level 2) at 5, "Next" (level 1) at 12, over a 20-character
+   * text.
+   *
+   * @param text the part's text
+   * @param offset where it starts
+   * @return the part
+   */
+  private static org.exoplatform.documents.model.DocumentTextPage textPage(String text, long offset) {
+    return new org.exoplatform.documents.model.DocumentTextPage(text,
+                                                               offset,
+                                                               20,
+                                                               false,
+                                                               List.of(new org.exoplatform.documents.model.DocumentOutlineEntry(0, 1, "Intro", 0, null),
+                                                                       new org.exoplatform.documents.model.DocumentOutlineEntry(1, 2, "Sub", 5, null),
+                                                                       new org.exoplatform.documents.model.DocumentOutlineEntry(2, 1, "Next", 12, 3)),
+                                                               DocumentTextContent.Status.EXTRACTED);
+  }
+
+  /**
+   * read_document_text checks the user can read the document, then reads by
+   * offset 40000 characters when no number is set, and gives where the next
+   * part starts, none at the end of the text; a number past the largest is
+   * brought back to it.
+   * Mutants: the access check dropped, the default or the cap changed, the
+   * next offset given at the end of the text.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void readDocumentTextReadsByOffsetAndGivesTheNextOne() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, DocumentMcpTool.DEFAULT_TEXT_PART_CHARS)).thenReturn(textPage("0123456789", 0));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 10, DocumentMcpTool.MAX_TEXT_PART_CHARS)).thenReturn(textPage("abcdefghij", 10));
+
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel first = documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, null);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel last = documentMcpTool.readDocumentText(DOCUMENT_ID, 10L, 999_999, null);
+
+    assertEquals("0123456789", first.text());
+    assertEquals(Long.valueOf(10), first.nextOffset());
+    assertEquals(20, first.totalChars());
+    assertEquals(20, last.endOffset());
+    assertEquals(null, last.nextOffset());
+    assertEquals(null, last.section());
+    when(documentFileService.getDocumentById("ce0688cd7f00010134384ab7e1b15a49", USERNAME)).thenThrow(new IllegalAccessException("no"));
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.readDocumentText("ce0688cd7f00010134384ab7e1b15a49", null, null, null));
+    verify(documentFileService, never()).getFileTextPage(eq("ce0688cd7f00010134384ab7e1b15a49"), anyLong(), anyInt());
+  }
+
+  /**
+   * A section is read from its heading's offset up to the next heading of
+   * the same or a higher level, a deeper one not ending it; the next offset it
+   * gives, passed back unchanged, reads the rest of the section, and an offset
+   * before the section starts at its heading; there is no next part past the
+   * section's end.
+   * Mutants: the section's start ignored, the offset counted from the
+   * section's start, a deeper heading ending it, the read going past its end,
+   * the next offset past it.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void readDocumentTextReadsOneSectionUpToTheNextHeadingOfItsLevel() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    String text = "01234567890123456789";
+    when(documentFileService.getFileTextPage(eq(DOCUMENT_ID), anyLong(), anyInt())).thenAnswer(invocation -> {
+      int from = (int) Math.min((long) invocation.getArgument(1), text.length());
+      int length = invocation.getArgument(2);
+      return textPage(text.substring(from, Math.min(text.length(), from + length)), from);
+    });
+
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel intro = documentMcpTool.readDocumentText(DOCUMENT_ID, 2L, 100, 0);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel sub = documentMcpTool.readDocumentText(DOCUMENT_ID, null, 4, 1);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel subEnd = documentMcpTool.readDocumentText(DOCUMENT_ID,
+                                                                                                         sub.nextOffset(),
+                                                                                                         100,
+                                                                                                         1);
+    org.exoplatform.documents.mcp.model.DocumentTextPartModel before = documentMcpTool.readDocumentText(DOCUMENT_ID, 1L, 4, 1);
+
+    assertEquals("Intro", intro.section().title());
+    assertEquals("2345678901", intro.text());
+    assertEquals(12, intro.section().endOffset());
+    assertEquals(null, intro.nextOffset());
+    assertEquals("5678", sub.text());
+    assertEquals(Long.valueOf(9), sub.nextOffset());
+    assertEquals(12, sub.section().endOffset());
+    assertEquals("901", subEnd.text());
+    assertEquals(null, subEnd.nextOffset());
+    assertEquals("5678", before.text());
+  }
+
+  /**
+   * A section the outline doesn't have is refused with the number of
+   * headings and the tool listing them.
+   * Mutants: the bound check dropped or off by one.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void readDocumentTextRefusesASectionTheOutlineDoesNotHave() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, 0)).thenReturn(textPage("", 0));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, 3));
+    assertTrue(error.getMessage().contains("3 headings"));
+    assertTrue(error.getMessage().contains("get_document_outline"));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, -1));
+  }
+
+  /**
+   * get_document_outline lists the headings, each section ending at the
+   * next heading of the same or a higher level or at the end of the text,
+   * with its page when it has one.
+   * Mutants: a section ended by a deeper heading, the last one not ending at
+   * the text's end, the page dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentOutlineListsTheHeadingsAndWhereTheirSectionsEnd() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, 0)).thenReturn(textPage("", 0));
+
+    org.exoplatform.documents.mcp.model.DocumentOutlineModel outline = documentMcpTool.getDocumentOutline(DOCUMENT_ID);
+
+    assertEquals(20, outline.totalChars());
+    assertEquals(List.of(12L, 12L, 20L), outline.headings().stream().map(h -> h.endOffset()).toList());
+    assertEquals(Integer.valueOf(3), outline.headings().get(2).page());
+  }
+
+  /**
+   * Two headings of one level starting at one offset, two bookmarks on one
+   * PDF page, do not give the first an empty section: it ends at the next
+   * heading starting after it.
+   * Mutants: the section ended at a heading sharing its start.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentOutlineEndsASectionAtAHeadingStartingAfterIt() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, 0))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("",
+                                                                         0,
+                                                                         20,
+                                                                         false,
+                                                                         List.of(new org.exoplatform.documents.model.DocumentOutlineEntry(0, 1, "One", 4, 2),
+                                                                                 new org.exoplatform.documents.model.DocumentOutlineEntry(1, 1, "Two", 4, 2),
+                                                                                 new org.exoplatform.documents.model.DocumentOutlineEntry(2, 1, "Three", 10, 3)),
+                                                                         DocumentTextContent.Status.EXTRACTED));
+
+    org.exoplatform.documents.mcp.model.DocumentOutlineModel outline = documentMcpTool.getDocumentOutline(DOCUMENT_ID);
+
+    assertEquals(10, outline.headings().get(0).endOffset());
+    assertEquals(10, outline.headings().get(1).endOffset());
+    assertEquals(20, outline.headings().get(2).endOffset());
+  }
+
+  /**
+   * A large document still being read, or waiting behind other large ones,
+   * says to call again, one too large even for parts says so, and any other
+   * reason is the one-shot tool's.
+   * Mutants: the being-read answer worded as a failure or naming only this
+   * document's reading, the reasons swapped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void readDocumentTextSaysWhyThereIsNoText() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextPage(eq(DOCUMENT_ID), anyLong(), anyInt()))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.BUSY))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.TOO_LARGE))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.NO_TEXT));
+
+    String busy = assertThrows(IllegalStateException.class,
+                               () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, null)).getMessage();
+    assertTrue(busy.contains("Call the same tool again"));
+    assertTrue(busy.contains("or other large documents are"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentOutline(DOCUMENT_ID)).getMessage().contains("even part by part"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.readDocumentText(DOCUMENT_ID, null, null, null)).getMessage()
+                                                                                                    .contains("no text was found"));
+  }
+
+  /**
+   * A file too large to be read in one go gives the first part read part by
+   * part, with the text's length and the offset to read on; a text that fits
+   * in that part comes whole, a cut one says so; a file too large even part
+   * by part, or one still being read, says it.
+   * Mutants: the refusal kept, the note dropped or with the wrong offset, a
+   * part smaller than the largest, the cut not told, whether the whole text
+   * fits in the part or not.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentContentByIdReadsTheFirstPartOfAFileTooLargeForOneGo() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(DocumentTextContent.none(DocumentTextContent.Status.TOO_LARGE));
+    when(documentFileService.getFileTextPage(DOCUMENT_ID, 0, DocumentMcpTool.MAX_TEXT_PART_CHARS))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("0123456789", 0, 500_000, false, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("whole", 0, 5, false, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("cut", 0, 3, true, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(new org.exoplatform.documents.model.DocumentTextPage("start", 0, 900, true, List.of(), DocumentTextContent.Status.EXTRACTED))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.TOO_LARGE))
+        .thenReturn(org.exoplatform.documents.model.DocumentTextPage.none(DocumentTextContent.Status.BUSY));
+
+    String first = documentMcpTool.getDocumentContentById(DOCUMENT_ID);
+    assertTrue(first.startsWith("0123456789\n\n["));
+    assertTrue(first.contains("500000 characters long"));
+    assertTrue(first.contains("read_document_text with offset=10"));
+    assertEquals("whole", documentMcpTool.getDocumentContentById(DOCUMENT_ID));
+    assertTrue(documentMcpTool.getDocumentContentById(DOCUMENT_ID).contains("it was cut at the most characters read"));
+    String cutFirst = documentMcpTool.getDocumentContentById(DOCUMENT_ID);
+    assertTrue(cutFirst.contains("900 characters long once cut at the most characters read"));
+    assertTrue(cutFirst.contains("offset=5"));
+    assertFalse(first.contains("once cut"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID)).getMessage().contains("even part by part"));
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.getDocumentContentById(DOCUMENT_ID)).getMessage().contains("Call the same tool again"));
+  }
+
+  /**
+   * The one-shot read says when its text was cut and where to read on.
+   * Mutants: the cut not told, an offset given, the pointer dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentContentByIdTellsACutTextAndPointsToThePartTools() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getFileTextContent(DOCUMENT_ID)).thenReturn(DocumentTextContent.truncated("0123456789"));
+
+    String text = documentMcpTool.getDocumentContentById(DOCUMENT_ID);
+
+    assertTrue(text.startsWith("0123456789"));
+    assertTrue(text.contains("get_document_outline and read_document_text"));
+    // this text's length is no position in the text read part by part, so none is given
+    assertFalse(text.contains("offset 10"));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rights on a document, and the documents changed since a date
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Builds a child of a folder last changed at the given time.
+   *
+   * @param id the child id
+   * @param folder true for a folder, false for a file
+   * @param modifiedDate the last change, in milliseconds
+   * @return the child
+   */
+  private AbstractNode childChangedAt(String id, boolean folder, long modifiedDate) {
+    AbstractNode node = folder ? folderNode(id) : fileNode(id, "application/pdf");
+    node.setModifiedDate(modifiedDate);
+    return node;
+  }
+
+  /**
+   * Without a date, the page is the storage's, which pages over the listing
+   * itself: the offset and the limit are passed through. A negative limit
+   * asks nothing, the storage reading every child when given none.
+   * Mutants: the offset or the limit not passed, the page cut again here, a
+   * negative limit passed to the storage.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenPassesThePageToTheStorage() throws Exception {
+    when(documentFileService.getFolderChildNodes(any(), eq(2), eq(2), anyLong())).thenReturn(List.of(childChangedAt("c", false, 1L),
+                                                                                                    childChangedAt("d", false, 1L)));
+
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, 2, 2, null);
+
+    assertEquals(List.of("c", "d"), models.stream().map(DocumentModel::getId).toList());
+    assertEquals(0, documentMcpTool.listFolderChildren(FOLDER_ID, 0, -1, null).size());
+    verify(documentFileService, times(1)).getFolderChildNodes(any(), anyInt(), anyInt(), anyLong());
+  }
+
+  /**
+   * With updated_since, only the children changed since then are listed,
+   * folders and files alike, the most recent first, the page cut after the
+   * sort. A date alone, without a time, is the start of that day in UTC.
+   * Mutants: the filter dropped or inverted, the sort dropped or reversed,
+   * the page cut before the sort, the date read in another zone.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenUpdatedSinceKeepsTheChangedOnesMostRecentFirst() throws Exception {
+    long since = java.time.LocalDate.parse("2026-10-01").atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli();
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(List.of(childChangedAt("old-folder", true, since - 1),
+                            childChangedAt("new-folder", true, since + 10),
+                            childChangedAt("same-time", false, since),
+                            childChangedAt("newest", false, since + 50)));
+
+    List<DocumentModel> models = documentMcpTool.listFolderChildren(FOLDER_ID, null, 2, "2026-10-01");
+
+    assertEquals(List.of("newest", "new-folder"), models.stream().map(DocumentModel::getId).toList());
+  }
+
+  /**
+   * A folder holding more children than the scan reads is refused with
+   * updated_since, rather than answered with part of its changes, and the
+   * refusal names the search to use instead.
+   * Mutants: the bound check dropped, or applied at the bound itself.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenUpdatedSinceRefusesAFolderTooLargeToScan() throws Exception {
+    List<AbstractNode> children = new java.util.ArrayList<>();
+    for (int i = 0; i <= DocumentMcpTool.MAX_SCANNED_CHILDREN; i++) {
+      children.add(childChangedAt("child-" + i, false, 1L));
+    }
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(children)
+        .thenReturn(children.subList(0, DocumentMcpTool.MAX_SCANNED_CHILDREN));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "2026-10-01"));
+    assertTrue(error.getMessage().contains("search_documents"));
+    assertEquals(0, documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "2026-10-01").size());
+  }
+
+  /**
+   * A date the tool can't read is refused with the accepted forms, never
+   * taken as no date; a date-time with an offset is read with it.
+   * Mutants: an unreadable date ignored, the offset dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void updatedSinceIsReadAsAnIsoDateOrRefused() throws Exception {
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "last week"));
+    assertTrue(error.getMessage().contains("ISO-8601"));
+    // a year too far for a date in milliseconds is refused the same way, not with an overflow
+    for (String farAway : List.of("+999999999-12-31", "+999999999-12-31T00:00:00Z", "+999999999-12-31T00:00:00")) {
+      IllegalArgumentException overflow = assertThrows(IllegalArgumentException.class,
+                                                       () -> documentMcpTool.listFolderChildren(FOLDER_ID, null, null, farAway));
+      assertTrue(overflow.getMessage().contains("ISO-8601"));
+    }
+
+    long since = java.time.OffsetDateTime.parse("2026-10-01T10:00:00+02:00").toInstant().toEpochMilli();
+    when(documentFileService.getFolderChildNodes(any(), eq(0), eq(DocumentMcpTool.MAX_SCANNED_CHILDREN + 1), anyLong()))
+        .thenReturn(List.of(childChangedAt("before", false, since - 1), childChangedAt("after", false, since)));
+    assertEquals(List.of("after"),
+                 documentMcpTool.listFolderChildren(FOLDER_ID, null, null, "2026-10-01T10:00:00+02:00")
+                                .stream()
+                                .map(DocumentModel::getId)
+                                .toList());
+  }
+
+  /**
+   * search_documents with updated_since and no query searches the files
+   * changed since then, the most recent first; with neither, it is refused
+   * before the search runs.
+   * Mutants: the date not set on the filter, the sort not set or ascending,
+   * the query still required, the refusal dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsUpdatedSinceSearchesTheChangedFilesMostRecentFirst() throws Exception {
+    long since = java.time.Instant.parse("2026-10-01T00:00:00Z").toEpochMilli();
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                    eq(currentIdentity),
+                                    anyInt(),
+                                    anyInt())).thenReturn(List.of(fileNode(DOCUMENT_ID, "application/pdf")));
+
+    assertEquals(1, documentMcpTool.searchDocuments(null, null, null, FOLDER_ID, null, null, null, "2026-10-01").size());
+
+    verify(documentFileService).search(argThat((org.exoplatform.documents.model.DocumentTimelineFilter filter) -> Long.valueOf(since)
+                                                                                                                       .equals(filter.getAfterDate())
+        && filter.getSortField() == org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE
+        && !filter.isAscending()
+        && FOLDER_ID.equals(filter.getParentFolderId())), eq(currentIdentity), anyInt(), anyInt());
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.searchDocuments(" ", null, null, FOLDER_ID, null, null, null, null));
+    verify(documentFileService, Mockito.times(1)).search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class),
+                                                         any(),
+                                                         anyInt(),
+                                                         anyInt());
+  }
+
+  /**
+   * The listed folders and files carry the rights the storage computed for
+   * the user, the owner's being all of them as the repository grants, and a
+   * folder its last change; a document whose rights weren't computed leaves
+   * them unknown rather than false.
+   * Mutants: the rights not copied, edit and delete swapped, unknown rights
+   * reported as false, the owner's rights left to the entries, the folder's
+   * date dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listedDocumentsCarryTheUsersRightsAndTheFoldersLastChange() throws Exception {
+    AbstractNode folder = childChangedAt(FOLDER_ID, true, 1_000L);
+    folder.setAcl(new NodePermission(true, true, false, false, null, null, null, null));
+    AbstractNode file = childChangedAt(DOCUMENT_ID, false, 1L);
+    file.setAcl(new NodePermission(true, false, true, false, null, null, null, null));
+    AbstractNode unknown = childChangedAt("unknown", false, 1L);
+    AbstractNode owned = childChangedAt("owned", true, 1L);
+    owned.setCreatorUserName(USERNAME);
+    owned.setAcl(new NodePermission(true, false, false, false, null, null, null, null));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(folder,
+                                                                                                           file,
+                                                                                                           unknown,
+                                                                                                           owned));
+
+    List<DocumentModel> models;
+    // the creator's user card is not what this test checks
+    try (MockedStatic<io.meeds.mcp.server.tool.util.UserToolUtils> users = Mockito.mockStatic(io.meeds.mcp.server.tool.util.UserToolUtils.class)) {
+      models = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
+    }
+
+    assertEquals(Boolean.TRUE, models.get(0).getCanEdit());
+    assertEquals(Boolean.FALSE, models.get(0).getCanDelete());
+    assertNotNull(((DocumentFolderModel) models.get(0)).getUpdatedDate());
+    assertEquals(Boolean.FALSE, models.get(1).getCanEdit());
+    assertEquals(Boolean.TRUE, models.get(1).getCanDelete());
+    assertEquals(null, models.get(2).getCanEdit());
+    assertEquals(null, models.get(2).getCanDelete());
+    // the repository grants every right to the owner, whatever the entries say
+    assertEquals(Boolean.TRUE, models.get(3).getCanEdit());
+    assertEquals(Boolean.TRUE, models.get(3).getCanDelete());
+  }
+
+  /**
+   * A shortcut listed in a folder carries no rights, its own not being its
+   * target's, and names its target, whose id the agent uses to add documents
+   * to the shortcut's folder, asking get_document_permissions for its rights
+   * there; the other children keep theirs. The same for
+   * get_documents_by_folder_id, which lists the same children.
+   * Mutants: the shortcut's own rights copied, the target not named, the
+   * rights of a plain child dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listedShortcutsCarryTheirTargetAndNoRights() throws Exception {
+    AbstractNode shortcut = childChangedAt("shortcut-id", true, 1L);
+    shortcut.setSourceID("target-id");
+    shortcut.setCreatorUserName(USERNAME);
+    shortcut.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
+    AbstractNode file = childChangedAt(DOCUMENT_ID, false, 1L);
+    file.setAcl(new NodePermission(true, true, false, false, null, null, null, null));
+    when(documentFileService.getFolderChildNodes(any(), anyInt(), anyInt(), anyLong())).thenReturn(List.of(shortcut, file));
+    Mockito.<List<? extends AbstractNode>>when(documentFileService.getDocumentItems(any(), any(), anyInt(), anyInt(), anyLong(), anyBoolean()))
+           .thenReturn(List.of(shortcut, file));
+
+    List<DocumentModel> listed;
+    List<DocumentModel> byFolder;
+    // the creator's user card is not what this test checks
+    try (MockedStatic<io.meeds.mcp.server.tool.util.UserToolUtils> users = Mockito.mockStatic(io.meeds.mcp.server.tool.util.UserToolUtils.class)) {
+      listed = documentMcpTool.listFolderChildren(FOLDER_ID, null, null, null);
+      byFolder = documentMcpTool.getDocumentsByFolderId(FOLDER_ID, null, null, null, null);
+    }
+
+    for (List<DocumentModel> models : List.of(listed, byFolder)) {
+      assertEquals("target-id", models.get(0).getShortcutTargetId());
+      assertNull(models.get(0).getCanEdit());
+      assertNull(models.get(0).getCanDelete());
+      assertNull(models.get(1).getShortcutTargetId());
+      assertEquals(Boolean.TRUE, models.get(1).getCanEdit());
+      assertEquals(Boolean.FALSE, models.get(1).getCanDelete());
+    }
+  }
+
+  /**
+   * Every tool that writes in a folder through the storage's own node lookup
+   * refuses a shortcut's id as that folder before writing anything, naming the
+   * folder it points to and the argument to pass it as: create_folder,
+   * create_document_from_template, move_document, copy_document and
+   * create_document_shortcut. A shortcut's id resolves to its target for the
+   * reads and the rights, while the storage would write under the shortcut
+   * node itself. An upload files through a shortcut into its target:
+   * {@link #aShortcutsRightIsItsTargetFolders}.
+   * Mutants: the check dropped from any one of the tools, the argument not
+   * named.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void everyToolWritingInAFolderRefusesAFolderShortcutNamingItsTarget() throws Exception {
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.getRootFolderOwnerId(anyString())).thenReturn(OWNER_ID);
+
+    assertRefusedAsAShortcut(() -> documentMcpTool.createFolder("shortcut-id", "New"), "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createFolder("shortcut-id", "A/B"), "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createDocumentFromTemplate("shortcut-id", "Q3 report", "docx"),
+                             "parent_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.moveDocument(DOCUMENT_ID, "shortcut-id", null), "destination_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.copyDocument(DOCUMENT_ID, "shortcut-id"), "destination_folder_id");
+    assertRefusedAsAShortcut(() -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID, "shortcut-id", null),
+                             "destination_folder_id");
+
+    verify(documentFileService, never()).createFolder(anyLong(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).getFolderChildNodes(any(), anyInt(), anyInt(), anyLong());
+    verify(documentFileService, never()).createDocumentFromTemplate(anyLong(), any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).importFiles(any(), any(), any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+    verify(documentFileService, never()).copyDocument(any(), any(), anyLong());
+    verify(documentFileService, never()).createShortcut(any(), any(), any(), any());
+  }
+
+  /**
+   * A shortcut to a file given as the folder a tool writes in is refused as no
+   * folder, naming the file, never as a shortcut to a folder whose id the
+   * agent would then pass.
+   * Mutant: a shortcut to a file refused as a shortcut to a folder.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileShortcutGivenAsTheFolderIsRefusedAsNoFolder() throws Exception {
+    when(documentFileService.getDocumentById("file-shortcut-id", USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.moveDocument(DOCUMENT_ID, "file-shortcut-id", null));
+
+    assertTrue(error.getMessage(), error.getMessage().contains("shortcut to the file " + DOCUMENT_ID + ", not a folder"));
+    assertTrue(error.getMessage(), error.getMessage().contains("destination_folder_id"));
+    assertFalse(error.getMessage(), error.getMessage().contains("shortcut to the folder"));
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+  }
+
+  /**
+   * A file's own id given as the folder a move writes in is refused as no
+   * folder before the move reaches the storage. An upload into a file is
+   * {@link #anUploadIntoAFileIsRefused}.
+   * Mutant: a node whose id is the one given returned as the folder whatever
+   * its kind.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileGivenAsTheFolderIsRefusedAsNoFolder() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+
+    IllegalArgumentException move = assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.moveDocument(DOCUMENT_ID, DOCUMENT_ID, null));
+
+    assertTrue(move.getMessage(), move.getMessage().contains("The id " + DOCUMENT_ID + " is a file, not a folder"));
+    assertTrue(move.getMessage(), move.getMessage().contains("destination_folder_id"));
+    verify(documentFileService, never()).moveDocument(anyLong(), any(), any(), anyLong(), any());
+  }
+
+  /**
+   * In a call limited to a space, a folder shortcut given as the destination
+   * of a move, a copy or a link is refused as a shortcut, naming the folder to
+   * pass, not as a destination outside the space: a shortcut node belongs to
+   * no space drive.
+   * Mutant: the space checked before the destination is resolved.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aCallLimitedToASpaceRefusesAFolderShortcutAsAShortcut() throws Exception {
+    String shortcutId = "00000000000000000000000000000005";
+    when(documentFileService.getDocumentById(shortcutId, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    lenient().when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    // reached only if the space were checked first: a shortcut node belongs to no space drive
+    lenient().when(documentFileService.getDocumentSpaceGroupId(shortcutId)).thenReturn(null);
+    scopeSpaceId = 12L;
+
+    for (ThrowingRunnable call : List.<ThrowingRunnable> of(() -> documentMcpTool.moveDocument(DOCUMENT_ID, shortcutId, null),
+                                                            () -> documentMcpTool.copyDocument(DOCUMENT_ID, shortcutId),
+                                                            () -> documentMcpTool.createDocumentShortcut(DOCUMENT_ID,
+                                                                                                         shortcutId,
+                                                                                                         null))) {
+      IllegalArgumentException error = assertThrows(IllegalArgumentException.class, call);
+      assertTrue(error.getMessage(), error.getMessage().contains(shortcutId + " is a shortcut to the folder " + FOLDER_ID));
+      assertTrue(error.getMessage(), error.getMessage().contains("destination_folder_id"));
+    }
+    scopeSpaceId = null;
+  }
+
+  /**
+   * A file shortcut's id is still taken where a tool acts on a document, not
+   * on a folder: a move of that shortcut into a folder goes on. A version
+   * added through it is {@link #aFileShortcutIsVersionedAsItsTarget}.
+   * Mutant: the folder check applied to the document a tool acts on.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileShortcutIsStillTakenAsTheDocumentAToolActsOn() throws Exception {
+    when(documentFileService.getDocumentById("file-shortcut-id", USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "text/plain"));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(anyString())).thenReturn(OWNER_ID);
+
+    documentMcpTool.moveDocument("file-shortcut-id", FOLDER_ID, null);
+
+    verify(documentFileService).moveDocument(eq(OWNER_ID),
+                                             eq("file-shortcut-id"),
+                                             eq("/documents/Projects"),
+                                             eq(USER_IDENTITY_ID),
+                                             eq("keepBoth"));
+  }
+
+  /**
+   * Asserts a tool call is refused as given a folder shortcut's id, naming the
+   * folder it points to and the argument to pass it as.
+   *
+   * @param call the tool call
+   * @param argumentName the argument the refusal names
+   */
+  private void assertRefusedAsAShortcut(ThrowingRunnable call, String argumentName) {
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class, call);
+    assertTrue(error.getMessage(), error.getMessage().contains("shortcut-id is a shortcut to the folder " + FOLDER_ID));
+    assertTrue(error.getMessage(), error.getMessage().contains(argumentName));
+  }
+
+  /**
+   * get_document_permissions takes the edit right from the repository's
+   * check for the user, not from the listing's computed flag, and the
+   * delete right from the computed one.
+   * Mutants: the edit right taken from the acl, the delete right dropped,
+   * the folder flag dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentPermissionsTellsTheEditRightTheRepositoryChecks() throws Exception {
+    FolderNode folder = folderNode(FOLDER_ID);
+    folder.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folder);
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(FOLDER_ID);
+
+    assertEquals(FOLDER_ID, permissions.getId());
+    assertTrue(permissions.isFolder());
+    assertTrue(permissions.isCanRead());
+    assertFalse(permissions.isCanEdit());
+    assertEquals(Boolean.TRUE, permissions.getCanDelete());
+  }
+
+  /**
+   * get_document_permissions adds the owner's delete right as a listing
+   * does, so both tell the same about a document the user owns whose entries
+   * grant nothing.
+   * Mutants: the owner's delete right left to the entries.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentPermissionsTellsTheOwnersDeleteRightAsAListingDoes() throws Exception {
+    FileNode file = fileNode(DOCUMENT_ID, "application/pdf");
+    file.setCreatorUserName(USERNAME);
+    file.setAcl(new NodePermission(true, false, false, false, null, null, null, null));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(file);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(DOCUMENT_ID);
+
+    assertTrue(permissions.isCanEdit());
+    assertEquals(Boolean.TRUE, permissions.getCanDelete());
+  }
+
+  /**
+   * A document added to a folder the user can only read is refused before
+   * anything is staged or filed, with a reason naming the folder and the
+   * tool that tells the rights.
+   * Mutants: the check dropped, or run after the filing.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void createDocumentInAReadOnlyFolderIsRefusedBeforeTheImport() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getRootFolderOwnerId(FOLDER_ID)).thenReturn(OWNER_ID);
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+
+    IllegalAccessException error = assertThrows(IllegalAccessException.class,
+                                                () -> documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "body"));
+
+    assertTrue(error.getMessage().contains("get_document_permissions"));
+    assertTrue(error.getMessage().contains("Projects"));
+    verify(uploadService, never()).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+  }
+
+  /**
+   * get_document_permissions on a shortcut answers for the id asked, names
+   * the target its rights are read on, checks the edit right on the target,
+   * and leaves the delete right out, deleting the shortcut removing only the
+   * shortcut.
+   * Mutants: the target's id returned as the one asked, the edit right
+   * checked on the shortcut, the target's delete right given.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void getDocumentPermissionsOnAShortcutTellsTheTargetsEditRightAndNoDeleteRight() throws Exception {
+    String shortcutId = "de0688cd7f00010134384ab7e1b15a40";
+    FileNode target = fileNode(DOCUMENT_ID, "application/pdf");
+    target.setAcl(new NodePermission(true, true, true, false, null, null, null, null));
+    when(documentFileService.getDocumentById(shortcutId, USERNAME)).thenReturn(target);
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(target);
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+
+    org.exoplatform.documents.mcp.model.DocumentPermissionsModel permissions = documentMcpTool.getDocumentPermissions(shortcutId);
+
+    assertEquals(shortcutId, permissions.getId());
+    assertEquals(DOCUMENT_ID, permissions.getShortcutTargetId());
+    assertTrue(permissions.isCanEdit());
+    assertEquals(null, permissions.getCanDelete());
+    verify(documentFileService, never()).hasEditPermissionOnDocument(eq(shortcutId), anyLong());
+    // get_document_by_id on the shortcut leaves its delete right out the same way
+    assertEquals(null, documentMcpTool.getDocumentById(shortcutId).getCanDelete());
+    assertEquals(Boolean.TRUE, documentMcpTool.getDocumentById(DOCUMENT_ID).getCanDelete());
+  }
+
+  private UploadService                  uploadService;
+
+  /** The bytes of each upload filed, read when it is filed, by upload id. */
+  private final Map<String, byte[]>      filedBytes   = new HashMap<>();
+
+  /**
+   * Stages the uploads the tool registers, and files each one as the given
+   * document, keeping the bytes the staged file held when it was filed.
+   *
+   * @param document the document filed
+   * @throws Exception never
+   */
+  private void fileUploadsAs(FileNode document) throws Exception {
+    Map<String, String> locations = new HashMap<>();
+    doAnswer(invocation -> {
+      org.exoplatform.upload.UploadResource resource = invocation.getArgument(0);
+      locations.put(resource.getUploadId(), resource.getStoreLocation());
+      return null;
+    }).when(uploadService).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
+    when(documentFileService.saveUploadedDocument(eq(FOLDER_ID), anyString(), anyString(), any(), eq(USER_IDENTITY_ID)))
+        .thenAnswer(invocation -> {
+          String uploadId = invocation.getArgument(1);
+          filedBytes.put(uploadId, java.nio.file.Files.readAllBytes(java.nio.file.Path.of(locations.get(uploadId))));
+          return document;
+        });
+  }
+
+  /**
+   * A text document is filed at once, as the Documents app files an upload,
+   * under its name, keeping both files on a conflict, and the staged upload
+   * is released.
+   * Mutants: the text not the content, the name or the conflict action
+   * changed, the upload not released.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void createDocumentFilesTheTextAsAnUpload() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    fileUploadsAs(fileNodeNamed("doc-txt", "notes.txt"));
+
+    DocumentModel model = documentMcpTool.createDocument(FOLDER_ID, "notes.txt", "plain text body");
+
+    assertEquals("doc-txt", model.getId());
+    ArgumentCaptor<String> uploadId = ArgumentCaptor.forClass(String.class);
+    verify(documentFileService).saveUploadedDocument(eq(FOLDER_ID),
+                                                     uploadId.capture(),
+                                                     eq("notes.txt"),
+                                                     eq(UploadConflictAction.KEEP_BOTH),
+                                                     eq(USER_IDENTITY_ID));
+    assertEquals("plain text body", new String(filedBytes.get(uploadId.getValue()), java.nio.charset.StandardCharsets.UTF_8));
+    verify(uploadService).removeUploadResource(uploadId.getValue());
+  }
+
+  /**
+   * A file over the upload size limit is refused before anything is staged,
+   * the limit read from the property the upload forms read.
+   * Mutants: the limit unchecked, or not read from the property.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileOverTheUploadLimitIsRefused() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    fileUploadsAs(fileNodeNamed("upl-big", "big.bin"));
+    // an attached file, the source that carries a file of that size
+    attachmentHolds("big.bin", new byte[1024 * 1024 + 1]);
+    org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
+    try {
+      assertTrue(assertThrows(IllegalArgumentException.class,
+                              () -> documentMcpTool.uploadDocument(FOLDER_ID, "big.bin", null, null, "activity", "77", null, null)).getMessage()
+                                                                                                                          .contains("1 MB"));
+    } finally {
+      org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
+    }
+    verify(uploadService, never()).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+  }
+
+  /**
+   * A file sent in pieces is filed by the piece that completes its size, into
+   * the folder, under the name and with the conflict action its start
+   * announced, the pieces joined in order; the staged upload is released, and
+   * the last piece sent again returns the same document without filing it
+   * again.
+   * Mutants: a piece dropped or doubled, the folder, the name or the action
+   * not the start's, the filing run early, twice or not at all, the upload
+   * not released.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileSentInPiecesIsFiledByItsLastPiece() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    fileUploadsAs(fileNodeNamed("doc-xlsx", "grid.xlsx"));
+    String content = java.util.Base64.getEncoder().encodeToString("0123456789".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    DocumentUploadModel upload = documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", 10L, "new_version");
+    DocumentUploadModel first = documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 0, content.substring(0, 8));
+
+    assertNull(first.document());
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+
+    DocumentUploadModel last = documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 1, content.substring(8));
+
+    assertEquals(10, last.receivedBytes());
+    assertEquals(2, last.nextIndex());
+    assertEquals("doc-xlsx", last.document().getId());
+    ArgumentCaptor<String> uploadId = ArgumentCaptor.forClass(String.class);
+    verify(documentFileService).saveUploadedDocument(eq(FOLDER_ID),
+                                                     uploadId.capture(),
+                                                     eq("grid.xlsx"),
+                                                     eq(UploadConflictAction.NEW_VERSION),
+                                                     eq(USER_IDENTITY_ID));
+    assertEquals("0123456789", new String(filedBytes.get(uploadId.getValue()), java.nio.charset.StandardCharsets.UTF_8));
+    verify(uploadService).removeUploadResource(uploadId.getValue());
+
+    DocumentUploadModel again = documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 1, content.substring(8));
+
+    assertEquals("doc-xlsx", again.document().getId());
+    verify(documentFileService).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+  }
+
+  /**
+   * An upload is refused at its start, before any piece is sent, into a
+   * folder the user can only read, without its size, over the upload size
+   * limit, with an unknown conflict action, or with a conflict action the
+   * name's existing document can't take.
+   * Mutants: any of those checks dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIsRefusedAtItsStart() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", null, null));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", DocumentUploadLimit.getMaxBytes() + 1, null));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", 10L, "rename"));
+    // the handler's replacement deletes before it files: it is not offered
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", 10L, "replace"));
+    doThrow(new IllegalArgumentException("A folder is named 'grid.xlsx' in this folder")).when(documentFileService)
+                                                                                          .checkUploadConflict(FOLDER_ID,
+                                                                                                               "grid.xlsx",
+                                                                                                               UploadConflictAction.NEW_VERSION,
+                                                                                                               USER_IDENTITY_ID);
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", 10L, "new_version"));
+    assertEquals(0, documentMcpTool.getChunkedUploads().start(USERNAME, FOLDER_ID, "a.txt", 1, UploadConflictAction.KEEP_BOTH).nextIndex());
+    when(documentFileService.hasEditPermissionOnDocument(FOLDER_ID, USER_IDENTITY_ID)).thenReturn(false);
+    assertThrows(IllegalAccessException.class, () -> documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", 10L, null));
+  }
+
+  /**
+   * A file that can't be filed ends its upload, its staged upload released,
+   * and says so, whatever the refusal: a failure, a right lost before the
+   * last piece, a name the conflict action can't take, or a folder gone.
+   * Mutants: the upload kept after a failed filing, the upload not released,
+   * the refusal swallowed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileThatCantBeFiledEndsItsUpload() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.saveUploadedDocument(eq(FOLDER_ID), anyString(), anyString(), any(), eq(USER_IDENTITY_ID)))
+        .thenThrow(new IllegalStateException("The file 'grid.xlsx' couldn't be filed"))
+        .thenThrow(new IllegalAccessException("Permission to add a document to the folder is missing"))
+        .thenThrow(new IllegalArgumentException("A folder is named 'grid.xlsx' in this folder"))
+        .thenThrow(new ObjectNotFoundException("The folder folder-42 doesn't exist"));
+
+    DocumentUploadModel upload = documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", 3L, null);
+    IllegalStateException failure = assertThrows(IllegalStateException.class,
+                                                  () -> documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 0, "AAAA"));
+
+    assertTrue(failure.getMessage().contains("start it again"));
+    verify(uploadService).removeUploadResource(anyString());
+    assertTrue(assertThrows(IllegalArgumentException.class,
+                            () -> documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 0, "AAAA")).getMessage()
+                                                                                                          .contains("No upload"));
+
+    DocumentUploadModel refused = documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", 3L, null);
+    assertTrue(assertThrows(IllegalAccessException.class,
+                            () -> documentMcpTool.appendDocumentUploadChunk(refused.uploadId(), 0, "AAAA")).getMessage()
+                                                                                                         .contains("start it again"));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.appendDocumentUploadChunk(refused.uploadId(), 0, "AAAA"));
+
+    DocumentUploadModel clashing = documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", 3L, null);
+    assertTrue(assertThrows(IllegalArgumentException.class,
+                            () -> documentMcpTool.appendDocumentUploadChunk(clashing.uploadId(), 0, "AAAA")).getMessage()
+                                                                                                          .contains("start it again"));
+
+    DocumentUploadModel folderGone = documentMcpTool.startDocumentUpload(FOLDER_ID, "grid.xlsx", 3L, null);
+    String gone = assertThrows(IllegalStateException.class,
+                               () -> documentMcpTool.appendDocumentUploadChunk(folderGone.uploadId(), 0, "AAAA")).getMessage();
+    assertTrue(gone.contains("is gone") && gone.contains("start it again"));
+  }
+
+  /**
+   * A piece over the most base64 characters of one call is refused, as is
+   * a piece without its number, a piece cut inside a 4-character group, and
+   * a piece that isn't base64; a data: prefix and white space are left out,
+   * as upload_document does, and a padded last piece is taken.
+   * Mutants: the piece's size unchecked, the group check dropped or refusing
+   * a padded piece.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aPieceIsReadAsUploadDocumentReadsBase64() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    fileUploadsAs(fileNodeNamed("doc-bin", "big.bin"));
+    DocumentUploadModel upload = documentMcpTool.startDocumentUpload(FOLDER_ID, "big.bin", 10L, null);
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 0, "A".repeat(DocumentMcpTool.MAX_CHUNK_CHARS + 4)));
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), null, "AAAA"));
+    assertEquals(3, documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 0, "data:application/octet-stream;base64,AA\nAA").receivedBytes());
+    assertEquals(6, documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 1, "data:text/plain,BBBB").receivedBytes());
+    assertTrue(assertThrows(IllegalArgumentException.class,
+                            () -> documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 2, "aGVsbG")).getMessage()
+                                                                                                          .contains("group of 4"));
+    assertTrue(assertThrows(IllegalArgumentException.class,
+                            () -> documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 2, "a$b!")).getMessage()
+                                                                                                        .contains("not valid base64"));
+    assertEquals(9, documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 2, "AAAA").receivedBytes());
+    assertEquals("doc-bin", documentMcpTool.appendDocumentUploadChunk(upload.uploadId(), 3, "AA==").document().getId());
+  }
+
+  /**
+   * A file's id given as the folder is refused before anything is staged or
+   * sent, by the upload in pieces and by a file sent whole, with the tool that
+   * adds a version named.
+   * Mutants: the folder check dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIntoAFileIsRefused() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    lenient().when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
+
+    assertTrue(assertThrows(IllegalArgumentException.class,
+                            () -> documentMcpTool.startDocumentUpload(DOCUMENT_ID, "a.pdf", 10L, null)).getMessage()
+                                                                                                      .contains("add_document_version"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(DOCUMENT_ID, "a.pdf", base64, null, null, null, null, null));
+    verify(uploadService, never()).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+  }
+
+  /**
+   * A shortcut to a folder is written in as the folder it targets: the right
+   * to add documents is checked on the target, not on the shortcut.
+   * Mutants: the right checked on the id given.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aShortcutsRightIsItsTargetFolders() throws Exception {
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(folderNode("target-id"));
+    when(documentFileService.hasEditPermissionOnDocument("target-id", USER_IDENTITY_ID)).thenReturn(true);
+
+    DocumentUploadModel upload = documentMcpTool.startDocumentUpload("shortcut-id", "grid.xlsx", 10L, null);
+
+    assertEquals("shortcut-id", upload.parentFolderId());
+    verify(documentFileService, never()).hasEditPermissionOnDocument(eq("shortcut-id"), anyLong());
+  }
+
+  /**
+   * A new version's content is checked by the upload validators as an
+   * upload is, under the file's name and type, before it replaces the file's
+   * content; a refusal stores nothing.
+   * Mutants: the check dropped, or run after the version is stored.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aNewVersionsContentIsValidatedAsAnUpload() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "image/svg+xml"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    String svg = "<svg onload='alert(1)'/>";
+    doThrow(new IllegalArgumentException("The file is refused: Infected file detected")).when(documentFileService)
+                                                                                     .validateUploadedContent(anyString(),
+                                                                                                              eq("image/svg+xml"),
+                                                                                                              eq(svg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, svg, null, null, null, null, null, null));
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+  }
+
+  /**
+   * A file shortcut is versioned as the file it targets: its right is read
+   * on the target and the version is stored on the target.
+   * Mutants: the right read, or the version stored, on the shortcut's id.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileShortcutIsVersionedAsItsTarget() throws Exception {
+    when(documentFileService.getDocumentById("shortcut-id", USERNAME)).thenReturn(fileNode("target-id", "text/plain"));
+    when(documentFileService.getDocumentById("target-id", USERNAME)).thenReturn(fileNode("target-id", "text/plain"));
+    when(documentFileService.hasEditPermissionOnDocument("target-id", USER_IDENTITY_ID)).thenReturn(true);
+
+    documentMcpTool.addDocumentVersion("shortcut-id", "new text", null, null, null, null, null, null);
+
+    verify(documentFileService).createNewVersion(eq("target-id"), eq(USERNAME), any());
+    verify(documentFileService, never()).hasEditPermissionOnDocument(eq("shortcut-id"), anyLong());
+  }
+
+  /**
+   * A new version read from a chat attachment is capped at the upload size
+   * limit as the other sources are, the attachment being read unbounded.
+   * Mutants: the attachment's size unchecked.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aNewVersionFromAnAttachmentIsCapped() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(socialAttachmentService.getAttachmentFileIds(eq("activity"), eq("77"), eq(currentIdentity))).thenReturn(List.of("999"));
+    org.exoplatform.commons.file.model.FileItem fileItem = Mockito.mock(org.exoplatform.commons.file.model.FileItem.class);
+    org.exoplatform.commons.file.model.FileInfo fileInfo = Mockito.mock(org.exoplatform.commons.file.model.FileInfo.class);
+    when(fileItem.getAsByte()).thenReturn(new byte[1024 * 1024 + 1]);
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    when(fileInfo.getMimetype()).thenReturn("application/pdf");
+    when(fileInfo.getName()).thenReturn("big.pdf");
+    when(fileService.getFile(999L)).thenReturn(fileItem);
+
+    org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
+    try {
+      assertThrows(IllegalArgumentException.class,
+                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, "activity", "77", null, null));
+    } finally {
+      org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
+    }
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+  }
+
+  /**
+   * Makes the attachment of the activity 77 the given file, readable by the
+   * current user.
+   *
+   * @param name the file's name
+   * @param bytes the file's bytes
+   * @throws Exception never
+   */
+  private void attachmentHolds(String name, byte[] bytes) throws Exception {
+    when(socialAttachmentService.getAttachmentFileIds(eq("activity"), eq("77"), eq(currentIdentity))).thenReturn(List.of("999"));
+    org.exoplatform.commons.file.model.FileItem fileItem = Mockito.mock(org.exoplatform.commons.file.model.FileItem.class);
+    org.exoplatform.commons.file.model.FileInfo fileInfo = Mockito.mock(org.exoplatform.commons.file.model.FileInfo.class);
+    when(fileItem.getAsByte()).thenReturn(bytes);
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    lenient().when(fileInfo.getMimetype()).thenReturn("application/octet-stream");
+    lenient().when(fileInfo.getName()).thenReturn(name);
+    when(fileService.getFile(999L)).thenReturn(fileItem);
+  }
+
+  /**
+   * A base64 file longer than one call carries is refused before it is
+   * decoded, by upload_document and by add_document_version, each naming the
+   * tool that sends it in pieces; one of exactly that length is filed. The
+   * refused base64 is not valid base64, so a decode would fail with another
+   * message, and the decoder is watched not to be called.
+   * In a call limited to a space, which is not offered those tools, the
+   * refusal of a new version says so instead.
+   * Mutants: the guard removed from either tool, moved after the decode, off
+   * by one, a refusal that names no tool to send the file in pieces, or one
+   * that names them in a call limited to a space.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aBase64FileLongerThanOneCallIsRefusedBeforeItIsDecoded() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    fileUploadsAs(fileNodeNamed("upl-max", "max.bin"));
+    String tooLong = "!".repeat(DocumentMcpTool.CHUNK_CHARS + 1);
+    String longest = "A".repeat(DocumentMcpTool.CHUNK_CHARS);
+
+    try (MockedStatic<UploadToolUtils> utils = Mockito.mockStatic(UploadToolUtils.class, Mockito.CALLS_REAL_METHODS)) {
+      String uploadRefusal = assertThrows(IllegalArgumentException.class,
+                                          () -> documentMcpTool.uploadDocument(FOLDER_ID, "big.bin", tooLong, null, null, null, null, null))
+                                                                                                                                 .getMessage();
+      assertTrue(uploadRefusal, uploadRefusal.contains("at most " + DocumentMcpTool.CHUNK_CHARS));
+      assertTrue(uploadRefusal, uploadRefusal.contains("start_document_upload"));
+      assertTrue(uploadRefusal, uploadRefusal.contains("append_document_upload_chunk"));
+      assertTrue(uploadRefusal, uploadRefusal.contains("start_upload"));
+
+      String versionRefusal = assertThrows(IllegalArgumentException.class,
+                                           () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, tooLong, null, null, null, null, null))
+                                                                                                                                  .getMessage();
+      assertTrue(versionRefusal, versionRefusal.contains("at most " + DocumentMcpTool.CHUNK_CHARS));
+      assertTrue(versionRefusal, versionRefusal.contains("start_document_upload"));
+      assertTrue(versionRefusal, versionRefusal.contains("on_conflict=new_version"));
+      assertTrue(versionRefusal, versionRefusal.contains("start_upload"));
+
+      // a call limited to a space isn't offered the tools that send a file in pieces
+      scopeSpaceId = 12L;
+      String scopedRefusal = assertThrows(IllegalArgumentException.class,
+                                          () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, tooLong, null, null, null, null, null))
+                                                                                                                                 .getMessage();
+      scopeSpaceId = null;
+      assertTrue(scopedRefusal, scopedRefusal.contains("at most " + DocumentMcpTool.CHUNK_CHARS));
+      assertTrue(scopedRefusal, scopedRefusal.contains("limited to a space"));
+      assertFalse(scopedRefusal, scopedRefusal.contains("start_document_upload"));
+      assertFalse(scopedRefusal, scopedRefusal.contains("start_upload"));
+
+      utils.verify(() -> UploadToolUtils.decodeBase64(anyString()), never());
+      verify(uploadService, never()).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
+      verify(documentFileService, never()).createNewVersion(any(), any(), any());
+
+      documentMcpTool.uploadDocument(FOLDER_ID, "max.bin", longest, null, null, null, null, null);
+      documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, longest, null, null, null, null, null);
+    }
+    verify(documentFileService).saveUploadedDocument(eq(FOLDER_ID), anyString(), eq("max.bin"), any(), eq(USER_IDENTITY_ID));
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
+  }
+
+  /**
+   * A file is read from a URL up to 15 MB, by upload_document and by
+   * add_document_version alike, or up to the upload size limit when it is
+   * lower; the fetcher's refusal of a larger file is completed with what to
+   * do instead, and its other refusals are passed as they are.
+   * Mutants: either tool asking the upload size limit, the limit not 15 MB, a
+   * lower upload size limit not applied, the refusal of a larger file not
+   * completed, or another refusal completed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileIsReadFromAUrlUpTo15MB() throws Exception {
+    assertEquals(15L * 1024 * 1024, DocumentUploadLimit.URL_FETCH_MAX_BYTES);
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    fileUploadsAs(fileNodeNamed("upl-url", "report.pdf"));
+    String url = "https://example.com/report.pdf";
+    String bigUrl = "https://example.com/big.pdf";
+    String privateUrl = "https://intranet.example/report.pdf";
+    String tooLarge = "The file exceeds the maximum allowed size (15 MB).";
+    String privateHost = "URL host is not allowed (it points to a private or internal address).";
+
+    try (MockedStatic<UploadToolUtils> utils = Mockito.mockStatic(UploadToolUtils.class, Mockito.CALLS_REAL_METHODS)) {
+      utils.when(() -> UploadToolUtils.fetchUrl(eq(url), anyLong(), any()))
+           .thenReturn(new UploadToolUtils.FetchedContent("PDF".getBytes(), "application/pdf", "report.pdf"));
+      utils.when(() -> UploadToolUtils.fetchUrl(eq(bigUrl), anyLong(), any())).thenThrow(new IllegalArgumentException(tooLarge));
+      utils.when(() -> UploadToolUtils.fetchUrl(eq(privateUrl), anyLong(), any()))
+           .thenThrow(new IllegalArgumentException(privateHost));
+
+      documentMcpTool.uploadDocument(FOLDER_ID, "report.pdf", null, url, null, null, null, null);
+      documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, url, null, null, null, null);
+      utils.verify(() -> UploadToolUtils.fetchUrl(eq(url), eq(DocumentUploadLimit.URL_FETCH_MAX_BYTES), any()), Mockito.times(2));
+
+      for (String refusal : List.of(assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, bigUrl, null, null, null, null))
+                                                                                                                                .getMessage(),
+                                    assertThrows(IllegalArgumentException.class,
+                                                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, bigUrl, null, null, null, null))
+                                                                                                                                    .getMessage())) {
+        assertTrue(refusal, refusal.startsWith(tooLarge));
+        assertTrue(refusal, refusal.contains("up to 15 MB"));
+        assertTrue(refusal, refusal.contains("start_upload"));
+        assertTrue(refusal, refusal.contains("upload_id"));
+      }
+      assertEquals(privateHost,
+                   assertThrows(IllegalArgumentException.class,
+                                () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, privateUrl, null, null, null, null)).getMessage());
+
+      // an upload size limit below 15 MB bounds the read, for a new version as for a new file
+      org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
+      try {
+        documentMcpTool.uploadDocument(FOLDER_ID, "report.pdf", null, url, null, null, null, null);
+        documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, url, null, null, null, null);
+        String refusal = assertThrows(IllegalArgumentException.class,
+                                      () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, bigUrl, null, null, null, null))
+                                                                                                                              .getMessage();
+        assertTrue(refusal, refusal.contains("up to 1 MB"));
+      } finally {
+        org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
+      }
+      utils.verify(() -> UploadToolUtils.fetchUrl(eq(url), eq(1024L * 1024), any()), Mockito.times(2));
+    }
+  }
+
+  /** The files the tests staged as uploads, deleted after each test. */
+  private final List<java.nio.file.Path> stagedFiles  = new java.util.ArrayList<>();
+
+  /**
+   * An attached file whose stored size is over the upload size limit is
+   * refused before its bytes are read, by both tools.
+   * Mutants: the stored size unchecked, the file read first.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anAttachmentOverTheLimitIsRefusedBeforeItIsRead() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(socialAttachmentService.getAttachmentFileIds(eq("activity"), eq("77"), eq(currentIdentity))).thenReturn(List.of("999"));
+    org.exoplatform.commons.file.model.FileItem fileItem = Mockito.mock(org.exoplatform.commons.file.model.FileItem.class);
+    org.exoplatform.commons.file.model.FileInfo fileInfo = Mockito.mock(org.exoplatform.commons.file.model.FileInfo.class);
+    when(fileItem.getFileInfo()).thenReturn(fileInfo);
+    when(fileInfo.getSize()).thenReturn(1024L * 1024 + 1);
+    when(fileService.getFile(999L)).thenReturn(fileItem);
+
+    org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
+    try {
+      assertTrue(assertThrows(IllegalArgumentException.class,
+                              () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null, null)).getMessage()
+                                                                                                                             .contains("1 MB"));
+      assertThrows(IllegalArgumentException.class,
+                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, "activity", "77", null, null));
+    } finally {
+      org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
+    }
+    verify(fileItem, never()).getAsByte();
+  }
+
+  // ---------------------------------------------------------------------------
+  // A file sent through an upload link (upload_id)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Stages one of the current user's uploads: its file on disk holds the
+   * given bytes, and the owner-checked accessor answers it for the current
+   * user only.
+   *
+   * @param uploadId the upload id
+   * @param fileName the name it was uploaded under
+   * @param bytes the file's bytes
+   * @param status the upload's status
+   * @return the staged file
+   * @throws Exception never
+   */
+  private java.nio.file.Path stagedUpload(String uploadId, String fileName, byte[] bytes, int status) throws Exception {
+    java.nio.file.Path file = java.nio.file.Files.createTempFile("upload", ".bin");
+    stagedFiles.add(file);
+    java.nio.file.Files.write(file, bytes);
+    org.exoplatform.upload.UploadResource resource = new org.exoplatform.upload.UploadResource(uploadId);
+    resource.setFileName(fileName);
+    resource.setMimeType("application/octet-stream");
+    resource.setStoreLocation(file.toString());
+    resource.setStatus(status);
+    when(uploadService.getUploadResource(uploadId, USERNAME)).thenReturn(resource);
+    return file;
+  }
+
+  /**
+   * Deletes the files the tests staged.
+   *
+   * @throws Exception never
+   */
+  @org.junit.After
+  public void deleteStagedFiles() throws Exception {
+    for (java.nio.file.Path file : stagedFiles) {
+      java.nio.file.Files.deleteIfExists(file);
+    }
+  }
+
+  /**
+   * A file sent through an upload link is filed from its staged file, by its
+   * upload id, under the name it was uploaded under or the name given, with
+   * the conflict action given: the tool never reads it nor stages a copy, and
+   * releases it through the owner-checked remove once filed. The upload is
+   * read through the owner-checked accessor only, its id trimmed, and takes
+   * the name it is filed under, which the filing types the file from.
+   * Mutants: the id not trimmed, the upload left under its own name, the
+   * upload id not handed to the filing, a copy staged, the
+   * upload's name or the given name ignored, the conflict action dropped,
+   * the remove dropped or not owner-checked, the unchecked accessor used.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIsFiledFromItsStagedFileWithoutACopy() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    Map<String, String> typedAs = new HashMap<>();
+    when(documentFileService.saveUploadedDocument(eq(FOLDER_ID), anyString(), anyString(), any(), eq(USER_IDENTITY_ID)))
+        .thenAnswer(invocation -> {
+          String uploadId = invocation.getArgument(1);
+          typedAs.put(uploadId, uploadService.getUploadResource(uploadId, USERNAME).getFileName());
+          return fileNodeNamed("up-doc", "deck.pptx");
+        });
+    stagedUpload("up-1", "deck.pptx", "PPTX".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("up-2", "deck.pptx", "PPTX".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+
+    try (MockedStatic<UploadToolUtils> utils = Mockito.mockStatic(UploadToolUtils.class, Mockito.CALLS_REAL_METHODS)) {
+      assertEquals("up-doc", documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, " up-1 ").getId());
+      documentMcpTool.uploadDocument(FOLDER_ID, "Final deck.pdf", null, null, null, null, "new_version", "up-2");
+
+      utils.verify(() -> UploadToolUtils.materialize(any(), any(), any(), any()), never());
+      utils.verify(() -> UploadToolUtils.decodeBase64(any()), never());
+    }
+    verify(documentFileService).saveUploadedDocument(FOLDER_ID, "up-1", "deck.pptx", UploadConflictAction.KEEP_BOTH, USER_IDENTITY_ID);
+    verify(documentFileService).saveUploadedDocument(FOLDER_ID,
+                                                     "up-2",
+                                                     "Final deck.pdf",
+                                                     UploadConflictAction.NEW_VERSION,
+                                                     USER_IDENTITY_ID);
+    // the filing types the file from the upload's name, which must be the one it is filed under
+    assertEquals(Map.of("up-1", "deck.pptx", "up-2", "Final deck.pdf"), typedAs);
+    verify(uploadService, never()).createUploadResource(any(org.exoplatform.upload.UploadResource.class));
+    verify(uploadService).removeUploadResource("up-1", USERNAME);
+    verify(uploadService).removeUploadResource("up-2", USERNAME);
+    verify(uploadService, never()).getUploadResource(anyString());
+    verify(uploadService, never()).removeUploadResource(anyString());
+  }
+
+  /**
+   * An upload filed from its upload id is refused under a macOS metadata
+   * name, whether the name is the one given or the upload's own, and nothing
+   * is filed, as a file sent in one call or in pieces is.
+   * Mutant: the refusal removed from the staged-upload filing.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void uploadDocumentFromAnUploadIdWithMacOsMetadataNameFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    for (String name : new String[] { "__MACOSX", "._photo.png", ".DS_Store" }) {
+      stagedUpload("up-given", "deck.pptx", "PPTX".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+      IllegalArgumentException given = assertThrows(IllegalArgumentException.class,
+                                                    () -> documentMcpTool.uploadDocument(FOLDER_ID,
+                                                                                         name,
+                                                                                         null,
+                                                                                         null,
+                                                                                         null,
+                                                                                         null,
+                                                                                         null,
+                                                                                         "up-given"));
+      assertTrue(given.getMessage().contains("'" + name + "' is a macOS metadata name"));
+
+      stagedUpload("up-own", name, "PPTX".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+      IllegalArgumentException own = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.uploadDocument(FOLDER_ID,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       "up-own"));
+      assertTrue(own.getMessage().contains("'" + name + "' is a macOS metadata name"));
+    }
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+  }
+
+  /**
+   * An upload id the owner-checked accessor doesn't answer for the current
+   * user, unknown or another user's, is refused alike by both tools, naming
+   * start_upload and get_upload, before anything is filed or versioned, and
+   * nothing is removed: another user's upload stays theirs.
+   * Mutants: the accessor's answer unchecked, the unchecked accessor used, a
+   * refusal naming neither tool, something removed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUnknownOrAnotherUsersUploadIsRefused() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    org.exoplatform.upload.UploadResource theirs = new org.exoplatform.upload.UploadResource("theirs");
+    theirs.setStatus(org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    lenient().when(uploadService.getUploadResource("theirs")).thenReturn(theirs);
+    lenient().when(uploadService.getUploadResource("theirs", "mary")).thenReturn(theirs);
+
+    for (String refusal : List.of(assertThrows(IllegalArgumentException.class,
+                                               () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.pdf", null, null, null, null, null, "theirs"))
+                                                                                                                                    .getMessage(),
+                                  assertThrows(IllegalArgumentException.class,
+                                               () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "theirs"))
+                                                                                                                                         .getMessage(),
+                                  assertThrows(IllegalArgumentException.class,
+                                               () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.pdf", null, null, null, null, null, "unknown"))
+                                                                                                                                     .getMessage())) {
+      assertTrue(refusal, refusal.contains("start_upload"));
+      assertTrue(refusal, refusal.contains("get_upload"));
+    }
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+    verify(uploadService, never()).removeUploadResource(anyString(), anyString());
+    verify(uploadService, never()).removeUploadResource(anyString());
+  }
+
+  /**
+   * An upload still being sent is refused and left in place for a later
+   * call, removing it would delete a file still being written; one that
+   * failed is refused and dropped; by both tools.
+   * Mutants: the status unchecked, an upload being sent removed, a failed one
+   * kept.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadNotCompleteIsRefused() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    stagedUpload("sending", "x.pdf", "PDF".getBytes(), org.exoplatform.upload.UploadResource.UPLOADING_STATUS);
+    stagedUpload("failed", "x.pdf", "PDF".getBytes(), org.exoplatform.upload.UploadResource.FAILED_STATUS);
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "sending")).getMessage()
+                                                                                                                         .contains("get_upload"));
+    assertThrows(IllegalStateException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "sending"));
+    verify(uploadService, never()).removeUploadResource(anyString(), anyString());
+
+    assertTrue(assertThrows(IllegalStateException.class,
+                            () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "failed")).getMessage()
+                                                                                                                        .contains("start_upload"));
+    assertThrows(IllegalStateException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "failed"));
+    verify(uploadService, Mockito.times(2)).removeUploadResource("failed", USERNAME);
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+  }
+
+  /**
+   * An upload is capped at the upload size limit, measured on its staged
+   * file, by both tools: one byte over is refused and dropped, the limit
+   * itself is filed; an empty file is refused and dropped.
+   * Mutants: the cap removed, off by one, not the upload limit, an empty
+   * file filed, a refused upload kept.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadOverTheLimitOrEmptyIsRefusedAndDropped() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(documentFileService.saveUploadedDocument(eq(FOLDER_ID), anyString(), anyString(), any(), eq(USER_IDENTITY_ID)))
+        .thenReturn(fileNodeNamed("up-max", "max.bin"));
+    int limit = 1024 * 1024;
+    stagedUpload("over", "over.bin", new byte[limit + 1], org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("over-v", "over.bin", new byte[limit + 1], org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("max", "max.bin", new byte[limit], org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("empty", "empty.bin", new byte[0], org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+
+    org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "1");
+    try {
+      assertTrue(assertThrows(IllegalArgumentException.class,
+                              () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "over")).getMessage()
+                                                                                                                         .contains("1 MB"));
+      assertThrows(IllegalArgumentException.class,
+                   () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "over-v"));
+      assertThrows(IllegalArgumentException.class,
+                   () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "empty"));
+      verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+      verify(documentFileService, never()).createNewVersion(any(), any(), any());
+
+      documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "max");
+    } finally {
+      org.exoplatform.commons.utils.PropertyManager.setProperty(DocumentUploadLimit.PROPERTY_NAME, "");
+    }
+    verify(documentFileService).saveUploadedDocument(FOLDER_ID, "max", "max.bin", UploadConflictAction.KEEP_BOTH, USER_IDENTITY_ID);
+    for (String uploadId : List.of("over", "over-v", "max", "empty")) {
+      verify(uploadService).removeUploadResource(uploadId, USERNAME);
+    }
+  }
+
+  /**
+   * An upload id is one source among the others, exclusive of each, for both
+   * tools: given with another one, the call is refused before the upload is
+   * read, and the upload is left in place.
+   * Mutants: the upload id not counted as a source, or read before the
+   * count.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIdIsOneSourceAmongTheOthers() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    String base64 = java.util.Base64.getEncoder().encodeToString("hello".getBytes());
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", base64, null, null, null, null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, "x.txt", null, "https://example.com/x.txt", null, null, null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, "activity", "77", null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, "text", null, null, null, null, null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, base64, null, null, null, null, "up-1"));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, "activity", "77", null, "up-1"));
+
+    verify(uploadService, never()).getUploadResource(anyString(), anyString());
+    verify(uploadService, never()).removeUploadResource(anyString(), anyString());
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+  }
+
+  /**
+   * An upload refused at its filing (a validator, a conflict, the storage) is
+   * dropped all the same; a folder the user can't write in is refused before
+   * the upload is read, which leaves it in place.
+   * Mutants: the remove not in a finally, the folder checked after the read.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIsDroppedWhenItsFilingFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.saveUploadedDocument(eq(FOLDER_ID), anyString(), anyString(), any(), eq(USER_IDENTITY_ID)))
+        .thenThrow(new IllegalArgumentException("The file 'x.svg' is refused: Infected file detected"))
+        .thenThrow(new IllegalStateException("The file 'x.svg' couldn't be filed"));
+    stagedUpload("refused", "x.svg", "<svg/>".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("broken", "x.svg", "<svg/>".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    stagedUpload("kept", "x.svg", "<svg/>".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "refused"));
+    assertThrows(IllegalStateException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "broken"));
+    verify(uploadService).removeUploadResource("refused", USERNAME);
+    verify(uploadService).removeUploadResource("broken", USERNAME);
+
+    when(documentFileService.hasEditPermissionOnDocument(eq(FOLDER_ID), anyLong())).thenReturn(false);
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "kept"));
+    verify(uploadService, never()).getUploadResource("kept", USERNAME);
+    verify(uploadService, never()).removeUploadResource("kept", USERNAME);
+  }
+
+  /**
+   * A new version from an upload is checked by the upload validators on its
+   * staged file, under the versioned file's name and type, then streamed
+   * from that file into the version, never read into memory by the tool;
+   * the upload is dropped once read, whether the version is added or
+   * refused. A file the user can't edit is refused before the upload is
+   * read.
+   * Mutants: the staged file not validated or validated in memory, the
+   * version given a byte array, another file streamed, the remove dropped,
+   * the edit right checked after the read.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aNewVersionIsStreamedFromTheStagedUpload() throws Exception {
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    when(documentFileService.getFileVersions(DOCUMENT_ID, USERNAME)).thenReturn(List.of(fileVersion()));
+    java.nio.file.Path staged = stagedUpload("up-v", "new.pdf", "PDF v2".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    List<String> streamed = new java.util.ArrayList<>();
+    doAnswer(invocation -> {
+      java.io.InputStream content = invocation.getArgument(2);
+      assertFalse(content instanceof java.io.ByteArrayInputStream);
+      streamed.add(new String(content.readAllBytes()));
+      return null;
+    }).when(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
+
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, "from my machine", "up-v");
+
+    assertEquals(List.of("PDF v2"), streamed);
+    verify(documentFileService).validateUploadedFile("report.pdf", "application/pdf", staged);
+    verify(documentFileService, never()).validateUploadedContent(any(), any(), any());
+    verify(documentFileService).updateVersionSummary(DOCUMENT_ID, "version-1", "from my machine", USERNAME);
+    verify(uploadService).removeUploadResource("up-v", USERNAME);
+
+    java.nio.file.Path refused = stagedUpload("up-svg", "x.svg", "<svg/>".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    doThrow(new IllegalArgumentException("The file 'report.pdf' is refused: Infected file detected")).when(documentFileService)
+                                                                                                   .validateUploadedFile(any(),
+                                                                                                                         any(),
+                                                                                                                         eq(refused));
+    assertThrows(IllegalArgumentException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "up-svg"));
+    verify(uploadService).removeUploadResource("up-svg", USERNAME);
+    assertEquals(1, streamed.size());
+
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(false);
+    stagedUpload("kept", "x.pdf", "PDF".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "kept"));
+    verify(uploadService, never()).getUploadResource("kept", USERNAME);
+  }
+
+  /**
+   * In a call limited to a space, where start_upload is not offered, an
+   * upload id is refused by both tools before the upload is read, and when
+   * the call's space can't be read too; the upload is left in place. (The
+   * server refuses the argument before the tool runs as well, its
+   * declaration not accepting it: {@code DocumentToolDefinitionSpaceScopeTest}.)
+   * Mutants: the scope unchecked, an unreadable scope taken as unlimited.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIdIsRefusedInACallLimitedToASpace() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNode(DOCUMENT_ID, "application/pdf"));
+    when(documentFileService.hasEditPermissionOnDocument(DOCUMENT_ID, USER_IDENTITY_ID)).thenReturn(true);
+    stagedUpload("up-1", "x.pdf", "PDF".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+
+    scopeSpaceId = 12L;
+    assertTrue(assertThrows(IllegalAccessException.class,
+                            () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "up-1")).getMessage()
+                                                                                                                             .contains("limited to a space"));
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.uploadDocument(FOLDER_ID, null, null, null, null, null, null, "up-1"));
+    scopeSpaceId = null;
+    scopeUnreadable = true;
+    assertThrows(IllegalAccessException.class,
+                 () -> documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "up-1"));
+    scopeUnreadable = false;
+
+    verify(uploadService, never()).getUploadResource(anyString(), anyString());
+    verify(uploadService, never()).removeUploadResource(anyString(), anyString());
+    verify(documentFileService, never()).createNewVersion(any(), any(), any());
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+
+    documentMcpTool.addDocumentVersion(DOCUMENT_ID, null, null, null, null, null, null, "up-1");
+    verify(documentFileService).createNewVersion(eq(DOCUMENT_ID), eq(USERNAME), any());
   }
 
 }

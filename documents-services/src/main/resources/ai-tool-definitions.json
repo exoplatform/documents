@@ -3,30 +3,32 @@
     {
       "name": "get_root_folder_by_space",
       "title": "Get DMS root folder of a given space",
-      "description": "Retrieves the root folder associated with a specific space.",
+      "description": "Retrieves the root folder of a space's documents. Give the space either by its space_name (its name, as the user says it) or by its space_id, not both. A space_name is the space's exact name, case and spacing aside, looked up among the spaces you're a member of; when it matches none or several, the error lists the candidates with their space_id. To find a space from approximate words, use search_spaces when it is among your tools. Never guess a space_id: pass the space_name, or find the id with get_my_spaces.",
       "input_schema": {
         "type": "object",
         "properties": {
           "space_id": {
             "type": "integer",
-            "description": "space id for which the root folder is requested."
+            "description": "The id of the space whose root folder is requested. Leave it out when you pass space_name."
+          },
+          "space_name": {
+            "type": "string",
+            "description": "The name of the space whose root folder is requested, e.g. 'Legal'. Case and surrounding spaces don't matter. Leave it out when you pass space_id."
           }
-        },
-        "required": [
-          "space_id"
-        ]
+        }
       },
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      }
+      },
+      "space_scope": { "space_arg": "space_id", "when_absent": "use_scope" }
     },
     {
       "name": "get_documents_by_folder_id",
       "title": "Get DMS files and/or folders under a given folder",
-      "description": "Retrieves the files (and/or folders) located under a folder stored in the DMS.",
+      "description": "Retrieves the files (and/or folders) located under a folder stored in the DMS. Each gives whether you can edit or delete it (can_edit, can_delete); a shortcut gives shortcut_target_id and no rights: to add documents to a shortcut's folder, use shortcut_target_id as the folder id; get_document_permissions tells your rights there.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -45,7 +47,7 @@
           },
           "limit": {
             "type": "integer",
-            "description": "Maximum number of results to return."
+            "description": "Maximum number of results to return, at most 100."
           }
         },
         "required": [
@@ -57,7 +59,8 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      }
+      },
+      "space_scope": { "object_arg": "folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["files_only", "folders_only", "offset", "limit"] }
     },
     {
       "name": "get_root_folder_for_user",
@@ -77,7 +80,7 @@
     {
       "name": "get_document_by_id",
       "title": "Get DMS folder or file by its id",
-      "description": "Fetches the metadata of a document given its unique identifier.",
+      "description": "Fetches the metadata of a document given its unique identifier, with can_edit and can_delete, your rights on it. A shortcut's id gives its target's metadata and edit right; can_delete is then left out, deleting a shortcut removing only the shortcut.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -95,12 +98,13 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      }
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32" }
     },
     {
       "name": "get_document_content_by_id",
       "title": "Get DMS file content",
-      "description": "Retrieves the textual or Markdown content of a document by its unique identifier.",
+      "description": "Retrieves the textual or Markdown content of a document by its unique identifier, in one go. A large file (a book, a thesis, a document full of pictures), up to the largest file a user can attach (200 MB by default), gives its first part only, ending with a note giving its length and the offset to read on with read_document_text. For one chapter only, use get_document_outline and read_document_text. A text cut at the most characters read in one go ends with a note saying how to read the rest.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -118,7 +122,68 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      }
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32" }
+    },
+    {
+      "name": "get_document_outline",
+      "title": "Get the outline of a DMS file",
+      "description": "Lists the headings of a document: a Word document's headings, a PDF's bookmarks, a presentation's slide titles, an xlsx spreadsheet's sheets (read as the text of its rows, one line a row: not its cells' positions or formulas). Each heading gives its index, level (1 for a top-level heading), title, the offset and end_offset of its section in the document's text, and its page, slide or sheet number when the document has them. Read one section with read_document_text and its section index, instead of reading the whole document. Works on large files, up to the largest file a user can attach (200 MB by default): the first call on a large file may answer that it is being read, then call it again a minute later. An empty list means no heading was found, or the format gives none (an .xls or .ods spreadsheet, for instance); read the document by offset then.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the document."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32" }
+    },
+    {
+      "name": "read_document_text",
+      "title": "Read a part of a DMS file's text",
+      "description": "Reads a part of a document's text, at most max_chars characters (40000 when left out, 200000 at most), from an offset or within one section of get_document_outline. The answer gives the part's offset and end_offset, the total_chars of the whole text, and next_offset where the next part starts (left out at the end of the text, or of the section): call it again with offset=next_offset to read on. Pictures are not read, so a large file full of pictures, up to the largest file a user can attach (200 MB by default), is read too: the first call on a large file may answer that it is being read, then call it again a minute later. truncated is true when the document's text was cut at the most characters read from one document.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The unique identifier of the document."
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Optional first character to read, from 0 in the whole text, as next_offset and end_offset give it (0 when left out). With section, the section's start when left out or before it."
+          },
+          "max_chars": {
+            "type": "integer",
+            "description": "Optional most characters to return: 40000 when left out, 200000 at most."
+          },
+          "section": {
+            "type": "integer",
+            "description": "Optional index of a heading of get_document_outline: reads that heading's section only, up to the next heading of the same or a higher level that starts after it."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["offset", "max_chars", "section"] }
     },
     {
       "name": "attach_document_to_content",
@@ -176,17 +241,22 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["html_description"], "space_role": "redactor" },
       "require_approval": true
     },
     {
       "name": "get_document_transcription_by_id",
       "title": "Transcript an Audio DMS file",
-      "description": "Get the file transcription when it's an audio/video media content",
+      "description": "Get the file transcription when it's an audio/video media content. With timestamps true, a transcript that has time positions is given one segment per line, each starting with the moment it was said, as [mm:ss · Ns] ([h:mm:ss · Ns] past an hour), N being that moment in whole seconds; without time positions, the plain transcript is given, or its turns when it tells who speaks. When the transcript is grouped into chapters, the answer starts with the chapters, each with the moment it starts, its title and a short summary. When the transcript tells who speaks, the answer then lists the speakers, each with its talk time, and each line of the transcript names who said it: the person's full name, a guest's name, or Speaker N when nobody was named or the person named can no longer be found; with timestamps true each line reads [mm:ss · Ns] Name: text, and without, the transcript is given one turn per line, Name: text. After the chapters or the speakers, the transcript follows Transcript:.",
       "input_schema": {
         "type": "object",
         "properties": {
           "document_id": {
             "type": "string"
+          },
+          "timestamps": {
+            "type": "boolean",
+            "description": "true to have each segment start with the moment it was said, when the transcript has time positions"
           }
         },
         "required": [
@@ -198,22 +268,67 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      }
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["timestamps"] }
+    },
+    {
+      "name": "get_transcript_excerpt",
+      "title": "Read part of a recording's transcript",
+      "description": "Read only one part of an audio or video recording's transcript instead of the whole of it. Called with only document_id, it lists the transcript's chapters, numbered, each with its moment, title and summary: call it that way first whenever you do not know the number of the chapter a question is about, and never guess a number. Then read one chapter (chapter, its number from that list or from get_meeting_recordings), or the lines said between two moments (from and to); pass either chapter, or from and to. Every line of that part is given as [mm:ss · Ns] Name: text, with the moment it was said (N in whole seconds) and who said it (Speaker N when nobody named that speaker). A chapter runs to the next chapter's start, the last one to the end of the recording. One call reads 30 minutes at most: a longer part stops there and says the from and to to call again with. Quote the moments and speakers in your answer.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The recording's document id."
+          },
+          "chapter": {
+            "type": "integer",
+            "description": "The chapter to read: its number in the chapter list. Leave out to read a time range; leave out with from and to as well to list the chapters."
+          },
+          "from": {
+            "type": "string",
+            "description": "Where a time range starts: mm:ss (23:00), h:mm:ss (1:02:30) or seconds (1380). Leave out to read a chapter."
+          },
+          "to": {
+            "type": "string",
+            "description": "Where a time range ends, in the same forms, after from. Leave out to read a chapter."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["chapter", "from", "to"] }
     },
     {
       "name": "search_documents",
       "title": "Search for files",
-      "description": "Searches for documents matching the specified query and optional filters.",
+      "description": "Searches for documents matching the specified query and optional filters. With updated_since, returns the files changed since that date, the most recent first, with or without a query: use it to keep a folder in sync instead of opening each document. It searches the whole tree under the folder or the space, files only, as the search index holds them (a change can take a moment to show). Each file says whether you can edit or delete it (can_edit, can_delete); a shortcut the search finds is answered as its target, with the target's id and rights.",
       "input_schema": {
         "type": "object",
         "properties": {
           "query": {
             "type": "string",
-            "description": "Full-text search query string."
+            "description": "Full-text search query string. Optional when you pass updated_since."
+          },
+          "updated_since": {
+            "type": "string",
+            "description": "Optional ISO-8601 date or date-time, such as 2026-10-01 or 2026-10-01T08:00:00Z (a date or a date-time without an offset is taken in UTC): only the files changed since then, the most recent first."
           },
           "space_id": {
             "type": "integer",
-            "description": "Optional space identifier to restrict search scope."
+            "description": "Optional id of the space to search in. Leave it out when you pass space_name."
+          },
+          "space_name": {
+            "type": "string",
+            "description": "Optional name of the space to search in, e.g. 'Legal', looked up among the spaces you're a member of. Leave it out when you pass space_id."
           },
           "parent_folder_id": {
             "type": "string",
@@ -232,9 +347,7 @@
             "description": "If true, restricts results to favorite documents."
           }
         },
-        "required": [
-          "query"
-        ]
+        "required": []
       },
       "annotations": {
         "readOnlyHint": true,
@@ -246,7 +359,7 @@
     {
       "name": "list_folder_children",
       "title": "List DMS folder children",
-      "description": "Lists the direct child files and folders of a folder. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
+      "description": "Lists the direct child files and folders of a folder, folders first. Each child gives its updated_date and whether you can edit it (for a folder: add or upload documents in it) or delete it (can_edit, can_delete); a shortcut gives shortcut_target_id and no rights: to add documents to a shortcut's folder, use shortcut_target_id as the folder id; get_document_permissions tells your rights there. With updated_since, lists only the children changed since that date, the most recent first; a folder whose listing returns more than 1000 documents is refused, then use search_documents with parent_folder_id and updated_since. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to obtain a folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -260,7 +373,11 @@
           },
           "limit": {
             "type": "integer",
-            "description": "Maximum number of results to return."
+            "description": "Maximum number of results to return, at most 100."
+          },
+          "updated_since": {
+            "type": "string",
+            "description": "Optional ISO-8601 date or date-time, such as 2026-10-01 or 2026-10-01T08:00:00Z (a date or a date-time without an offset is taken in UTC): only the children changed since then."
           }
         },
         "required": [
@@ -272,7 +389,32 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      }
+      },
+      "space_scope": { "object_arg": "folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["offset", "limit", "updated_since"] }
+    },
+    {
+      "name": "get_document_permissions",
+      "title": "Get your rights on a DMS folder or file",
+      "description": "Tells what you may do on a folder or a file before you try: can_read, can_edit (for a folder: create, upload or rename documents in it; for a file: edit it or add a version) and can_delete. Call it before writing into a folder you didn't create. For a shortcut, the rights are its target's (shortcut_target_id) and can_delete is left out: deleting a shortcut removes only the shortcut. A document you can't read is refused.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the folder or the file."
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32" }
     },
     {
       "name": "get_folder_breadcrumb",
@@ -345,7 +487,8 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      }
+      },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32" }
     },
     {
       "name": "get_documents_size",
@@ -394,6 +537,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "parent_folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["name"], "space_role": "redactor" },
       "require_approval": true
     },
     {
@@ -428,6 +572,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "parent_folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["name", "content"], "space_role": "redactor" },
       "require_approval": true
     },
     {
@@ -467,12 +612,13 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "parent_folder_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["name", "document_type"], "space_role": "redactor" },
       "require_approval": true
     },
     {
       "name": "upload_document",
       "title": "Upload a file to the DMS",
-      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder. Use this when the user attaches a file or image in the conversation and asks to save it to the Documents app (the attachment is resolved automatically server-side), or from exactly one of a base64 payload or an http(s) URL (fetched server-side behind an SSRF guard). Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
+      "description": "Uploads a real or binary document (PDF, image, office file, etc.) into a folder, filed at once the way the Documents app files an upload; the created document is returned. Exactly one source, in order of choice: a file the user attached in the conversation, resolved server-side through the attachment_object_* parameters the client sets, up to the upload size limit (200 MB by default): prefer it whenever the user attached the file; an http(s) url the platform can read, fetched server-side behind an SSRF guard, up to 15 MB within the upload size limit; a file on your machine: open an upload link with start_upload (name and size), run its curl command in your shell, then pass its upload_id here, up to the upload size limit, the file never passing through the conversation; or, only when you have no shell or curl can't reach the platform, base64 for a small file: at most 20000 base64 characters (about 15 KB) in this call, and a larger one in pieces with start_document_upload then append_document_upload_chunk, each piece being base64 text you write out, so in practice up to about 1 MB. Call get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id first to get the parent_folder_id. For text/markdown/HTML authored in the chat, use create_document instead.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -482,15 +628,19 @@
           },
           "name": {
             "type": "string",
-            "description": "The document file name including its extension (e.g. 'report.pdf'). Mandatory with base64; optional with url or a chat attachment (the name is then derived from the source file)."
+            "description": "The document file name including its extension (e.g. 'report.pdf'). Mandatory with base64; optional with upload_id, url or a chat attachment (the name is then the uploaded or source file's)."
           },
           "base64": {
             "type": "string",
-            "description": "The file bytes encoded in base64. Provide exactly one source: the chat attachment, base64 or url."
+            "description": "The file bytes encoded in base64, at most 20000 characters (a file of about 15 KB), only when you have no shell to send the file with start_upload and upload_id; a longer one is refused. Provide exactly one source: the chat attachment, upload_id, base64 or url."
           },
           "url": {
             "type": "string",
-            "description": "An http(s) URL to download the file from. Provide exactly one source: the chat attachment, base64 or url."
+            "description": "An http(s) URL to download the file from, read up to 15 MB, within the upload size limit. Provide exactly one source: the chat attachment, upload_id, base64 or url."
+          },
+          "upload_id": {
+            "type": "string",
+            "description": "The upload_id start_upload returned, once its curl command answered {\"status\":\"uploaded\"}: the way to send a file that is on your machine, up to the upload size limit (200 MB by default). Only your own uploads are accepted. Once this call has checked the folder and read the upload, it consumes it, whether it files it or not: after such a refusal, open a new one with start_upload. An upload still being sent is left for a later call. Not start_document_upload's upload_id. Provide exactly one source: the chat attachment, upload_id, base64 or url."
           },
           "attachment_object_type": {
             "type": "string",
@@ -498,7 +648,12 @@
           },
           "attachment_object_id": {
             "type": "string",
-            "description": "Internal: object id of an existing platform attachment to upload (set automatically by the client — do not fill this yourself). Provide exactly one source: attachment_object_id, base64 or url."
+            "description": "Internal: object id of an existing platform attachment to upload (set automatically by the client — do not fill this yourself). Provide exactly one source: attachment_object_id, upload_id, base64 or url."
+          },
+          "on_conflict": {
+            "type": "string",
+            "enum": ["keep_both", "new_version"],
+            "description": "What to do when the folder already holds a file of that name, the two choices the Documents app offers: keep_both (default) files a second one with a numbered name, new_version adds this file as a new version of the existing one, which keeps the old content in its version history; it is refused when the existing file keeps no versions, as the app then offers keep_both only. Ask the user when a file of that name exists and they didn't say."
           }
         },
         "required": [
@@ -514,9 +669,81 @@
       "require_approval": true
     },
     {
+      "name": "start_document_upload",
+      "title": "Start uploading a file in pieces",
+      "description": "Starts uploading a file into a folder in pieces, the fallback when you have no shell, or curl can't reach the platform, for a file you hold the bytes of that is too large to pass whole as base64 to upload_document (over 20000 base64 characters, about 15 KB). With a shell, send a file on your machine with start_upload, its curl command and upload_document's upload_id instead. Each piece is base64 text you write out in a tool call, so in practice pieces suit a file of up to about 1 MB; for a larger one, ask the user to attach it in the conversation or to upload it in the Documents app. (upload_document reads an attached file up to the upload size limit.) Announces the file: its folder, name, size and what to do when a file of that name exists; checks the folder, that you can add documents to it and that the file is within the upload size limit (max_bytes, 200 MB by default) before anything is sent. Then send the file's bytes, base64-encoded, in pieces of chunk_chars (20000) characters with append_document_upload_chunk (index 0, 1, 2, ... in order): the piece that completes the size files the document and returns it. To send a new version of an existing file too large for add_document_version's base64, start it in that file's folder with the file's exact name and on_conflict=new_version. The upload is kept 30 minutes without a piece, and a user keeps at most 3 in progress.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "parent_folder_id": {
+            "type": "string",
+            "description": "The folder the file is filed into. Get it from get_root_folder_for_user, get_root_folder_by_space or get_documents_by_folder_id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The file name with its extension, e.g. 'grid.xlsx'."
+          },
+          "size": {
+            "type": "integer",
+            "description": "The file's size in bytes, before base64 encoding."
+          },
+          "on_conflict": {
+            "type": "string",
+            "enum": ["keep_both", "new_version"],
+            "description": "What to do when the folder already holds a file of that name, the two choices the Documents app offers: keep_both (default) files a second one with a numbered name, new_version adds this file as a new version of the existing one, which keeps the old content in its version history; it is refused when the existing file keeps no versions, as the app then offers keep_both only. Ask the user when a file of that name exists and they didn't say."
+          }
+        },
+        "required": [
+          "parent_folder_id",
+          "name",
+          "size"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "require_approval": true
+    },
+    {
+      "name": "append_document_upload_chunk",
+      "title": "Send a piece of a file uploaded in pieces",
+      "description": "Sends the next piece of a file started with start_document_upload: the piece's index (from 0, in order) and its base64 content (chunk_chars characters, 20000: cut the file's padded base64 every chunk_chars characters, the last piece holding the rest). The answer gives next_index and received_bytes; the piece that completes the file's size files it, as start_document_upload announced, and the answer then holds the created document. Sending a piece again after a lost answer is safe: it is not added twice, and the last piece sent again returns the document already filed. Each piece is text you write out, so in practice a file of up to about 1 MB is sent this way.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "description": "The upload_id start_document_upload returned (not one from start_upload, which is passed to upload_document or add_document_version)."
+          },
+          "index": {
+            "type": "integer",
+            "description": "The piece's number, from 0, one more for each piece."
+          },
+          "base64": {
+            "type": "string",
+            "description": "The piece of the file, base64-encoded."
+          }
+        },
+        "required": [
+          "upload_id",
+          "index",
+          "base64"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "rename_document",
       "title": "Rename a DMS file or folder",
-      "description": "Renames a file or folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "description": "Renames a file or folder. In a call limited to a space, a node the platform created for the space (creator __system) can't be renamed. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -540,12 +767,13 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["new_name"], "space_role": "redactor" },
       "require_approval": true
     },
     {
       "name": "move_document",
       "title": "Move a DMS file or folder",
-      "description": "Moves a file or folder into a destination folder. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "description": "Moves a file or folder into a destination folder. In a call limited to a space, the destination folder must be in that space, and a node the platform created for the space (creator __system) can't be moved. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -574,12 +802,13 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id"], "space_role": "redactor" },
       "require_approval": true
     },
     {
       "name": "copy_document",
       "title": "Copy a DMS file or folder",
-      "description": "Copies a file or folder into a destination folder. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "description": "Copies a file or folder into a destination folder. In a call limited to a space, the destination folder must be in that space, and a node the platform created for the space (creator __system) can't be copied. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -603,12 +832,13 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id"], "space_role": "redactor" },
       "require_approval": true
     },
     {
       "name": "duplicate_document",
       "title": "Duplicate a DMS file or folder",
-      "description": "Creates a copy of a file or folder in the same parent folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "description": "Creates a copy of a file or folder in the same parent folder. In a call limited to a space, a node the platform created for the space (creator __system) can't be duplicated. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -631,6 +861,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["prefix"], "space_role": "redactor" },
       "require_approval": true
     },
     {
@@ -742,7 +973,7 @@
     {
       "name": "set_document_visibility",
       "title": "Set DMS document visibility",
-      "description": "Hides or shows a file or folder. Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
+      "description": "Hides or shows a file or folder; hiding a folder may also hide some of its direct children. In a call limited to a space, only a folder, and not one the platform created for the space (creator __system). Call get_document_by_id or get_documents_by_folder_id first to get a document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -766,12 +997,13 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["hidden"], "space_role": "redactor" },
       "require_approval": true
     },
     {
       "name": "add_document_version",
       "title": "Add a new version to a DMS file",
-      "description": "Uploads updated content onto an EXISTING file, creating a new version (the previous content stays retrievable via list_document_versions / restore_document_version). The file name and type are unchanged. Provide the new content from exactly one source: a text 'content' string (for text files), a 'base64' payload, an http(s) 'url', or a file the user attached in the conversation. Call get_document_by_id, get_documents_by_folder_id or search_documents first to get the document_id.",
+      "description": "Uploads updated content onto an EXISTING file, creating a new version (the previous content stays retrievable via list_document_versions / restore_document_version). The file name and type are unchanged. Provide the new content from exactly one source, in order of choice: a file the user attached in the conversation, resolved server-side through the attachment_object_* parameters the client sets, up to the upload size limit (200 MB by default): prefer it whenever the user attached the file; a text 'content' string (for text files); an http(s) 'url' the platform can read, up to 15 MB within the upload size limit; a file on your machine: open an upload link with start_upload (name and size), run its curl command in your shell, then pass its 'upload_id' here, up to the upload size limit, the file never passing through the conversation; or, only when you have no shell or curl can't reach the platform, a 'base64' payload for a small file: at most 20000 characters (about 15 KB), and a larger binary version in pieces: start_document_upload into the file's folder with the file's exact name and on_conflict=new_version, then append_document_upload_chunk (no version_summary that way; in practice up to about 1 MB, each piece being text you write out). While a run is limited to a space, only 'content' and 'base64' (with version_summary) are taken: an upload link and sending in pieces are not available. In a call limited to a space, a file the platform created for the space (creator __system) can't be versioned. Call get_document_by_id, get_documents_by_folder_id or search_documents first to get the document_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -781,15 +1013,19 @@
           },
           "content": {
             "type": "string",
-            "description": "Plain text / markdown / HTML body to write as the new version. Use for text files. Provide exactly one source: content, base64, url or the chat attachment."
+            "description": "Plain text / markdown / HTML body to write as the new version. Use for text files. Provide exactly one source: content, upload_id, base64, url or the chat attachment."
           },
           "base64": {
             "type": "string",
-            "description": "The new file bytes encoded in base64. Provide exactly one source: content, base64, url or the chat attachment."
+            "description": "The new file bytes encoded in base64, at most 20000 characters (a file of about 15 KB), only when you have no shell to send the file with start_upload and upload_id; a longer one is refused. Provide exactly one source: content, upload_id, base64, url or the chat attachment."
           },
           "url": {
             "type": "string",
-            "description": "An http(s) URL to download the new content from (fetched server-side behind an SSRF guard). Provide exactly one source: content, base64, url or the chat attachment."
+            "description": "An http(s) URL to download the new content from (fetched server-side behind an SSRF guard), read up to 15 MB, within the upload size limit. Provide exactly one source: content, upload_id, base64, url or the chat attachment."
+          },
+          "upload_id": {
+            "type": "string",
+            "description": "The upload_id start_upload returned, once its curl command answered {\"status\":\"uploaded\"}: the way to send a new version that is a file on your machine, up to the upload size limit (200 MB by default). Only your own uploads are accepted. Once this call has checked the file and read the upload, it consumes it, whether it adds the version or not: after such a refusal, open a new one with start_upload. An upload still being sent is left for a later call. Provide exactly one source: content, upload_id, base64, url or the chat attachment."
           },
           "attachment_object_type": {
             "type": "string",
@@ -797,7 +1033,7 @@
           },
           "attachment_object_id": {
             "type": "string",
-            "description": "Internal: object id of an existing platform attachment to use as the new version (set automatically by the client - do not fill this yourself). Provide exactly one source: content, base64, url or attachment_object_id."
+            "description": "Internal: object id of an existing platform attachment to use as the new version (set automatically by the client - do not fill this yourself). Provide exactly one source: content, upload_id, base64, url or attachment_object_id."
           },
           "version_summary": {
             "type": "string",
@@ -814,6 +1050,7 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["content", "base64", "version_summary"], "space_role": "redactor" },
       "require_approval": true
     },
     {
@@ -851,7 +1088,7 @@
     {
       "name": "create_document_shortcut",
       "title": "Create a shortcut to a DMS file or folder",
-      "description": "Creates a shortcut (symlink) to a document inside another folder, so the same file appears in a second location without being copied. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
+      "description": "Creates a shortcut (symlink) to a document inside another folder, so the same file appears in a second location without being copied. In a call limited to a space, the destination folder must be in that space, and a node the platform created for the space (creator __system) can't be linked. Call get_document_by_id or get_documents_by_folder_id first to get the document_id and the destination_folder_id.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -880,12 +1117,13 @@
         "idempotentHint": false,
         "openWorldHint": false
       },
+      "space_scope": { "object_arg": "document_id", "resolver": "document", "id_format": "hex32", "allowed_args": ["destination_folder_id", "conflict_action"], "space_role": "redactor" },
       "require_approval": true
     },
     {
       "name": "share_document",
       "title": "Share a DMS file with a user or space",
-      "description": "Shares a document with another user or with a space: the recipient is granted read access and gets the file in their 'Shared' folder. Provide exactly one recipient: either username or space_id. Requires edit permission on the document. Call get_document_by_id first to get the document_id, search_users for a username, or get_my_spaces for a space_id.",
+      "description": "Shares a document with another user or with a space: the recipient is granted read access and gets the file in their 'Shared' folder. Provide exactly one recipient: username, space_id or space_name. Requires edit permission on the document. Call get_document_by_id first to get the document_id, search_users for a username; a space can be given by its space_name, looked up among the spaces you're a member of, or by its space_id from get_my_spaces.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -895,11 +1133,15 @@
           },
           "username": {
             "type": "string",
-            "description": "The username to share the document with (mutually exclusive with space_id)."
+            "description": "The username to share the document with (mutually exclusive with space_id and space_name)."
           },
           "space_id": {
             "type": "integer",
-            "description": "The id of the space to share the document with (mutually exclusive with username)."
+            "description": "The id of the space to share the document with (mutually exclusive with username and space_name)."
+          },
+          "space_name": {
+            "type": "string",
+            "description": "The name of the space to share the document with, e.g. 'Legal', one of the spaces you're a member of (mutually exclusive with username and space_id)."
           },
           "notify": {
             "type": "boolean",

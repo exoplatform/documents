@@ -29,15 +29,24 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.jcr.*;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 import javax.jcr.version.Version;
 import javax.jcr.version.VersionIterator;
+import javax.ws.rs.core.Response;
+import javax.xml.transform.dom.DOMSource;
 
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.fileupload2.core.FileUploadException;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -48,18 +57,24 @@ import org.exoplatform.commons.comparators.NaturalComparator;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.PropertyManager;
+import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.commons.utils.IOUtil;
+import org.exoplatform.documents.constant.TranscriptionStatus;
+import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
+import org.exoplatform.documents.storage.jcr.search.DocumentPagedTextExtractor;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.search.DocumentTextExtractor;
+import org.exoplatform.documents.storage.jcr.util.ContentSource;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.documents.storage.jcr.util.Utils;
 import org.exoplatform.services.document.DocumentReaderService;
 import org.exoplatform.services.cms.documents.DocumentService;
+import org.exoplatform.services.context.DocumentContext;
 import org.exoplatform.services.cms.documents.NewDocumentTemplate;
 import org.exoplatform.services.cms.documents.NewDocumentTemplateProvider;
 import org.exoplatform.services.jcr.RepositoryService;
@@ -74,10 +89,12 @@ import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.jcr.impl.core.query.QueryImpl;
+import org.exoplatform.services.jcr.impl.util.EntityCollection;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
@@ -91,12 +108,17 @@ import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.social.metadata.tag.model.TagObject;
 import org.exoplatform.upload.UploadResource;
+import org.exoplatform.upload.UploadFileValidator;
 import org.exoplatform.upload.UploadService;
+import org.exoplatform.wcm.connector.FileUploadHandler;
 
 import io.meeds.portal.thumbnail.model.FileContent;
 import lombok.SneakyThrows;
 
 public class JCRDocumentFileStorage implements DocumentFileStorage {
+
+  /** How long a request waits for a speaker lock, in milliseconds; shortened by the tests only. */
+  static long                                       speakerLockWaitMillis       = 30_000;
 
   /** The refusal of a folder title the storage can't name a folder after */
   private static final String INVALID_FOLDER_NAME_MESSAGE    =
@@ -107,6 +129,12 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                              "An item named '%s' already exists in this folder but can't be reused as a folder (a file, a hidden folder or a shortcut): pick another folder name.";
 
   private static final String                       COLLABORATION               = "collaboration";
+
+  /**
+   * The fewest rows a folder listing reads at once, so a listing whose rows
+   * hold children it leaves out isn't read one row at a time.
+   */
+  private static final int                          MIN_CHILDREN_ROWS_READ      = 20;
 
   private static final List<String>                 FOLDER_NODE_TYPES           = List.of(NodeTypeConstants.NT_UNSTRUCTURED,
                                                                                           NodeTypeConstants.NT_FOLDER,
@@ -141,6 +169,44 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                                                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                                                                           "application/vnd.openxmlformats-officedocument.presentationml.presentation");
 
+  /**
+   * Files larger than this many MB are not read part by part: the largest
+   * file a user can attach in the UI, so any file attached there can be read.
+   */
+  public static final String                        PAGED_TEXT_MAX_SIZE_MB_PROPERTY          = "exo.social.composer.maxFileSizeInMB";
+
+  /** The text read part by part is cut at this many characters. */
+  public static final String                        PAGED_TEXT_MAX_CHARS_PROPERTY            =
+                                                                                         "exo.documents.textExtraction.paged.maxChars";
+
+  /**
+   * Extracting a file read part by part is abandoned after this many seconds.
+   * A file read by a platform reader that builds its whole text before giving
+   * any, an older Office, an Outlook or an OpenDocument file for instance, is
+   * not stopped: it keeps the one extraction thread until it ends.
+   */
+  public static final String                        PAGED_TEXT_TIMEOUT_SECONDS_PROPERTY      =
+                                                                                         "exo.documents.textExtraction.paged.timeoutSeconds";
+
+  /** A caller waits this many seconds for a file's extraction before being told to ask again. */
+  public static final String                        PAGED_TEXT_WAIT_SECONDS_PROPERTY         =
+                                                                                         "exo.documents.textExtraction.paged.waitSeconds";
+
+  /** The texts extracted to be read part by part take at most this many MB on disk. */
+  public static final String                        PAGED_TEXT_CACHE_MAX_MB_PROPERTY         =
+                                                                                         "exo.documents.textExtraction.paged.cacheMaxMb";
+
+  /** The UI's own default for the largest file attached. */
+  private static final long                         DEFAULT_PAGED_TEXT_MAX_SIZE_MB           = 200;
+
+  private static final long                         DEFAULT_PAGED_TEXT_MAX_CHARS             = 20_000_000;
+
+  private static final long                         DEFAULT_PAGED_TEXT_TIMEOUT_SECONDS       = 300;
+
+  private static final long                         DEFAULT_PAGED_TEXT_WAIT_SECONDS          = 25;
+
+  private static final long                         DEFAULT_PAGED_TEXT_CACHE_MAX_MB          = 512;
+
   private final SpaceService                        spaceService;
 
   private final RepositoryService                   repositoryService;
@@ -163,6 +229,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private final DocumentService                     documentService;
 
+  private FileUploadHandler                         fileUploadHandler;
+
   /** Files of this many MB or larger are not read to extract their text on the fly. */
   public static final String                        TEXT_EXTRACTION_MAX_SIZE_MB_PROPERTY     =
                                                                                          "exo.documents.textExtraction.maxFileSizeMb";
@@ -181,9 +249,35 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final long                         DEFAULT_TEXT_EXTRACTION_MAX_CHARS        = 1_000_000;
 
+  /**
+   * The locks that serialize the naming of a file's speakers on this server, by
+   * file (EXO-92123): a save rewrites all the names of the file from what it
+   * read, so two at once would drop one, and a new transcript drops them, which
+   * a save then must not bring back.
+   */
+  private static final ReentrantLock[]              SPEAKER_LOCKS                            =
+                                                                  Stream.generate(ReentrantLock::new)
+                                                                        .limit(64)
+                                                                        .toArray(ReentrantLock[]::new);
+
+
   private static final long                         DEFAULT_TEXT_EXTRACTION_TIMEOUT_SECONDS  = 20;
 
+  /** How a stored speaker proposal says its evidence is strong (EXO-92126). */
+  private static final String                       SUGGESTION_STRONG                        = "strong";
+
+  /** How a stored speaker proposal says its evidence is not strong. */
+  private static final String                       SUGGESTION_LIKELY                        = "likely";
+
+  /** How a stored speaker proposal says it was applied without waiting for a person. */
+  private static final String                       SUGGESTION_AUTO                          = "auto";
+
+  /** How a stored speaker proposal says it waits for a person. */
+  private static final String                       SUGGESTION_MANUAL                        = "manual";
+
   private volatile DocumentTextExtractor            textExtractor;
+
+  private volatile DocumentPagedTextExtractor       pagedTextExtractor;
 
   private final String                              EVENT_DOCUMENT_MOVED        = "exo-document-moved";
 
@@ -212,6 +306,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   private static final String                       KEEP_BOTH                   = "keepBoth";
 
   private static final String                       CREATE_NEW_VERSION          = "createNewVersion";
+
+  /** The source the Documents app names when it files an upload. */
+  private static final String                       UPLOAD_SOURCE_NEW_APP       = "newApp";
 
   private static final String                       ZIP_PREFIX                  = "downloadzip";
 
@@ -246,6 +343,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private static final Log                          LOG                         =
                                                         ExoLogger.getLogger(JCRDocumentFileStorage.class);
+
+  /** A node path in the {@code Documents} drive of a space, the space's group name captured. */
+  private static final Pattern                      SPACE_DRIVE_PATH            = Pattern.compile("/Groups/spaces/([^/\\[\\]]+)/Documents(?:/.*)?");
 
   public JCRDocumentFileStorage(NodeHierarchyCreator nodeHierarchyCreator,
                                 RepositoryService repositoryService,
@@ -474,14 +574,16 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
       paths.add(path);
       paths.addAll(findSymlinkTargetPaths(session, path));
+      // the relevance order, unless the caller sorts by a field, such as the latest changes first
+      boolean sorted = filter.getSortField() != null;
       Collection<DocumentFileSearchResult> results = documentSearchServiceConnector.search(identity,
                                                                                            COLLABORATION,
                                                                                            paths,
                                                                                            filter,
                                                                                            offset,
                                                                                            limit,
-                                                                                           "_score",
-                                                                                           "DESC");
+                                                                                           sorted ? getSortField(filter, false) : "_score",
+                                                                                           sorted ? getSortDirection(filter) : "DESC");
       return results.stream()
                     .map(result -> (AbstractNode) toFileNode(identityManager, session, identity, result, spaceService))
                     .filter(Objects::nonNull)
@@ -722,7 +824,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
             String sourceNodeId = parent.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
             parent = getNodeByIdentifier(session, sourceNodeId);
           }
-          // Load folders + symlink of folders
+          // the folders, shortcuts to folders included, then the files, shortcuts to files included,
+          // paged over that sequence as listed; no limit, as for the JCR query, reads them all
+          int wanted = limit <= 0 ? Integer.MAX_VALUE
+                                  : (int) Math.min((long) Math.max(offset, 0) + limit, Integer.MAX_VALUE);
           String statementOfFolders = getFolderDocumentsQuery(parent.getPath(),
                                                               sortField,
                                                               sortDirection,
@@ -730,49 +835,29 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                                               filter.getCategoryIds(),
                                                               filter.getExcludedCategoryIds(),
                                                               includeHiddenFiles);
-          Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfFolders, Query.SQL);
-          ((QueryImpl) jcrQuery).setOffset(offset);
-          ((QueryImpl) jcrQuery).setLimit(limit);
-          QueryResult queryResult = jcrQuery.execute();
-          NodeIterator nodeIterator = queryResult.getNodes();
-          List<AbstractNode> fileItems = new ArrayList<>(toNodes(identityManager,
-                                                                 session,
-                                                                 nodeIterator,
-                                                                 aclIdentity,
-                                                                 spaceService,
-                                                                 includeHiddenFiles,
-                                                                 filter).stream().filter(AbstractNode::isFolder).toList());
-          // load files + symlink of files
-          int itemsSize = fileItems.size();
-          if (itemsSize < limit) {
-            String statementOfSymlinks =
-                                       getFolderDocumentsQuery(parent.getPath(),
-                                                               sortField,
-                                                               sortDirection,
-                                                               List.of(NodeTypeConstants.NT_FILE, NodeTypeConstants.EXO_SYMLINK),
-                                                               filter.getCategoryIds(),
-                                                               filter.getExcludedCategoryIds(),
-                                                               includeHiddenFiles);
-            jcrQuery = session.getWorkspace().getQueryManager().createQuery(statementOfSymlinks, Query.SQL);
-            ((QueryImpl) jcrQuery).setOffset(0);
-            ((QueryImpl) jcrQuery).setLimit(limit);
-            queryResult = jcrQuery.execute();
-            nodeIterator = queryResult.getNodes();
-            List<AbstractNode> fileItemsToAdd = toNodes(identityManager,
-                                                        session,
-                                                        nodeIterator,
-                                                        aclIdentity,
-                                                        spaceService,
-                                                        includeHiddenFiles,
-                                                        filter).stream().filter(f -> !f.isFolder()).toList();
-            int limitToAdd = limit - itemsSize;
-            if (fileItemsToAdd.size() > limitToAdd) {
-              fileItems.addAll(fileItemsToAdd.subList(0, limit - itemsSize));
-            } else {
-              fileItems.addAll(fileItemsToAdd);
-            }
+          List<AbstractNode> fileItems = readListedChildren(session,
+                                                            statementOfFolders,
+                                                            AbstractNode::isFolder,
+                                                            wanted,
+                                                            aclIdentity,
+                                                            includeHiddenFiles);
+          if (fileItems.size() < wanted) {
+            String statementOfFiles = getFolderDocumentsQuery(parent.getPath(),
+                                                              sortField,
+                                                              sortDirection,
+                                                              List.of(NodeTypeConstants.NT_FILE, NodeTypeConstants.EXO_SYMLINK),
+                                                              filter.getCategoryIds(),
+                                                              filter.getExcludedCategoryIds(),
+                                                              includeHiddenFiles);
+            fileItems.addAll(readListedChildren(session,
+                                                statementOfFiles,
+                                                child -> !child.isFolder(),
+                                                wanted - fileItems.size(),
+                                                aclIdentity,
+                                                includeHiddenFiles));
           }
-          return fileItems;
+          return offset >= fileItems.size() ? new ArrayList<>()
+                                             : new ArrayList<>(fileItems.subList(Math.max(offset, 0), fileItems.size()));
         } else {
           String workspace = session.getWorkspace().getName();
           String sortField = getSortField(filter, false);
@@ -805,6 +890,61 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
     }
+  }
+
+  /**
+   * Reads the first children a folder query lists, keeping those of the kind
+   * asked, until enough are kept or the query's rows run out. The query's rows
+   * hold children the listing leaves out (a shortcut to a file among the
+   * folders, a shortcut to a folder among the files, a shortcut whose target
+   * is gone or can't be read, a hidden child), so its rows are read again past
+   * the last one read whenever too few were kept: the children returned are a
+   * prefix of the children listed, whatever the rows left out. The children
+   * keep the query's order, names compared whatever their case by the query
+   * itself: no sort after the rows are read, which would make a longer read
+   * order its children otherwise than a shorter one.
+   *
+   * @param session the user's session
+   * @param statement the JCR-SQL query of the folder's children, sorted
+   * @param kind the kind of children kept
+   * @param wanted the most children to keep
+   * @param aclIdentity the user's identity
+   * @param includeHiddenFiles whether hidden children are listed
+   * @return at most {@code wanted} children, fewer only when the rows ran out
+   * @throws RepositoryException when the query can't be run
+   */
+  private List<AbstractNode> readListedChildren(Session session,
+                                                String statement,
+                                                Predicate<AbstractNode> kind,
+                                                int wanted,
+                                                Identity aclIdentity,
+                                                boolean includeHiddenFiles) throws RepositoryException {
+    List<AbstractNode> children = new ArrayList<>();
+    long rowsRead = 0;
+    while (children.size() < wanted) {
+      int rowsAsked = Math.max(wanted - children.size(), MIN_CHILDREN_ROWS_READ);
+      Query jcrQuery = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+      ((QueryImpl) jcrQuery).setOffset(rowsRead);
+      ((QueryImpl) jcrQuery).setLimit(rowsAsked);
+      // names sort as the listing shows them, whatever their case; the rows are kept in that order
+      ((QueryImpl) jcrQuery).setCaseInsensitiveOrder(true);
+      NodeIterator nodeIterator = jcrQuery.execute().getNodes();
+      List<Node> rows = new ArrayList<>();
+      while (nodeIterator.hasNext()) {
+        rows.add(nodeIterator.nextNode());
+      }
+      toNodesInRowOrder(identityManager,
+                        session,
+                        new EntityCollection(rows),
+                        aclIdentity,
+                        spaceService,
+                        includeHiddenFiles).stream().filter(kind).forEach(children::add);
+      rowsRead += rows.size();
+      if (rows.size() < rowsAsked) {
+        break;
+      }
+    }
+    return children.size() > wanted ? new ArrayList<>(children.subList(0, wanted)) : children;
   }
 
   @Override
@@ -1301,6 +1441,262 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         sessionProvider.close();
       }
     }
+  }
+
+  @Override
+  public void checkUploadConflict(String folderId,
+                                  String name,
+                                  UploadConflictAction conflictAction,
+                                  Identity aclIdentity) throws ObjectNotFoundException {
+    if (conflictAction == null || conflictAction == UploadConflictAction.KEEP_BOTH) {
+      return;
+    }
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node folder = getUploadFolder(session, folderId);
+      toExistenceAction(folder, name, conflictAction);
+    } catch (RepositoryException e) {
+      LOG.debug("Error reading the folder {}", folderId, e);
+      throw new IllegalStateException("The folder " + folderId + " can't be read");
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  @Override
+  public FileNode saveUploadedDocument(String folderId,
+                                       String uploadId,
+                                       String name,
+                                       UploadConflictAction conflictAction,
+                                       Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    if (StringUtils.isBlank(name)) {
+      throw new IllegalArgumentException("The file name is mandatory");
+    }
+    UploadResource upload = uploadService.getUploadResource(uploadId);
+    if (upload == null) {
+      throw new ObjectNotFoundException("The upload " + uploadId + " doesn't exist");
+    }
+    SessionProvider sessionProvider = null;
+    try {
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node folder = getUploadFolder(session, folderId);
+      Map<String, Boolean> nodeAccessList = countNodeAccessList(folder, aclIdentity);
+      if (nodeAccessList.containsKey("canEdit") && !nodeAccessList.get("canEdit").booleanValue()) {
+        throw new IllegalAccessException("Permission to add a document to the folder is missing");
+      }
+      String existenceAction = toExistenceAction(folder, name, conflictAction);
+      validateUploadedFile(upload, name);
+      Response response = saveAsNTFile(folder, uploadId, name, aclIdentity.getUserId(), existenceAction);
+      Node file = getNodeByIdentifier(session, getSavedFileId(response, name));
+      if (file == null) {
+        throw new IllegalStateException("The file '" + name + "' was filed but can't be read back");
+      }
+      return toFileNode(identityManager, aclIdentity, file, "", spaceService);
+    } catch (IllegalAccessException | ObjectNotFoundException | IllegalArgumentException | IllegalStateException e) {
+      throw e;
+    } catch (Exception e) {
+      LOG.debug("Error filing the upload {} into the folder {}", uploadId, folderId, e);
+      throw new IllegalStateException("The file '" + name + "' couldn't be filed");
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * Runs the platform's upload validators on an upload, as the platform runs
+   * them on a file uploaded from a browser: each validator that supports the
+   * file reads it from a fresh stream.
+   *
+   * @param upload the upload, its file on disk
+   * @param name the name it is filed under
+   * @throws IllegalArgumentException when a validator refuses the file, with
+   *           its message
+   * @throws IOException when the file can't be read
+   */
+  void validateUploadedFile(UploadResource upload, String name) throws IOException {
+    validateFile(name, upload.getMimeType(), () -> Files.newInputStream(Path.of(upload.getStoreLocation())));
+  }
+
+  @Override
+  public void validateUploadedContent(String fileName, String mimeType, byte[] content) {
+    try {
+      validateFile(fileName, mimeType, () -> new ByteArrayInputStream(content));
+    } catch (IOException e) {
+      throw new IllegalStateException("The file '" + fileName + "' couldn't be checked", e);
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void validateUploadedFile(String fileName, String mimeType, Path file) {
+    try {
+      validateFile(fileName, mimeType, () -> Files.newInputStream(file));
+    } catch (IOException e) {
+      throw new IllegalStateException("The file '" + fileName + "' couldn't be checked", e);
+    }
+  }
+
+  /**
+   * Runs every upload validator that supports a file on its content, each
+   * from a fresh stream.
+   *
+   * @param name the file name
+   * @param mimeType the file's type
+   * @param content opens a stream at the start of the file's content
+   * @throws IllegalArgumentException when a validator refuses the file, with
+   *           its message
+   * @throws IOException when the content can't be read
+   */
+  private void validateFile(String name, String mimeType, ContentSource content) throws IOException {
+    for (UploadFileValidator validator : getUploadFileValidators()) {
+      if (validator.supports(name, mimeType)) {
+        try (InputStream inputStream = content.open()) {
+          validator.validate(name, mimeType, inputStream);
+        } catch (FileUploadException e) {
+          throw new IllegalArgumentException("The file '" + name + "' is refused: " + e.getMessage());
+        }
+      }
+    }
+  }
+
+  /**
+   * The platform's upload validators, the container's components of that
+   * type.
+   *
+   * @return the validators
+   */
+  List<UploadFileValidator> getUploadFileValidators() {
+    return ExoContainerContext.getCurrentContainer().getComponentInstancesOfType(UploadFileValidator.class);
+  }
+
+  /**
+   * Files an upload through the handler as the Documents app does: no file
+   * activity is posted in the stream, which the app asks of the handler
+   * through the thread's document context. The context outlives the request
+   * on its thread, so its previous state is restored once the file is filed.
+   *
+   * @param folder the folder, read in the user's session
+   * @param uploadId the upload
+   * @param name the file name
+   * @param userId the user filing it
+   * @param existenceAction the handler's conflict action
+   * @return the handler's answer
+   * @throws Exception when the handler fails outside its own answer
+   */
+  private Response saveAsNTFile(Node folder, String uploadId, String name, String userId, String existenceAction) throws Exception {
+    Map<String, Object> documentAttributes = DocumentContext.getCurrent().getAttributes();
+    boolean hadSkip = documentAttributes.containsKey(DocumentContext.IS_SKIP_RAISE_ACT);
+    Object previousSkip = documentAttributes.get(DocumentContext.IS_SKIP_RAISE_ACT);
+    documentAttributes.put(DocumentContext.IS_SKIP_RAISE_ACT, true);
+    try {
+      return getFileUploadHandler().saveAsNTFile(COLLABORATION,
+                                                 folder,
+                                                 uploadId,
+                                                 name,
+                                                 Locale.ENGLISH.getLanguage(),
+                                                 UPLOAD_SOURCE_NEW_APP,
+                                                 null,
+                                                 userId,
+                                                 existenceAction);
+    } finally {
+      if (hadSkip) {
+        documentAttributes.put(DocumentContext.IS_SKIP_RAISE_ACT, previousSkip);
+      } else {
+        documentAttributes.remove(DocumentContext.IS_SKIP_RAISE_ACT);
+      }
+    }
+  }
+
+  /**
+   * The handler the Documents app files an upload through, built at first use:
+   * it reads its services from the container when it is built. One handler
+   * files every upload of this storage, since it files one at a time.
+   *
+   * @return the handler
+   */
+  synchronized FileUploadHandler getFileUploadHandler() {
+    if (fileUploadHandler == null) {
+      fileUploadHandler = new FileUploadHandler();
+    }
+    return fileUploadHandler;
+  }
+
+  /**
+   * Maps a conflict action to the one the upload handler takes. A new version
+   * needs a versioned file of that name, as the Documents app offers it only
+   * then: the handler writes the upload over whatever node bears the name and
+   * keeps a version only of a versioned file, so a folder, a shortcut or a
+   * file that keeps no versions is refused rather than overwritten, and a new version
+   * of a file that doesn't exist files the upload as a new one. The handler's
+   * replacement, which deletes the existing node before filing, is never
+   * asked for.
+   *
+   * @param folder the folder the upload is filed into
+   * @param name the file name it is filed under
+   * @param conflictAction the action asked, {@link UploadConflictAction#KEEP_BOTH}
+   *          when null
+   * @return {@link FileUploadHandler#KEEP_BOTH} or
+   *         {@link FileUploadHandler#CREATE_VERSION}
+   * @throws RepositoryException when the folder can't be read
+   * @throws IllegalArgumentException when the action is a new version and the
+   *           document of that name is not a file (a folder or a shortcut), or
+   *           keeps no versions
+   */
+  static String toExistenceAction(Node folder, String name, UploadConflictAction conflictAction) throws RepositoryException {
+    if (conflictAction == null || conflictAction == UploadConflictAction.KEEP_BOTH) {
+      return FileUploadHandler.KEEP_BOTH;
+    }
+    // the node name the handler computes from the file name, to find the node it acts on
+    String cleanedName = org.exoplatform.services.cms.impl.Utils.cleanNameWithAccents(name);
+    cleanedName = org.exoplatform.services.cms.impl.Utils.cleanName(cleanedName.toLowerCase());
+    String nodeName = org.exoplatform.ecm.utils.text.Text.escapeIllegalJcrChars(cleanedName);
+    if (!folder.hasNode(nodeName)) {
+      return FileUploadHandler.KEEP_BOTH;
+    }
+    Node existing = folder.getNode(nodeName);
+    if (!existing.isNodeType(NodeTypeConstants.NT_FILE)) {
+      throw new IllegalArgumentException("A document named '" + name + "' in this folder is not a file (a folder or a shortcut): "
+          + "it can't get a version. Keep both files instead.");
+    }
+    if (!existing.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
+      throw new IllegalArgumentException("The file '" + name + "' in this folder keeps no versions: a new version would overwrite "
+          + "its content. Keep both files instead.");
+    }
+    return FileUploadHandler.CREATE_VERSION;
+  }
+
+  /**
+   * Reads the id of the file the upload handler filed from its answer. The
+   * handler answers every failure as a server error carrying the engine's
+   * message, and a refusal as a message document: neither is shown as is.
+   *
+   * @param response the handler's answer
+   * @param name the file name, for the messages
+   * @return the filed file's id
+   * @throws IllegalAccessException when the handler refused the upload
+   */
+  static String getSavedFileId(Response response, String name) throws IllegalAccessException {
+    Object entity = response.getEntity();
+    if (response.getStatus() == Response.Status.OK.getStatusCode() && entity instanceof DOMSource source
+        && source.getNode() instanceof org.w3c.dom.Document document) {
+      org.w3c.dom.Element root = document.getDocumentElement();
+      if (root != null && "file".equals(root.getTagName()) && StringUtils.isNotBlank(root.getAttribute("UUID"))) {
+        return root.getAttribute("UUID");
+      }
+      LOG.debug("The upload handler refused the file '{}': {}", name, root == null ? null : root.getTextContent());
+      throw new IllegalAccessException("The file '" + name + "' can't be added to this folder");
+    }
+    LOG.debug("The upload handler failed to file '{}' with the status {}: {}", name, response.getStatus(), entity);
+    throw new IllegalStateException("The file '" + name + "' couldn't be filed");
   }
 
   @Override
@@ -1871,8 +2267,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * Copies a node under {@code destinationNode}, recursing into a folder's
    * children.
    * <p>
-   * When the destination is the source's own parent the copy cannot keep the
-   * source's name, so a {@code " (n)"} counter is appended, {@code n} being the
+   * When the destination already holds a node of the source's name - always
+   * the case for a copy into the source's own parent, and for a copy into
+   * another folder that holds a node of the same name - the copy cannot keep
+   * that name, so a {@code " (n)"} counter is appended, {@code n} being the
    * first free index. For a file the counter is inserted <em>before</em> the
    * extension - {@code report (1).docx}, never {@code report.docx (1)}, which is
    * no longer recognised as a .docx and does not open - through the same
@@ -1883,8 +2281,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    * @param oldNode the node to copy
    * @param destinationNode the node the copy is added under
    * @param parentNode the source's parent, compared against the destination to
-   *          decide whether a counter is needed
-   * @param prefixClone optional prefix prepended to the copy's name and title
+   *          decide whether the copy is an in-place duplicate, which takes the
+   *          prefix and a lower-cased name
+   * @param prefixClone optional prefix prepended to an in-place duplicate's
+   *          name and title
    * @return the newly created node, or null for a thumbnails folder
    * @throws RepositoryException if the repository cannot be read or written
    * @throws UnsupportedEncodingException if the name cannot be URL-decoded
@@ -1908,32 +2308,34 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String title =
                  oldNode.hasProperty(NodeTypeConstants.EXO_TITLE) ? oldNode.getProperty(NodeTypeConstants.EXO_TITLE).getString() :
                                                                   oldNode.getName();
-    if (((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier())) {
-      if (StringUtils.isNotEmpty(prefixClone)) {
-        name = prefixClone.concat(" ").concat(name);
-        title = prefixClone.concat(" ").concat(title);
-      }
-      // A file's counter goes before the extension, a folder's at the end: see the
-      // method javadoc. Both sides use one index so the node name and the title a
-      // user sees stay in step. A dot at index 0 is not an extension separator but a
-      // hidden-file marker (".gitignore"), and splitting there would yield a name
-      // beginning with the counter, so those keep the trailing form - the same
-      // "dot > 0" guard cleanNameWithAccents applies.
-      boolean beforeExtension = !isFolder(oldNode) && name.lastIndexOf('.') > 0;
-      String newName = name;
-      int i = 0;
-      while ((destinationNode.hasNode(newName))) {
-        i++;
-        newName = beforeExtension ? getNewIndexedName(name, " (" + i + ")") : name + " (" + i + ")";
-      }
-      name = newName.toLowerCase();
-      if (i > 0) {
-        title = beforeExtension ? getNewIndexedName(title, " (" + i + ")") : title + " (" + i + ")";
-      }
+    boolean inPlace = ((NodeImpl) destinationNode).getIdentifier().equals(((NodeImpl) parentNode).getIdentifier());
+    if (inPlace && StringUtils.isNotEmpty(prefixClone)) {
+      name = prefixClone.concat(" ").concat(name);
+      title = prefixClone.concat(" ").concat(title);
     }
-    name = URLDecoder.decode(name, "UTF-8");
-    if (oldNode.isNodeType(NodeTypeConstants.NT_FOLDER)) {
-      newNode = destinationNode.addNode(name.toLowerCase(), NodeTypeConstants.NT_FOLDER);
+    // A file's counter goes before the extension, a folder's at the end: see the
+    // method javadoc. Both sides use one index so the node name and the title a
+    // user sees stay in step. A dot at index 0 is not an extension separator but a
+    // hidden-file marker (".gitignore"), and splitting there would yield a name
+    // beginning with the counter, so those keep the trailing form - the same
+    // "dot > 0" guard cleanNameWithAccents applies.
+    boolean beforeExtension = !isFolder(oldNode) && name.lastIndexOf('.') > 0;
+    // A name is taken when the destination holds it as it is (the source itself,
+    // for an in-place duplicate) or as the node is added under, which addedName
+    // computes for both the probe and addNode.
+    boolean folder = oldNode.isNodeType(NodeTypeConstants.NT_FOLDER);
+    String newName = name;
+    int i = 0;
+    while (destinationNode.hasNode(newName) || destinationNode.hasNode(addedName(newName, inPlace, folder))) {
+      i++;
+      newName = beforeExtension ? getNewIndexedName(name, " (" + i + ")") : name + " (" + i + ")";
+    }
+    name = addedName(newName, inPlace, folder);
+    if (i > 0) {
+      title = beforeExtension ? getNewIndexedName(title, " (" + i + ")") : title + " (" + i + ")";
+    }
+    if (folder) {
+      newNode = destinationNode.addNode(name, NodeTypeConstants.NT_FOLDER);
       newNode.setProperty(NodeTypeConstants.EXO_TITLE, title);
       NodeIterator nodeIterator = oldNode.getNodes();
       while (nodeIterator.hasNext()) {
@@ -1964,6 +2366,21 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     String name = Text.escapeIllegalJcrChars(cleanName(title.toLowerCase(), nodeType));
     name = cleanNameWithAccents(name, nodeType);
     return URLDecoder.decode(name, "UTF-8");
+  }
+
+  /**
+   * @param name the name a copy is given, counter included
+   * @param inPlace true for a copy into the source's own folder
+   * @param folder true for an {@code nt:folder}
+   * @return the name the copy's node is added under: lower-cased for an
+   *         in-place copy, then URL-decoded, then lower-cased for an
+   *         {@code nt:folder}, so a percent-escape of an upper-case letter is
+   *         lower-cased too
+   * @throws UnsupportedEncodingException never, UTF-8 being supported
+   */
+  private static String addedName(String name, boolean inPlace, boolean folder) throws UnsupportedEncodingException {
+    String decoded = URLDecoder.decode(inPlace ? name.toLowerCase() : name, "UTF-8");
+    return folder ? decoded.toLowerCase() : decoded;
   }
 
   private void addProperties(Node oldNode, Node newNode, String title) throws RepositoryException {
@@ -2482,7 +2899,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public String getAudioTranscription(String documentId, Identity aclIdentity) throws IllegalAccessException {
     SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
     try {
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getNodeByIdentifier(session, documentId);
@@ -2498,6 +2917,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error renaming document'" + documentId, e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -2533,7 +2953,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                        Identity aclIdentity) throws IllegalAccessException {
     String path = null;
     SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
     try { // NOSONAR
+      makeCurrent(aclIdentity);
       sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
       Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
       Node node = getNodeByIdentifier(session, documentId);
@@ -2552,6 +2974,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error transcribing media file '%s'".formatted(path == null ? documentId : path), e);
     } finally {
+      ConversationState.setCurrent(previousState);
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -2581,6 +3004,603 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       if (sessionProvider != null) {
         sessionProvider.close();
       }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public TranscriptionState getTranscriptionState(String documentId,
+                                                  Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
+    try {
+      makeCurrent(aclIdentity);
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return toTranscriptionState(getTranscribedNode(session, documentId));
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the transcription state of media file '%s'".formatted(documentId), e);
+    } finally {
+      ConversationState.setCurrent(previousState);
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public TranscriptionState getTranscriptionState(String documentId) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return toTranscriptionState(getTranscribedNode(session, documentId));
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the transcription state of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void updateTranscriptionState(String documentId, TranscriptionState state) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      writeTranscriptionState(node, state);
+      session.save();
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error writing the transcription state of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean markTranscriptionQueued(String documentId) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)) {
+        return false;
+      }
+      writeTranscriptionState(node, TranscriptionState.builder().status(TranscriptionStatus.QUEUED).build());
+      session.save();
+      return true;
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error queueing the transcription of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean clearTranscriptionState(String documentId) throws ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    // the names of the speakers go with the state: never while a speaker is being named
+    lock.lock();
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)
+          || toTranscriptionState(node).status() == TranscriptionStatus.DONE) {
+        return false;
+      }
+      node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+      forgetTranscriptAnnotations(node);
+      session.save();
+      return true;
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error removing the transcription state of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+      lock.unlock();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void completeTranscription(String documentId,
+                                    String transcription,
+                                    String segments,
+                                    TranscriptionState state) throws ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    // the names of the speakers go with the old transcript: never while a speaker is being named
+    lock.lock();
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)) {
+        node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION);
+      }
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION,
+                       new ByteArrayInputStream(Objects.toString(transcription, "").getBytes(StandardCharsets.UTF_8)));
+      writeTranscriptionState(node, state.toBuilder().hasSegments(StringUtils.isNotBlank(segments)).build());
+      // A new transcript numbers its speakers anew: the people named for the previous one no longer apply
+      forgetTranscriptAnnotations(node);
+      if (StringUtils.isBlank(segments)) {
+        if (node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)) {
+          node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS).remove();
+        }
+      } else {
+        node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS,
+                         new ByteArrayInputStream(segments.getBytes(StandardCharsets.UTF_8)));
+      }
+      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)) {
+        node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+      }
+      session.save();
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error writing the transcript of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+      lock.unlock();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionSegments(String documentId,
+                                         Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return readTranscriptionProperty(documentId,
+                                     aclIdentity,
+                                     NodeTypeConstants.EXO_TRANSCRIPTION_STATE,
+                                     NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionSegments(String documentId) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return readBinaryProperty(getTranscribedNode(session, documentId),
+                                NodeTypeConstants.EXO_TRANSCRIPTION_STATE,
+                                NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS);
+    } catch (RepositoryException | IOException e) {
+      throw new IllegalStateException("Error reading the transcript segments of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean saveTranscriptionChapters(String documentId,
+                                           String chapters,
+                                           long transcriptUpdated) throws ObjectNotFoundException {
+    if (StringUtils.isBlank(chapters)) {
+      throw new IllegalArgumentException("chapters are mandatory");
+    }
+    ReentrantLock lock = speakerLock(documentId);
+    // the chapters mixin is written with the file's whole mixin list: never while a speaker is being named
+    lock.lock();
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      TranscriptionState state = toTranscriptionState(node);
+      if (state.status() != TranscriptionStatus.DONE || !Objects.equals(state.updated(), transcriptUpdated)) {
+        return false;
+      }
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)) {
+        node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+      }
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS,
+                       new ByteArrayInputStream(chapters.getBytes(StandardCharsets.UTF_8)));
+      session.save();
+      return true;
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error writing the transcript chapters of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+      lock.unlock();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getTranscriptionChapters(String documentId,
+                                         Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    return readTranscriptionProperty(documentId,
+                                     aclIdentity,
+                                     NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS,
+                                     NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+  }
+
+  /**
+   * Reads a Binary property of a transcribed file with the rights of a user.
+   *
+   * @param documentId the file's UUID
+   * @param aclIdentity the user reading it
+   * @param mixin the mixin that holds the property
+   * @param property the property's name
+   * @return its text, or null when the file has no such property
+   * @throws IllegalAccessException when the user may not read the file
+   * @throws ObjectNotFoundException when the file does not exist, or the user
+   *           cannot see it
+   */
+  private String readTranscriptionProperty(String documentId,
+                                           Identity aclIdentity,
+                                           String mixin,
+                                           String property) throws IllegalAccessException, ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
+    try {
+      makeCurrent(aclIdentity);
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return readBinaryProperty(getTranscribedNode(session, documentId), mixin, property);
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException | IOException e) {
+      throw new IllegalStateException("Error reading the property %s of media file '%s'".formatted(property, documentId), e);
+    } finally {
+      ConversationState.setCurrent(previousState);
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * Makes a user the thread's current conversation state. A JCR session logs in
+   * as the thread's current state, whatever its session provider was built with
+   * ({@code SessionProvider#getSession} calls {@code repository.login}), so a read
+   * or a write made with a user's rights runs with that user current. The caller
+   * reads the thread's state before its {@code try}, calls this first inside it,
+   * and restores the state in its {@code finally}, so that a failure here still
+   * releases whatever the method took before (a speaker lock).
+   *
+   * @param aclIdentity the user
+   */
+  private static void makeCurrent(Identity aclIdentity) {
+    ConversationState userState = new ConversationState(aclIdentity);
+    if (aclIdentity.getSubject() != null) {
+      userState.setAttribute(ConversationState.SUBJECT, aclIdentity.getSubject());
+    }
+    ConversationState.setCurrent(userState);
+  }
+
+  /**
+   * Reads a Binary property of a node as UTF-8 text.
+   *
+   * @param node the node
+   * @param mixin the mixin that holds the property
+   * @param property the property's name
+   * @return its text, or null when the node does not have it
+   * @throws RepositoryException when the node cannot be read
+   * @throws IOException when the value cannot be read
+   */
+  private String readBinaryProperty(Node node, String mixin, String property) throws RepositoryException, IOException {
+    if (!node.isNodeType(mixin) || !node.hasProperty(property)) {
+      return null;
+    }
+    try (InputStream stream = node.getProperty(property).getStream()) {
+      return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public Map<String, String> getTranscriptionSpeakers(String documentId,
+                                                      Identity aclIdentity) throws IllegalAccessException,
+                                                                            ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
+    try {
+      makeCurrent(aclIdentity);
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return readTranscriptionSpeakers(getTranscribedNode(session, documentId));
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the transcript speakers of media file '%s'".formatted(documentId), e);
+    } finally {
+      ConversationState.setCurrent(previousState);
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void setTranscriptionSpeaker(String documentId,
+                                      String speaker,
+                                      String identityId,
+                                      Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    if (!acquireOnRequest(lock)) {
+      throw new TranscriptionBusyException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
+    }
+    SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
+    try {
+      makeCurrent(aclIdentity);
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new IllegalAccessException("User may not edit file '%s'".formatted(documentId));
+      }
+      Map<String, String> speakers = new TreeMap<>(readTranscriptionSpeakers(node));
+      if (identityId == null) {
+        speakers.remove(speaker);
+      } else {
+        speakers.put(speaker, identityId);
+      }
+      if (speakers.isEmpty()) {
+        removeTranscriptionSpeakers(node);
+      } else {
+        if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)) {
+          node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+        }
+        node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER,
+                         speakers.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new));
+      }
+      // a name a person gives, changes or clears is no longer the one the platform applied
+      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
+      if (suggestions.removeIf(suggestion -> suggestion.speaker().equals(speaker) && suggestion.autoApplied())) {
+        writeTranscriptionSpeakerSuggestions(node, suggestions);
+      }
+      session.save();
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error naming a speaker of media file '%s'".formatted(documentId), e);
+    } finally {
+      ConversationState.setCurrent(previousState);
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+      lock.unlock();
+    }
+  }
+
+  /**
+   * Takes a speaker lock for a request, which waits at most
+   * {@link #speakerLockWaitMillis}: a request is never held by a save that
+   * hangs.
+   *
+   * @param lock the lock
+   * @return true once held, false when the wait timed out or was interrupted
+   */
+  private static boolean acquireOnRequest(ReentrantLock lock) {
+    try {
+      return lock.tryLock(speakerLockWaitMillis, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return false;
+    }
+  }
+
+  /**
+   * The lock that serializes the naming of a file's speakers on this server.
+   *
+   * @param documentId the file's UUID
+   * @return the file's lock, shared with the files of the same stripe
+   */
+  static ReentrantLock speakerLock(String documentId) {
+    return SPEAKER_LOCKS[Math.floorMod(Objects.hashCode(documentId), SPEAKER_LOCKS.length)];
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public DocumentAudience getDocumentAudience(String documentId) throws ObjectNotFoundException {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node == null) {
+        throw new ObjectNotFoundException("File '%s' doesn't exist".formatted(documentId));
+      }
+      String owner = node.hasProperty(NodeTypeConstants.EXO_OWNER) ? node.getProperty(NodeTypeConstants.EXO_OWNER).getString() : null;
+      Set<String> users = new LinkedHashSet<>();
+      for (AccessControlEntry entry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
+        String identity = entry.getIdentity();
+        if (entry.getMembershipEntry() == null
+            && StringUtils.isNotBlank(identity)
+            && !IdentityConstants.ANY.equals(identity)
+            && !IdentityConstants.SYSTEM.equals(identity)) {
+          users.add(identity);
+        }
+      }
+      return new DocumentAudience(owner, new ArrayList<>(users), spaceGroupIdOfDrivePath(node.getPath()));
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading whom file '%s' is for".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean saveTranscriptionSpeakerSuggestions(String documentId,
+                                                     List<TranscriptionSpeakerSuggestion> suggestions,
+                                                     long transcriptUpdated) throws ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    // the same lock as a new transcript's, which forgets the proposals: never a stale one written after it
+    lock.lock();
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!isTranscriptAt(node, transcriptUpdated)) {
+        return false;
+      }
+      writeTranscriptionSpeakerSuggestions(node, suggestions);
+      session.save();
+      return true;
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error writing the speaker proposals of media file '%s'".formatted(documentId), e);
+    } finally {
+      sessionProvider.close();
+      lock.unlock();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<TranscriptionSpeakerSuggestion> getTranscriptionSpeakerSuggestions(String documentId,
+                                                                                 Identity aclIdentity) throws IllegalAccessException,
+                                                                                                       ObjectNotFoundException {
+    SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
+    try {
+      makeCurrent(aclIdentity);
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      return readTranscriptionSpeakerSuggestions(getTranscribedNode(session, documentId));
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error reading the speaker proposals of media file '%s'".formatted(documentId), e);
+    } finally {
+      ConversationState.setCurrent(previousState);
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void removeTranscriptionSpeakerSuggestion(String documentId,
+                                                   String speaker,
+                                                   Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    if (!acquireOnRequest(lock)) {
+      throw new TranscriptionBusyException("Timed out waiting to dismiss a speaker proposal of media file '%s'".formatted(documentId));
+    }
+    SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
+    try {
+      makeCurrent(aclIdentity);
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new IllegalAccessException("User may not edit file '%s'".formatted(documentId));
+      }
+      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
+      if (suggestions.removeIf(suggestion -> suggestion.speaker().equals(speaker))) {
+        writeTranscriptionSpeakerSuggestions(node, suggestions);
+        session.save();
+      }
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error dismissing a speaker proposal of media file '%s'".formatted(documentId), e);
+    } finally {
+      ConversationState.setCurrent(previousState);
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+      lock.unlock();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean applyTranscriptionSpeakerSuggestion(String documentId,
+                                                     TranscriptionSpeakerSuggestion suggestion,
+                                                     long transcriptUpdated,
+                                                     Identity aclIdentity) throws IllegalAccessException, ObjectNotFoundException {
+    ReentrantLock lock = speakerLock(documentId);
+    if (!acquireOnRequest(lock)) {
+      throw new TranscriptionBusyException("Timed out waiting to name a speaker of media file '%s'".formatted(documentId));
+    }
+    SessionProvider sessionProvider = null;
+    ConversationState previousState = ConversationState.getCurrent();
+    try {
+      makeCurrent(aclIdentity);
+      sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+      Session session = sessionProvider.getSession(COLLABORATION, repositoryService.getCurrentRepository());
+      Node node = getTranscribedNode(session, documentId);
+      if (!JCRDocumentsUtil.hasEditPermission(session, node)) {
+        throw new IllegalAccessException("User may not edit file '%s'".formatted(documentId));
+      }
+      String identityId = String.valueOf(suggestion.identityId());
+      List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>(readTranscriptionSpeakerSuggestions(node));
+      int stored = -1;
+      for (int i = 0; i < suggestions.size() && stored < 0; i++) {
+        if (suggestions.get(i).speaker().equals(suggestion.speaker()) && suggestions.get(i).identityId() == suggestion.identityId()) {
+          stored = i;
+        }
+      }
+      Map<String, String> speakers = new TreeMap<>(readTranscriptionSpeakers(node));
+      if (suggestion.premiseSpeaker() != null
+          || !isTranscriptAt(node, transcriptUpdated)
+          || stored < 0
+          || speakers.containsKey(suggestion.speaker())
+          || speakers.containsValue(identityId)) {
+        return false;
+      }
+      speakers.put(suggestion.speaker(), identityId);
+      if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)) {
+        node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+      }
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER,
+                       speakers.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new));
+      suggestions.set(stored, suggestions.get(stored).withAutoApplied(true));
+      writeTranscriptionSpeakerSuggestions(node, suggestions);
+      session.save();
+      return true;
+    } catch (AccessDeniedException e) {
+      throw new IllegalAccessException(e.getMessage());
+    } catch (RepositoryException e) {
+      throw new IllegalStateException("Error naming a speaker of media file '%s'".formatted(documentId), e);
+    } finally {
+      ConversationState.setCurrent(previousState);
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
+      lock.unlock();
     }
   }
 
@@ -2959,6 +3979,39 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     }
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String getDocumentSpaceGroupId(String documentId) {
+    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
+    try {
+      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
+      Node node = getNodeByIdentifier(session, documentId);
+      if (node == null || node.isNodeType(NodeTypeConstants.EXO_SYMLINK) || node.isNodeType(NodeTypeConstants.TAXONOMY_LINK)) {
+        return null;
+      }
+      return spaceGroupIdOfDrivePath(node.getPath());
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.debug("The space of document '{}' couldn't be read", documentId, e);
+      return null;
+    } finally {
+      sessionProvider.close();
+    }
+  }
+
+  /**
+   * @param path a node path
+   * @return the group id ({@code /spaces/<name>}) of the space whose
+   *         {@code Documents} drive the path is, or lies in, null for any
+   *         other path
+   */
+  static String spaceGroupIdOfDrivePath(String path) {
+    Matcher matcher = path == null ? null : SPACE_DRIVE_PATH.matcher(path);
+    return matcher != null && matcher.matches() ? "/spaces/" + matcher.group(1) : null;
+  }
+
   @Override
   public FileContent getDocumentContent(String documentId, String aclIdentity) throws ObjectNotFoundException {
     Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
@@ -2988,11 +4041,13 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         mimeType = content.getProperty(NodeTypeConstants.JCR_MIME_TYPE).getString();
       }
 
-      return new FileContent(documentId,
-                             JCRDocumentsUtil.getTitle(node),
-                             mimeType,
-                             content.getProperty(NodeTypeConstants.JCR_DATA).getStream(),
-                             new Date(lastModified));
+      Property data = content.getProperty(NodeTypeConstants.JCR_DATA);
+      return new DocumentFileContent(documentId,
+                                     JCRDocumentsUtil.getTitle(node),
+                                     mimeType,
+                                     data.getStream(),
+                                     new Date(lastModified),
+                                     data.getLength());
     } catch (ItemNotFoundException e) {
       throw new ObjectNotFoundException("Document with id : " + documentId + " isn't found");
     } catch (RepositoryException e) {
@@ -3442,6 +4497,52 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   /**
+   * {@inheritDoc} The whole text is extracted from the file once per version
+   * of it, on this node, whatever the search index holds, so its parts and its
+   * outline come from one reading.
+   */
+  @Override
+  public DocumentTextPage getFileTextPage(String documentId, long offset, int maxChars) {
+    return getPagedTextExtractor().getPage(documentId, offset, maxChars);
+  }
+
+  /**
+   * The extractor reading a file's text part by part, created on first use
+   * with its limits read from the platform properties.
+   *
+   * @return the paged text extractor
+   */
+  DocumentPagedTextExtractor getPagedTextExtractor() {
+    DocumentPagedTextExtractor extractor = pagedTextExtractor;
+    if (extractor == null) {
+      synchronized (this) {
+        extractor = pagedTextExtractor;
+        if (extractor == null) {
+          try {
+            extractor = new DocumentPagedTextExtractor(repositoryService,
+                                                       CommonsUtils.getService(DocumentReaderService.class),
+                                                       getTextExtractor(),
+                                                       getLongProperty(PAGED_TEXT_MAX_SIZE_MB_PROPERTY,
+                                                                       DEFAULT_PAGED_TEXT_MAX_SIZE_MB) * 1024 * 1024,
+                                                       getLongProperty(PAGED_TEXT_MAX_CHARS_PROPERTY, DEFAULT_PAGED_TEXT_MAX_CHARS),
+                                                       getLongProperty(PAGED_TEXT_TIMEOUT_SECONDS_PROPERTY,
+                                                                       DEFAULT_PAGED_TEXT_TIMEOUT_SECONDS) * 1000,
+                                                       getLongProperty(PAGED_TEXT_WAIT_SECONDS_PROPERTY,
+                                                                       DEFAULT_PAGED_TEXT_WAIT_SECONDS) * 1000,
+                                                       getLongProperty(PAGED_TEXT_CACHE_MAX_MB_PROPERTY,
+                                                                       DEFAULT_PAGED_TEXT_CACHE_MAX_MB) * 1024 * 1024,
+                                                       Path.of(System.getProperty("java.io.tmpdir"), "documents-paged-text"));
+          } catch (IOException e) {
+            throw new IllegalStateException("The cache of the texts read part by part can't be created", e);
+          }
+          pagedTextExtractor = extractor;
+        }
+      }
+    }
+    return extractor;
+  }
+
+  /**
    * The extractor reading a file's text when the search index does not hold it,
    * created on first use with its limits read from the platform properties.
    *
@@ -3629,6 +4730,19 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return StringUtils.startsWith(nodePath, "/Users") && StringUtils.contains(nodePath, "/Private");
   }
 
+  /**
+   * Reads a document through the given session. A shortcut resolves to its
+   * target, carrying the shortcut's path.
+   *
+   * @param session the session to read with, whose user's rights apply
+   * @param documentId the document id
+   * @param identity the user's identity, to compute the user's rights
+   * @return the document, null when no node has the id or the session can't
+   *         read it
+   * @throws ItemNotFoundException when the node is neither a file nor a
+   *           folder, or is a shortcut whose target is gone or can't be read
+   * @throws RepositoryException when the repository can't be read
+   */
   public AbstractNode getDocumentById(Session session, String documentId, Identity identity) throws RepositoryException {
     Node node = getNodeByIdentifier(session, documentId);
     if (node == null) {
@@ -3641,7 +4755,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         } else {
           String symlinkPath = node.getPath();
           Node targetNode = getNodeByIdentifier(node.getSession(), nodeId);
-          if (JCRDocumentsUtil.isFile(targetNode)) {
+          if (targetNode == null) {
+            // a target that is gone, or that the session can't read, is answered as missing
+            throw new ItemNotFoundException();
+          } else if (JCRDocumentsUtil.isFile(targetNode)) {
             AbstractNode fileNode = toFileNode(identityManager, identity, targetNode, "", spaceService);
             fileNode.setPath(symlinkPath);
             return fileNode;
@@ -3684,4 +4801,297 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     return targetNode;
   }
 
+
+  /**
+   * Reads who each named speaker of a file's transcript is.
+   *
+   * @param node the file
+   * @return the stored value of each named speaker, by speaker number: an
+   *         identity id, or a guest's name after
+   *         {@link org.exoplatform.documents.model.TranscriptSpeakers#GUEST_PREFIX};
+   *         empty when none is named
+   * @throws RepositoryException when the file cannot be read
+   */
+  private Map<String, String> readTranscriptionSpeakers(Node node) throws RepositoryException {
+    Map<String, String> speakers = new TreeMap<>();
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS) && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER)) {
+      for (Value value : node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER).getValues()) {
+        String speaker = StringUtils.substringBefore(value.getString(), "=");
+        String identityId = StringUtils.substringAfter(value.getString(), "=");
+        if (StringUtils.isNotBlank(speaker) && StringUtils.isNotBlank(identityId)) {
+          speakers.put(speaker, identityId);
+        }
+      }
+    }
+    return speakers;
+  }
+
+  /**
+   * Forgets the people named for the speakers of a file's transcript, the save
+   * being the caller's.
+   *
+   * @param node the file
+   * @throws RepositoryException when the file cannot be written
+   */
+  private void removeTranscriptionSpeakers(Node node) throws RepositoryException {
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)) {
+      node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+    }
+  }
+
+  /**
+   * Forgets everything said about the speakers of a file's previous
+   * transcript, the people named and the proposals (EXO-92126): a new transcript
+   * numbers its speakers anew. The save is the caller's.
+   *
+   * @param node the file
+   * @throws RepositoryException when the file cannot be written
+   */
+  private void forgetTranscriptAnnotations(Node node) throws RepositoryException {
+    removeTranscriptionSpeakers(node);
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)) {
+      node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+    }
+  }
+
+  /**
+   * Writes the proposals of who the speakers of a file's transcript are, the
+   * save being the caller's; none removes them.
+   *
+   * @param node the file
+   * @param suggestions the proposals
+   * @throws RepositoryException when the file cannot be written
+   */
+  private void writeTranscriptionSpeakerSuggestions(Node node, List<TranscriptionSpeakerSuggestion> suggestions) throws RepositoryException {
+    if (suggestions == null || suggestions.isEmpty()) {
+      if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)) {
+        node.removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+      }
+      return;
+    }
+    if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)) {
+      node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+    }
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION,
+                     suggestions.stream().map(JCRDocumentFileStorage::toSuggestionValue).toArray(String[]::new));
+  }
+
+  /**
+   * Reads the proposals of who the speakers of a file's transcript are; a value
+   * that cannot be read is skipped.
+   *
+   * @param node the file
+   * @return the proposals, in the order they were written
+   * @throws RepositoryException when the file cannot be read
+   */
+  private List<TranscriptionSpeakerSuggestion> readTranscriptionSpeakerSuggestions(Node node) throws RepositoryException {
+    List<TranscriptionSpeakerSuggestion> suggestions = new ArrayList<>();
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)
+        && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION)) {
+      for (Value value : node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION).getValues()) {
+        TranscriptionSpeakerSuggestion suggestion = toSuggestion(value.getString());
+        if (suggestion != null) {
+          suggestions.add(suggestion);
+        }
+      }
+    }
+    return suggestions;
+  }
+
+  /**
+   * Tells whether a file's transcript is done and still the one of the given
+   * update time.
+   *
+   * @param node the file
+   * @param transcriptUpdated an update time of its transcription state, in
+   *          milliseconds since the epoch
+   * @return true when its state is done and was last updated then
+   * @throws RepositoryException when the file cannot be read
+   */
+  private boolean isTranscriptAt(Node node, long transcriptUpdated) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)) {
+      return false;
+    }
+    TranscriptionState state = toTranscriptionState(node);
+    return state.status() == TranscriptionStatus.DONE && Long.valueOf(transcriptUpdated).equals(state.updated());
+  }
+
+  /**
+   * @param suggestion a proposal
+   * @return its stored value:
+   *         {@code <speaker>=<identity id>|strong|likely|auto|manual|<segment>,<segment>…|<premise speaker>=<premise identity id>},
+   *         the premise empty for a proposal that follows from no other voice
+   */
+  static String toSuggestionValue(TranscriptionSpeakerSuggestion suggestion) {
+    return suggestion.speaker() + "=" + suggestion.identityId()
+        + "|" + (suggestion.strong() ? SUGGESTION_STRONG : SUGGESTION_LIKELY)
+        + "|" + (suggestion.autoApplied() ? SUGGESTION_AUTO : SUGGESTION_MANUAL)
+        + "|" + suggestion.evidence().stream().map(String::valueOf).collect(Collectors.joining(","))
+        + "|" + (suggestion.premiseSpeaker() == null ? "" : suggestion.premiseSpeaker() + "=" + suggestion.premiseIdentityId());
+  }
+
+  /**
+   * @param value a stored proposal, as {@link #toSuggestionValue} writes it
+   * @return the proposal, or null when the value cannot be read
+   */
+  static TranscriptionSpeakerSuggestion toSuggestion(String value) {
+    String[] parts = StringUtils.splitPreserveAllTokens(value, '|');
+    if (parts == null || parts.length != 5) {
+      return null;
+    }
+    String premiseSpeaker = StringUtils.trimToNull(StringUtils.substringBefore(parts[4], "="));
+    String premiseIdentityId = StringUtils.substringAfter(parts[4], "=");
+    if (premiseSpeaker != null && !StringUtils.isNumeric(premiseIdentityId)) {
+      return null;
+    }
+    String speaker = StringUtils.substringBefore(parts[0], "=");
+    String identityId = StringUtils.substringAfter(parts[0], "=");
+    if (StringUtils.isBlank(speaker) || !StringUtils.isNumeric(identityId)) {
+      return null;
+    }
+    List<Integer> evidence = new ArrayList<>();
+    for (String index : StringUtils.split(parts[3], ',')) {
+      if (!StringUtils.isNumeric(index)) {
+        return null;
+      }
+      evidence.add(Integer.valueOf(index));
+    }
+    return new TranscriptionSpeakerSuggestion(speaker,
+                                              Long.parseLong(identityId),
+                                              SUGGESTION_STRONG.equals(parts[1]),
+                                              SUGGESTION_AUTO.equals(parts[2]),
+                                              evidence,
+                                              premiseSpeaker,
+                                              premiseSpeaker == null ? null : Long.valueOf(premiseIdentityId));
+  }
+
+  /**
+   * The media file a transcription read or write is about.
+   *
+   * @param session the session to read it with, whose rights apply
+   * @param documentId the file's UUID
+   * @return the file's node
+   * @throws ObjectNotFoundException when the file does not exist or the session
+   *           cannot see it
+   */
+  private Node getTranscribedNode(Session session, String documentId) throws ObjectNotFoundException {
+    Node node = getNodeByIdentifier(session, documentId);
+    if (node == null) {
+      throw new ObjectNotFoundException("File with id '%s' wasn't found".formatted(documentId));
+    }
+    return node;
+  }
+
+  /**
+   * Reads the transcription state stored on a file. A file holding a non-empty
+   * transcript but no state, transcribed before the state existed, reads as
+   * done; the empty placeholder an earlier version wrote reads as never
+   * transcribed.
+   *
+   * @param node the file
+   * @return the state
+   * @throws RepositoryException when the file cannot be read
+   */
+  private TranscriptionState toTranscriptionState(Node node) throws RepositoryException {
+    boolean media = isMediaFile(node);
+    if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)) {
+      return TranscriptionState.builder()
+                               .status(toTranscriptionStatus(getStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS)))
+                               .progress(getStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_PROGRESS))
+                               .error(getStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_ERROR))
+                               .language(getStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE))
+                               .durationSeconds(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION) ?
+                                                                                                             node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)
+                                                                                                                 .getLong() :
+                                                                                                             null)
+                               .updated(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED) ?
+                                                                                                    node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)
+                                                                                                        .getDate()
+                                                                                                        .getTimeInMillis() :
+                                                                                                    null)
+                               .hasSegments(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS))
+                               .hasChapters(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS))
+                               .media(media)
+                               .build();
+    } else if (node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)
+               && node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION)
+               && node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION).getLength() > 0) {
+      return TranscriptionState.builder().status(TranscriptionStatus.DONE).media(media).build();
+    } else {
+      return TranscriptionState.builder().media(media).build();
+    }
+  }
+
+  /**
+   * Writes every field of a transcription state on a file, removing those that
+   * are null, and sets its update time to now. The caller saves the session.
+   *
+   * @param node the file
+   * @param state the state to write
+   * @throws RepositoryException when the file cannot be written
+   */
+  private void writeTranscriptionState(Node node, TranscriptionState state) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)) {
+      node.addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    }
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, state.status() == null ? null : state.status().name());
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_PROGRESS, state.progress());
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_ERROR, state.error());
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE, state.language());
+    if (state.durationSeconds() == null) {
+      if (node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)) {
+        node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION).remove();
+      }
+    } else {
+      node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION, state.durationSeconds().longValue());
+    }
+    node.setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED, Calendar.getInstance());
+  }
+
+  /**
+   * Tells whether a node is an audio or a video file, the only files that can
+   * be transcribed.
+   *
+   * @param node the node
+   * @return true for an nt:file whose content has an audio or video type
+   * @throws RepositoryException when the node cannot be read
+   */
+  private boolean isMediaFile(Node node) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.NT_FILE) || !node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+      return false;
+    }
+    Node content = node.getNode(NodeTypeConstants.JCR_CONTENT);
+    String mimeType = content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE) ?
+                                                                            content.getProperty(NodeTypeConstants.JCR_MIME_TYPE)
+                                                                                   .getString() :
+                                                                            null;
+    return StringUtils.startsWithAny(mimeType, "audio/", "video/");
+  }
+
+  /**
+   * Reads a string property of a node.
+   *
+   * @param node the node
+   * @param name the property's name
+   * @return its value, or null when the node does not have it
+   * @throws RepositoryException when the node cannot be read
+   */
+  private String getStringProperty(Node node, String name) throws RepositoryException {
+    return node.hasProperty(name) ? node.getProperty(name).getString() : null;
+  }
+
+  /**
+   * Reads a stored transcription status.
+   *
+   * @param value the stored value
+   * @return the status, or null when the value is blank or unknown
+   */
+  private TranscriptionStatus toTranscriptionStatus(String value) {
+    try {
+      return StringUtils.isBlank(value) ? null : TranscriptionStatus.valueOf(value);
+    } catch (IllegalArgumentException e) {
+      LOG.debug("Unknown transcription status {}", value, e);
+      return null;
+    }
+  }
 }

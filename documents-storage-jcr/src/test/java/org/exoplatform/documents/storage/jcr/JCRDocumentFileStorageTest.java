@@ -74,6 +74,9 @@ import org.exoplatform.social.metadata.tag.TagService;
 import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
+import org.mockito.ArgumentCaptor;
+import org.exoplatform.documents.constant.TranscriptionStatus;
+import io.meeds.portal.thumbnail.model.FileContent;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDocumentFileStorageTest {
@@ -626,8 +629,8 @@ public class JCRDocumentFileStorageTest {
     when(parentNode.getIdentifier()).thenReturn("1");
     when(currentNode.getPath()).thenReturn("/Documents/Private");
     when(parentNode.getPath()).thenReturn("/Documents/Private/user/2026.Q1 reports");
-    when(parentNode.hasNode("2026.Q1 reports")).thenReturn(true);
-    when(parentNode.hasNode("2026.Q1 reports (1)")).thenReturn(false);
+    when(parentNode.hasNode("2026.q1 reports")).thenReturn(true);
+    when(parentNode.hasNode("2026.q1 reports (1)")).thenReturn(false);
     when(parentNode.addNode(anyString(), anyString())).thenReturn(currentNode);
     // A folder recurses into its children; this one has none.
     when(currentNode.getNodes()).thenReturn(emptyChildren);
@@ -676,6 +679,426 @@ public class JCRDocumentFileStorageTest {
     when(destinationNode.addNode("nodeName", "nt:file")).thenReturn(node);
     jcrDocumentFileStorage.copyDocument("1", "2", userID);
     verify(sessionProvider, times(3)).close();
+  }
+
+  /**
+   * A copy into another folder that already holds a file of the source's name
+   * gets the same {@code " (n)"} counter as an in-place duplicate, before the
+   * extension, on its node name and its title, and keeps the source's case and
+   * no prefix.
+   * Mutants: the counter limited to an in-place copy again, or the copy's name
+   * lower-cased like an in-place duplicate.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void copyIntoAnotherFolderHoldingTheSameNameGetsTheCopyCounter() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("Report.docx");
+    when(sourceNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(sourceNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("Report.docx");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Report.docx");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("Report.docx")).thenReturn(true);
+    when(destinationNode.hasNode("Report (1).docx")).thenReturn(false);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("Report (1).docx", NodeTypeConstants.NT_FILE);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Report (1).docx");
+  }
+
+  /**
+   * A prefixed duplicate of a folder prefixes the folder only: its children
+   * are copied under their own names into the new folder.
+   * Mutant: the prefix applied to every copied node, not only to the
+   * in-place duplicate.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aPrefixedFolderDuplicateKeepsItsChildrensNames() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl folderNode = mock(NodeImpl.class);
+    NodeImpl parentNode = mock(NodeImpl.class);
+    NodeImpl newFolder = mock(NodeImpl.class);
+    NodeImpl childNode = mock(NodeImpl.class);
+    NodeImpl newChild = mock(NodeImpl.class);
+    NodeType folderType = mock(NodeType.class);
+    NodeType fileType = mock(NodeType.class);
+    NodeIterator children = mock(NodeIterator.class);
+    NodeIterator noChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(folderNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(folderNode.getName()).thenReturn("contracts");
+    when(folderNode.getPrimaryNodeType()).thenReturn(folderType);
+    when(folderType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(folderNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folderNode.getParent()).thenReturn(parentNode);
+    when(folderNode.getPath()).thenReturn("/Documents/contracts");
+    when(parentNode.getPath()).thenReturn("/Documents");
+    when(parentNode.getIdentifier()).thenReturn("10");
+    when(parentNode.addNode(anyString(), anyString())).thenReturn(newFolder);
+    when(newFolder.getIdentifier()).thenReturn("20");
+    when(newFolder.getPath()).thenReturn("/Documents/copy contracts");
+    when(folderNode.getNodes()).thenReturn(children);
+    when(children.hasNext()).thenReturn(true, false);
+    when(children.nextNode()).thenReturn(childNode);
+    when(childNode.getName()).thenReturn("nda.txt");
+    when(childNode.getPrimaryNodeType()).thenReturn(fileType);
+    when(fileType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(childNode.getParent()).thenReturn(folderNode);
+    when(childNode.getPath()).thenReturn("/Documents/contracts/nda.txt");
+    when(newFolder.addNode(anyString(), anyString())).thenReturn(newChild);
+    lenient().when(newChild.getNodes()).thenReturn(noChildren);
+
+    jcrDocumentFileStorage.duplicateDocument(1L, "1", "copy", userID);
+
+    verify(parentNode).addNode("copy contracts", NodeTypeConstants.NT_FOLDER);
+    verify(newFolder).addNode("nda.txt", NodeTypeConstants.NT_FILE);
+  }
+
+  /**
+   * A folder copied into another folder that already holds a folder of the
+   * same name in another case gets the copy counter: a folder is added under
+   * its lower-cased name, so the clash is probed on that name, not on the
+   * source's mixed-case one, which no node holds.
+   * Mutant: the probe on the name as it is.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aMixedCaseFolderCopiedOntoItsLowerCaseNameGetsTheCopyCounter() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    NodeType nodeType = mock(NodeType.class);
+    NodeIterator noChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("Reports");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Reports");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("reports")).thenReturn(true);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+    when(sourceNode.getNodes()).thenReturn(noChildren);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("reports (1)", NodeTypeConstants.NT_FOLDER);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Reports (1)");
+  }
+
+  /**
+   * The copy counter takes a name as taken when the destination holds it as
+   * it is or as the node is added under. An in-place duplicate of a
+   * mixed-case file finds the source itself, then its earlier lower-cased
+   * duplicate ({@code report (1).docx}), and is added as
+   * {@code report (2).docx}; an escaped folder name ({@code 50%25 plan}) is
+   * added URL-decoded, so it clashes with the decoded one.
+   * Mutants: the probe on the name as it is only, on the added name only, the
+   * in-place half of the lower-casing dropped, or the probe on the escaped
+   * name.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void theCopyCounterProbesTheDecodedLowerCasedName() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl fileNode = mock(NodeImpl.class);
+    NodeImpl folderNode = mock(NodeImpl.class);
+    NodeImpl parentNode = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    NodeType fileType = mock(NodeType.class);
+    NodeType folderType = mock(NodeType.class);
+    NodeIterator noChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(fileNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "3")).thenReturn(folderNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(fileNode.getName()).thenReturn("Report.docx");
+    when(fileNode.getPrimaryNodeType()).thenReturn(fileType);
+    when(fileType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(fileNode.getParent()).thenReturn(parentNode);
+    when(fileNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Report.docx");
+    when(parentNode.getIdentifier()).thenReturn("10");
+    when(parentNode.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(parentNode.hasNode("Report.docx")).thenReturn(true);
+    when(parentNode.hasNode("report (1).docx")).thenReturn(true);
+    when(parentNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.duplicateDocument(1L, "1", "", userID);
+
+    verify(parentNode).addNode("report (2).docx", NodeTypeConstants.NT_FILE);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Report (2).docx");
+
+    Property folderTitle = mock(Property.class);
+    when(folderNode.getName()).thenReturn("50%25 plan");
+    when(folderNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(folderNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(folderTitle);
+    when(folderTitle.getString()).thenReturn("50% plan");
+    when(folderNode.getPrimaryNodeType()).thenReturn(folderType);
+    when(folderType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(folderNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(folderNode.getParent()).thenReturn(parentNode);
+    when(folderNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/50%25 plan");
+    when(folderNode.getNodes()).thenReturn(noChildren);
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("50% plan")).thenReturn(true);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.copyDocument("3", "2", userID);
+
+    verify(destinationNode).addNode("50% plan (1)", NodeTypeConstants.NT_FOLDER);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "50% plan (1)");
+  }
+
+  /**
+   * An {@code nt:unstructured} folder copied into another folder that already
+   * holds its name gets the trailing copy counter on its node name and its
+   * title, and keeps its case: unlike an {@code nt:folder}, it is added under
+   * its name as it is.
+   * Mutants: the counter before a dot of the folder name, the counter on the
+   * name but not the title, or an {@code nt:unstructured} folder lower-cased
+   * like an {@code nt:folder}.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUnstructuredFolderCopiedOntoItsNameGetsTheCopyCounter() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("Q1.Reports");
+    when(sourceNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(sourceNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("Q1.Reports");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_UNSTRUCTURED);
+    when(sourceNode.isNodeType(NodeTypeConstants.NT_UNSTRUCTURED)).thenReturn(true);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Q1.Reports");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("Q1.Reports")).thenReturn(true);
+    when(destinationNode.hasNode("q1.reports")).thenReturn(true);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("Q1.Reports (1)", NodeTypeConstants.NT_UNSTRUCTURED);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Q1.Reports (1)");
+  }
+
+  /**
+   * A folder whose name escapes an upper-case letter ({@code %C3%89t%C3%A9})
+   * is added URL-decoded then lower-cased ({@code été}), so the copy counter
+   * probes that name: the destination holding {@code été} and
+   * {@code été (1)}, the copy is added as {@code été (2)}.
+   * Mutant: the probe lower-cases before decoding, finds {@code Été}, which
+   * no node holds, and adds {@code été} again.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anEscapedUpperCaseFolderNameIsProbedAsItIsAdded() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    NodeIterator noChildren = mock(NodeIterator.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("%C3%89t%C3%A9");
+    when(sourceNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(sourceNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("Été");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FOLDER);
+    when(sourceNode.isNodeType(NodeTypeConstants.NT_FOLDER)).thenReturn(true);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/%C3%89t%C3%A9");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("été")).thenReturn(true);
+    when(destinationNode.hasNode("été (1)")).thenReturn(true);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+    when(sourceNode.getNodes()).thenReturn(noChildren);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("été (2)", NodeTypeConstants.NT_FOLDER);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Été (2)");
+  }
+
+  /**
+   * A file copied into another folder keeps its name and title when that
+   * folder holds only its lower-cased name: a file copied out of place is
+   * added under its name as it is, so the lower-cased one is no clash.
+   * Mutant: every copy probed lower-cased.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileCopiedNextToItsLowerCasedNameKeepsItsName() throws Exception {
+    Session systemSession = mock(Session.class);
+    NodeImpl sourceNode = mock(NodeImpl.class);
+    NodeImpl sourceParent = mock(NodeImpl.class);
+    NodeImpl destinationNode = mock(NodeImpl.class);
+    NodeImpl copyNode = mock(NodeImpl.class);
+    Property property = mock(Property.class);
+    NodeType nodeType = mock(NodeType.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity("username");
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    RepositoryEntry repositoryEntry = mock(RepositoryEntry.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    when(manageableRepository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(systemSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID))
+                      .thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "1")).thenReturn(sourceNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(systemSession, "2")).thenReturn(destinationNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNewIndexedName(anyString(), anyString())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any(Node.class))).thenCallRealMethod();
+
+    when(sourceNode.getName()).thenReturn("Report.docx");
+    when(sourceNode.hasProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(true);
+    when(sourceNode.getProperty(NodeTypeConstants.EXO_TITLE)).thenReturn(property);
+    when(property.getString()).thenReturn("Report.docx");
+    when(sourceNode.getPrimaryNodeType()).thenReturn(nodeType);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(sourceNode.getParent()).thenReturn(sourceParent);
+    when(sourceParent.getIdentifier()).thenReturn("10");
+    when(destinationNode.getIdentifier()).thenReturn("2");
+    when(sourceNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Report.docx");
+    when(sourceParent.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    when(destinationNode.getPath()).thenReturn("/Groups/spaces/legal/Documents/Archive");
+    when(destinationNode.hasNode("report.docx")).thenReturn(true);
+    when(destinationNode.hasNode("Report.docx")).thenReturn(false);
+    when(destinationNode.addNode(anyString(), anyString())).thenReturn(copyNode);
+
+    jcrDocumentFileStorage.copyDocument("1", "2", userID);
+
+    verify(destinationNode).addNode("Report.docx", NodeTypeConstants.NT_FILE);
+    verify(copyNode).setProperty(NodeTypeConstants.EXO_TITLE, "Report.docx");
   }
 
   @Test
@@ -762,13 +1185,12 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(identityManager, identity, folderNode5, "", spaceService)).thenReturn(folderWithSpecificName1);
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(identityManager, identity, fileNode, "", spaceService)).thenReturn(file);
 
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(identityManager,
-                                                           userSession,
-                                                           nodeIterator,
-                                                           identity,
-                                                           spaceService,
-                                                           false,
-                                                           filter))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(eq(identityManager),
+                                                                     eq(userSession),
+                                                                     any(NodeIterator.class),
+                                                                     eq(identity),
+                                                                     eq(spaceService),
+                                                                     eq(false)))
                       .thenCallRealMethod();
 
 
@@ -777,8 +1199,9 @@ public class JCRDocumentFileStorageTest {
     assertEquals(2, nodes.size());
     when(nodeIterator.hasNext()).thenReturn(true, false);
     when(nodeIterator.nextNode()).thenReturn(folderNode2);
+    // the folder holds one child: a page starting past it is empty
     nodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 2, 4);
-    assertEquals(1, nodes.size());
+    assertEquals(0, nodes.size());
 
     // case of folderNodeId empty
     filter.setParentFolderId(null);
@@ -803,33 +1226,31 @@ public class JCRDocumentFileStorageTest {
     when(queryResult.getNodes()).thenReturn(nodeIterator1);
     when(nodeIterator1.hasNext()).thenReturn(true, true, false);
     when(nodeIterator1.nextNode()).thenReturn(folderNode2, folderNode1);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(
-                                                           identityManager,
-                                                           userSession,
-                                                           nodeIterator1,
-                                                           identity,
-                                                           spaceService,
-                                                           false, filter))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(eq(identityManager),
+                                                                     eq(userSession),
+                                                                     any(NodeIterator.class),
+                                                                     eq(identity),
+                                                                     eq(spaceService),
+                                                                     eq(false)))
                       .thenCallRealMethod();
     List<AbstractNode> nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 2);
     assertEquals(2, nodes1.size());
     when(nodeIterator1.hasNext()).thenReturn(true, false);
     when(nodeIterator1.nextNode()).thenReturn(folderNode2);
     nodes1 = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 2, 4);
-    assertEquals(1, nodes1.size());
+    assertEquals(0, nodes1.size());
 
     // case folder with specific name
     NodeIterator nodeIterator2 = mock(NodeIterator.class);
     when(queryResult.getNodes()).thenReturn(nodeIterator2);
     when(nodeIterator2.hasNext()).thenReturn(true, true, true,false);
     when(nodeIterator2.nextNode()).thenReturn(folderNode3, folderNode4, folderNode5);
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(
-                                                           identityManager,
-                                                           userSession,
-                                                           nodeIterator2,
-                                                           identity,
-                                                           spaceService,
-                                                           false, filter))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(eq(identityManager),
+                                                                     eq(userSession),
+                                                                     any(NodeIterator.class),
+                                                                     eq(identity),
+                                                                     eq(spaceService),
+                                                                     eq(false)))
                       .thenCallRealMethod();
 
     //assert NumberFormatException when try to parse specific folder name
@@ -1418,7 +1839,7 @@ public class JCRDocumentFileStorageTest {
     when(queryManager.createQuery(anyString(), anyString())).thenReturn(jcrQuery);
     when(jcrQuery.execute()).thenReturn(queryResult);
 
-    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(any(), any(), any(), any(), any(), anyBoolean(), any()))
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(any(), any(), any(), any(), any(), anyBoolean()))
                       .thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(any(), any(), any(), any(), any())).thenCallRealMethod();
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(any()))
@@ -1438,68 +1859,41 @@ public class JCRDocumentFileStorageTest {
                                                               any(SpaceService.class)))
                       .thenCallRealMethod();
 
-    // creation date
+    // each sort: the rows come in the order the query serves them, and the
+    // listing keeps it, with no sort of its own
     filter.setSortField(DocumentSortField.CREATED_DATE);
     filter.setAscending(true);
     List<AbstractNode> fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertNotNull(fileNodes);
-    assertEquals("Abc", fileNodes.get(0).getName());
-    assertEquals("Xyz", fileNodes.get(1).getName());
-    assertEquals("Efg.lnk", fileNodes.get(2).getName());
+    assertEquals(List.of("Xyz", "Abc", "Efg.lnk"), fileNodes.stream().map(AbstractNode::getName).toList());
 
-    filter.setAscending(false);
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertEquals("Abc", fileNodes.get(2).getName());
-    assertEquals("Xyz", fileNodes.get(1).getName());
-    assertEquals("Efg.lnk", fileNodes.get(0).getName());
+    Map<DocumentSortField, List<Node>> ascendingRows = Map.of(DocumentSortField.CREATED_DATE,
+                                                              List.of(folderAbc, folderXyz, symlinkFolderEfg),
+                                                              DocumentSortField.MODIFIED_DATE,
+                                                              List.of(folderAbc, folderXyz, symlinkFolderEfg),
+                                                              DocumentSortField.NAME,
+                                                              List.of(folderAbc, symlinkFolderEfg, folderXyz));
+    for (DocumentSortField sortField : List.of(DocumentSortField.CREATED_DATE,
+                                               DocumentSortField.MODIFIED_DATE,
+                                               DocumentSortField.NAME)) {
+      for (boolean ascending : List.of(true, false)) {
+        List<Node> rows = new ArrayList<>(ascendingRows.get(sortField));
+        if (!ascending) {
+          Collections.reverse(rows);
+        }
+        when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
+        when(subItemsIterator.nextNode()).thenReturn(rows.get(0), rows.get(1), rows.get(2));
+        filter.setSortField(sortField);
+        filter.setAscending(ascending);
 
-    // modified date
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
+        fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
 
-    filter.setSortField(DocumentSortField.MODIFIED_DATE);
-    filter.setAscending(true);
-
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertNotNull(fileNodes);
-    assertEquals("Abc", fileNodes.get(0).getName());
-    assertEquals("Xyz", fileNodes.get(1).getName());
-    assertEquals("Efg.lnk", fileNodes.get(2).getName());
-
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-
-    filter.setAscending(false);
-
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertEquals("Efg.lnk", fileNodes.get(2).getName());
-    assertEquals("Abc", fileNodes.get(1).getName());
-    assertEquals("Xyz", fileNodes.get(0).getName());
-
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-    // name
-    filter.setSortField(DocumentSortField.NAME);
-    filter.setAscending(true);
-
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertNotNull(fileNodes);
-    assertEquals("Abc", fileNodes.get(0).getName());
-    assertEquals("Xyz", fileNodes.get(2).getName());
-    assertEquals("Efg.lnk", fileNodes.get(1).getName());
-
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-
-    filter.setAscending(false);
-    when(subItemsIterator.hasNext()).thenReturn(true, true, true, false);
-    when(subItemsIterator.nextNode()).thenReturn(folderXyz, folderAbc, symlinkFolderEfg);
-    fileNodes = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 5);
-    assertEquals("Abc", fileNodes.get(2).getName());
-    assertEquals("Xyz", fileNodes.get(0).getName());
-    assertEquals("Efg.lnk", fileNodes.get(1).getName());
+        assertEquals(sortField + (ascending ? " ASC" : " DESC"),
+                     rows.stream().map(row -> row == symlinkFolderEfg ? "Efg.lnk" : getNodeName(row)).toList(),
+                     fileNodes.stream().map(AbstractNode::getName).toList());
+      }
+    }
+    verify(jcrQuery, atLeastOnce()).setCaseInsensitiveOrder(true);
+    verify(jcrQuery, never()).setCaseInsensitiveOrder(false);
 
     Node file3 = createFileMock("file3", Calendar.getInstance(), userSession);
     Node file4 = createFileMock("file4", Calendar.getInstance(), userSession);
@@ -1531,6 +1925,20 @@ public class JCRDocumentFileStorageTest {
     assertNotNull(fileNodes);
     assertEquals(10, fileNodes.size());
 
+  }
+
+  /**
+   * Reads a mocked node's name, wrapping the repository's checked exception.
+   *
+   * @param node the node
+   * @return its name
+   */
+  private static String getNodeName(Node node) {
+    try {
+      return node.getName();
+    } catch (RepositoryException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   private Node createFolderMock(String name, Calendar createdDate, Session session) throws RepositoryException {
@@ -2267,6 +2675,106 @@ public class JCRDocumentFileStorageTest {
     verify(sessionProvider, times(1)).close();
   }
 
+  /**
+   * The group id comes from the path of a node of a space's {@code Documents}
+   * drive, the drive root included, and from nothing else: a personal drive,
+   * another folder of the space, a name that only starts like the drive, a
+   * same-name-sibling index, a nested space path and a null path give none.
+   * Mutants: the {@code Documents} segment dropped from the pattern; the
+   * pattern unanchored (a path that merely contains a drive).
+   */
+  @Test
+  public void spaceGroupIdOfDrivePathAcceptsTheDriveOfASpaceOnly() {
+    assertEquals("/spaces/team", JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documents"));
+    assertEquals("/spaces/team", JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documents/a/b.txt"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Pages/x"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documentsx"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team/Documents[2]/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces/team[2]/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/platform/administrators/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Users/j___/jo___/john/Private/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Trash/a/Groups/spaces/team/Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath("/Groups/spaces//Documents/a"));
+    assertNull(JCRDocumentFileStorage.spaceGroupIdOfDrivePath(null));
+  }
+
+  /**
+   * A node of a space's drive tells its space, as the system. Mutant: the
+   * path read from another node.
+   */
+  @Test
+  public void documentSpaceGroupIdOfANodeOfASpaceDrive() throws Exception {
+    Session session = systemSessionForSpaceGroupId();
+    Node node = mock(Node.class);
+    when(node.getPath()).thenReturn("/Groups/spaces/team/Documents/reports/q3.txt");
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "abc")).thenReturn(node);
+
+    assertEquals("/spaces/team", jcrDocumentFileStorage.getDocumentSpaceGroupId("abc"));
+  }
+
+  /**
+   * A shortcut or a share link inside a space's drive belongs to no space: it
+   * stands for a node that may lie anywhere. Mutants: the {@code exo:symlink}
+   * check removed; the {@code exo:taxonomyLink} check removed.
+   */
+  @Test
+  public void documentSpaceGroupIdOfAShortcutIsNone() throws Exception {
+    Session session = systemSessionForSpaceGroupId();
+    Node shortcut = mock(Node.class);
+    Node taxonomyLink = mock(Node.class);
+    when(shortcut.getPath()).thenReturn("/Groups/spaces/team/Documents/Shared/q3.txt");
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    when(taxonomyLink.getPath()).thenReturn("/Groups/spaces/team/Documents/links/q3.txt");
+    when(taxonomyLink.isNodeType(NodeTypeConstants.TAXONOMY_LINK)).thenReturn(true);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "shortcut")).thenReturn(shortcut);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "taxonomy")).thenReturn(taxonomyLink);
+
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("shortcut"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("taxonomy"));
+  }
+
+  /**
+   * A node of a personal drive, of the trash, outside any drive, a missing
+   * node and a repository that fails give no space, and the session is closed
+   * each time.
+   */
+  @Test
+  public void documentSpaceGroupIdOfAnythingElseIsNone() throws Exception {
+    Session session = systemSessionForSpaceGroupId();
+    Node personal = mock(Node.class);
+    Node trashed = mock(Node.class);
+    Node failing = mock(Node.class);
+    when(personal.getPath()).thenReturn("/Users/j___/jo___/john/Private/Documents/a");
+    when(trashed.getPath()).thenReturn("/Trash/a");
+    when(failing.getPath()).thenThrow(new RepositoryException("down"));
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "personal")).thenReturn(personal);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "trashed")).thenReturn(trashed);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "failing")).thenReturn(failing);
+    JCR_DOCUMENTS_UTIL.when(() -> getNodeByIdentifier(session, "missing")).thenReturn(null);
+
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("personal"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("trashed"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("failing"));
+    assertNull(jcrDocumentFileStorage.getDocumentSpaceGroupId("missing"));
+    verify(sessionProviderOfSpaceGroupId, times(4)).close();
+  }
+
+  private SessionProvider sessionProviderOfSpaceGroupId;
+
+  /**
+   * @return the system session the space group id is read with
+   */
+  private Session systemSessionForSpaceGroupId() throws Exception {
+    Session session = mock(Session.class);
+    sessionProviderOfSpaceGroupId = mock(SessionProvider.class);
+    ManageableRepository repository = mock(ManageableRepository.class);
+    when(SessionProvider.createSystemProvider()).thenReturn(sessionProviderOfSpaceGroupId);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(sessionProviderOfSpaceGroupId.getSession("collaboration", repository)).thenReturn(session);
+    return session;
+  }
+
   private Value categoryValue(String value) throws Exception {
     Value jcrValue = mock(Value.class);
     when(jcrValue.getString()).thenReturn(value);
@@ -2838,4 +3346,1681 @@ public class JCRDocumentFileStorageTest {
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(destination)).thenReturn(true);
     return destination;
   }
+
+  /**
+   * A search sorted by a field reaches the index sorted by it, the latest
+   * changes first for a descending last-change sort; a search with no sort
+   * keeps the relevance order.
+   * Mutants: the filter's sort ignored, its direction ignored, the relevance
+   * order dropped when no sort is set.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchSortsByTheFiltersFieldOrByRelevance() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity)).thenReturn(sessionProvider);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getSortField(any(), anyBoolean())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getSortDirection(any())).thenCallRealMethod();
+    ManageableRepository repository = mock(ManageableRepository.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration().getDefaultWorkspaceName()).thenReturn("collaboration");
+    Session session = mock(Session.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+    when(sessionProvider.getSession("collaboration", repository)).thenReturn(session);
+    Node folder = mock(Node.class);
+    when(folder.getPath()).thenReturn("/Groups/spaces/legal/Documents");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "folder")).thenReturn(folder);
+
+    DocumentTimelineFilter latestFirst = new DocumentTimelineFilter();
+    latestFirst.setParentFolderId("folder");
+    latestFirst.setSortField(org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE);
+    latestFirst.setAscending(false);
+    jcrDocumentFileStorage.search(latestFirst, aclIdentity, 0, 10);
+    DocumentTimelineFilter oldestFirst = new DocumentTimelineFilter();
+    oldestFirst.setParentFolderId("folder");
+    oldestFirst.setSortField(org.exoplatform.documents.constant.DocumentSortField.MODIFIED_DATE);
+    oldestFirst.setAscending(true);
+    jcrDocumentFileStorage.search(oldestFirst, aclIdentity, 0, 10);
+    DocumentTimelineFilter relevance = new DocumentTimelineFilter();
+    relevance.setParentFolderId("folder");
+    relevance.setQuery("contract");
+    jcrDocumentFileStorage.search(relevance, aclIdentity, 0, 10);
+
+    verify(documentSearchServiceConnector).search(eq(aclIdentity), eq("collaboration"), anyList(), eq(latestFirst), eq(0), eq(10),
+                                                  eq("lastUpdatedDate"), eq("DESC"));
+    verify(documentSearchServiceConnector).search(eq(aclIdentity), eq("collaboration"), anyList(), eq(oldestFirst), eq(0), eq(10),
+                                                  eq("lastUpdatedDate"), eq("ASC"));
+    verify(documentSearchServiceConnector).search(eq(aclIdentity), eq("collaboration"), anyList(), eq(relevance), eq(0), eq(10),
+                                                  eq("_score"), eq("DESC"));
+  }
+
+  /**
+   * A shortcut whose target the user's session can't read, or that is gone,
+   * is answered as a missing document, as any id the user can't read is,
+   * instead of failing on the missing target. {@code isFile} and
+   * {@code isFolder} run their real code, so a target read without the null
+   * check fails here as it does on the platform.
+   */
+  @Test
+  public void getDocumentByIdAnswersAShortcutToAnUnreadableTargetAsMissing() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    when(identityRegistry.getIdentity("john")).thenReturn(aclIdentity);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity)).thenReturn(sessionProvider);
+    ManageableRepository repository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    SessionImpl session = mock(SessionImpl.class);
+    when(sessionProvider.getSession("collaboration", repository)).thenReturn(session);
+    Node shortcut = createSymlinkMock("unreadableTargetId", "report");
+    when(shortcut.getSession()).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "shortcutId")).thenReturn(shortcut);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "unreadableTargetId")).thenReturn(null);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFile(any())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(any())).thenCallRealMethod();
+
+    assertThrows(ItemNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentById(session, "shortcutId", aclIdentity));
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentById("shortcutId", "john"));
+  }
+
+  /**
+   * A folder's children are paged over the listing, folders first, then files:
+   * a shortcut to a file the folder query returns sorted among the folders is
+   * listed with the files, and reading the listing page by page gives every
+   * child once, in order. The queries serve their rows by the offset and the
+   * limit they are given, as the repository does.
+   */
+  @Test
+  public void getFolderChildNodesPagesOverTheListingWithAFileShortcutAmongTheFolders() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn("user");
+    SessionImpl session = mockFolderListingSession(identity);
+    Node fileB = createFileMock("bTarget", Calendar.getInstance(), session);
+    Node shortcutB = createSymlinkMock("bTargetFileIdentifier", "B");
+    List<Node> folderRows = List.of(createFolderMock("A", Calendar.getInstance(), session),
+                                    shortcutB,
+                                    createFolderMock("C", Calendar.getInstance(), session),
+                                    createFolderMock("D", Calendar.getInstance(), session),
+                                    createFolderMock("E", Calendar.getInstance(), session),
+                                    createFolderMock("F", Calendar.getInstance(), session));
+    List<Node> fileRows = List.of(shortcutB, createFileMock("f1", Calendar.getInstance(), session));
+    mockFolderListingQueries(session, folderRows, fileRows);
+    assertNotNull(fileB);
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "", 1L, "");
+    filter.setSortField(DocumentSortField.NAME);
+    filter.setAscending(true);
+
+    List<String> listed = new ArrayList<>();
+    for (int offset = 0; offset < 9; offset += 3) {
+      jcrDocumentFileStorage.getFolderChildNodes(filter, identity, offset, 3).forEach(child -> listed.add(child.getName()));
+    }
+
+    assertEquals(List.of("A", "C", "D", "E", "F", "B.lnk", "f1"), listed);
+    assertEquals(List.of("E", "F", "B.lnk"),
+                 jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 3, 3).stream().map(AbstractNode::getName).toList());
+  }
+
+  /**
+   * A page is filled up to its limit whenever the folder holds more children,
+   * however many of the rows read first the listing leaves out (shortcuts to
+   * files among the folders, a shortcut whose target is gone): the rows are
+   * read again past the last one read. So a listing asked for one child more
+   * than a bound gets it whenever the folder holds that many, and a shorter
+   * listing means the folder holds no more.
+   */
+  @Test
+  public void getFolderChildNodesFillsThePageWhenRowsAreLeftOut() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn("user");
+    SessionImpl session = mockFolderListingSession(identity);
+    List<Node> folderRows = new ArrayList<>();
+    createFileMock("target", Calendar.getInstance(), session);
+    for (int i = 0; i < 4; i++) {
+      folderRows.add(createSymlinkMock("targetFileIdentifier", "fileShortcut" + i));
+    }
+    folderRows.add(createSymlinkMock("goneIdentifier", "deadShortcut"));
+    for (int i = 10; i < 32; i++) {
+      folderRows.add(createFolderMock("folder" + i, Calendar.getInstance(), session));
+    }
+    mockFolderListingQueries(session, folderRows, List.of());
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "", 1L, "");
+    filter.setSortField(DocumentSortField.NAME);
+    filter.setAscending(true);
+
+    List<AbstractNode> page = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 21);
+    assertEquals(21, page.size());
+    assertEquals("folder10", page.get(0).getName());
+    assertEquals("folder30", page.get(20).getName());
+
+    assertEquals(22, jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 23).size());
+    assertEquals(22, jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0).size());
+  }
+
+  /**
+   * A folder's children are listed in the order the query serves them, names
+   * compared whatever their case by the query itself, and paged over that
+   * order: reading the listing page by page gives the one-shot listing. The
+   * rows come in the repository's case-insensitive order, which upper-cases
+   * the names, so {@code _z} sorts after {@code B20}, where a lower-cased
+   * comparison would put it first: a sort of the rows read, done again on
+   * every longer read, would order a page otherwise than the one before it.
+   * Mutants: the case-insensitive order not asked of the query, the rows read
+   * sorted again.
+   */
+  @Test
+  public void getFolderChildNodesPagesOverTheQuerysCaseInsensitiveOrder() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn("user");
+    SessionImpl session = mockFolderListingSession(identity);
+    List<String> names = new ArrayList<>();
+    names.add("a");
+    for (int i = 1; i <= 20; i++) {
+      names.add("B%02d".formatted(i));
+    }
+    names.add("_z");
+    List<Node> folderRows = new ArrayList<>();
+    for (String name : names) {
+      folderRows.add(createFolderMock(name, Calendar.getInstance(), session));
+    }
+    List<QueryImpl> queries = mockFolderListingQueries(session, folderRows, List.of());
+    DocumentFolderFilter filter = new DocumentFolderFilter("12e2", "", 1L, "");
+    filter.setSortField(DocumentSortField.NAME);
+    filter.setAscending(true);
+
+    List<String> oneShot = jcrDocumentFileStorage.getFolderChildNodes(filter, identity, 0, 0)
+                                                 .stream()
+                                                 .map(AbstractNode::getName)
+                                                 .toList();
+    for (int limit : List.of(20, 5)) {
+      List<String> paged = new ArrayList<>();
+      for (int offset = 0; offset < names.size(); offset += limit) {
+        jcrDocumentFileStorage.getFolderChildNodes(filter, identity, offset, limit).forEach(child -> paged.add(child.getName()));
+      }
+      assertEquals("pages of " + limit, oneShot, paged);
+    }
+
+    assertEquals(names, oneShot);
+    assertFalse(queries.isEmpty());
+    for (QueryImpl query : queries) {
+      verify(query).setCaseInsensitiveOrder(true);
+    }
+  }
+
+  /**
+   * Opens the user's session on a parent folder whose children the listing
+   * converts with the real conversion code.
+   *
+   * @param identity the user's identity
+   * @return the user's session
+   */
+  private SessionImpl mockFolderListingSession(org.exoplatform.services.security.Identity identity) throws Exception {
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    SessionImpl session = mock(SessionImpl.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Node parentNode = mock(Node.class);
+    when(parentNode.getPath()).thenReturn("/documents/path");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "12e2")).thenReturn(parentNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodesInRowOrder(any(), any(), any(), any(), any(), anyBoolean()))
+                      .thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toNodes(any(), any(), any(), any(), any(), anyBoolean(), any()))
+                      .thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFolderNode(any(), any(), any(), any(), any())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(any())).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.retrieveFileProperties(any(), any(), any(), any(), any()))
+                      .thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(any(IdentityManager.class),
+                                                              any(org.exoplatform.services.security.Identity.class),
+                                                              any(Node.class),
+                                                              anyString(),
+                                                              any(SpaceService.class)))
+                      .thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(any(IdentityManager.class),
+                                                              any(org.exoplatform.services.security.Identity.class),
+                                                              any(Node.class),
+                                                              any(FileNode.class),
+                                                              any(SpaceService.class)))
+                      .thenCallRealMethod();
+    return session;
+  }
+
+  /**
+   * Answers the folder query and the file query of a listing with the given
+   * rows, served by the offset and the limit each query is given, no limit
+   * serving every row past the offset.
+   *
+   * @param session the user's session
+   * @param folderRows the rows of the folder query, in its order
+   * @param fileRows the rows of the file query, in its order
+   * @return the queries created, as they are created
+   */
+  private List<QueryImpl> mockFolderListingQueries(SessionImpl session, List<Node> folderRows, List<Node> fileRows) throws Exception {
+    List<QueryImpl> queries = new ArrayList<>();
+    WorkspaceImpl workspace = mock(WorkspaceImpl.class);
+    QueryManager queryManager = mock(QueryManager.class);
+    when(session.getWorkspace()).thenReturn(workspace);
+    doReturn(queryManager).when(workspace).getQueryManager();
+    when(queryManager.createQuery(anyString(), eq(Query.SQL))).thenAnswer(invocation -> {
+      List<Node> rows = invocation.getArgument(0, String.class).contains("'nt:folder'") ? folderRows : fileRows;
+      long[] offsetAndLimit = new long[2];
+      QueryImpl query = mock(QueryImpl.class);
+      queries.add(query);
+      doAnswer(set -> offsetAndLimit[0] = set.getArgument(0, Long.class)).when(query).setOffset(anyLong());
+      doAnswer(set -> offsetAndLimit[1] = set.getArgument(0, Long.class)).when(query).setLimit(anyLong());
+      when(query.execute()).thenAnswer(execution -> {
+        int from = (int) Math.min(offsetAndLimit[0], rows.size());
+        int to = offsetAndLimit[1] <= 0 ? rows.size() : (int) Math.min(from + offsetAndLimit[1], rows.size());
+        QueryResult result = mock(QueryResult.class);
+        when(result.getNodes()).thenReturn(new org.exoplatform.services.jcr.impl.util.EntityCollection(new ArrayList<>(rows.subList(from,
+                                                                                                                                          to))));
+        return result;
+      });
+      return query;
+    });
+    return queries;
+  }
+
+  /** The user's session provider of the last upload folder mocked. */
+  private SessionProvider                uploadSessionProvider;
+
+  /**
+   * Builds the handler's answer for a filed file: an XML document whose root
+   * names the file's id, as {@code FileUploadHandler#getUploadedFile} writes
+   * it.
+   *
+   * @param rootName the root element's name
+   * @param uuid the id it carries, or null
+   * @return the answer, with the status 200
+   * @throws Exception never
+   */
+  private static javax.ws.rs.core.Response handlerAnswer(String rootName, String uuid) throws Exception {
+    org.w3c.dom.Document document = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+    org.w3c.dom.Element root = document.createElement(rootName);
+    if (uuid != null) {
+      root.setAttribute("UUID", uuid);
+    }
+    document.appendChild(root);
+    javax.ws.rs.core.Response response = mock(javax.ws.rs.core.Response.class);
+    when(response.getStatus()).thenReturn(200);
+    when(response.getEntity()).thenReturn(new javax.xml.transform.dom.DOMSource(document));
+    return response;
+  }
+
+  /**
+   * Mocks the user's session on a folder "1" the user can add documents to,
+   * and stores an upload "up-1"; the user's session provider is kept in
+   * {@link #uploadSessionProvider}.
+   *
+   * @param aclIdentity the user
+   * @param folderNode the folder
+   * @return the user's session
+   * @throws Exception never
+   */
+  private Session uploadFolder(org.exoplatform.services.security.Identity aclIdentity, ExtendedNode folderNode) throws Exception {
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    uploadSessionProvider = sessionProvider;
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity)).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(folderNode);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(folderNode)).thenReturn(true);
+    AccessControlEntry editEntry = new AccessControlEntry(aclIdentity.getUserId(), PermissionType.ADD_NODE);
+    when(folderNode.getACL()).thenReturn(new AccessControlList(aclIdentity.getUserId(), Arrays.asList(editEntry)));
+    when(uploadService.getUploadResource("up-1")).thenReturn(new org.exoplatform.upload.UploadResource("up-1"));
+    return session;
+  }
+
+  /**
+   * An upload is filed by the handler the Documents app files its uploads
+   * through, under the user's own session, with the app's source and the
+   * user's id, and the file it names is returned; the session is closed. As
+   * the app does, the filing asks the handler to post no stream activity, and
+   * the thread's document context is left as it was found, absent or set.
+   * Mutants: another workspace, folder, upload, name, source, user or action
+   * passed, the file read from another id, the session left open, the skip
+   * not set, or not restored.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void saveUploadedDocumentFilesThroughTheUploadHandler() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    Session session = uploadFolder(aclIdentity, folderNode);
+    org.exoplatform.wcm.connector.FileUploadHandler handler = mock(org.exoplatform.wcm.connector.FileUploadHandler.class);
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(handler).when(storage).getFileUploadHandler();
+    doReturn(List.of()).when(storage).getUploadFileValidators();
+    javax.ws.rs.core.Response answer = handlerAnswer("file", "file-1");
+    List<Object> skipDuringFiling = new ArrayList<>();
+    when(handler.saveAsNTFile("collaboration", folderNode, "up-1", "Report.pdf", "en", "newApp", null, "john", "keepBoth")).thenAnswer(invocation -> {
+      skipDuringFiling.add(org.exoplatform.services.context.DocumentContext.getCurrent()
+                                                                         .getAttributes()
+                                                                         .get(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT));
+      return answer;
+    });
+    Node fileNode = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "file-1")).thenReturn(fileNode);
+    FileNode expected = new FileNode();
+    expected.setId("file-1");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toFileNode(identityManager, aclIdentity, fileNode, "", spaceService)).thenReturn(expected);
+
+    java.util.Map<String, Object> documentAttributes = org.exoplatform.services.context.DocumentContext.getCurrent().getAttributes();
+    documentAttributes.remove(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT);
+
+    FileNode result = storage.saveUploadedDocument("1", "up-1", "Report.pdf", null, aclIdentity);
+
+    assertSame(expected, result);
+    assertEquals(List.of(true), skipDuringFiling);
+    assertFalse(documentAttributes.containsKey(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT));
+
+    documentAttributes.put(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT, false);
+    storage.saveUploadedDocument("1", "up-1", "Report.pdf", null, aclIdentity);
+    assertEquals(List.of(true, true), skipDuringFiling);
+    assertEquals(false, documentAttributes.remove(org.exoplatform.services.context.DocumentContext.IS_SKIP_RAISE_ACT));
+    verify(handler, times(2)).saveAsNTFile("collaboration", folderNode, "up-1", "Report.pdf", "en", "newApp", null, "john", "keepBoth");
+    verify(uploadSessionProvider, times(2)).close();
+  }
+
+  /**
+   * An upload is refused before the handler runs when it isn't stored, its
+   * folder isn't found, or the user can't add documents to the folder.
+   * Mutants: any of the three checks dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void saveUploadedDocumentIsRefusedBeforeTheHandler() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    Session session = uploadFolder(aclIdentity, folderNode);
+    org.exoplatform.wcm.connector.FileUploadHandler handler = mock(org.exoplatform.wcm.connector.FileUploadHandler.class);
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    lenient().doReturn(handler).when(storage).getFileUploadHandler();
+    lenient().doReturn(List.of()).when(storage).getUploadFileValidators();
+
+    assertThrows(ObjectNotFoundException.class, () -> storage.saveUploadedDocument("1", "up-2", "a.pdf", null, aclIdentity));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "9")).thenReturn(null);
+    assertThrows(ObjectNotFoundException.class, () -> storage.saveUploadedDocument("9", "up-1", "a.pdf", null, aclIdentity));
+    when(folderNode.getACL()).thenReturn(new AccessControlList("john",
+                                                               Arrays.asList(new AccessControlEntry("john", PermissionType.READ))));
+    assertThrows(IllegalAccessException.class, () -> storage.saveUploadedDocument("1", "up-1", "a.pdf", null, aclIdentity));
+    verifyNoInteractions(handler);
+  }
+
+  /**
+   * An upload's name and conflict action are checked before its file is sent
+   * as when it is filed: a folder of that name refuses a new version, keeping
+   * both opens no session, and a missing folder is not found.
+   * Mutants: the check not run, a session opened for keep_both, the folder
+   * unchecked, the session left open.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void checkUploadConflictChecksAsTheFilingDoes() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    Session session = uploadFolder(aclIdentity, folderNode);
+    Node existing = mock(Node.class);
+    when(folderNode.hasNode("report.pdf")).thenReturn(true);
+    doReturn(existing).when(folderNode).getNode("report.pdf");
+
+    jcrDocumentFileStorage.checkUploadConflict("1", "Report.pdf", org.exoplatform.documents.constant.UploadConflictAction.KEEP_BOTH, aclIdentity);
+    verify(uploadSessionProvider, never()).getSession(anyString(), any());
+
+    assertThrows(IllegalArgumentException.class,
+                 () -> jcrDocumentFileStorage.checkUploadConflict("1",
+                                                                  "Report.pdf",
+                                                                  org.exoplatform.documents.constant.UploadConflictAction.NEW_VERSION,
+                                                                  aclIdentity));
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "9")).thenReturn(null);
+    assertThrows(ObjectNotFoundException.class,
+                 () -> jcrDocumentFileStorage.checkUploadConflict("9",
+                                                                  "Report.pdf",
+                                                                  org.exoplatform.documents.constant.UploadConflictAction.NEW_VERSION,
+                                                                  aclIdentity));
+    verify(uploadSessionProvider, times(2)).close();
+  }
+
+  /**
+   * The conflict action maps to the handler's, on the node name the handler
+   * computes, lower-cased: a new version of a file that isn't there keeps
+   * both, of a versioned file is passed on, and of a folder or of a file that
+   * keeps no versions is refused, since the handler would overwrite it.
+   * Mutants: the node name not lower-cased, the absence not checked, the
+   * folder or the unversioned file not refused.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void theConflictActionMapsToTheHandlersOnItsNodeName() throws Exception {
+    Node folder = mock(Node.class);
+    Node existing = mock(Node.class);
+    org.exoplatform.documents.constant.UploadConflictAction newVersion =
+                                                                       org.exoplatform.documents.constant.UploadConflictAction.NEW_VERSION;
+
+    assertEquals("keepBoth", JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", null));
+    assertEquals("keepBoth",
+                 JCRDocumentFileStorage.toExistenceAction(folder,
+                                                          "Report.pdf",
+                                                          org.exoplatform.documents.constant.UploadConflictAction.KEEP_BOTH));
+    verifyNoInteractions(folder);
+    when(folder.getNode(anyString())).thenThrow(new PathNotFoundException());
+    assertEquals("keepBoth", JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", newVersion));
+
+    when(folder.hasNode("report.pdf")).thenReturn(true);
+    doReturn(existing).when(folder).getNode("report.pdf");
+    when(existing.isNodeType("nt:file")).thenReturn(true);
+    assertThrows(IllegalArgumentException.class, () -> JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", newVersion));
+    when(existing.isNodeType("mix:versionable")).thenReturn(true);
+    assertEquals("createVersion", JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", newVersion));
+
+    when(existing.isNodeType("nt:file")).thenReturn(false);
+    assertThrows(IllegalArgumentException.class, () -> JCRDocumentFileStorage.toExistenceAction(folder, "Report.pdf", newVersion));
+  }
+
+  /**
+   * The handler's answer gives the filed file's id; a message document is a
+   * refusal, and a server error a failure whose message doesn't carry the
+   * engine's text.
+   * Mutants: the root element unchecked, the engine's text shown.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void theHandlersAnswerGivesTheFiledFile() throws Exception {
+    assertEquals("file-1", JCRDocumentFileStorage.getSavedFileId(handlerAnswer("file", "file-1"), "a.pdf"));
+    assertThrows(IllegalAccessException.class,
+                 () -> JCRDocumentFileStorage.getSavedFileId(handlerAnswer("Message", null), "a.pdf"));
+
+    javax.ws.rs.core.Response failure = mock(javax.ws.rs.core.Response.class);
+    when(failure.getStatus()).thenReturn(500);
+    when(failure.getEntity()).thenReturn("javax.jcr.AccessDeniedException: /Users/j___/john/Private access denied for john");
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> JCRDocumentFileStorage.getSavedFileId(failure, "a.pdf"));
+    assertFalse(e.getMessage().contains("john"));
+    assertTrue(e.getMessage().contains("a.pdf"));
+  }
+
+  /**
+   * An upload is filed into the folder a shortcut targets, as the Documents
+   * app shows a shortcut, and refused before the handler when its id names a
+   * file, whose parent the handler would otherwise file into.
+   * Mutants: the shortcut not resolved, a file accepted as the folder.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIsFiledIntoAFolderOnly() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    Session session = uploadFolder(aclIdentity, folderNode);
+    org.exoplatform.wcm.connector.FileUploadHandler handler = mock(org.exoplatform.wcm.connector.FileUploadHandler.class);
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(handler).when(storage).getFileUploadHandler();
+    doReturn(List.of()).when(storage).getUploadFileValidators();
+    javax.ws.rs.core.Response answer = handlerAnswer("file", "file-1");
+    when(handler.saveAsNTFile("collaboration", folderNode, "up-1", "a.pdf", "en", "newApp", null, "john", "keepBoth")).thenReturn(answer);
+    Node fileNode = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "file-1")).thenReturn(fileNode);
+
+    Node shortcut = mock(Node.class);
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    Property target = mock(Property.class);
+    when(target.getString()).thenReturn("1");
+    when(shortcut.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(target);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "shortcut")).thenReturn(shortcut);
+    storage.saveUploadedDocument("shortcut", "up-1", "a.pdf", null, aclIdentity);
+    verify(handler).saveAsNTFile("collaboration", folderNode, "up-1", "a.pdf", "en", "newApp", null, "john", "keepBoth");
+
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isFolder(fileNode)).thenReturn(false);
+    assertThrows(IllegalArgumentException.class, () -> storage.saveUploadedDocument("file-1", "up-1", "a.pdf", null, aclIdentity));
+    assertThrows(IllegalArgumentException.class,
+                 () -> storage.checkUploadConflict("file-1",
+                                                   "a.pdf",
+                                                   org.exoplatform.documents.constant.UploadConflictAction.NEW_VERSION,
+                                                   aclIdentity));
+    verify(handler, times(1)).saveAsNTFile(any(), any(), any(), any(), any(), any(), any(), any(), any());
+  }
+
+  /**
+   * An upload is run through the platform's upload validators before it is
+   * filed, as a browser upload is: a validator that supports the file reads
+   * its bytes from a stream of its own, and its refusal stops the filing with
+   * its message; a validator that doesn't support the file is not run.
+   * Mutants: the validators not run, an unsupporting validator run, the
+   * refusal swallowed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void anUploadIsValidatedBeforeItIsFiled() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = new org.exoplatform.services.security.Identity("john");
+    ExtendedNode folderNode = mock(ExtendedNode.class);
+    uploadFolder(aclIdentity, folderNode);
+    java.nio.file.Path stored = java.nio.file.Files.createTempFile("upload-", ".part");
+    java.nio.file.Files.writeString(stored, "<svg onload='alert(1)'/>");
+    org.exoplatform.upload.UploadResource resource = new org.exoplatform.upload.UploadResource("up-1");
+    resource.setStoreLocation(stored.toString());
+    resource.setMimeType("application/octet-stream");
+    when(uploadService.getUploadResource("up-1")).thenReturn(resource);
+    org.exoplatform.wcm.connector.FileUploadHandler handler = mock(org.exoplatform.wcm.connector.FileUploadHandler.class);
+    org.exoplatform.upload.UploadFileValidator refusing = mock(org.exoplatform.upload.UploadFileValidator.class);
+    org.exoplatform.upload.UploadFileValidator other = mock(org.exoplatform.upload.UploadFileValidator.class);
+    when(refusing.supports("x.svg", "application/octet-stream")).thenReturn(true);
+    List<String> read = new ArrayList<>();
+    doAnswer(invocation -> {
+      read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()));
+      throw new org.apache.commons.fileupload2.core.FileUploadException("Infected file detected. Uploading is forbidden");
+    }).when(refusing).validate(eq("x.svg"), eq("application/octet-stream"), any(InputStream.class));
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(handler).when(storage).getFileUploadHandler();
+    doReturn(List.of(other, refusing)).when(storage).getUploadFileValidators();
+    try {
+      IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                      () -> storage.saveUploadedDocument("1", "up-1", "x.svg", null, aclIdentity));
+
+      assertTrue(refusal.getMessage().contains("Infected file detected"));
+      assertEquals(List.of("<svg onload='alert(1)'/>"), read);
+      verify(other, never()).validate(any(), any(), any());
+      verifyNoInteractions(handler);
+    } finally {
+      java.nio.file.Files.deleteIfExists(stored);
+    }
+  }
+
+  /**
+   * A file's content held in memory is checked by every validator that
+   * supports it, each reading the whole content from its own stream, and a
+   * refusal carries the validator's message.
+   * Mutants: the content not validated, a validator handed a used stream,
+   * the refusal swallowed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aContentIsValidatedByEveryValidatorThatSupportsIt() throws Exception {
+    org.exoplatform.upload.UploadFileValidator first = mock(org.exoplatform.upload.UploadFileValidator.class);
+    org.exoplatform.upload.UploadFileValidator refusing = mock(org.exoplatform.upload.UploadFileValidator.class);
+    when(first.supports("x.svg", "image/svg+xml")).thenReturn(true);
+    when(refusing.supports("x.svg", "image/svg+xml")).thenReturn(true);
+    List<String> read = new ArrayList<>();
+    doAnswer(invocation -> read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()))).when(first)
+                                                                                                        .validate(any(), any(), any());
+    doAnswer(invocation -> {
+      read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()));
+      throw new org.apache.commons.fileupload2.core.FileUploadException("Infected file detected");
+    }).when(refusing).validate(any(), any(), any());
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(List.of(first, refusing)).when(storage).getUploadFileValidators();
+
+    IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                    () -> storage.validateUploadedContent("x.svg", "image/svg+xml", "<svg/>".getBytes()));
+
+    assertTrue(refusal.getMessage().contains("Infected file detected"));
+    assertEquals(List.of("<svg/>", "<svg/>"), read);
+  }
+
+  /**
+   * A file on disk is checked by every validator that supports it, under the
+   * name and type given, each reading the whole file from its own stream
+   * opened on the disk file, a validator that doesn't support it being
+   * skipped; a refusal carries the validator's message, and a file that
+   * can't be read is reported as not checked.
+   * Mutants: the file not validated, a validator handed a used stream, the
+   * name or type not passed on, an unsupporting validator called, the
+   * refusal swallowed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void aFileOnDiskIsValidatedByEveryValidatorThatSupportsIt() throws Exception {
+    org.exoplatform.upload.UploadFileValidator first = mock(org.exoplatform.upload.UploadFileValidator.class);
+    org.exoplatform.upload.UploadFileValidator refusing = mock(org.exoplatform.upload.UploadFileValidator.class);
+    org.exoplatform.upload.UploadFileValidator other = mock(org.exoplatform.upload.UploadFileValidator.class);
+    when(first.supports("x.svg", "image/svg+xml")).thenReturn(true);
+    when(refusing.supports("x.svg", "image/svg+xml")).thenReturn(true);
+    List<String> read = new ArrayList<>();
+    doAnswer(invocation -> read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()))).when(first)
+                                                                                                        .validate(eq("x.svg"),
+                                                                                                                  eq("image/svg+xml"),
+                                                                                                                  any());
+    doAnswer(invocation -> {
+      read.add(new String(((InputStream) invocation.getArgument(2)).readAllBytes()));
+      throw new org.apache.commons.fileupload2.core.FileUploadException("Infected file detected");
+    }).when(refusing).validate(eq("x.svg"), eq("image/svg+xml"), any());
+    JCRDocumentFileStorage storage = spy(jcrDocumentFileStorage);
+    doReturn(List.of(first, other, refusing)).when(storage).getUploadFileValidators();
+    java.nio.file.Path file = java.nio.file.Files.createTempFile("upload", ".svg");
+    try {
+      java.nio.file.Files.writeString(file, "<svg/>");
+
+      IllegalArgumentException refusal = assertThrows(IllegalArgumentException.class,
+                                                      () -> storage.validateUploadedFile("x.svg", "image/svg+xml", file));
+
+      assertTrue(refusal.getMessage().contains("Infected file detected"));
+      assertEquals(List.of("<svg/>", "<svg/>"), read);
+      verify(other, never()).validate(any(), any(), any());
+    } finally {
+      java.nio.file.Files.deleteIfExists(file);
+    }
+    assertThrows(IllegalStateException.class, () -> storage.validateUploadedFile("x.svg", "image/svg+xml", file));
+  }
+
+  @Test
+  public void getTranscriptionStateReadsTheStoredStateWithTheViewersRights() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "PROCESSING");
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_PROGRESS, "3/9");
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE, "en");
+    Property duration = mock(Property.class);
+    when(duration.getLong()).thenReturn(5400L);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)).thenReturn(duration);
+    Calendar updated = Calendar.getInstance();
+    Property updatedProperty = mock(Property.class);
+    when(updatedProperty.getDate()).thenReturn(updated);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(updatedProperty);
+
+    TranscriptionState state = jcrDocumentFileStorage.getTranscriptionState("1", viewer);
+
+    assertEquals(TranscriptionStatus.PROCESSING, state.status());
+    assertEquals("3/9", state.progress());
+    assertEquals("en", state.language());
+    assertEquals(Long.valueOf(5400L), state.durationSeconds());
+    assertEquals(Long.valueOf(updated.getTimeInMillis()), state.updated());
+    assertNull(state.error());
+    assertFalse(state.hasSegments());
+    assertTrue(state.media());
+  }
+
+  @Test
+  public void getTranscriptionStateReadsAnOldTranscriptAsDoneAndAnEmptyPlaceholderAsNeverTranscribed() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "audio/ogg");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION)).thenReturn(true);
+    Property transcript = mock(Property.class);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION)).thenReturn(transcript);
+
+    when(transcript.getLength()).thenReturn(42L);
+    assertEquals(TranscriptionStatus.DONE, jcrDocumentFileStorage.getTranscriptionState("1", viewer).status());
+
+    when(transcript.getLength()).thenReturn(0L);
+    TranscriptionState placeholder = jcrDocumentFileStorage.getTranscriptionState("1", viewer);
+    assertNull("Expected the empty placeholder of the former listener to read as never transcribed", placeholder.status());
+    assertTrue(placeholder.media());
+  }
+
+  @Test
+  public void getTranscriptionStateTellsAFileThatIsNoMedia() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "application/pdf");
+
+    assertFalse(jcrDocumentFileStorage.getTranscriptionState("1", viewer).media());
+    when(node.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(false);
+    assertFalse(jcrDocumentFileStorage.getTranscriptionState("1", viewer).media());
+  }
+
+  @Test
+  public void getTranscriptionStateOfAFileTheViewerCannotSeeIsNotFound() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getTranscriptionState("1", viewer));
+  }
+
+  @Test
+  public void updateTranscriptionStateWritesEveryFieldAsTheSystem() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(false);
+    Property duration = mock(Property.class);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION)).thenReturn(duration);
+
+    jcrDocumentFileStorage.updateTranscriptionState("1",
+                                                    TranscriptionState.builder()
+                                                                      .status(TranscriptionStatus.FAILED)
+                                                                      .error("provider.timeout")
+                                                                      .build());
+
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "FAILED");
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_ERROR, "provider.timeout");
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_PROGRESS, (String) null);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE, (String) null);
+    verify(duration).remove();
+    verify(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED), any(Calendar.class));
+    verify(session).save();
+  }
+
+  @Test
+  public void markTranscriptionQueuedWritesOnlyAFileWithNoStateYet() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    assertFalse(jcrDocumentFileStorage.markTranscriptionQueued("1"));
+    verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS), anyString());
+    verify(session, never()).save();
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(false);
+    assertTrue(jcrDocumentFileStorage.markTranscriptionQueued("1"));
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "QUEUED");
+    verify(session).save();
+  }
+
+  @Test
+  public void clearTranscriptionStateRemovesOnlyTheStateOfAFileNotTranscribedYet() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(false);
+    assertFalse(jcrDocumentFileStorage.clearTranscriptionState("1"));
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    assertFalse(jcrDocumentFileStorage.clearTranscriptionState("1"));
+    verify(node, never()).removeMixin(anyString());
+    verify(session, never()).save();
+
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "QUEUED");
+    assertTrue(jcrDocumentFileStorage.clearTranscriptionState("1"));
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    verify(session).save();
+  }
+
+  @Test
+  public void markTranscriptionQueuedOfAFileNotSavedYetIsNotFound() throws Exception {
+    Session session = mockSystemSession();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(null);
+
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.markTranscriptionQueued("1"));
+  }
+
+  @Test
+  public void completeTranscriptionWritesTheTextTheSegmentsAndTheStateInOneSave() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+
+    jcrDocumentFileStorage.completeTranscription("1",
+                                                 "bonjour à tous",
+                                                 "[{\"start\":0.0,\"end\":2.0,\"text\":\"bonjour\"}]",
+                                                 TranscriptionState.builder()
+                                                                   .status(TranscriptionStatus.DONE)
+                                                                   .language("fr")
+                                                                   .durationSeconds(5400L)
+                                                                   .build());
+
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION);
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_STATE);
+    ArgumentCaptor<InputStream> text = ArgumentCaptor.forClass(InputStream.class);
+    verify(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION), text.capture());
+    assertEquals("bonjour à tous", new String(text.getValue().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+    verify(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS), any(InputStream.class));
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_LANGUAGE, "fr");
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_DURATION, 5400L);
+    verify(session, times(1)).save();
+  }
+
+  @Test
+  public void completeTranscriptionWithoutSegmentsRemovesThePreviousOnes() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    Property segments = mock(Property.class);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(segments);
+
+    jcrDocumentFileStorage.completeTranscription("1",
+                                                 "hello",
+                                                 null,
+                                                 TranscriptionState.builder().status(TranscriptionStatus.DONE).build());
+
+    verify(segments).remove();
+    verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS), any(InputStream.class));
+  }
+
+  /**
+   * A new transcript drops the chapters made from the previous one, so that the
+   * transcript never shows under chapters that do not describe it (EXO-92122).
+   */
+  @Test
+  public void completeTranscriptionRemovesTheChaptersOfThePreviousTranscript() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    TranscriptionState done = TranscriptionState.builder().status(TranscriptionStatus.DONE).build();
+
+    jcrDocumentFileStorage.completeTranscription("1", "hello", null, done);
+    verify(node, never()).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenReturn(true);
+    jcrDocumentFileStorage.completeTranscription("1", "hello", null, done);
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+  }
+
+  /**
+   * Chapters are written only over the transcript they were made from: done,
+   * and with the update time read before making them; a transcript redone or
+   * queued again in between keeps no chapters (EXO-92122).
+   */
+  @Test
+  public void saveTranscriptionChaptersWritesOnlyOverTheTranscriptTheyWereMadeFrom() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    Calendar updated = Calendar.getInstance();
+    Property updatedProperty = mock(Property.class);
+    when(updatedProperty.getDate()).thenReturn(updated);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(updatedProperty);
+    String chapters = "[{\"start\":0.0,\"index\":0,\"title\":\"Welcome\",\"summary\":\"Hello.\"}]";
+
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionChapters("1", chapters, updated.getTimeInMillis() - 1));
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionChapters("1", chapters, updated.getTimeInMillis() + 1));
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "QUEUED");
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionChapters("1", chapters, updated.getTimeInMillis()));
+    verify(node, never()).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+    verify(session, never()).save();
+
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    assertTrue(jcrDocumentFileStorage.saveTranscriptionChapters("1", chapters, updated.getTimeInMillis()));
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+    ArgumentCaptor<InputStream> written = ArgumentCaptor.forClass(InputStream.class);
+    verify(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS), written.capture());
+    assertEquals(chapters, new String(written.getValue().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+    verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED), any(Calendar.class));
+    verify(session).save();
+  }
+
+  /**
+   * Chapters are written under the file's speaker lock, and the lock is
+   * released after the save and after a refusal: the chapters mixin and the
+   * speakers mixin are written with the file's whole mixin list, so a naming
+   * and a chapters save never drop one another's (EXO-92123).
+   */
+  @Test
+  public void saveTranscriptionChaptersWritesUnderTheSpeakerLock() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    Calendar updated = Calendar.getInstance();
+    Property updatedProperty = mock(Property.class);
+    when(updatedProperty.getDate()).thenReturn(updated);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(updatedProperty);
+    List<Boolean> lockedWhileWriting = new ArrayList<>();
+    doAnswer(invocation -> lockedWhileWriting.add(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread())).when(node)
+                                                                                                                 .addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS);
+
+    assertTrue(jcrDocumentFileStorage.saveTranscriptionChapters("1", "[]", updated.getTimeInMillis()));
+    assertEquals("Expected the chapters mixin added under the file's lock", List.of(true), lockedWhileWriting);
+    assertFalse("Expected the lock released after the save", JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionChapters("1", "[]", updated.getTimeInMillis() + 1));
+    assertFalse("Expected the lock released after a refusal", JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+  }
+
+  /**
+   * Blank chapters are refused rather than stored as an empty list.
+   */
+  @Test
+  public void saveTranscriptionChaptersRefusesBlankChapters() {
+    assertThrows(IllegalArgumentException.class, () -> jcrDocumentFileStorage.saveTranscriptionChapters("1", " ", 1L));
+  }
+
+  /**
+   * The chapters are read with the viewer's rights, and only from the chapters
+   * mixin; the state tells whether there are any (EXO-92122).
+   */
+  @Test
+  public void getTranscriptionChaptersReadsThemWithTheViewersRights() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    Property chapters = mock(Property.class);
+    when(chapters.getStream()).thenAnswer(invocation -> new ByteArrayInputStream("[{\"title\":\"Été\"}]".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenReturn(chapters);
+
+    assertNull(jcrDocumentFileStorage.getTranscriptionChapters("1", viewer));
+    assertFalse(jcrDocumentFileStorage.getTranscriptionState("1", viewer).hasChapters());
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenReturn(true);
+    assertEquals("[{\"title\":\"Été\"}]", jcrDocumentFileStorage.getTranscriptionChapters("1", viewer));
+    assertTrue(jcrDocumentFileStorage.getTranscriptionState("1", viewer).hasChapters());
+
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_CHAPTERS)).thenThrow(new javax.jcr.AccessDeniedException("john"));
+    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.getTranscriptionChapters("1", viewer));
+  }
+
+  /**
+   * The segments are read with the viewer's rights: the session logs in with
+   * the viewer current, whoever the thread's user is, and the thread's state is
+   * back afterwards, on a refusal too.
+   */
+  @Test
+  public void getTranscriptionSegmentsReadsThemWithTheViewersRights() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    org.exoplatform.services.security.ConversationState threadState =
+                                                                     new org.exoplatform.services.security.ConversationState(new org.exoplatform.services.security.Identity("mary"));
+    org.exoplatform.services.security.ConversationState.setCurrent(threadState);
+    try {
+      SessionProvider sessionProvider = mock(SessionProvider.class);
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, viewer)).thenReturn(sessionProvider);
+      ManageableRepository manageableRepository = mock(ManageableRepository.class);
+      when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+      Session session = mock(Session.class);
+      java.util.List<String> loggedInAs = new java.util.ArrayList<>();
+      when(sessionProvider.getSession("collaboration", manageableRepository)).thenAnswer(invocation -> {
+        loggedInAs.add(org.exoplatform.services.security.ConversationState.getCurrent().getIdentity().getUserId());
+        return session;
+      });
+      Node node = mockMediaNode(session, "video/mp4");
+      when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+      Property segments = mock(Property.class);
+      when(segments.getStream()).thenAnswer(invocation -> new ByteArrayInputStream("[{\"text\":\"Été\"}]".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+      when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+      when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(segments);
+
+      assertEquals("[{\"text\":\"Été\"}]", jcrDocumentFileStorage.getTranscriptionSegments("1", viewer));
+      assertEquals(java.util.List.of("john"), loggedInAs);
+      assertSame(threadState, org.exoplatform.services.security.ConversationState.getCurrent());
+
+      when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenThrow(new javax.jcr.AccessDeniedException("john"));
+      assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.getTranscriptionSegments("1", viewer));
+      assertSame(threadState, org.exoplatform.services.security.ConversationState.getCurrent());
+    } finally {
+      org.exoplatform.services.security.ConversationState.setCurrent(null);
+    }
+  }
+
+  /**
+   * Every transcript read or write made with a user's rights opens its session
+   * with that user current, whoever the thread's user is, and gives the thread
+   * its state back, whether the call succeeds or fails: the state, the
+   * chapters, the speakers, their naming, the speaker proposals and the text.
+   * Mutant: any one of the swaps dropped.
+   */
+  @Test
+  public void everyTranscriptCallWithAUsersRightsLogsInAsThatUser() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    org.exoplatform.services.security.ConversationState threadState =
+                                                                     new org.exoplatform.services.security.ConversationState(new org.exoplatform.services.security.Identity("mary"));
+    org.exoplatform.services.security.ConversationState.setCurrent(threadState);
+    try {
+      SessionProvider sessionProvider = mock(SessionProvider.class);
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, viewer)).thenReturn(sessionProvider);
+      ManageableRepository manageableRepository = mock(ManageableRepository.class);
+      when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+      Session session = mock(Session.class);
+      java.util.List<String> loggedInAs = new java.util.ArrayList<>();
+      when(sessionProvider.getSession("collaboration", manageableRepository)).thenAnswer(invocation -> {
+        loggedInAs.add(org.exoplatform.services.security.ConversationState.getCurrent().getIdentity().getUserId());
+        return session;
+      });
+      mockMediaNode(session, "video/mp4");
+      java.util.List<java.util.concurrent.Callable<Object>> calls =
+                                                                 java.util.List.of(() -> jcrDocumentFileStorage.getTranscriptionState("1", viewer),
+                                                                                   () -> jcrDocumentFileStorage.getTranscriptionChapters("1", viewer),
+                                                                                   () -> jcrDocumentFileStorage.getTranscriptionSpeakers("1", viewer),
+                                                                                   () -> {
+                                                                                     jcrDocumentFileStorage.setTranscriptionSpeaker("1", "0", "7", viewer);
+                                                                                     return null;
+                                                                                   },
+                                                                                   () -> jcrDocumentFileStorage.getTranscriptionSpeakerSuggestions("1", viewer),
+                                                                                   () -> {
+                                                                                     jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "0", viewer);
+                                                                                     return null;
+                                                                                   },
+                                                                                   () -> jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                                                                                                    new TranscriptionSpeakerSuggestion("0",
+                                                                                                                                                                                       7L,
+                                                                                                                                                                                       true,
+                                                                                                                                                                                       false,
+                                                                                                                                                                                       java.util.List.of()),
+                                                                                                                                                    1L,
+                                                                                                                                                    viewer),
+                                                                                   () -> jcrDocumentFileStorage.getAudioTranscription("1", viewer),
+                                                                                   () -> {
+                                                                                     jcrDocumentFileStorage.updateAudioTranscription("1", "text", viewer);
+                                                                                     return null;
+                                                                                   });
+      for (int i = 0; i < calls.size(); i++) {
+        try {
+          calls.get(i).call();
+        } catch (Exception e) { // NOSONAR the outcome of a call on a bare node is not what this test checks
+        }
+        assertEquals("call " + i + " opened its session once", i + 1, loggedInAs.size());
+        assertEquals("call " + i + " logged in as the viewer", "john", loggedInAs.get(i));
+        assertSame("call " + i + " gave the thread its state back", threadState, org.exoplatform.services.security.ConversationState.getCurrent());
+      }
+    } finally {
+      org.exoplatform.services.security.ConversationState.setCurrent(null);
+    }
+  }
+
+  /**
+   * The background work on a transcript reads its segments as the system.
+   */
+  @Test
+  public void getTranscriptionSegmentsReadsThemAsTheSystem() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+
+    assertNull(jcrDocumentFileStorage.getTranscriptionSegments("1"));
+
+    Property segments = mock(Property.class);
+    when(segments.getStream()).thenReturn(new ByteArrayInputStream("[]".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(segments);
+    assertEquals("[]", jcrDocumentFileStorage.getTranscriptionSegments("1"));
+  }
+
+  /**
+   * The named speakers are read with the viewer's rights, a malformed value
+   * left out (EXO-92123).
+   */
+  @Test
+  public void getTranscriptionSpeakersReadsTheNamedSpeakersWithTheViewersRights() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Node node = mockMediaNode(mockViewerSession(viewer), "video/mp4");
+    mockSpeakers(node, "2=43", "1=42", "broken", "3=");
+
+    assertEquals(Map.of("1", "42", "2", "43"), jcrDocumentFileStorage.getTranscriptionSpeakers("1", viewer));
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)).thenReturn(false);
+    assertEquals(Map.of(), jcrDocumentFileStorage.getTranscriptionSpeakers("1", viewer));
+  }
+
+  /**
+   * Naming a speaker keeps the others, and adds the mixin the first time.
+   */
+  @Test
+  public void setTranscriptionSpeakerKeepsTheOtherSpeakers_andAddsTheMixinTheFirstTime() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSpeakers(node, "1=42");
+    java.util.concurrent.atomic.AtomicBoolean lockedWhileWriting = new java.util.concurrent.atomic.AtomicBoolean();
+    doAnswer(invocation -> {
+      lockedWhileWriting.set(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+      return null;
+    }).when(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
+
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "2", "43", viewer);
+
+    assertTrue("Expected the file's names rewritten under its lock, so that two saves never drop one", lockedWhileWriting.get());
+    assertFalse("Expected the lock released after the save", JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+
+    verify(node, never()).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=42", "2=43" });
+    verify(session).save();
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)).thenReturn(false);
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", "44", viewer);
+
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=44" });
+  }
+
+  /**
+   * A guest's name is stored and read back as is beside a person's identity
+   * id, an {@code =} or a non-ASCII character in the name included: only the
+   * first {@code =} ends the speaker number (EXO-92123).
+   */
+  @Test
+  public void aGuestNameIsStoredAndReadBackAsIs() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSpeakers(node, "1=42", "2=name:Jean-Luc =Ö");
+
+    assertEquals(Map.of("1", "42", "2", "name:Jean-Luc =Ö"), jcrDocumentFileStorage.getTranscriptionSpeakers("1", viewer));
+
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "3", "name:Zoé", viewer);
+
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=42", "2=name:Jean-Luc =Ö", "3=name:Zoé" });
+  }
+
+  /**
+   * Unnaming the last named speaker removes the mixin, and any other one only
+   * its value.
+   */
+  @Test
+  public void unnamingASpeakerRemovesItsValue_andTheMixinWithTheLastOne() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSpeakers(node, "1=42", "2=43");
+
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", null, viewer);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "2=43" });
+    verify(node, never()).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+
+    mockSpeakers(node, "2=43");
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "2", null, viewer);
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+  }
+
+  /**
+   * A person who names, renames or unnames a speaker drops the proposal the
+   * platform applied to it, in the same save: the « named from the call's
+   * attendees » mark never shows on a name a person gave. A proposal still
+   * waiting for a person is kept.
+   */
+  @Test
+  public void aPersonNamingASpeakerDropsTheProposalThePlatformAppliedToIt() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSpeakers(node, "1=42");
+    mockSuggestions(node, "1=42|strong|auto|1|", "2=43|likely|manual|2|");
+
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", null, viewer);
+
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION, new String[] { "2=43|likely|manual|2|" });
+    verify(session).save();
+
+    mockSuggestions(node, "2=43|likely|manual|2|");
+    jcrDocumentFileStorage.setTranscriptionSpeaker("1", "2", "44", viewer);
+
+    verify(node, times(1)).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION), any(String[].class));
+  }
+
+  /**
+   * A user who cannot edit the file names no speaker.
+   */
+  @Test
+  public void setTranscriptionSpeakerIsRefusedToAUserWhoCannotEditTheFile() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(false);
+
+    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", "42", viewer));
+    assertFalse("Expected the lock released after a refusal", JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+
+    verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
+    verify(session, never()).save();
+  }
+
+  /**
+   * A new transcript numbers its speakers anew, and a cleared state starts
+   * over: both forget the people named before, and the people proposed.
+   */
+  @Test
+  public void aNewTranscriptOrAClearedStateForgetsTheNamedSpeakers() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)).thenReturn(true);
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)).thenReturn(true);
+    List<Boolean> lockedWhileForgetting = new ArrayList<>();
+    doAnswer(invocation -> lockedWhileForgetting.add(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread())).when(node)
+                                                                                                                   .removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+
+    jcrDocumentFileStorage.completeTranscription("1", "hello", null, TranscriptionState.builder().status(TranscriptionStatus.DONE).build());
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "FAILED");
+    assertTrue(jcrDocumentFileStorage.clearTranscriptionState("1"));
+    verify(node, times(2)).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+    verify(node, times(2)).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+    assertEquals("Expected the names forgotten under the file's lock, so that a save naming a speaker never brings them back",
+                 List.of(true, true),
+                 lockedWhileForgetting);
+    assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+  }
+
+  /**
+   * A request naming a speaker waits a bounded time for a save of the same
+   * file running on another thread, then gives up without writing.
+   */
+  @Test
+  public void namingASpeakerGivesUpWhenAnotherSaveOfTheFileHoldsItsLock() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    java.util.concurrent.CountDownLatch held = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+    Thread other = new Thread(() -> {
+      JCRDocumentFileStorage.speakerLock("1").lock();
+      try {
+        held.countDown();
+        release.await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } finally {
+        JCRDocumentFileStorage.speakerLock("1").unlock();
+      }
+    });
+    long wait = JCRDocumentFileStorage.speakerLockWaitMillis;
+    JCRDocumentFileStorage.speakerLockWaitMillis = 50;
+    try {
+      other.start();
+      held.await();
+
+      assertThrows(TranscriptionBusyException.class, () -> jcrDocumentFileStorage.setTranscriptionSpeaker("1", "1", "42", viewer));
+
+      verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
+    } finally {
+      JCRDocumentFileStorage.speakerLockWaitMillis = wait;
+      release.countDown();
+      other.join();
+    }
+  }
+
+  /**
+   * A file whose speakers nobody named has no mixin to remove.
+   */
+  @Test
+  public void aNewTranscriptOfAFileWithoutNamedSpeakersRemovesNoMixin() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+
+    jcrDocumentFileStorage.completeTranscription("1", "hello", null, TranscriptionState.builder().status(TranscriptionStatus.DONE).build());
+
+    verify(node, never()).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS);
+  }
+
+  /**
+   * Proposals are written as the system, under the file's lock, one value per
+   * speaker, a proposal made by elimination with its premise; saving none
+   * removes their mixin; nothing is written over a transcript made since.
+   */
+  @Test
+  public void speakerProposalsAreSavedAsTheSystem_andNoneRemovesThem() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    mockDoneTranscript(node, 1000L);
+    java.util.concurrent.atomic.AtomicBoolean lockedWhileWriting = new java.util.concurrent.atomic.AtomicBoolean();
+    doAnswer(invocation -> {
+      lockedWhileWriting.set(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+      return null;
+    }).when(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION), any(String[].class));
+
+    assertTrue(jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1",
+                                                                          List.of(new TranscriptionSpeakerSuggestion("1", 42, true, true, List.of(3, 7)),
+                                                                                  new TranscriptionSpeakerSuggestion("2",
+                                                                                                                     43,
+                                                                                                                     false,
+                                                                                                                     false,
+                                                                                                                     List.of(),
+                                                                                                                     "1",
+                                                                                                                     42L)),
+                                                                          1000L));
+
+    verify(node).addMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION,
+                             new String[] { "1=42|strong|auto|3,7|", "2=43|likely|manual||1=42" });
+    verify(session).save();
+    assertTrue("Expected the proposals written under the file's lock", lockedWhileWriting.get());
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)).thenReturn(true);
+    assertTrue(jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1", List.of(), 1000L));
+
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+
+    assertFalse("Expected nothing written over a transcript made since",
+                jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1",
+                                                                           List.of(new TranscriptionSpeakerSuggestion("1", 44, true, false, List.of())),
+                                                                           999L));
+    verify(session, times(2)).save();
+
+    // a state that is no longer done refuses them even when written in the same millisecond
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "QUEUED");
+    assertFalse(jcrDocumentFileStorage.saveTranscriptionSpeakerSuggestions("1", List.of(), 1000L));
+    verify(session, times(2)).save();
+    assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+  }
+
+  /**
+   * Proposals are read with the viewer's rights; a value that cannot be read is
+   * skipped rather than failing the others.
+   */
+  @Test
+  public void speakerProposalsAreReadWithTheViewersRights_andAnUnreadableValueIsSkipped() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    mockSuggestions(node,
+                    "1=42|strong|auto|3,7|",
+                    "broken",
+                    "1=42|strong|auto|3,7",
+                    "2=x|likely|manual||",
+                    "3=44|likely|manual|1,a|",
+                    "4=45|strong|manual||1=x",
+                    "2=43|likely|manual||1=42");
+
+    assertEquals(List.of(new TranscriptionSpeakerSuggestion("1", 42, true, true, List.of(3, 7)),
+                         new TranscriptionSpeakerSuggestion("2", 43, false, false, List.of(), "1", 42L)),
+                 jcrDocumentFileStorage.getTranscriptionSpeakerSuggestions("1", viewer));
+
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)).thenReturn(false);
+    assertEquals(List.of(), jcrDocumentFileStorage.getTranscriptionSpeakerSuggestions("1", viewer));
+  }
+
+  /**
+   * Dismissing a proposal and applying one wait a bounded time for a save of
+   * the same file running on another thread, then give up as busy without
+   * writing, as naming a speaker does.
+   */
+  @Test
+  public void dismissingOrApplyingAProposalGivesUpAsBusyWhenAnotherSaveOfTheFileHoldsItsLock() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    mockSuggestions(node, "1=42|strong|manual|3|");
+    java.util.concurrent.CountDownLatch held = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+    Thread other = new Thread(() -> {
+      JCRDocumentFileStorage.speakerLock("1").lock();
+      try {
+        held.countDown();
+        release.await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } finally {
+        JCRDocumentFileStorage.speakerLock("1").unlock();
+      }
+    });
+    long wait = JCRDocumentFileStorage.speakerLockWaitMillis;
+    JCRDocumentFileStorage.speakerLockWaitMillis = 50;
+    try {
+      other.start();
+      held.await();
+
+      assertThrows(TranscriptionBusyException.class, () -> jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "1", viewer));
+      assertThrows(TranscriptionBusyException.class,
+                   () -> jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                                    new TranscriptionSpeakerSuggestion("1", 42, true, false, List.of(3)),
+                                                                                    1000L,
+                                                                                    viewer));
+
+      verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION), any(String[].class));
+      verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
+    } finally {
+      JCRDocumentFileStorage.speakerLockWaitMillis = wait;
+      release.countDown();
+      other.join();
+    }
+  }
+
+  /**
+   * Dismissing a proposal keeps the others, removes the mixin with the last
+   * one, and is refused to a user who cannot edit the file.
+   */
+  @Test
+  public void dismissingASpeakerProposalKeepsTheOthers_andIsRefusedToANonEditor() throws Exception {
+    org.exoplatform.services.security.Identity viewer = new org.exoplatform.services.security.Identity("john");
+    Session session = mockViewerSession(viewer);
+    Node node = mockMediaNode(session, "video/mp4");
+    mockSuggestions(node, "1=42|strong|manual|3|", "2=43|likely|manual|5|");
+
+    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "1", viewer));
+    verify(node, never()).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION), any(String[].class));
+
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "1", viewer);
+
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION, new String[] { "2=43|likely|manual|5|" });
+    verify(session).save();
+
+    mockSuggestions(node, "2=43|likely|manual|5|");
+    jcrDocumentFileStorage.removeTranscriptionSpeakerSuggestion("1", "2", viewer);
+    verify(node).removeMixin(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS);
+    assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+  }
+
+  /**
+   * A proposal names its speaker, as a user who can edit the file, only when
+   * everything it depends on still holds when the name is written: the same
+   * transcript, the proposal still stored (not dismissed), neither the speaker
+   * nor the person named. One made by elimination is never applied, even while
+   * its other voice is still named after the person it was taken to be. The
+   * name and the proposal's applied mark are written in one save under the
+   * file's lock.
+   */
+  @Test
+  public void applyingAProposalRereadsEverythingItDependsOn() throws Exception {
+    org.exoplatform.services.security.Identity owner = new org.exoplatform.services.security.Identity("mary");
+    Session session = mockViewerSession(owner);
+    Node node = mockMediaNode(session, "video/mp4");
+    mockSpeakers(node, "1=42");
+    mockDoneTranscript(node, 1000L);
+    mockSuggestions(node, "2=43|strong|manual|1|", "3=44|strong|manual|2|", "4=42|strong|manual|2|", "1=44|strong|manual|2|", "6=46|strong|manual|1|1=42");
+    TranscriptionSpeakerSuggestion strong = new TranscriptionSpeakerSuggestion("2", 43, true, false, List.of(1));
+    java.util.concurrent.atomic.AtomicBoolean lockedWhileWriting = new java.util.concurrent.atomic.AtomicBoolean();
+    doAnswer(invocation -> {
+      lockedWhileWriting.set(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+      return null;
+    }).when(node).setProperty(eq(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER), any(String[].class));
+
+    assertThrows(IllegalAccessException.class, () -> jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", strong, 1000L, owner));
+
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.hasEditPermission(session, node)).thenReturn(true);
+    assertFalse("Expected no voice of a transcript made since named",
+                jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", strong, 999L, owner));
+    assertFalse("Expected a dismissed proposal not applied",
+                jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                           new TranscriptionSpeakerSuggestion("5", 45, true, false, List.of()),
+                                                                           1000L,
+                                                                           owner));
+    assertFalse("Expected a proposal stored for another person not applied",
+                jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                           new TranscriptionSpeakerSuggestion("3", 45, true, false, List.of(2)),
+                                                                           1000L,
+                                                                           owner));
+    assertFalse("Expected a named speaker kept",
+                jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                           new TranscriptionSpeakerSuggestion("1", 44, true, false, List.of()),
+                                                                           1000L,
+                                                                           owner));
+    assertFalse("Expected a person already naming a speaker not given a second one",
+                jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                           new TranscriptionSpeakerSuggestion("4", 42, true, false, List.of(2)),
+                                                                           1000L,
+                                                                           owner));
+    assertFalse("Expected a proposal by elimination never applied, even while its premise holds",
+                jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1",
+                                                                           new TranscriptionSpeakerSuggestion("6", 46, true, false, List.of(1), "1", 42L),
+                                                                           1000L,
+                                                                           owner));
+    verify(session, never()).save();
+
+    assertTrue(jcrDocumentFileStorage.applyTranscriptionSpeakerSuggestion("1", strong, 1000L, owner));
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER, new String[] { "1=42", "2=43" });
+    verify(node).setProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION,
+                             new String[] { "2=43|strong|auto|1|", "3=44|strong|manual|2|", "4=42|strong|manual|2|", "1=44|strong|manual|2|", "6=46|strong|manual|1|1=42" });
+    verify(session).save();
+    assertTrue("Expected the name written under the file's lock", lockedWhileWriting.get());
+    assertFalse(JCRDocumentFileStorage.speakerLock("1").isHeldByCurrentThread());
+  }
+
+  /**
+   * A file is for its owner, the users it is shared with one by one (not the
+   * groups, not everyone, not the system) and the space whose documents hold
+   * it.
+   */
+  @Test
+  public void theAudienceOfAFileIsItsOwnerItsUsersAndItsSpace() throws Exception {
+    Session session = mockSystemSession();
+    ExtendedNode node = mock(ExtendedNode.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(node);
+    mockStringProperty(node, NodeTypeConstants.EXO_OWNER, "mary");
+    when(node.getPath()).thenReturn("/Groups/spaces/team/Documents/recordings/call.mp4");
+    AccessControlList acl = mock(AccessControlList.class);
+    when(node.getACL()).thenReturn(acl);
+    when(acl.getPermissionEntries()).thenReturn(List.of(new AccessControlEntry("mary", PermissionType.READ),
+                                                        new AccessControlEntry("john", PermissionType.READ),
+                                                        new AccessControlEntry("john", PermissionType.SET_PROPERTY),
+                                                        new AccessControlEntry("*:/spaces/team", PermissionType.READ),
+                                                        new AccessControlEntry("any", PermissionType.READ),
+                                                        new AccessControlEntry("__system", PermissionType.READ)));
+
+    assertEquals(new DocumentAudience("mary", List.of("mary", "john"), "/spaces/team"), jcrDocumentFileStorage.getDocumentAudience("1"));
+
+    when(node.hasProperty(NodeTypeConstants.EXO_OWNER)).thenReturn(false);
+    when(node.getPath()).thenReturn("/Users/m___/ma___/mar___/mary/Private/recordings/call.mp4");
+    assertEquals(new DocumentAudience(null, List.of("mary", "john"), null), jcrDocumentFileStorage.getDocumentAudience("1"));
+
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "2")).thenReturn(null);
+    assertThrows(ObjectNotFoundException.class, () -> jcrDocumentFileStorage.getDocumentAudience("2"));
+  }
+
+  /**
+   * The platform's background work reads a transcript's segments as the
+   * system; a file with no transcription state, or no segments, has none.
+   */
+  @Test
+  public void theSegmentsAreReadAsTheSystem_andNoneWithoutAState() throws Exception {
+    Session session = mockSystemSession();
+    Node node = mockMediaNode(session, "video/mp4");
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+    Property segments = mock(Property.class);
+    when(segments.getStream()).thenAnswer(invocation -> new java.io.ByteArrayInputStream("[{\"text\":\"é\"}]".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(segments);
+
+    assertEquals("[{\"text\":\"é\"}]", jcrDocumentFileStorage.getTranscriptionSegments("1"));
+
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(false);
+    assertNull(jcrDocumentFileStorage.getTranscriptionSegments("1"));
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SEGMENTS)).thenReturn(true);
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(false);
+    assertNull(jcrDocumentFileStorage.getTranscriptionSegments("1"));
+  }
+
+  /** Gives the node a done transcript updated at the given time, in milliseconds. */
+  private void mockDoneTranscript(Node node, long updated) throws Exception {
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_STATE)).thenReturn(true);
+    mockStringProperty(node, NodeTypeConstants.EXO_TRANSCRIPTION_STATUS, "DONE");
+    Property updatedProperty = mock(Property.class);
+    Calendar date = Calendar.getInstance();
+    date.setTimeInMillis(updated);
+    when(updatedProperty.getDate()).thenReturn(date);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(true);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_UPDATED)).thenReturn(updatedProperty);
+  }
+
+  /** Stores the given speaker proposals, in their stored form, on the node. */
+  private void mockSuggestions(Node node, String... values) throws Exception {
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTIONS)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION)).thenReturn(true);
+    Property property = mock(Property.class);
+    Value[] jcrValues = new Value[values.length];
+    for (int i = 0; i < values.length; i++) {
+      jcrValues[i] = mock(Value.class);
+      when(jcrValues[i].getString()).thenReturn(values[i]);
+    }
+    when(property.getValues()).thenReturn(jcrValues);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER_SUGGESTION)).thenReturn(property);
+  }
+
+  private void mockSpeakers(Node node, String... values) throws Exception {
+    when(node.isNodeType(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKERS)).thenReturn(true);
+    when(node.hasProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER)).thenReturn(true);
+    Property property = mock(Property.class);
+    Value[] jcrValues = new Value[values.length];
+    for (int i = 0; i < values.length; i++) {
+      jcrValues[i] = mock(Value.class);
+      when(jcrValues[i].getString()).thenReturn(values[i]);
+    }
+    when(property.getValues()).thenReturn(jcrValues);
+    when(node.getProperty(NodeTypeConstants.EXO_TRANSCRIPTION_SPEAKER)).thenReturn(property);
+  }
+
+  private Session mockViewerSession(org.exoplatform.services.security.Identity viewer) throws Exception {
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, viewer)).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    return session;
+  }
+
+  private Session mockSystemSession() throws Exception {
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    when(SessionProvider.createSystemProvider()).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    return session;
+  }
+
+  private Node mockMediaNode(Session session, String mimeType) throws Exception {
+    Node node = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "1")).thenReturn(node);
+    when(node.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(true);
+    Node content = mock(Node.class);
+    when(node.getNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(content);
+    when(content.hasProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(true);
+    Property mimeTypeProperty = mock(Property.class);
+    when(mimeTypeProperty.getString()).thenReturn(mimeType);
+    when(content.getProperty(NodeTypeConstants.JCR_MIME_TYPE)).thenReturn(mimeTypeProperty);
+    return node;
+  }
+
+  private void mockStringProperty(Node node, String name, String value) throws Exception {
+    Property property = mock(Property.class);
+    when(property.getString()).thenReturn(value);
+    when(node.hasProperty(name)).thenReturn(true);
+    when(node.getProperty(name)).thenReturn(property);
+  }
+
+  /**
+   * The content of a document carries the size of its binary, which the
+   * content endpoint needs to serve a byte range of it.
+   */
+  @Test
+  public void getDocumentContentCarriesTheSizeOfItsBinary() throws Exception {
+    org.exoplatform.services.security.Identity identity = new org.exoplatform.services.security.Identity("john");
+    when(identityRegistry.getIdentity("john")).thenReturn(identity);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Node node = mock(Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "doc1")).thenReturn(node);
+    Node content = mock(Node.class);
+    when(node.getNode("jcr:content")).thenReturn(content);
+    Property data = mock(Property.class);
+    when(content.getProperty("jcr:data")).thenReturn(data);
+    when(data.getLength()).thenReturn(22890488L);
+
+    FileContent fileContent = jcrDocumentFileStorage.getDocumentContent("doc1", "john");
+
+    assertTrue(fileContent instanceof DocumentFileContent);
+    assertEquals(22890488L, ((DocumentFileContent) fileContent).getSize());
+  }
+
 }

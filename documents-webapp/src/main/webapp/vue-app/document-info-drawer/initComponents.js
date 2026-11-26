@@ -18,15 +18,63 @@
  */
 
 import DocumentInfoDrawer from './components/DocumentInfoDrawer.vue';
-import Breadcrumb from './components/Breadcrumb.vue';
 import DocumentCategories from './components/DocumentCategories.vue';
+import DocumentTranscriptButton from '../document-transcript-drawer/components/DocumentTranscriptButton.vue';
+import DocumentTranscriptStatus from '../document-transcript-drawer/components/DocumentTranscriptStatus.vue';
+import DocumentRecordingDetails from './components/DocumentRecordingDetails.vue';
+import DocumentMediaThumbnail from './components/DocumentMediaThumbnail.vue';
+import DocumentTranscriptContent from '../document-transcript-drawer/components/DocumentTranscriptContent.vue';
+import DocumentTranscriptChapter from '../document-transcript-drawer/components/DocumentTranscriptChapter.vue';
+import DocumentTranscriptChapterList from '../document-transcript-drawer/components/DocumentTranscriptChapterList.vue';
+import DocumentTranscriptHighlight from '../document-transcript-drawer/components/DocumentTranscriptHighlight.vue';
+import DocumentTranscriptPlayer from '../document-transcript-drawer/components/DocumentTranscriptPlayer.vue';
+import DocumentTranscriptSpeaker from '../document-transcript-drawer/components/DocumentTranscriptSpeaker.vue';
+import DocumentTranscriptSpeakerSuggestion from '../document-transcript-drawer/components/DocumentTranscriptSpeakerSuggestion.vue';
+import DocumentInfoMenu from './components/DocumentInfoMenu.vue';
+import DocumentInfoMenuItem from './components/DocumentInfoMenuItem.vue';
+import DocumentInfoRow from './components/DocumentInfoRow.vue';
+import DocumentInfoPerson from './components/DocumentInfoPerson.vue';
+import DocumentInfoDetails from './components/DocumentInfoDetails.vue';
+import DocumentInfoContent from './components/DocumentInfoContent.vue';
+import DocumentInfoVersions from './components/DocumentInfoVersions.vue';
+import DocumentInfoTranscript from './components/DocumentInfoTranscript.vue';
+import DocumentInfoPath from './components/DocumentInfoPath.vue';
+import DocumentRecordingTimeline from './components/DocumentRecordingTimeline.vue';
+import DocumentTimelineTrack from './components/DocumentTimelineTrack.vue';
+import DocumentTimelineSpeaker from './components/DocumentTimelineSpeaker.vue';
 
 const components = {
   'document-info-drawer': DocumentInfoDrawer,
   'document-categories': DocumentCategories,
-  'breadcrumb': Breadcrumb,
+  'document-transcript-button': DocumentTranscriptButton,
+  'document-transcript-status': DocumentTranscriptStatus,
+  'document-recording-details': DocumentRecordingDetails,
+  'document-media-thumbnail': DocumentMediaThumbnail,
+  'document-transcript-content': DocumentTranscriptContent,
+  'document-transcript-chapter': DocumentTranscriptChapter,
+  'document-transcript-chapter-list': DocumentTranscriptChapterList,
+  'document-transcript-highlight': DocumentTranscriptHighlight,
+  'document-transcript-player': DocumentTranscriptPlayer,
+  'document-transcript-speaker': DocumentTranscriptSpeaker,
+  'document-transcript-speaker-suggestion': DocumentTranscriptSpeakerSuggestion,
+  'document-info-menu': DocumentInfoMenu,
+  'documents-info-menu-item': DocumentInfoMenuItem,
+  'documents-info-row': DocumentInfoRow,
+  'document-info-person': DocumentInfoPerson,
+  'document-info-details': DocumentInfoDetails,
+  'document-info-content': DocumentInfoContent,
+  'document-info-versions': DocumentInfoVersions,
+  'document-info-transcript': DocumentInfoTranscript,
+  'document-info-path': DocumentInfoPath,
+  'document-recording-timeline': DocumentRecordingTimeline,
+  'document-timeline-track': DocumentTimelineTrack,
+  'document-timeline-speaker': DocumentTimelineSpeaker,
 };
 
 for (const key in components) {
-  Vue.component(key, components[key]);
+  // the transcript drawer's bundle registers the same transcript components:
+  // the first registration stays, so a mounted player is never replaced
+  if (!Vue.options.components[key]) {
+    Vue.component(key, components[key]);
+  }
 }
