@@ -402,6 +402,33 @@ class PublicLinkFolderDownloadTest {
     assertThrows(java.util.zip.ZipException.class, () -> new ZipFile(written).close(), "no zip directory");
   }
 
+  /**
+   * A sub-folder that cannot be listed while it is zipped: the zip sent so far
+   * has no directory, as for a file that cannot be read, never a complete zip
+   * without that sub-folder. Its read permission is removed, which a root user
+   * ignores, so the test does not run as root.
+   */
+  @Test
+  void aZipCutShortByAnUnlistableFolderHasNoDirectory(@TempDir java.nio.file.Path tempDir) throws Exception {
+    File folder = Files.createDirectory(tempDir.resolve("zip-unlistable")).toFile();
+    Files.writeString(new File(folder, "a.txt").toPath(), "a");
+    java.nio.file.Path subFolder = Files.createDirectory(folder.toPath().resolve("sub"));
+    Files.writeString(subFolder.resolve("b.txt"), "b");
+    Files.setPosixFilePermissions(subFolder, java.util.EnumSet.noneOf(java.nio.file.attribute.PosixFilePermission.class));
+    try {
+      org.junit.jupiter.api.Assumptions.assumeTrue(subFolder.toFile().listFiles() == null,
+                                                   "the user can list a folder with no read permission (root)");
+      java.io.ByteArrayOutputStream zip = new java.io.ByteArrayOutputStream();
+      IOException failure = assertThrows(IOException.class,
+                                         () -> org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.zipFiles(folder, zip));
+      assertTrue(failure.getMessage().contains(subFolder.toString()), "the failure names the folder");
+      File written = Files.write(tempDir.resolve("unlistable.zip"), zip.toByteArray()).toFile();
+      assertThrows(java.util.zip.ZipException.class, () -> new ZipFile(written).close(), "no zip directory");
+    } finally {
+      Files.setPosixFilePermissions(subFolder, java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+    }
+  }
+
   private static Map<String, String> zipContent(byte[] zip) throws IOException {
     Map<String, String> content = new java.util.TreeMap<>();
     try (java.util.zip.ZipInputStream entries = new java.util.zip.ZipInputStream(new ByteArrayInputStream(zip))) {
