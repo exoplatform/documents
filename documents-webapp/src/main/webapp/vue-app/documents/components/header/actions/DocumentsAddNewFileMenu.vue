@@ -51,6 +51,7 @@
       <v-list class="pa-0" dense>
         <v-list-item
           v-if="isFolderView"
+          id="addFolderMenuItem"
           class="text-body menu-text-color"
           @click="addFolder()">
           <v-list-item-icon class="me-1">
