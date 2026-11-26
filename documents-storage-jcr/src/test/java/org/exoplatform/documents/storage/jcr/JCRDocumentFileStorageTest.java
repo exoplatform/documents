@@ -973,6 +973,67 @@ public class JCRDocumentFileStorageTest {
   }
 
   /**
+   * The Documents app's timeline view searches the owner's drive when a query
+   * is typed: the file a shortcut of that drive points to, which stays in its
+   * owner's drive, is searched too.
+   */
+  @Test
+  public void aTimelineSearchCoversTheFilesTheShortcutsOfTheOwnersDrivePointTo() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identity.getUserId()).thenReturn("bob");
+    org.exoplatform.social.core.identity.model.Identity ownerIdentity =
+                                                                    mock(org.exoplatform.social.core.identity.model.Identity.class);
+    when(identityManager.getIdentity("1")).thenReturn(ownerIdentity);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    String drivePath = "/Users/b___/bob/Private";
+    Node driveRoot = mock(Node.class);
+    Session userSession = mock(Session.class);
+    when(driveRoot.getPath()).thenReturn(drivePath);
+    when(driveRoot.getSession()).thenReturn(userSession);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getIdentityRootNode(spaceService,
+                                                                       nodeHierarchyCreator,
+                                                                       "bob",
+                                                                       ownerIdentity,
+                                                                       sessionProvider))
+                      .thenReturn(driveRoot);
+    Workspace workspace = mock(Workspace.class);
+    QueryManager queryManager = mock(QueryManager.class);
+    when(userSession.getWorkspace()).thenReturn(workspace);
+    when(workspace.getName()).thenReturn("collaboration");
+    when(workspace.getQueryManager()).thenReturn(queryManager);
+
+    Node sharedFile = mock(Node.class);
+    when(sharedFile.isNodeType(NodeTypeConstants.NT_FILE)).thenReturn(true);
+    when(sharedFile.getPath()).thenReturn("/Users/a___/alice/Private/Documents/TEST.docx");
+    Node fileLink = mockSymlinkTo(userSession, "fileId", sharedFile);
+    NodeIterator symlinks = mock(NodeIterator.class);
+    when(symlinks.hasNext()).thenReturn(true, false);
+    when(symlinks.nextNode()).thenReturn(fileLink);
+    QueryImpl symlinksQuery = mock(QueryImpl.class);
+    QueryResult symlinksResult = mock(QueryResult.class);
+    when(queryManager.createQuery("SELECT * FROM exo:symlink WHERE jcr:path LIKE '" + drivePath + "/%'",
+                                  Query.SQL)).thenReturn(symlinksQuery);
+    when(symlinksQuery.execute()).thenReturn(symlinksResult);
+    when(symlinksResult.getNodes()).thenReturn(symlinks);
+
+    DocumentTimelineFilter filter = new DocumentTimelineFilter();
+    filter.setOwnerId(1L);
+    filter.setQuery("TEST");
+    jcrDocumentFileStorage.getFilesTimeline(filter, identity, 0, 10);
+
+    verify(documentSearchServiceConnector).search(eq(identity),
+                                                  eq("collaboration"),
+                                                  eq(List.of(drivePath)),
+                                                  eq(List.of("/Users/a___/alice/Private/Documents/TEST.docx")),
+                                                  eq(filter),
+                                                  eq(0),
+                                                  eq(10),
+                                                  nullable(String.class),
+                                                  nullable(String.class));
+  }
+
+  /**
    * Runs the statement through the repository's own SQL parser: a quote in the
    * searched folder's path that is not doubled ends the string literal, and the
    * parser refuses the whole statement.
