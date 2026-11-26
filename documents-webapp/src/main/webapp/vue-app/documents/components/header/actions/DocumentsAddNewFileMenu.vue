@@ -61,6 +61,7 @@
         @keydown.native="onAddMenuKeydown">
         <v-list-item
           v-if="isFolderView"
+          id="addFolderMenuItem"
           :aria-label="$t('documents.button.addNewFolder')"
           role="menuitem"
           class="text-body menu-text-color"
