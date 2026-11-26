@@ -414,11 +414,11 @@ class PublicLinkFolderDownloadTest {
     Files.writeString(new File(folder, "a.txt").toPath(), "a");
     java.nio.file.Path subFolder = Files.createDirectory(folder.toPath().resolve("sub"));
     Files.writeString(subFolder.resolve("b.txt"), "b");
+    java.io.ByteArrayOutputStream zip = new java.io.ByteArrayOutputStream();
     Files.setPosixFilePermissions(subFolder, java.util.EnumSet.noneOf(java.nio.file.attribute.PosixFilePermission.class));
     try {
       org.junit.jupiter.api.Assumptions.assumeTrue(subFolder.toFile().listFiles() == null,
                                                    "the user can list a folder with no read permission (root)");
-      java.io.ByteArrayOutputStream zip = new java.io.ByteArrayOutputStream();
       IOException failure = assertThrows(IOException.class,
                                          () -> org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil.zipFiles(folder, zip));
       assertTrue(failure.getMessage().contains(subFolder.toString()), "the failure names the folder");
