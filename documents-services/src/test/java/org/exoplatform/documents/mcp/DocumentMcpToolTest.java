@@ -3967,6 +3967,45 @@ public class DocumentMcpToolTest {
   }
 
   /**
+   * An upload filed from its upload id is refused under a macOS metadata
+   * name, whether the name is the one given or the upload's own, and nothing
+   * is filed, as a file sent in one call or in pieces is.
+   * Mutant: the refusal removed from the staged-upload filing.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void uploadDocumentFromAnUploadIdWithMacOsMetadataNameFails() throws Exception {
+    when(documentFileService.getDocumentById(FOLDER_ID, USERNAME)).thenReturn(folderNode(FOLDER_ID));
+    for (String name : new String[] { "__MACOSX", "._photo.png", ".DS_Store" }) {
+      stagedUpload("up-given", "deck.pptx", "PPTX".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+      IllegalArgumentException given = assertThrows(IllegalArgumentException.class,
+                                                    () -> documentMcpTool.uploadDocument(FOLDER_ID,
+                                                                                         name,
+                                                                                         null,
+                                                                                         null,
+                                                                                         null,
+                                                                                         null,
+                                                                                         null,
+                                                                                         "up-given"));
+      assertTrue(given.getMessage().contains("'" + name + "' is a macOS metadata name"));
+
+      stagedUpload("up-own", name, "PPTX".getBytes(), org.exoplatform.upload.UploadResource.UPLOADED_STATUS);
+      IllegalArgumentException own = assertThrows(IllegalArgumentException.class,
+                                                  () -> documentMcpTool.uploadDocument(FOLDER_ID,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       null,
+                                                                                       "up-own"));
+      assertTrue(own.getMessage().contains("'" + name + "' is a macOS metadata name"));
+    }
+    verify(documentFileService, never()).saveUploadedDocument(any(), any(), any(), any(), anyLong());
+  }
+
+  /**
    * An upload id the owner-checked accessor doesn't answer for the current
    * user, unknown or another user's, is refused alike by both tools, naming
    * start_upload and get_upload, before anything is filed or versioned, and

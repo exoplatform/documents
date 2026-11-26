@@ -3218,8 +3218,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @return the filed document
    * @throws IllegalArgumentException when the upload id names no upload of
    *           the user's, the file is empty, over the upload size limit or
-   *           refused by a validator, it has no name, or a new version is
-   *           asked of a folder, a shortcut or a file that keeps no versions
+   *           refused by a validator, it has no name or a macOS metadata
+   *           name, or a new version is asked of a folder, a shortcut or a
+   *           file that keeps no versions
    * @throws IllegalStateException when the upload is still being sent or
    *           failed, or the file can't be read or filed
    * @throws ObjectNotFoundException when the folder doesn't exist
@@ -3241,6 +3242,7 @@ public class DocumentMcpTool implements McpToolPlugin {
             .formatted(uploadId));
       }
       fileName = sanitizeFileName(fileName);
+      checkNotMacOsMetadata(fileName);
       // the filing types the file from the upload's own name: the upload is the user's, and consumed by this call
       upload.setFileName(fileName);
       // the filing reads the staged file, runs the upload validators on it and removes the upload once filed
