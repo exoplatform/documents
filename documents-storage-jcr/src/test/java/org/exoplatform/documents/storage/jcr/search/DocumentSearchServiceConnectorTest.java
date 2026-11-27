@@ -17,15 +17,19 @@
 package org.exoplatform.documents.storage.jcr.search;
 
 import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -42,6 +46,9 @@ import org.exoplatform.documents.model.DocumentNodeFilter;
 import org.exoplatform.services.security.Identity;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.social.core.manager.IdentityManager;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 @RunWith(MockitoJUnitRunner.class)
 public class DocumentSearchServiceConnectorTest {
@@ -244,6 +251,71 @@ public class DocumentSearchServiceConnectorTest {
     //then
     assertEquals("test* AND \\\\*escaped\\\\-query\\\\", escapedQueryWithAndOperator);
 
+  }
+
+  /**
+   * Checks the query's shape with a strict parser. No search engine runs here,
+   * as no test harness of this repository starts one: how the clauses match on
+   * a real index is checked on a running platform.
+   */
+  @Test
+  public void searchWritesFoldersAsPrefixesAndFilesAsExactPathsInAValidQueryWhateverTheirNames() throws Exception {
+    Identity userIdentity = mock(Identity.class);
+    when(userIdentity.getUserId()).thenReturn("bob");
+    when(userIdentity.getMemberships()).thenReturn(new ArrayList<>());
+    DocumentNodeFilter filter = new DocumentFolderFilter(null, null, 1L, null);
+    filter.setQuery("test");
+    String drivePath = "/Users/b___/bob/Private";
+    String sharedFolderPath = "/Users/a___/alice/Private/Documents/Re\"ports";
+    String sharedFilePath = "/Users/a___/alice/Private/Documents/TEST \\ \"v2\".docx";
+    when(client.sendRequest(anyString(), eq(ES_INDEX))).thenReturn(searchResult);
+    DocumentSearchServiceConnector documentSearchServiceConnector = new DocumentSearchServiceConnector(configurationManager,
+                                                                                                       identityManager,
+                                                                                                       client,
+                                                                                                       getParams());
+
+    documentSearchServiceConnector.search(userIdentity,
+                                          WORKSPACE,
+                                          List.of(drivePath, sharedFolderPath),
+                                          List.of(sharedFilePath),
+                                          filter,
+                                          0,
+                                          10,
+                                          "title",
+                                          "ASC");
+
+    ArgumentCaptor<String> query = ArgumentCaptor.forClass(String.class);
+    verify(client).sendRequest(query.capture(), eq(ES_INDEX));
+    JsonNode pathClauses = getPathFilterClauses(query.getValue());
+    assertEquals(3, pathClauses.size());
+    assertEquals(drivePath + "/", getPrefixValue(pathClauses, 0));
+    assertEquals(sharedFolderPath + "/", getPrefixValue(pathClauses, 1));
+    JsonNode filePaths = pathClauses.get(2).path("terms").path("path");
+    assertEquals(1, filePaths.size());
+    assertEquals(sharedFilePath, filePaths.get(0).asString());
+
+    documentSearchServiceConnector.search(userIdentity, WORKSPACE, List.of(drivePath), filter, 0, 10, "title", "ASC");
+
+    verify(client, times(2)).sendRequest(query.capture(), eq(ES_INDEX));
+    pathClauses = getPathFilterClauses(query.getValue());
+    assertEquals("A search with no file matches its folders only", 1, pathClauses.size());
+    assertEquals(drivePath + "/", getPrefixValue(pathClauses, 0));
+  }
+
+  /**
+   * Parses the query with a strict parser, which refuses what the search
+   * engine refuses, such as a trailing comma. The path filter is the last
+   * clause of the query's filter, a should over one clause per folder and one
+   * for the files.
+   */
+  private JsonNode getPathFilterClauses(String query) {
+    JsonNode root = JsonMapper.builder().build().readTree(query);
+    JsonNode musts = root.path("query").path("bool").path("filter").get(0).path("bool").path("must");
+    return musts.get(musts.size() - 1).path("bool").path("should");
+  }
+
+  private String getPrefixValue(JsonNode pathClauses, int index) {
+    return pathClauses.get(index).path("prefix").path("path").path("value").asString();
   }
 
   private InitParams getParams() {
