@@ -429,7 +429,8 @@ public class DocumentMcpToolTest {
                                                    Mockito.mock(UserPortalConfigService.class),
                                                    Mockito.mock(UploadService.class),
                                                    publicDocumentAccessService,
-                                                   favoriteService);
+                                                   favoriteService,
+                                                   recycleBinService);
     ActingIdentity limited = ActingIdentity.agent("agent-docs", "DOCS", Origin.PROPOSAL, 7L);
     ActingIdentity unlimited = ActingIdentity.person(USERNAME, Origin.CHAT);
     try (MockedStatic<McpToolUtils> mocked = Mockito.mockStatic(McpToolUtils.class)) {
