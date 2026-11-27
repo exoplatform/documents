@@ -18,9 +18,11 @@
 // The entry of the Recycle Bin in the settings of a space. The page requires
 // this module and calls init().
 //
-// The entry has no isEnabled: only the managers of a space reach its settings.
-// An asynchronous isEnabled would also be lost when another extension with one
-// registers at the same time, the page then keeping only the last of them.
+// The entry has no isEnabled: an asynchronous one is lost when another
+// extension with one registers at the same time, the page then keeping only
+// the last of them. The entry renders nothing for who neither manages nor
+// publishes in the space, as an administrator of the platform may reach its
+// settings.
 export function init() {
   return Vue.prototype.$recycleBinService.loadLabels().then(() => {
     extensionRegistry.registerComponent('SpaceSettings', 'space-settings-components', {

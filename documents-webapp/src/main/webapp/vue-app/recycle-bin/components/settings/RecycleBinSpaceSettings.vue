@@ -18,6 +18,7 @@
 -->
 <template>
   <v-card
+    v-if="holdsBin"
     id="documentsSpaceSettings"
     class="recycle-bin-space-settings card-border-radius"
     flat>
@@ -58,7 +59,21 @@ export default {
   },
   data: () => ({
     section: 'documents-recycle-bin',
+    space: null,
   }),
+  computed: {
+    // The bin of a space is opened by its managers and publishers: an
+    // administrator of the platform reaches the settings of any space, and
+    // sees no entry in one they neither manage nor publish in.
+    holdsBin() {
+      return !!this.space && (this.space.isManager || this.space.isPublisher);
+    },
+  },
+  created() {
+    this.$spaceService.getSpaceById(this.spaceId)
+      .then(space => this.space = space)
+      .catch(() => this.space = null);
+  },
   methods: {
     // The bin is displayed as a section of the page: the page hides its other
     // blocks, this one included, so the section lives beside them until its
