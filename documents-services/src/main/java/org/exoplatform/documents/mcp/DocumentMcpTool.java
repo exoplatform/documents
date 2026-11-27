@@ -1570,7 +1570,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * reads each one back with the user's own rights: a contributed id that
    * names no file, a file in the trash, a file outside the space searched or
    * a file the user may not read is dropped, so that a contributor never
-   * decides what the user sees. A contributor that fails is skipped.
+   * decides what the user sees. A contributor that fails is skipped. The cap
+   * applies to the files kept, so that the files a filter drops never take
+   * the place of one it keeps.
    *
    * @param name the name the lookup and the title search found nothing for
    * @param spaceId the id of the one space searched, null for every place
@@ -1604,11 +1606,7 @@ public class DocumentMcpTool implements McpToolPlugin {
       }
       answer.stream()
             .filter(hit -> hit != null && StringUtils.isNotBlank(hit.fileId()))
-            .forEach(hit -> {
-              if (hits.size() < size) {
-                hits.putIfAbsent(hit.fileId(), hit);
-              }
-            });
+            .forEach(hit -> hits.putIfAbsent(hit.fileId(), hit));
     }
     if (hits.isEmpty()) {
       return List.of();
@@ -1616,6 +1614,9 @@ public class DocumentMcpTool implements McpToolPlugin {
     Map<String, DocumentIndexInfo> files = documentFileService.describeForIndex(hits.keySet());
     List<DocumentModel> models = new ArrayList<>();
     for (DocumentNameLookupHit hit : hits.values()) {
+      if (models.size() >= size) {
+        break;
+      }
       DocumentIndexInfo info = files.get(hit.fileId());
       if (info == null || (spaceId != null && info.spaceId() != spaceId.longValue())) {
         continue;

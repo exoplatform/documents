@@ -1438,9 +1438,11 @@ public class DocumentMcpToolTest {
    * it names, only a file the user may read, out of the trash and in the
    * space searched comes back. An id the user may not read, one no node
    * carries, a file in the trash (which the index description leaves out),
-   * a file of another space and a folder are dropped. Mutants: the read-back
+   * a file of another space and a folder are dropped, and the cap, here one
+   * file, counts only the files kept, so that five dropped ids ahead of the
+   * readable one never take its place. Mutants: the read-back
    * as the user removed; the trash left in; the space not compared; a folder
-   * kept.
+   * kept; the cap applied before the filters.
    *
    * @throws Exception never
    */
@@ -1456,7 +1458,7 @@ public class DocumentMcpToolTest {
                                                                                                                               "f2_support");
     spaceIdentity.setId("200");
     when(identityManager.getOrCreateSpaceIdentity("f2_support")).thenReturn(spaceIdentity);
-    when(documentFileService.findDocumentsByName("Contract QA-92501", 200L, USER_IDENTITY_ID, 20)).thenReturn(List.of());
+    when(documentFileService.findDocumentsByName("Contract QA-92501", 200L, USER_IDENTITY_ID, 1)).thenReturn(List.of());
     when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class), any(), anyInt(), anyInt()))
         .thenReturn(List.of());
     String unreadable = "aa0688cd7f00010134384ab7e1b15a41";
@@ -1485,7 +1487,7 @@ public class DocumentMcpToolTest {
     when(documentFileService.getDocumentById(folder, USERNAME)).thenReturn(folderNode(folder));
     when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNodeNamed(DOCUMENT_ID, "qa-92501-root.txt"));
 
-    List<DocumentModel> models = documentMcpTool.searchDocuments(null, "Contract QA-92501", SPACE_ID, null, null, null, null, null, null);
+    List<DocumentModel> models = documentMcpTool.searchDocuments(null, "Contract QA-92501", SPACE_ID, null, null, null, 1, null, null);
 
     assertEquals(List.of(DOCUMENT_ID), models.stream().map(DocumentModel::getId).toList());
     ArgumentCaptor<DocumentNameLookupRequest> request = ArgumentCaptor.forClass(DocumentNameLookupRequest.class);
