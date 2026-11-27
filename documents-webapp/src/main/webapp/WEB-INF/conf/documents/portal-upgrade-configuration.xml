@@ -177,5 +177,52 @@
         </values-param>
       </init-params>
     </component-plugin>
+    <component-plugin profiles="layout">
+      <name>DownloadDocumentPagePlatformNameShippedColorsUpgrade</name>
+      <set-method>addUpgradePlugin</set-method>
+      <type>io.meeds.layout.plugin.upgrade.ShippedStyleUpgradePlugin</type>
+      <description>Removes the text colours shipped on the Platform Name application of the document download page, so that it follows the text colours of the theme in use</description>
+      <init-params>
+        <value-param>
+          <name>product.group.id</name>
+          <value>org.exoplatform.social</value>
+        </value-param>
+        <value-param>
+          <name>plugin.execution.order</name>
+          <value>200</value>
+        </value-param>
+        <value-param>
+          <name>plugin.upgrade.execute.once</name>
+          <value>true</value>
+        </value-param>
+        <value-param>
+          <name>enabled</name>
+          <value>true</value>
+        </value-param>
+        <value-param>
+          <name>site.type</name>
+          <value>portal</value>
+        </value-param>
+        <value-param>
+          <name>site.name</name>
+          <value>global</value>
+        </value-param>
+        <value-param>
+          <name>application.content</name>
+          <value>social/PlatformName</value>
+        </value-param>
+        <values-param>
+          <name>page.names</name>
+          <value>download-document</value>
+        </values-param>
+        <properties-param>
+          <name>style.values</name>
+          <property name="textTitleColor" value="#20282C" />
+          <property name="textHeaderColor" value="#707070" />
+          <property name="textColor" value="#20282C" />
+          <property name="textSubtitleColor" value="#707070" />
+        </properties-param>
+      </init-params>
+    </component-plugin>
   </external-component-plugins>
 </configuration>
