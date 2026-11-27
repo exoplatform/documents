@@ -71,6 +71,8 @@ import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
 import org.exoplatform.portal.rest.UserFieldValidator;
 import org.exoplatform.services.attachments.service.AttachmentService;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.social.core.profileproperty.ProfilePropertyService;
@@ -113,6 +115,8 @@ public class DocumentMcpTool implements McpToolPlugin {
    * shareable link (<code>{origin}/{containerName}/download-document/{nodeId}</code>).
    */
   public static final String       PUBLIC_LINK_URL_FORMAT = "/portal/download-document/%s";
+
+  private static final Log                LOG                = ExoLogger.getLogger(DocumentMcpTool.class);
 
   /**
    * Same password policy DocumentFileRest applies to public-link passwords
@@ -783,25 +787,20 @@ public class DocumentMcpTool implements McpToolPlugin {
    * Restores a document that was deleted with {@code delete_document}: since that
    * tool trashes immediately (delay 0), the delayed-delete cancel path is a no-op,
    * so the node is resolved from trash (it keeps its id/uuid after the move) and
-   * restored to its original location.
+   * restored to its original location, for a user who may add to that folder.
    */
-  public void undoDeleteDocument(String documentId) throws IllegalAccessException, ObjectNotFoundException {
+  public void undoDeleteDocument(String documentId) {
     checkDocumentIdParameter(documentId);
-    // Resolve the trashed node through the SYSTEM-session overload: all trash
-    // access in storage uses a system session, and a regular user session cannot
-    // read a node once it has been moved to trash. Using the user-session overload
-    // here would return null even though the node still exists, yielding a
-    // misleading "permanently deleted" error.
-    AbstractNode trashedNode = documentFileService.getDocumentById(documentId);
-    if (trashedNode == null) {
-      throw new IllegalStateException(("Document %s can no longer be found (it may have been permanently deleted from the trash), "
-          + "so it cannot be restored.").formatted(documentId));
-    }
     try {
-      documentFileService.restoreDocumentFromTrash(trashedNode.getPath());
+      documentFileService.restoreDocumentFromTrash(documentId, getCurrentUserIdentityId());
+    } catch (ObjectNotFoundException | IllegalAccessException e) {
+      // One answer whether the document is in the trash or not, so that a refusal tells nothing of the trash
+      LOG.debug("Document {} not restored from the trash", documentId, e);
+      throw new IllegalStateException(("Document %s cannot be restored: it is not in the trash, or you may not add "
+          + "to the folder it was deleted from.").formatted(documentId));
     } catch (RepositoryException e) {
-      throw new IllegalStateException(("Could not restore document %s from trash: %s. It may not be in the trash "
-          + "(only documents deleted via delete_document can be restored this way).").formatted(documentId, e.getMessage()));
+      LOG.debug("Could not restore document {} from the trash", documentId, e);
+      throw new IllegalStateException("Could not restore document %s from the trash.".formatted(documentId));
     }
   }
 
