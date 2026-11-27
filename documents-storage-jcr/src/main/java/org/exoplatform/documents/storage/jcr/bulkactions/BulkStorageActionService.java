@@ -17,9 +17,12 @@
 package org.exoplatform.documents.storage.jcr.bulkactions;
 
 import java.io.File;
-import java.util.ArrayList;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -46,21 +49,25 @@ import org.exoplatform.upload.UploadService;
 
 public class BulkStorageActionService implements Startable {
 
-  private static final Log              LOG        = ExoLogger.getLogger(BulkStorageActionService.class.getName());
+  public static final String            TEMP_DOWNLOAD_FOLDER_PREFIX = "temp_download";
 
-  private ExecutorService               bulkActionThreadPool;
+  public static final String            TEMP_IMPORT_FOLDER_PREFIX   = "temp_import";
+
+  private static final Log              LOG        = ExoLogger.getLogger(BulkStorageActionService.class.getName());
 
   private static final String           TEMP_DIRECTORY_PATH = "java.io.tmpdir";
 
   private static final String           ZIP_PREFIX          = "downloadzip";
 
-  public static final String            TEMP_DOWNLOAD_FOLDER_PREFIX = "temp_download";
+  private static final List<ActionData> actionList = new CopyOnWriteArrayList<>();
 
-  public static final String            TEMP_IMPORT_FOLDER_PREFIX   = "temp_import";
+  // test hook, run between the removal of the earlier entries and the add of the new one
+  Runnable                              afterEarlierEntriesRemoved  = () -> {
+                                                                    };
+
+  private ExecutorService               bulkActionThreadPool;
 
   private long                          DEFAULT_ZIP_UPLOAD_LIMIT    = 3000;
-
-  private static final List<ActionData> actionList = new ArrayList<>();
 
   public void executeBulkAction(Session session,
                                 DocumentFileStorage documentFileStorage,
@@ -73,7 +80,28 @@ public class BulkStorageActionService implements Startable {
                                 Map<String,Object> params,
                                 long authenticatedUserId) {
     actionData.setStatus(ActionStatus.STARTED.name());
-    actionList.add(actionData);
+    // an action identifier is unique per user in the list: the older entries are replaced
+    // (the threads of those keep working on their own ActionData), but a running import,
+    // whose size counts in the uploads limit, stays. The list is a copy-on-write one, read
+    // on snapshots by every thread, and the replacement is made one start at a time.
+    List<ActionData> toDiscard;
+    synchronized (actionList) {
+      List<ActionData> replaced = actionList.stream()
+                                            .filter(older -> !ActionType.IMPORT_ZIP.name().equals(older.getActionType())
+                                                && older.getActionId() != null
+                                                && older.getActionId().equals(actionData.getActionId())
+                                                && older.getIdentity() != null && actionData.getIdentity() != null
+                                                && older.getIdentity()
+                                                        .getUserId()
+                                                        .equals(actionData.getIdentity().getUserId()))
+                                            .toList();
+      actionList.removeIf(entry -> replaced.stream().anyMatch(older -> older == entry));
+      afterEarlierEntriesRemoved.run();
+      actionList.add(actionData);
+      toDiscard = replaced;
+    }
+    // after the removal, outside the lock: the thread of a download sets the path, then checks the list
+    toDiscard.forEach(this::discardDownloadArchive);
     checkTotalUplaodsLimit(actionData.getIdentity(), true);
     bulkActionThreadPool.execute(new ActionThread(documentFileStorage,
                                                   jcrDeleteFileStorage,
@@ -119,12 +147,48 @@ public class BulkStorageActionService implements Startable {
     return true;
   }
 
-  public ActionData getActionDataById(String id) {
-    return actionList.stream().filter(resource -> id.equals(resource.getActionId())).findFirst().orElse(null);
+  /**
+   * @param id the action's identifier
+   * @param userId the user who started the action
+   * @return the most recent action with this identifier started by this user, or null
+   */
+  public ActionData getActionData(String id, String userId) {
+    return actionList.stream()
+                     .filter(resource -> id.equals(resource.getActionId()) && resource.getIdentity() != null
+                         && resource.getIdentity().getUserId().equals(userId))
+                     .reduce((older, newer) -> newer)
+                     .orElse(null);
+  }
+
+  /**
+   * @param actionData an action
+   * @return true when this very action is still in the running list, false once
+   *         it was removed or replaced by a newer action of the same user and id
+   */
+  public boolean isListed(ActionData actionData) {
+    return actionList.stream().anyMatch(entry -> entry == actionData);
+  }
+
+  /**
+   * Deletes the archive of a download and clears its path; a second call, or
+   * a reader that took the archive first, leaves nothing to delete.
+   *
+   * @param actionData a download action
+   */
+  public void discardDownloadArchive(ActionData actionData) {
+    String zipPath = actionData.takeDownloadZipPath();
+    if (zipPath != null) {
+      try {
+        Files.deleteIfExists(Path.of(zipPath));
+      } catch (IOException e) {
+        LOG.warn("Cannot delete the archive of a replaced download", e);
+      }
+    }
   }
 
   public void removeActionData(ActionData actionData) {
-    actionList.remove(actionData);
+    // by instance: ActionData compares by value and an equal entry of a newer action must stay
+    actionList.removeIf(entry -> entry == actionData);
     checkTotalUplaodsLimit(actionData.getIdentity(), true);
   }
 

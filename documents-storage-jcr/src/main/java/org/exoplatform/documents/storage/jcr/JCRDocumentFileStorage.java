@@ -26,6 +26,7 @@ import java.net.URLDecoder;
 import java.security.AccessControlException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -3179,15 +3180,17 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   }
 
   public byte[] getDownloadZipBytes(int actionId, String userName) throws IOException {
-    ActionData actionData = bulkStorageActionService.getActionDataById(String.valueOf(actionId));
-    if (actionData != null) {
-      if (!actionData.getIdentity().getUserId().equals(userName)) {
-        throw new IOException("Current user is not allowed to get zip file");
+    ActionData actionData = bulkStorageActionService.getActionData(String.valueOf(actionId), userName);
+    String zipPath = actionData == null ? null : actionData.takeDownloadZipPath();
+    if (zipPath != null) {
+      byte[] filesBytes;
+      try {
+        filesBytes = FileUtils.readFileToByteArray(new File(zipPath));
+      } catch (NoSuchFileException | FileNotFoundException e) {
+        return new byte[0];
+      } finally {
+        Files.deleteIfExists(Path.of(zipPath));
       }
-      File zipped = new File(actionData.getDownloadZipPath());
-      byte[] filesBytes = FileUtils.readFileToByteArray(zipped);
-      Files.delete(Path.of(actionData.getDownloadZipPath()));
-      actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
       if (actionData.getStatus().equals(ActionStatus.CANCELED.name())) {
         try {
           listenerService.broadcast("bulk_actions_document_event", actionData.getIdentity(), actionData);
@@ -3202,10 +3205,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       return new byte[0];
   }
 
-  public void cancelBulkAction(String actionId, String userName) throws IOException {
-    ActionData actionData = bulkStorageActionService.getActionDataById(actionId);
-    if (!actionData.getIdentity().getUserId().equals(userName)) {
-      throw new IOException("Current user is not allowed to cancel the download action");
+  public void cancelBulkAction(String actionId, String userName) throws ObjectNotFoundException {
+    ActionData actionData = bulkStorageActionService.getActionData(actionId, userName);
+    if (actionData == null) {
+      throw new ObjectNotFoundException("No action of the current user has this identifier");
     }
     actionData.setStatus(ActionStatus.CANCELED.name());
   }

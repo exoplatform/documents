@@ -1038,15 +1038,16 @@ public class DocumentFileRest implements ResourceContainer {
       byte[] filesBytes = documentFileService.getDownloadZipBytes(actionId,
               currentUserIdentity.getRemoteId());
       if (filesBytes.length == 0) {
-        return Response.status(Status.GONE).build();
+        return Response.status(Status.GONE).cacheControl(NO_STORE_CACHE_CONTROL).build();
       }
       return Response.ok(filesBytes)
                      .type("application/zip")
+                     .cacheControl(NO_STORE_CACHE_CONTROL)
                      .header("Content-Disposition", "attachment; filename=\"documents_Download" + new Date().getTime() + ".zip\"")
                      .build();
     } catch (Exception ex) {
       LOG.warn("Failed to get download file ", ex);
-      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+      return Response.status(HTTPStatus.INTERNAL_ERROR).cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
   }
 
@@ -1064,10 +1065,13 @@ public class DocumentFileRest implements ResourceContainer {
     Identity currentUserIdentity = RestUtils.getCurrentUserIdentity(identityManager);
     try {
       documentFileService.cancelBulkAction(actionId, currentUserIdentity.getRemoteId());
-      return Response.ok().build();
+      return Response.ok().cacheControl(NO_STORE_CACHE_CONTROL).build();
+    } catch (ObjectNotFoundException e) {
+      LOG.debug("No bulk action of user {} has the identifier {}", currentUserIdentity.getRemoteId(), actionId);
+      return Response.status(HTTPStatus.NOT_FOUND).cacheControl(NO_STORE_CACHE_CONTROL).build();
     } catch (Exception ex) {
       LOG.warn("Failed to cancel bulk action", ex);
-      return Response.status(HTTPStatus.INTERNAL_ERROR).build();
+      return Response.status(HTTPStatus.INTERNAL_ERROR).cacheControl(NO_STORE_CACHE_CONTROL).build();
     }
   }
 

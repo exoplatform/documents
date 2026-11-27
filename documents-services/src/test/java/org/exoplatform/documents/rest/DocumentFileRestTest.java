@@ -1060,9 +1060,40 @@ public class DocumentFileRestTest {
     when(documentFileStorage.getDownloadZipBytes(123456, username)).thenReturn(new byte[0]);
     Response response = documentFileRest.getDownloadZip(123456);
     assertEquals(Response.Status.GONE.getStatusCode(), response.getStatus());
+    assertTrue(((javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control")).isNoStore());
     when(documentFileStorage.getDownloadZipBytes(123456, username)).thenReturn(new byte[10]);
     response = documentFileRest.getDownloadZip(123456);
     assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    javax.ws.rs.core.CacheControl zipCacheControl = (javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control");
+    assertTrue(zipCacheControl.isNoStore());
+    assertTrue(zipCacheControl.isPrivate());
+    when(documentFileStorage.getDownloadZipBytes(123456, username)).thenThrow(new IOException("failure"));
+    response = documentFileRest.getDownloadZip(123456);
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+    assertTrue(((javax.ws.rs.core.CacheControl) response.getMetadata().getFirst("Cache-Control")).isNoStore());
+  }
+
+  @Test
+  public void testCancelBulkActionAnswersNotFoundForAnActionTheUserDoesNotHave() throws Exception {
+    String username = "testuser";
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId("2");
+    mockRestUtils().when(() -> RestUtils.getCurrentUserIdentity(identityManager)).thenReturn(currentIdentity);
+
+    Response response = documentFileRest.cancelBulkAction("7");
+    assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+    assertNotStored(response);
+    verify(documentFileStorage).cancelBulkAction("7", username);
+
+    doThrow(new ObjectNotFoundException("no such action")).when(documentFileStorage).cancelBulkAction("8", username);
+    response = documentFileRest.cancelBulkAction("8");
+    assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
+    assertNotStored(response);
+
+    doThrow(new IllegalStateException("failure")).when(documentFileStorage).cancelBulkAction("9", username);
+    response = documentFileRest.cancelBulkAction("9");
+    assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+    assertNotStored(response);
   }
 
   @Test

@@ -501,8 +501,9 @@ public interface DocumentFileStorage {
    *
    * @param actionId action id
    * @param userName current user name
+   * @throws ObjectNotFoundException when the user has no action with this identifier
    */
-  void cancelBulkAction(String actionId, String userName) throws IOException;
+  void cancelBulkAction(String actionId, String userName) throws ObjectNotFoundException;
 
   /**
    * Creates a new version from an input stream

@@ -94,6 +94,26 @@ public class ActionData {
     updatedFiles.add(fileName);
   }
 
+  public synchronized String getDownloadZipPath() {
+    return downloadZipPath;
+  }
+
+  public synchronized void setDownloadZipPath(String downloadZipPath) {
+    this.downloadZipPath = downloadZipPath;
+  }
+
+  /**
+   * Hands the archive path to one caller only: it is read and cleared under the
+   * monitor of this action, so the reader of the archive and a discard never both own it.
+   *
+   * @return the archive path, or null when there is none or another caller took it
+   */
+  public synchronized String takeDownloadZipPath() {
+    String path = downloadZipPath;
+    downloadZipPath = null;
+    return path;
+  }
+
   public void incrementImportCount() {
     importedFilesCount++;
   }

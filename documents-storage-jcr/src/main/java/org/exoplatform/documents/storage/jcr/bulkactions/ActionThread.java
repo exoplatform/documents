@@ -188,7 +188,6 @@ public class ActionThread implements Runnable {
   }
 
   public void processAction() throws RepositoryException {
-    actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
     if (actionData.getActionType().equals(ActionType.DELETE.name())) {
       actionData.setStatus(ActionStatus.IN_PROGRESS.name());
       deleteItems();
@@ -478,7 +477,6 @@ public class ActionThread implements Runnable {
   }
   
   private boolean checkCanceled() {
-    actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
     if (actionData.getStatus().equals(ActionStatus.CANCELED.name())) {
       brodcastEvent();
       return true;
@@ -488,7 +486,7 @@ public class ActionThread implements Runnable {
   
   private void deleteFile(File file) {
     try {
-      Files.delete(file.toPath());
+      Files.deleteIfExists(file.toPath());
     } catch (IOException e) {
       log.error("Error while deleting file", e);
     }
@@ -540,43 +538,67 @@ public class ActionThread implements Runnable {
     try {
       tempFolderPath = Files.createTempDirectory(BulkStorageActionService.TEMP_DOWNLOAD_FOLDER_PREFIX).toString();
 
-    boolean hasFolders = items.stream().anyMatch(AbstractNode::isFolder);
-    brodcastEvent();
+    String zipPath = null;
+    boolean archiveHandedOver = false;
     try {
-      for (Node node : nodes) {
-        if (checkCanceled()) {
-          File folder = new File(tempFolderPath);
-          cleanFiles(folder);
-          break;
-        }
-        parentNode = node.getParent();
-        if (hasFolders) {
-          JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentNode);
-        } else {
-          JCRDocumentsUtil.createFile(node, "", "", tempFolderPath, parentNode);
-        }
+      boolean hasFolders = items.stream().anyMatch(AbstractNode::isFolder);
+      brodcastEvent();
+      try {
+        for (Node node : nodes) {
+          if (checkCanceled()) {
+            break;
+          }
+          parentNode = node.getParent();
+          if (hasFolders) {
+            JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", tempFolderPath, parentNode);
+          } else {
+            JCRDocumentsUtil.createFile(node, "", "", tempFolderPath, parentNode);
+          }
 
+        }
+      } catch (Exception e) {
+        log.error("Error when creating temp files for download", e);
+        actionData.setStatus(ActionStatus.FAILED.name());
       }
-    } catch (Exception e) {
-      log.error("Error when creating temp files for download", e);
-      actionData.setStatus(ActionStatus.FAILED.name());
-    }
 
-    String zipName = ZIP_PREFIX + actionData.getActionId() + ZIP_EXTENSION;
-    String zipPath = System.getProperty(TEMP_DIRECTORY_PATH) + File.separator + zipName;
-    try {
-      JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
-      File zipped = new File(zipPath);
-      actionData.setDownloadZipPath(zipped.getPath());
-      File folder = new File(tempFolderPath);
-      cleanFiles(folder);
-    } catch (Exception e) {
-      log.error("Error when creating zip file", e);
-      actionData.setStatus(ActionStatus.FAILED.name());
+      // no archive is built from copies that failed or were cancelled: nothing would fetch it
+      String copyStatus = actionData.getStatus();
+      if (!ActionStatus.FAILED.name().equals(copyStatus) && !ActionStatus.CANCELED.name().equals(copyStatus)) {
+        try {
+          zipPath = Files.createTempFile(Path.of(System.getProperty(TEMP_DIRECTORY_PATH)), ZIP_PREFIX, ZIP_EXTENSION).toString();
+          JCRDocumentsUtil.zipFiles(zipPath, tempFolderPath);
+          File zipped = new File(zipPath);
+          actionData.setDownloadZipPath(zipped.getPath());
+          archiveHandedOver = true;
+        } catch (Exception e) {
+          log.error("Error when creating zip file", e);
+          actionData.setStatus(ActionStatus.FAILED.name());
+          if (zipPath != null) {
+            deleteFile(new File(zipPath));
+            zipPath = null;
+          }
+        }
+      }
+    } finally {
+      // whatever ends the build, an Error included, the copies of the documents are removed
+      // and so is an archive that was not handed over
+      cleanFiles(new File(tempFolderPath));
+      if (zipPath != null && !archiveHandedOver) {
+        deleteFile(new File(zipPath));
+      }
     }
     if (checkCanceled()) {
-      File zip = new File(zipPath);
-      deleteFile(zip);
+      if (zipPath != null) {
+        deleteFile(new File(zipPath));
+      }
+      return;
+    }
+    if (!bulkStorageActionService.isListed(actionData)) {
+      // a replaced download that was not cancelled and is replaced before this check ends
+      // silently: its archive, when built, is deleted and it sends no event
+      if (zipPath != null) {
+        bulkStorageActionService.discardDownloadArchive(actionData);
+      }
       return;
     }
     if (!actionData.getStatus().equals(ActionStatus.FAILED.name())) {
