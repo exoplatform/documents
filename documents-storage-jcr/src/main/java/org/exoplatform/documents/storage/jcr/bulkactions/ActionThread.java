@@ -39,8 +39,12 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import org.exoplatform.commons.utils.MimeTypeResolver;
+import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.container.ExoContainer;
+import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.container.component.RequestLifeCycle;
+import org.exoplatform.documents.constant.RecycleBinError;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.ActionData;
 import org.exoplatform.documents.model.ActionStatus;
@@ -51,8 +55,10 @@ import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.services.jcr.ext.utils.VersionHistoryUtils;
 import org.exoplatform.services.jcr.util.Text;
 import org.exoplatform.services.listener.ListenerService;
+import org.exoplatform.documents.storage.BulkItemAction;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.upload.UploadService;
 
 import net.lingala.zip4j.ZipFile;
@@ -149,6 +155,28 @@ public class ActionThread implements Runnable {
 
   private final Node                     parent;
 
+  /** The ids of the items of an action that applies one operation to each. */
+  private List<String>                   itemIds;
+
+  /** What such an action does to each item, null for the other actions. */
+  private BulkItemAction                 itemAction;
+
+  /** The container each item of an operation is treated in, in a request of its own. */
+  private ExoContainer                   itemContainer;
+
+  /**
+   * An action that applies one operation to each item of a list of ids.
+   */
+  public ActionThread(BulkStorageActionService bulkStorageActionService,
+                      ListenerService listenerService,
+                      ActionData actionData,
+                      List<String> itemIds,
+                      BulkItemAction itemAction) {
+    this(null, null, bulkStorageActionService, listenerService, null, actionData, null, null, null, null, null);
+    this.itemIds = itemIds;
+    this.itemAction = itemAction;
+  }
+
   public ActionThread(DocumentFileStorage documentFileStorage,
                       JCRDeleteFileStorage jCrDeleteFileStorage,
                       BulkStorageActionService bulkStorageActionService,
@@ -175,8 +203,13 @@ public class ActionThread implements Runnable {
 
   @Override
   public void run() {
+    if (itemAction != null) {
+      runItemAction();
+      return;
+    }
     try {
-      RequestLifeCycle.begin(PortalContainer.getInstance());
+      PortalContainer container = PortalContainer.getInstance();
+      RequestLifeCycle.begin(container);
       processAction();
     } catch (Exception e) {
       log.error("Cannot execute Action {} operation", actionData.getActionType(), e);
@@ -187,7 +220,39 @@ public class ActionThread implements Runnable {
     }
   }
 
+  /** An operation runs in no request of the whole action: each of its items has its own. */
+  private void runItemAction() {
+    try {
+      PortalContainer container = PortalContainer.getInstance();
+      // What the operation looks for is looked for in the portal container.
+      ExoContainerContext.setCurrentContainer(container);
+      itemContainer = container;
+      applyItemAction();
+    } catch (Exception e) {
+      log.error("Cannot execute Action {} operation", actionData.getActionType(), e);
+      actionData.setStatus(ActionStatus.FAILED.name());
+      brodcastEvent();
+    }
+  }
+
+  /** Opens the request an item is treated in, so that no item keeps what another one read. */
+  void beginItem() {
+    if (itemContainer != null) {
+      RequestLifeCycle.begin(itemContainer);
+    }
+  }
+
+  void endItem() {
+    if (itemContainer != null) {
+      RequestLifeCycle.end();
+    }
+  }
+
   public void processAction() throws RepositoryException {
+    if (itemAction != null) {
+      applyItemAction();
+      return;
+    }
     actionData = bulkStorageActionService.getActionDataById(actionData.getActionId());
     if (actionData.getActionType().equals(ActionType.DELETE.name())) {
       actionData.setStatus(ActionStatus.IN_PROGRESS.name());
@@ -203,105 +268,120 @@ public class ActionThread implements Runnable {
     if (actionData.getActionType().equals(ActionType.IMPORT_ZIP.name())) {
       importFromZip();
     }
-    if (actionData.getActionType().equals(ActionType.PERMANENTLY_DELETE.name())) {
-      actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-      permanentlyDeleteItems();
-    }
-    if (actionData.getActionType().equals(ActionType.RESTORE.name())) {
-      actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-      restoreItems();
-    }
   }
 
   private void deleteItems() {
-    int errors = 0;
-    List<String> treatedItemsIds = new ArrayList<>();
-    for (AbstractNode item : items) {
-      if (checkCanceled()) {
-        break;
+    ConversationState previousState = ConversationState.getCurrent();
+    // The items are moved to the trash as the user deleting them: the
+    // repository records that user as the last one to change each of them.
+    ConversationState.setCurrent(actionData.getIdentity() == null ? null : new ConversationState(actionData.getIdentity()));
+    try {
+      int errors = 0;
+      List<String> treatedItemsIds = new ArrayList<>();
+      for (AbstractNode item : items) {
+        if (checkCanceled()) {
+          break;
+        }
+        try {
+          jCrDeleteFileStorage.deleteDocument(session,
+                                              item.getPath(),
+                                              item.getId(),
+                                              true,
+                                              true,
+                                              0,
+                                              actionData.getIdentity(),
+                                              identityId);
+          actionData.setStatus(ActionStatus.IN_PROGRESS.name());
+          treatedItemsIds.add(item.getId());
+        } catch (PathNotFoundException path) {
+          log.error("The document with this path is not found" + item.getPath(), path);
+          errors++;
+        } catch (Exception e) {
+          log.error("Error when deleting the document" + item.getPath(), e);
+          errors++;
+        }
       }
-      try {
-        jCrDeleteFileStorage.deleteDocument(session,
-                                            item.getPath(),
-                                            item.getId(),
-                                            true,
-                                            true,
-                                            0,
-                                            actionData.getIdentity(),
-                                            identityId);
-        actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-        treatedItemsIds.add(item.getId());
-      } catch (PathNotFoundException path) {
-        log.error("The document with this path is not found" + item.getPath(), path);
-        errors++;
-      } catch (Exception e) {
-        log.error("Error when deleting the document" + item.getPath(), e);
-        errors++;
+      if (errors > 0) {
+        actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
+      } else {
+        actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
       }
+      actionData.setTreatedItemsIds(treatedItemsIds);
+      brodcastEvent();
+    } finally {
+      ConversationState.setCurrent(previousState);
     }
-    if (errors > 0) {
-      actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
-    } else {
-      actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
-    }
-    actionData.setTreatedItemsIds(treatedItemsIds);
-    brodcastEvent();
   }
 
-  private void permanentlyDeleteItems() {
-    int errors = 0;
-    List<String> treatedItemsIds = new ArrayList<>();
-    for (AbstractNode item : items) {
-      if (checkCanceled()) {
-        break;
+  /**
+   * Applies the operation of the action to each of its items, in the order
+   * the operation asks for, as the user the action was started for. An item
+   * that is no longer there is left out, one that fails is counted and the
+   * others go on, and a cancellation leaves the items not yet reached.
+   */
+  private void applyItemAction() {
+    ConversationState previousState = ConversationState.getCurrent();
+    // Whatever reads the current user while an item is treated reads the one the action is for.
+    ConversationState.setCurrent(actionData.getIdentity() == null ? null : new ConversationState(actionData.getIdentity()));
+    try {
+      actionData.setStatus(ActionStatus.IN_PROGRESS.name());
+      int errors = 0;
+      boolean canceled = false;
+      List<String> treatedItemsIds = new ArrayList<>();
+      for (String itemId : orderedItemIds()) {
+        if (ActionStatus.CANCELED.name().equals(actionData.getStatus())) {
+          canceled = true;
+          break;
+        }
+        beginItem();
+        try {
+          if (itemAction.apply(itemId)) {
+            treatedItemsIds.add(itemId);
+          }
+        } catch (Exception e) {
+          if (isRefusal(e)) {
+            log.debug("The action {} {} was refused on the item {}", actionData.getActionType(), actionData.getActionId(), itemId, e);
+          } else {
+            log.warn("The action {} {} could not be applied to the item {}", actionData.getActionType(), actionData.getActionId(), itemId, e);
+          }
+          errors++;
+        } finally {
+          endItem();
+        }
       }
-      try {
-        jCrDeleteFileStorage.deleteDocumentPermanently(item.getPath(), item.getId());
-        actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-        treatedItemsIds.add(item.getId());
-      } catch (PathNotFoundException path) {
-        log.error("The document with this path is not found" + item.getPath(), path);
-        errors++;
-      } catch (Exception e) {
-        log.error("Error when deleting the document" + item.getPath(), e);
-        errors++;
+      if (!canceled) {
+        actionData.setStatus(errors > 0 ? ActionStatus.DONE_WITH_ERRORS.name() : ActionStatus.DONE_SUCCESSFULLY.name());
       }
+      actionData.setTreatedItemsIds(treatedItemsIds);
+      brodcastEvent();
+    } finally {
+      ConversationState.setCurrent(previousState);
+      bulkStorageActionService.releaseActionData(actionData);
     }
-    if (errors > 0) {
-      actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
-    } else {
-      actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
-    }
-    actionData.setTreatedItemsIds(treatedItemsIds);
-    brodcastEvent();
   }
 
-  private void restoreItems() {
-    int errors = 0;
-    List<String> treatedItemsIds = new ArrayList<>();
-    for (AbstractNode item : items) {
-      if (checkCanceled()) {
-        break;
-      }
-      try {
-        jCrDeleteFileStorage.restoreFromTrash(item.getPath());
-        actionData.setStatus(ActionStatus.IN_PROGRESS.name());
-        treatedItemsIds.add(item.getId());
-      } catch (PathNotFoundException path) {
-        log.error("The document with this path is not found" + item.getPath(), path);
-        errors++;
-      } catch (Exception e) {
-        log.error("Error when restoring the document" + item.getPath(), e);
-        errors++;
-      }
+  /** The items in the order the operation asks for, or as given when it cannot tell. */
+  private List<String> orderedItemIds() {
+    try {
+      return itemAction.order(itemIds);
+    } catch (RuntimeException e) {
+      log.warn("The items of the action {} {} could not be ordered: they are acted on in the order given",
+               actionData.getActionType(),
+               actionData.getActionId(),
+               e);
+      return itemIds;
     }
-    if (errors > 0) {
-      actionData.setStatus(ActionStatus.DONE_WITH_ERRORS.name());
-    } else {
-      actionData.setStatus(ActionStatus.DONE_SUCCESSFULLY.name());
-    }
-    actionData.setTreatedItemsIds(treatedItemsIds);
-    brodcastEvent();
+  }
+
+  /**
+   * Whether what an item ended on is an answer to the user, told by the
+   * status of the action, rather than a defect to report: a refusal, an item
+   * that is not found, or an argument refused under a message code of the
+   * Recycle Bin. Any other argument error is a defect.
+   */
+  static boolean isRefusal(Exception e) {
+    return e instanceof IllegalAccessException || e instanceof ObjectNotFoundException
+        || e instanceof IllegalArgumentException && StringUtils.startsWith(e.getMessage(), RecycleBinError.CODE_PREFIX);
   }
 
   public static void fixAndExtractZip(File zipFile, File outputDir) throws IOException {

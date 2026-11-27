@@ -38,7 +38,10 @@ public interface TrashStorage {
    * @throws RepositoryException
    * @return -1: move failed.
    *          trashId if moved succesfully
+   * @deprecated use {@link #moveToTrash(Node, SessionProvider, String)}, which
+   *             records who deleted the node. Since 7.3.0, for removal.
    */
+  @Deprecated(since = "7.3.0", forRemoval = true)
   public String moveToTrash(Node node, SessionProvider sessionProvider) throws RepositoryException;
 
   /**
@@ -49,8 +52,52 @@ public interface TrashStorage {
    * @return -1: move failed.
    *          trashId if moved succesfully
    * @throws RepositoryException
+   * @deprecated use {@link #moveToTrash(Node, SessionProvider, String, int)},
+   *             which records who deleted the node. Since 7.3.0, for removal.
    */
+  @Deprecated(since = "7.3.0", forRemoval = true)
   public String moveToTrash(Node node, SessionProvider sessionProvider, int deep) throws RepositoryException;
+
+  /**
+   * Moves a node to the trash and records what its Recycle Bin shows of it:
+   * the drive it belongs to, the folder it was deleted from, who deleted it
+   * and when, its size and its name. A node deleted from a personal or a space
+   * drive goes to that drive's bin folder, any other one under the trash home.
+   * The shortcuts pointing at the node or at one of its descendants are moved
+   * with it. The move, the recorded facts and the shortcuts are saved together
+   * or not at all. Two things are done before that save and stay when it
+   * fails: the repository's removal actions on the node have run, and the bin
+   * folder of the drive, when it did not exist, has been created. A node of
+   * another workspace than the trash is copied to the trash and then removed
+   * from its workspace, which is not one save: its shortcuts are not moved.
+   *
+   * @param node node to move, read in the session of the user deleting it
+   * @param sessionProvider session provider of the caller
+   * @param deletedBy username of the user deleting the node. When null, the
+   *          user of the node's session is recorded, unless it is the system
+   *          or the anonymous one
+   * @return the trash id of the node, null when the node is itself a deleted
+   *         item of the trash. A node a deleted folder holds is not one: it is
+   *         moved as an item of its own
+   * @throws RepositoryException when the node cannot be moved; a node of the
+   *           trash workspace is then left where it was, with its shortcuts
+   */
+  public String moveToTrash(Node node, SessionProvider sessionProvider, String deletedBy) throws RepositoryException;
+
+  /**
+   * Same as {@link #moveToTrash(Node, SessionProvider, String)}, with the depth
+   * of the call: a depth other than 0 is a move made on behalf of another one
+   * and does not look for the target of a category link.
+   *
+   * @param node node to move
+   * @param sessionProvider session provider of the caller
+   * @param deletedBy username of the user deleting the node, may be null
+   * @param deep depth of the call
+   * @return the trash id of the node, null when the node is itself a deleted
+   *         item of the trash
+   * @throws RepositoryException when the node cannot be moved
+   */
+  public String moveToTrash(Node node, SessionProvider sessionProvider, String deletedBy, int deep) throws RepositoryException;
   
   /**
    * Restore node from trash
@@ -139,16 +186,32 @@ public interface TrashStorage {
 
 
   /**
-   * Updates the restore paths of nodes in the trash workspace when a parent folder has been renamed.
-   * <p>
-   * This method searches for all nodes whose {@code exo:restoreWorkspace} property starts with the given
-   * {@code oldPath}, and replaces that prefix with {@code newPath}. This ensures that nodes in the trash
-   * can be restored correctly even after the original folder has been moved or renamed.
-   * </p>
+   * Makes the nodes of the trash follow a folder that moved or was renamed:
+   * the path each was deleted from is rewritten when it lies under the
+   * folder, and under it only (a folder named foo does not take the nodes of
+   * foobar). Each node is rewritten in a save of its own; one that fails is
+   * reported and the others still follow. An item of a Recycle Bin stays in
+   * the bin of the drive it was deleted from, and keeps the path it had when
+   * the folder leaves that drive.
    *
-   * @param oldPath the old path prefix to look for in the {@code exo:restoreWorkspace} property
-   * @param newPath the new path prefix to replace the old path with
-   * @throws RepositoryException if an error occurs while accessing or updating nodes in the repository
+   * @param oldPath the path the folder had
+   * @param newPath the path the folder has now
+   * @throws RepositoryException when the nodes of the trash cannot be read
    */
   void updateRestorePath(String oldPath, String newPath) throws RepositoryException;
+
+  /**
+   * Gives the items of the trash that lack them the facts the Recycle Bin
+   * lists: the drive they belong to, their deletion date, their size and
+   * their name. Such items were deleted before those facts were recorded, or
+   * by a mover that records none. Who deleted them, the folder they were
+   * deleted from and the permissions they inherited are not known and are
+   * left out; the deletion date is the item's last modification date. An item
+   * is not moved. Each item is saved on its own, an item another run handled
+   * meanwhile is skipped, and a failure on one item does not stop the others.
+   *
+   * @return the number of items given their facts by this run
+   * @throws RepositoryException when the items of the trash cannot be read
+   */
+  int normalizeRecycleBinItems() throws RepositoryException;
 }

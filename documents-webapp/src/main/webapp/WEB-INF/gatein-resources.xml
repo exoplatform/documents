@@ -80,6 +80,60 @@
     </depends>
   </module>
 
+  <!-- The Recycle Bin of the documents: its list, its drawers and its labels.
+       A plain named module (no load-group): each page that opens a Recycle Bin
+       depends on it. -->
+  <module>
+    <name>documentsRecycleBin</name>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsRecycleBin.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>eXoVueI18n</module>
+    </depends>
+    <depends>
+      <module>vuetify</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+    <depends>
+      <module>commons-cometd3</module>
+      <as>cCometd</as>
+    </depends>
+  </module>
+
+  <!-- The entry of the Recycle Bin in the settings of a space. The space settings
+       page requires the modules of its load-group whose name contains
+       SpaceSettingExtension, and calls their init(). -->
+  <module>
+    <name>DocumentsRecycleBinSpaceSettingExtension</name>
+    <load-group>SpaceSettingExtensions</load-group>
+    <script>
+      <minify>false</minify>
+      <path>/js/documentsRecycleBinSpaceSettings.bundle.js</path>
+    </script>
+    <depends>
+      <module>vue</module>
+    </depends>
+    <depends>
+      <module>extensionRegistry</module>
+    </depends>
+    <depends>
+      <module>commonVueComponents</module>
+    </depends>
+    <depends>
+      <module>documentsRecycleBin</module>
+    </depends>
+  </module>
+
   <module>
     <name>DocumentsLeftHeaderExtension</name>
     <load-group>documentLeftHeaderGRP</load-group>
@@ -152,6 +206,9 @@
       </depends>
       <depends>
         <module>categoryVueComponents</module>
+      </depends>
+      <depends>
+        <module>documentsRecycleBin</module>
       </depends>
     </module>
   </portlet>
@@ -240,11 +297,11 @@
   </portlet>
 
   <portlet>
-    <name>TrashManagement</name>
+    <name>DocumentSettings</name>
     <module>
       <script>
         <minify>false</minify>
-        <path>/js/trashManagement.bundle.js</path>
+        <path>/js/documentSettings.bundle.js</path>
       </script>
       <depends>
         <module>commonVueComponents</module>
@@ -262,15 +319,7 @@
         <module>eXoVueI18n</module>
       </depends>
       <depends>
-        <module>jquery</module>
-        <as>$</as>
-      </depends>
-      <depends>
-        <module>applicationToolbarComponent</module>
-      </depends>
-      <depends>
-        <module>commons-cometd3</module>
-        <as>cCometd</as>
+        <module>documentsRecycleBin</module>
       </depends>
     </module>
   </portlet>
@@ -296,6 +345,9 @@
       </depends>
       <depends>
         <module>eXoVueI18n</module>
+      </depends>
+      <depends>
+        <module>documentsRecycleBin</module>
       </depends>
     </module>
   </portlet>

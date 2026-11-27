@@ -20,16 +20,23 @@ import org.exoplatform.container.ExoContainer;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
+import org.exoplatform.documents.service.RecycleBinService;
 import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.util.JCRDocumentsUtil;
 import org.exoplatform.documents.storage.jcr.util.NodeTypeConstants;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
 import org.exoplatform.services.jcr.core.ExtendedNode;
+import org.exoplatform.services.jcr.core.ExtendedSession;
 import org.exoplatform.services.jcr.core.ManageableRepository;
-import org.exoplatform.services.jcr.ext.ActivityTypeUtils;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
+import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
+import org.exoplatform.services.jcr.access.AccessControlEntry;
+import org.exoplatform.services.security.IdentityConstants;
+import org.exoplatform.social.core.identity.model.Identity;
+import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.social.core.space.spi.SpaceService;
 import org.exoplatform.services.jcr.impl.core.ItemImpl;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
@@ -49,7 +56,7 @@ import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
 import static org.exoplatform.documents.storage.jcr.util.NodeTypeConstants.*;
 
@@ -61,13 +68,20 @@ public class TrashStorageImpl implements TrashStorage {
 
   private static final String    TRASH_HOME_PATH         = "trashHomeNodePath";
 
-  private static final String    SELECT_FROM_TRASH_QUERY = "SELECT * FROM nt:base WHERE exo:restorePath IS NOT NULL";
+  private static final Pattern   TRASH_ID_PATTERN        =
+                                                  Pattern.compile("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
 
   private RepositoryService      repositoryService;
 
   private SessionProviderService sessionProviderService;
 
   private ListenerService        listenerService;
+
+  private NodeHierarchyCreator   nodeHierarchyCreator;
+
+  private IdentityManager        identityManager;
+
+  private SpaceService           spaceService;
 
   private String                 trashWorkspace;
 
@@ -76,10 +90,19 @@ public class TrashStorageImpl implements TrashStorage {
   /** The log. */
   private static final Log LOG = ExoLogger.getLogger(TrashStorageImpl.class.getName());
 
-  public TrashStorageImpl(RepositoryService repositoryService, SessionProviderService sessionProviderService, ListenerService listenerService, InitParams initParams) throws PortletInvokerException {
+  public TrashStorageImpl(RepositoryService repositoryService,
+                          SessionProviderService sessionProviderService,
+                          ListenerService listenerService,
+                          NodeHierarchyCreator nodeHierarchyCreator,
+                          IdentityManager identityManager,
+                          SpaceService spaceService,
+                          InitParams initParams) throws PortletInvokerException {
     this.repositoryService = repositoryService;
     this.sessionProviderService = sessionProviderService;
     this.listenerService = listenerService;
+    this.nodeHierarchyCreator = nodeHierarchyCreator;
+    this.identityManager = identityManager;
+    this.spaceService = spaceService;
     this.trashWorkspace = initParams.getValueParam(TRASH_WORKSPACE).getValue();
     this.trashHome = initParams.getValueParam(TRASH_HOME_PATH).getValue();
     ExoContainer manager = ExoContainerContext.getCurrentContainer();
@@ -109,21 +132,274 @@ public class TrashStorageImpl implements TrashStorage {
   /**
    * {@inheritDoc}
    */
+  @Override
+  @Deprecated(since = "7.3.0", forRemoval = true)
   public String moveToTrash(Node node, SessionProvider sessionProvider) throws RepositoryException {
-    return moveToTrash(node, sessionProvider, 0);
+    return moveToTrash(node, sessionProvider, null, 0);
   }
 
   /**
    *{@inheritDoc}
    */
   @Override
+  @Deprecated(since = "7.3.0", forRemoval = true)
   public String moveToTrash(Node node,
                             SessionProvider sessionProvider,
                             int deep) throws RepositoryException {
-    ((SessionImpl)node.getSession()).getActionHandler().preRemoveItem((ItemImpl)node);
-    String trashId = null;
-    String nodeName = node.getName();
+    return moveToTrash(node, sessionProvider, null, deep);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String moveToTrash(Node node, SessionProvider sessionProvider, String deletedBy) throws RepositoryException {
+    return moveToTrash(node, sessionProvider, deletedBy, 0);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public String moveToTrash(Node node,
+                            SessionProvider sessionProvider,
+                            String deletedBy,
+                            int deep) throws RepositoryException {
     Session nodeSession = node.getSession();
+    checkRemovePermission(node, nodeSession);
+    ((SessionImpl) nodeSession).getActionHandler().preRemoveItem((ItemImpl) node);
+    if (node.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION) && isInTrash(node)) {
+      return null;
+    }
+    String nodePath = node.getPath();
+    String nodeWorkspaceName = nodeSession.getWorkspace().getName();
+    String deleter = deletedBy == null ? getSessionUser(nodeSession) : deletedBy;
+    String taxonomyLinkUUID = node.isNodeType(NodeTypeConstants.TAXONOMY_LINK) ? node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString() : null;
+    String taxonomyLinkWS = node.isNodeType(NodeTypeConstants.TAXONOMY_LINK) ? node.getProperty(NodeTypeConstants.EXO_WORKSPACE).getString() : null;
+    ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
+
+    String trashId;
+    // A session of its own, so that a failed move leaves nothing pending for a
+    // later save of the same thread.
+    SessionProvider trashProvider = createSystemProvider();
+    try {
+      Session trashSession = trashProvider.getSession(this.trashWorkspace, manageableRepository);
+      if (trashSession.getWorkspace().getName().equals(nodeWorkspaceName)) {
+        trashId = moveToTrashInOneSave(trashSession, trashProvider, nodePath, nodeWorkspaceName, deleter);
+      } else {
+        trashId = cloneToTrash(node, trashSession, trashProvider, manageableRepository, nodeWorkspaceName, deleter);
+      }
+    } finally {
+      trashProvider.close();
+    }
+
+    //check and delete target node when there is no its symlink
+    if (deep == 0 && taxonomyLinkUUID != null && taxonomyLinkWS != null) {
+      Session targetNodeSession = sessionProvider.getSession(taxonomyLinkWS, manageableRepository);
+      Node targetNode = null;
+      try {
+        targetNode = targetNodeSession.getNodeByUUID(taxonomyLinkUUID);
+      } catch (Exception e) {
+        if (LOG.isWarnEnabled()) {
+          LOG.warn(e.getMessage());
+        }
+      }
+      if (targetNode != null) {
+        List<Node> symlinks = getAllLinks(targetNode, NodeTypeConstants.EXO_SYMLINK, sessionProvider);
+        boolean found = false;
+        for (Node symlink : symlinks)
+          if (!symlink.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION)) {
+            found = true;
+            break;
+          }
+        if (!found) {
+          this.moveToTrash(targetNode, sessionProvider, deleter);
+        }
+      }
+    }
+    return trashId;
+  }
+
+  /**
+   * Moves a node of the trash workspace, and the shortcuts pointing at it or
+   * at one of its descendants, to the trash, and records what the Recycle Bin
+   * keeps of them, in one save of the given session. On a failure the pending
+   * changes are discarded and nothing has moved.
+   */
+  private String moveToTrashInOneSave(Session trashSession,
+                                      SessionProvider trashProvider,
+                                      String nodePath,
+                                      String nodeWorkspaceName,
+                                      String deleter) throws RepositoryException {
+    String trashId = java.util.UUID.randomUUID().toString();
+    List<Node> trashedNodes = new ArrayList<>();
+    try {
+      Node source = (Node) trashSession.getItem(nodePath);
+      String restorePath = fixRestorePath(nodePath);
+      String ownerId = JCRDocumentsUtil.resolveRecycleBinOwner(restorePath,
+                                                              nodeHierarchyCreator,
+                                                              identityManager,
+                                                              spaceService,
+                                                              trashProvider);
+      Node destination = getDestination(ownerId, trashSession, trashProvider);
+      Calendar deletedDate = Calendar.getInstance();
+      boolean broadcastRemoval = isRemovalBroadcast(source);
+      List<String> permissions = readInheritedPermissions(source);
+      String parentId = getReferenceableParentId(source);
+      String name = JCRDocumentsUtil.getTitle(source).toLowerCase(Locale.ROOT);
+      Map<String, Node> shortcuts = source.isNodeType(NodeTypeConstants.EXO_SYMLINK) ? null : new TreeMap<>(Comparator.reverseOrder());
+      long size = measureItem(source, nodePath, nodeWorkspaceName, trashSession, shortcuts, true);
+
+      markAsBinItem(source);
+      Node trashed = moveInto(trashSession, nodePath, destination, source.getName());
+      writeRestoreLocation(trashed, restorePath, nodeWorkspaceName, trashId);
+      setOrRemoveProperty(trashed, NodeTypeConstants.RECYCLE_BIN_OWNER, ownerId);
+      setOrRemoveProperty(trashed, NodeTypeConstants.RESTORE_PARENT_ID, parentId);
+      setOrRemoveProperty(trashed, NodeTypeConstants.DELETED_BY, deleter);
+      setOrRemoveProperty(trashed, NodeTypeConstants.RECYCLE_BIN_OF, null);
+      trashed.setProperty(NodeTypeConstants.DELETED_DATE, deletedDate);
+      trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_SIZE, size);
+      trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_NAME, name);
+      if (permissions == null) {
+        if (trashed.hasProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS)) {
+          trashed.getProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS).remove();
+        }
+      } else {
+        trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS, permissions.toArray(new String[0]));
+      }
+      if (broadcastRemoval) {
+        trashedNodes.add(trashed);
+      }
+
+      if (shortcuts != null) {
+        // The paths are walked in descending order, so that moving a shortcut
+        // never renumbers a same-name sibling still to move.
+        for (Node shortcut : shortcuts.values()) {
+          boolean broadcastShortcutRemoval = isRemovalBroadcast(shortcut);
+          Node trashedShortcut = moveShortcutToTrash(trashSession, shortcut, destination, nodeWorkspaceName, trashId, deleter, deletedDate);
+          if (broadcastShortcutRemoval) {
+            trashedNodes.add(trashedShortcut);
+          }
+        }
+      }
+      trashSession.save();
+      reportItemTrashed(ownerId, size);
+    } catch (RepositoryException | RuntimeException e) {
+      trashSession.refresh(false);
+      throw e;
+    }
+    // The listeners are told once the move is saved: a failing one is logged
+    // and does not undo it.
+    for (Node trashedNode : trashedNodes) {
+      try {
+        listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, trashedNode);
+      } catch (Exception e) {
+        LOG.error("A listener of the removal of {} failed", trashedNode, e);
+      }
+    }
+    return trashId;
+  }
+
+  /**
+   * The trash workspace is not the node's: the node is cloned into the trash
+   * then removed from its workspace, as two operations. A failure between them
+   * leaves the node in both.
+   */
+  private String cloneToTrash(Node node,
+                              Session trashSession,
+                              SessionProvider trashProvider,
+                              ManageableRepository manageableRepository,
+                              String nodeWorkspaceName,
+                              String deleter) throws RepositoryException {
+    String trashId = java.util.UUID.randomUUID().toString();
+    String nodePath = node.getPath();
+    String nodeName = node.getName();
+    String restorePath = fixRestorePath(nodePath);
+    boolean broadcastRemoval = isRemovalBroadcast(node);
+    Node trashed;
+    try {
+      Session sourceSession = trashProvider.getSession(nodeWorkspaceName, manageableRepository);
+      Node source = (Node) sourceSession.getItem(nodePath);
+      String ownerId = JCRDocumentsUtil.resolveRecycleBinOwner(restorePath,
+                                                              nodeHierarchyCreator,
+                                                              identityManager,
+                                                              spaceService,
+                                                              trashProvider);
+      Node destination = getDestination(ownerId, trashSession, trashProvider);
+      List<String> permissions = readInheritedPermissions(source);
+      String parentId = getReferenceableParentId(source);
+      String name = JCRDocumentsUtil.getTitle(source).toLowerCase(Locale.ROOT);
+      long size = measureItem(source, nodePath, nodeWorkspaceName, sourceSession, null, false);
+
+      String destinationPath = destination.getPath() + "/" + nodeName;
+      trashSession.getWorkspace().clone(nodeWorkspaceName, nodePath, destinationPath, true);
+      node.remove();
+      trashed = getLastSameNameNode(destination, nodeName);
+      writeRestoreLocation(trashed, restorePath, nodeWorkspaceName, trashId);
+      if (!trashed.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
+        trashed.addMixin(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM);
+      }
+      setOrRemoveProperty(trashed, NodeTypeConstants.RECYCLE_BIN_OWNER, ownerId);
+      setOrRemoveProperty(trashed, NodeTypeConstants.RESTORE_PARENT_ID, parentId);
+      setOrRemoveProperty(trashed, NodeTypeConstants.DELETED_BY, deleter);
+      setOrRemoveProperty(trashed, NodeTypeConstants.RECYCLE_BIN_OF, null);
+      trashed.setProperty(NodeTypeConstants.DELETED_DATE, Calendar.getInstance());
+      trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_SIZE, size);
+      trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_NAME, name);
+      if (permissions != null) {
+        trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS, permissions.toArray(new String[0]));
+      } else if (trashed.hasProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS)) {
+        trashed.getProperty(NodeTypeConstants.RECYCLE_BIN_PERMISSIONS).remove();
+      }
+      trashSession.save();
+      reportItemTrashed(ownerId, size);
+    } catch (RepositoryException | RuntimeException e) {
+      trashSession.refresh(false);
+      throw e;
+    }
+    // The listeners are told once the node is in the trash, as for a node of
+    // the trash workspace.
+    if (broadcastRemoval) {
+      try {
+        listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, trashed);
+      } catch (Exception e) {
+        LOG.error("A listener of the removal of {} failed", trashed, e);
+      }
+    }
+    return trashId;
+  }
+
+  /**
+   * Tells the Recycle Bin service that an item joined the bin of a drive, for
+   * it to count it. The item is in the trash whatever happens here: a service
+   * that is not there, as in a container that does not hold it, or that
+   * fails, is reported and the count is corrected by the daily run.
+   */
+  private void reportItemTrashed(String ownerId, long size) {
+    if (ownerId == null) {
+      return;
+    }
+    try {
+      RecycleBinService recycleBinService = getRecycleBinService();
+      if (recycleBinService == null) {
+        LOG.warn("The Recycle Bin service is not available: an item deleted from the drive {} is not counted in its bin", ownerId);
+      } else {
+        recycleBinService.itemTrashed(Long.parseLong(ownerId), size);
+      }
+    } catch (Exception e) {
+      LOG.warn("An item deleted from the drive {} could not be counted in its bin", ownerId, e);
+    }
+  }
+
+  /**
+   * The service is looked for when it is needed and never kept: it lives in a
+   * container that starts after this component.
+   */
+  RecycleBinService getRecycleBinService() {
+    return ExoContainerContext.getService(RecycleBinService.class);
+  }
+
+  private void checkRemovePermission(Node node, Session nodeSession) throws RepositoryException {
     try {
       nodeSession.checkPermission(node.getPath(), PermissionType.REMOVE);
     } catch (AccessControlException e) {
@@ -136,76 +412,343 @@ public class TrashStorageImpl implements TrashStorage {
         throw e;
       }
     }
-    if (deep == 0 && !node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-      try {
-        removeDeadSymlinks(node);
-      } catch (Exception e) {
-        if (LOG.isWarnEnabled()) {
-          LOG.warn(e.getMessage());
-        }
+  }
+
+  private String getSessionUser(Session session) {
+    String userId = session.getUserID();
+    if (userId == null || userId.isBlank() || IdentityConstants.SYSTEM.equals(userId) || IdentityConstants.ANONIM.equals(userId)) {
+      return null;
+    }
+    return userId;
+  }
+
+  private boolean isRemovalBroadcast(Node node) throws RepositoryException {
+    if (node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE) || node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+      return isBroadcastNTFileEvents(node);
+    }
+    return true;
+  }
+
+  /**
+   * The bin folder of the drive's owner, created when it does not exist yet,
+   * or the trash home for a node deleted from no personal or space drive.
+   */
+  private Node getDestination(String ownerId, Session trashSession, SessionProvider trashProvider) throws RepositoryException {
+    Node destination = null;
+    if (ownerId != null) {
+      Identity ownerIdentity = identityManager.getIdentity(ownerId);
+      if (ownerIdentity != null) {
+        destination = JCRDocumentsUtil.getRecycleBinFolder(ownerIdentity,
+                                                          trashSession,
+                                                          this.trashHome,
+                                                          nodeHierarchyCreator,
+                                                          spaceService,
+                                                          trashProvider,
+                                                          true);
       }
     }
+    return destination == null ? (Node) trashSession.getItem(this.trashHome) : destination;
+  }
+
+  /**
+   * The effective permission entries of a node that carries none of its own:
+   * once in the trash it takes the entries of its bin folder, so the ones it
+   * had are kept for its restore. A node with permissions of its own keeps
+   * them through the move.
+   */
+  private List<String> readInheritedPermissions(Node node) throws RepositoryException {
+    if (node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+      return null; // NOSONAR null tells "none recorded" from "no entry"
+    }
+    List<String> permissions = new ArrayList<>();
+    for (AccessControlEntry entry : ((ExtendedNode) node).getACL().getPermissionEntries()) {
+      permissions.add(entry.getIdentity() + " " + entry.getPermission());
+    }
+    return permissions;
+  }
+
+  private String getReferenceableParentId(Node node) throws RepositoryException {
     try {
-      if (node.getPrimaryNodeType().getName().equals(NodeTypeConstants.NT_FILE) || node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-        if (isBroadcastNTFileEvents(node)) {
-          listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, node);
-        }
-      } else{
-        listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, node);
-      }
-    } catch (Exception e) {
-      LOG.error(e.getMessage());
+      Node parent = node.getParent();
+      return parent.isNodeType(NodeTypeConstants.MIX_REFERENCEABLE) ? parent.getUUID() : null;
+    } catch (ItemNotFoundException e) {
+      return null;
     }
-    String nodeWorkspaceName = nodeSession.getWorkspace().getName();
+  }
+
+  /**
+   * Walks an item about to be trashed and returns its size: the content length
+   * of a file, the sum of its files for a folder, versions left out. On the
+   * way it collects the shortcuts pointing at the item or at a descendant
+   * (when a map is given) and removes the Recycle Bin marks a descendant still
+   * carries from an earlier stay in the trash (when asked to).
+   */
+  private long measureItem(Node item,
+                           String itemPath,
+                           String workspaceName,
+                           Session session,
+                           Map<String, Node> shortcuts,
+                           boolean removeStaleMarks) throws RepositoryException {
+    long size = 0;
+    Deque<Node> nodes = new ArrayDeque<>();
+    nodes.add(item);
+    boolean descendant = false;
+    while (!nodes.isEmpty()) {
+      Node node = nodes.poll();
+      if (descendant && removeStaleMarks) {
+        if (node.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
+          node.removeMixin(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM);
+        }
+        if (node.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION)) {
+          node.removeMixin(NodeTypeConstants.EXO_RESTORE_LOCATION);
+        }
+      }
+      descendant = true;
+      if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
+        continue;
+      }
+      if (shortcuts != null) {
+        collectShortcuts(node, itemPath, workspaceName, session, shortcuts);
+      }
+      if (node.isNodeType(NodeTypeConstants.NT_FILE)) {
+        size += getContentLength(node);
+      } else if (JCRDocumentsUtil.isFolder(node)) {
+        for (NodeIterator children = node.getNodes(); children.hasNext();) {
+          nodes.add(children.nextNode());
+        }
+      }
+    }
+    return size;
+  }
+
+  private long getContentLength(Node file) throws RepositoryException {
+    if (file.hasNode(NodeTypeConstants.JCR_CONTENT)) {
+      Node content = file.getNode(NodeTypeConstants.JCR_CONTENT);
+      if (content.hasProperty(NodeTypeConstants.JCR_DATA)) {
+        return content.getProperty(NodeTypeConstants.JCR_DATA).getLength();
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * Adds the shortcuts pointing at a node, keyed by their path. A shortcut
+   * already in the trash is left there, and one stored inside the item moves
+   * with it as any descendant.
+   */
+  private void collectShortcuts(Node target,
+                                String itemPath,
+                                String workspaceName,
+                                Session session,
+                                Map<String, Node> shortcuts) throws RepositoryException {
+    String statement = "SELECT * FROM " + NodeTypeConstants.EXO_SYMLINK + " WHERE " + NodeTypeConstants.EXO_SYMLINK_UUID + "='"
+        + ((ExtendedNode) target).getIdentifier() + "' AND " + NodeTypeConstants.EXO_WORKSPACE + "='" + workspaceName.replace("'", "''")
+        + "'";
+    Query query = session.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+    for (NodeIterator links = query.execute().getNodes(); links.hasNext();) {
+      Node link = links.nextNode();
+      String linkPath = link.getPath();
+      if (!linkPath.startsWith(this.trashHome + "/") && !linkPath.startsWith(itemPath + "/")) {
+        shortcuts.put(linkPath, link);
+      }
+    }
+  }
+
+  /**
+   * Moves a shortcut to the trash with the item whose deletion causes it. It
+   * is stored beside that item and named after it by exo:recycleBinOf: it
+   * belongs to no bin and has no size, and comes back or leaves with the item.
+   */
+  private Node moveShortcutToTrash(Session trashSession,
+                                   Node shortcut,
+                                   Node destination,
+                                   String workspaceName,
+                                   String itemTrashId,
+                                   String deleter,
+                                   Calendar deletedDate) throws RepositoryException {
+    String shortcutPath = shortcut.getPath();
+    String parentId = getReferenceableParentId(shortcut);
+    markAsBinItem(shortcut);
+    Node trashed = moveInto(trashSession, shortcutPath, destination, shortcut.getName());
+    writeRestoreLocation(trashed, fixRestorePath(shortcutPath), workspaceName, java.util.UUID.randomUUID().toString());
+    trashed.setProperty(NodeTypeConstants.RECYCLE_BIN_OF, itemTrashId);
+    trashed.setProperty(NodeTypeConstants.DELETED_DATE, deletedDate);
+    setOrRemoveProperty(trashed, NodeTypeConstants.DELETED_BY, deleter);
+    setOrRemoveProperty(trashed, NodeTypeConstants.RESTORE_PARENT_ID, parentId);
+    setOrRemoveProperty(trashed, NodeTypeConstants.RECYCLE_BIN_OWNER, null);
+    return trashed;
+  }
+
+  /**
+   * Gives a node the mixins of an item of the bin before it is moved to the
+   * trash. Moved and given a mixin in the same save, a node whose permissions
+   * change with the move is rewritten by the cache of the repository with
+   * what it holds at the paths it had before the move, and the removal of the
+   * node is then refused.
+   */
+  private void markAsBinItem(Node node) throws RepositoryException {
+    for (String mixin : List.of(NodeTypeConstants.EXO_RESTORE_LOCATION, NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
+      if (!node.isNodeType(mixin)) {
+        node.addMixin(mixin);
+      }
+    }
+  }
+
+  private Node moveInto(Session session, String sourcePath, Node destination, String name) throws RepositoryException {
+    session.move(sourcePath, destination.getPath() + "/" + name);
+    return getLastSameNameNode(destination, name);
+  }
+
+  /**
+   * Several items of one bin folder may bear the same name: the one just
+   * moved in is the last of them.
+   */
+  private Node getLastSameNameNode(Node parent, String name) throws RepositoryException {
+    Node last = null;
+    for (NodeIterator nodes = parent.getNodes(name); nodes.hasNext();) {
+      Node node = nodes.nextNode();
+      if (last == null || last.getIndex() < node.getIndex()) {
+        last = node;
+      }
+    }
+    if (last == null) {
+      throw new ItemNotFoundException("No node named " + name + " under " + parent.getPath());
+    }
+    return last;
+  }
+
+  private void writeRestoreLocation(Node node, String restorePath, String workspaceName, String trashId) throws RepositoryException {
     if (!node.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION)) {
-      String restorePath = fixRestorePath(node.getPath());
-      ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-      Session trashSession = sessionProviderService.getSystemSessionProvider(null).getSession(this.trashWorkspace, manageableRepository);
-      String actualTrashPath = this.trashHome + (this.trashHome.endsWith("/") ? "" : "/")
-          + fixRestorePath(nodeName);
-      if (trashSession.getWorkspace().getName().equals(
-          nodeSession.getWorkspace().getName())) {
-        trashSession.getWorkspace().move(node.getPath(),
-            actualTrashPath);
-      } else {
-        //clone node in trash folder
-        trashSession.getWorkspace().clone(nodeWorkspaceName,
-            node.getPath(), actualTrashPath, true);
-        node.remove();
-      }
-      trashId = addRestorePathInfo(nodeName, restorePath, nodeWorkspaceName);
-      trashSession.save();
-
-      //check and delete target node when there is no its symlink
-      String taxonomyLinkUUID = node.isNodeType(NodeTypeConstants.TAXONOMY_LINK) ? node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString() : null;
-      String taxonomyLinkWS = node.isNodeType(NodeTypeConstants.TAXONOMY_LINK) ? node.getProperty(NodeTypeConstants.EXO_WORKSPACE).getString() : null;
-      if (deep == 0 && taxonomyLinkUUID != null && taxonomyLinkWS != null) {
-        Session targetNodeSession = sessionProvider.getSession(taxonomyLinkWS, manageableRepository);
-        Node targetNode = null;
-        try {
-          targetNode = targetNodeSession.getNodeByUUID(taxonomyLinkUUID);
-        } catch (Exception e) {
-          if (LOG.isWarnEnabled()) {
-            LOG.warn(e.getMessage());
-          }
-        }
-        if (targetNode != null) {
-          List<Node> symlinks = getAllLinks(targetNode, NodeTypeConstants.EXO_SYMLINK, sessionProvider);
-          boolean found = false;
-          for (Node symlink : symlinks)
-            if (!symlink.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION)) {
-              found = true;
-              break;
-            }
-          if (!found) {
-            this.moveToTrash(targetNode, sessionProvider);
-          }
-        }
-      }
-
-      trashSession.save();
+      node.addMixin(NodeTypeConstants.EXO_RESTORE_LOCATION);
     }
-    return trashId;
+    node.setProperty(NodeTypeConstants.RESTORE_PATH, restorePath);
+    node.setProperty(NodeTypeConstants.RESTORE_WORKSPACE, workspaceName);
+    node.setProperty(NodeTypeConstants.TRASH_ID, trashId);
+  }
+
+  private void setOrRemoveProperty(Node node, String name, String value) throws RepositoryException {
+    if (value != null) {
+      node.setProperty(name, value);
+    } else if (node.hasProperty(name)) {
+      node.getProperty(name).remove();
+    }
+  }
+
+  /**
+   * A system session provider of its own for one operation on the trash,
+   * closed by its caller.
+   */
+  SessionProvider createSystemProvider() {
+    return SessionProvider.createSystemProvider();
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public int normalizeRecycleBinItems() throws RepositoryException {
+    int normalized = 0;
+    SessionProvider trashProvider = createSystemProvider();
+    try {
+      Session trashSession = trashProvider.getSession(this.trashWorkspace, repositoryService.getCurrentRepository());
+      // The mixin is also carried outside the trash: the path keeps the
+      // statement to the trash home and its bin folders.
+      String statement = "SELECT * FROM " + NodeTypeConstants.EXO_RESTORE_LOCATION + " WHERE jcr:path LIKE '" + this.trashHome
+          + "/%'";
+      Query query = trashSession.getWorkspace().getQueryManager().createQuery(statement, Query.SQL);
+      List<String> itemIds = new ArrayList<>();
+      for (NodeIterator nodes = query.execute().getNodes(); nodes.hasNext();) {
+        Node node = nodes.nextNode();
+        if (lacksRecycleBinFacts(node)) {
+          itemIds.add(((ExtendedNode) node).getIdentifier());
+        }
+      }
+      for (String itemId : itemIds) {
+        if (normalizeRecycleBinItem(trashSession, trashProvider, itemId)) {
+          normalized++;
+        }
+      }
+    } finally {
+      trashProvider.close();
+    }
+    return normalized;
+  }
+
+  /**
+   * Whether a node is an entry of the trash, listed as one item: it carries
+   * the restore location, is not a bin folder, and sits right under the trash
+   * home or under a bin folder. What a deleted folder holds is no entry.
+   */
+  private boolean isTrashEntry(Node node) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.EXO_RESTORE_LOCATION) || node.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_FOLDER)) {
+      return false;
+    }
+    Node parent = node.getParent();
+    return this.trashHome.equals(parent.getPath()) || parent.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_FOLDER);
+  }
+
+  private boolean lacksRecycleBinFacts(Node node) throws RepositoryException {
+    return !node.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM) && isTrashEntry(node);
+  }
+
+  private boolean normalizeRecycleBinItem(Session trashSession, SessionProvider trashProvider, String itemId) {
+    try {
+      Node item = ((ExtendedSession) trashSession).getNodeByIdentifier(itemId);
+      if (!lacksRecycleBinFacts(item)) {
+        return false;
+      }
+      String workspaceName = item.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE) ? item.getProperty(NodeTypeConstants.RESTORE_WORKSPACE).getString()
+                                                                                   : trashSession.getWorkspace().getName();
+      String ownerId = item.hasProperty(NodeTypeConstants.RESTORE_PATH) ? JCRDocumentsUtil.resolveRecycleBinOwner(item.getProperty(NodeTypeConstants.RESTORE_PATH)
+                                                                                                                     .getString(),
+                                                                                                                 nodeHierarchyCreator,
+                                                                                                                 identityManager,
+                                                                                                                 spaceService,
+                                                                                                                 trashProvider)
+                                                                        : null;
+      // The date the item went to the trash was not kept: its last
+      // modification is the closest date it carries, read before it is written.
+      Calendar deletedDate = item.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE) ? item.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate()
+                                                                                         : Calendar.getInstance();
+      long size = measureItem(item, item.getPath(), workspaceName, trashSession, null, false);
+      String name = JCRDocumentsUtil.getTitle(item).toLowerCase(Locale.ROOT);
+
+      item.addMixin(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM);
+      setOrRemoveProperty(item, NodeTypeConstants.RECYCLE_BIN_OWNER, ownerId);
+      item.setProperty(NodeTypeConstants.DELETED_DATE, deletedDate);
+      item.setProperty(NodeTypeConstants.RECYCLE_BIN_SIZE, size);
+      item.setProperty(NodeTypeConstants.RECYCLE_BIN_NAME, name);
+      if (!item.hasProperty(NodeTypeConstants.TRASH_ID)) {
+        item.setProperty(NodeTypeConstants.TRASH_ID, java.util.UUID.randomUUID().toString());
+      }
+      trashSession.save();
+      return true;
+    } catch (RepositoryException | RuntimeException e) {
+      discardAndReportNormalizationFailure(trashSession, itemId, e);
+      return false;
+    }
+  }
+
+  /**
+   * A run on another node may have given the item its facts first, which
+   * fails this run's save: the item is then read again, and only an item
+   * still lacking its facts is a failure worth a warning.
+   */
+  private void discardAndReportNormalizationFailure(Session trashSession, String itemId, Exception failure) {
+    try {
+      trashSession.refresh(false);
+      Node item = ((ExtendedSession) trashSession).getNodeByIdentifier(itemId);
+      if (item.isNodeType(NodeTypeConstants.EXO_RECYCLE_BIN_ITEM)) {
+        LOG.debug("The item {} of the trash was given its Recycle Bin facts meanwhile", itemId);
+        return;
+      }
+    } catch (ItemNotFoundException e) {
+      LOG.debug("The item {} of the trash no longer exists", itemId);
+      return;
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.debug("The item {} of the trash could not be read again", itemId, e);
+    }
+    LOG.warn("The item {} of the trash could not be given its Recycle Bin facts: it is tried again at the next daily run", itemId, failure);
   }
 
   /**
@@ -222,8 +765,7 @@ public class TrashStorageImpl implements TrashStorage {
    * {@inheritDoc}
    */
   public List<Node> getAllNodeInTrash(SessionProvider sessionProvider) throws RepositoryException {
-    StringBuilder query = new StringBuilder(SELECT_FROM_TRASH_QUERY);
-    return selectNodesByQuery(sessionProvider, query.toString(), Query.SQL);
+    return selectNodesByQuery(sessionProvider, selectFromTrash(), Query.SQL);
   }
 
   /**
@@ -231,8 +773,9 @@ public class TrashStorageImpl implements TrashStorage {
    */
   public List<Node> getAllNodeInTrashByUser(SessionProvider sessionProvider,
                                             String userName) throws RepositoryException {
-    StringBuilder query = new StringBuilder(
-        "SELECT * FROM nt:base WHERE exo:restorePath IS NOT NULL AND exo:lastModifier='").append(userName).append("'");
+    StringBuilder query = new StringBuilder(selectFromTrash()).append(" AND exo:lastModifier='")
+                                                              .append(userName.replace("'", "''"))
+                                                              .append("'");
     return selectNodesByQuery(sessionProvider, query.toString(), Query.SQL);
   }
 
@@ -281,6 +824,10 @@ public class TrashStorageImpl implements TrashStorage {
   }
 
   public Node getNodeByTrashId(String trashId) throws RepositoryException {
+    // A trash id is a UUID: anything else names no node and is not written into a statement.
+    if (trashId == null || !TRASH_ID_PATTERN.matcher(trashId).matches()) {
+      return null;
+    }
     QueryResult queryResult;
     NodeIterator iter;
     SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
@@ -288,7 +835,7 @@ public class TrashStorageImpl implements TrashStorage {
                     repositoryService.getCurrentRepository());
     QueryManager queryManager = session.getWorkspace().getQueryManager();
     StringBuilder sb = new StringBuilder();
-    sb.append("SELECT * from exo:restoreLocation WHERE exo:trashId = '").append(trashId).append("'");
+    sb.append("SELECT * FROM exo:restoreLocation WHERE jcr:path LIKE '").append(this.trashHome).append("/%' AND exo:trashId = '").append(trashId).append("'");
     QueryImpl query = (QueryImpl) queryManager.createQuery(sb.toString(), Query.SQL);
     query.setLimit(1);
     queryResult = query.execute();
@@ -326,27 +873,6 @@ public class TrashStorageImpl implements TrashStorage {
     }
   }
 
-  /**
-   * Remove deleted Symlink from Trash
-   * @param node
-   * @throws Exception
-   */
-  private void removeDeadSymlinksFromTrash(Node node) throws RepositoryException {
-    List<Node> symlinks = getAllLinks(node, NodeTypeConstants.EXO_SYMLINK);
-    for (Node symlink : symlinks) {
-      symlink.remove();
-      try {
-        listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, symlink);
-      } catch (Exception e) {
-        LOG.error(e.getMessage());
-      }
-    }
-  }
-
-  public void removeDeadSymlinks(Node node) throws RepositoryException {
-    removeDeadSymlinks(node, true);
-  }
-
   @Override
   public List<Node> getTrashElements(TrashElementNodeFilter trashElementNodeFilter) throws RepositoryException {
     String mappedSortField = switch (trashElementNodeFilter.getSortField()) {
@@ -355,7 +881,7 @@ public class TrashStorageImpl implements TrashStorage {
     };
     String sortDirection = trashElementNodeFilter.isAscending() ? "ASC" : "DESC";
     // all trash elements has the property exo:restorePath, it is added during the move te trash
-    StringBuilder sb = new StringBuilder(SELECT_FROM_TRASH_QUERY);
+    StringBuilder sb = new StringBuilder(selectFromTrash());
     sb.append(" ORDER BY ").append(mappedSortField).append(" ").append(sortDirection);
 
     List<Node> result = new ArrayList<>();
@@ -385,7 +911,7 @@ public class TrashStorageImpl implements TrashStorage {
   @Override
   public int countDeletedDocuments() {
     try {
-      StringBuilder sb = new StringBuilder(SELECT_FROM_TRASH_QUERY);
+      StringBuilder sb = new StringBuilder(selectFromTrash());
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
       Session session = sessionProvider.getSession(this.trashWorkspace, manageableRepository);
@@ -397,6 +923,15 @@ public class TrashStorageImpl implements TrashStorage {
       LOG.error("Error occurred when counting trash elements", e.getMessage());
       return 0;
     }
+  }
+
+  /**
+   * The statement every listing of the trash starts with. The restore path is
+   * also carried by nodes outside the trash: the path keeps the statement to
+   * the trash home and what it holds.
+   */
+  private String selectFromTrash() {
+    return "SELECT * FROM nt:base WHERE jcr:path LIKE '" + this.trashHome + "/%' AND exo:restorePath IS NOT NULL";
   }
 
   private boolean isDocumentNodeType(Node node) throws RepositoryException {
@@ -416,83 +951,6 @@ public class TrashStorageImpl implements TrashStorage {
       }
     }
     return result;
-  }
-
-  /**
-   * Remove all the link of a deleted node
-   * @param node
-   * @param keepInTrash true if the link will be move to trash, otherwise set by false
-   * @throws RepositoryException
-   */
-  private void removeDeadSymlinks(Node node, boolean keepInTrash) throws RepositoryException {
-    if (isInTrash(node)) {
-      removeDeadSymlinksFromTrash(node);
-      return;
-    }
-    SessionProvider sessionProvider = SessionProvider.createSystemProvider();
-    Queue<Node> queue = new LinkedList<>();
-    queue.add(node);
-
-    try {
-      while (!queue.isEmpty()) {
-        node = queue.poll();
-        if (!node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
-          removeSymlinks(node, keepInTrash, sessionProvider);
-          for (NodeIterator iter = node.getNodes(); iter.hasNext(); ) {
-            queue.add(iter.nextNode());
-          }
-        }
-      }
-    } catch (Exception e) {
-      if (LOG.isWarnEnabled()) {
-        LOG.warn(e.getMessage());
-      }
-    } finally {
-      sessionProvider.close();
-    }
-  }
-
-  private void removeSymlinks(Node node, boolean keepInTrash, SessionProvider sessionProvider) {
-    try {
-      List<Node> symlinks = getAllLinks(node, NodeTypeConstants.EXO_SYMLINK, sessionProvider);
-      // Before removing symlinks, We order symlinks by name descending, index descending.
-      // Example: symlink[3],symlink[2], symlink[1] to avoid the case that
-      // the index of same name symlink automatically changed to increasing one by one
-      symlinks = symlinks.stream().sorted(this::compare).filter(Objects::nonNull).collect(Collectors.toList());
-      for (Node symlink : symlinks) {
-        synchronized (symlink) {
-          if (keepInTrash) {
-            moveToTrash(symlink, sessionProvider, 1);
-          } else {
-            if (symlink.isNodeType(ActivityTypeUtils.EXO_ACTIVITY_INFO) && node.hasProperty(ActivityTypeUtils.EXO_ACTIVITY_ID)) {
-              listenerService.broadcast(FILE_REMOVE_ACTIVITY, null, symlink);
-            }
-            Session nodeSession = symlink.getSession();
-            symlink.remove();
-            nodeSession.save();
-          }
-        }
-      }
-    } catch (Exception e) {
-      if (LOG.isWarnEnabled()) {
-        LOG.warn(e.getMessage());
-      }
-    }
-  }
-
-  private int compare(Node node1, Node node2) {
-    try {
-      String name1 = node1.getName();
-      String name2 = node2.getName();
-      if (name1.equals(name2)) {
-        int index1 = node1.getIndex();
-        int index2 = node2.getIndex();
-        return -1 * ((Integer)index1).compareTo(index2);
-      }
-      return -1 * name1.compareTo(name2);
-    } catch (RepositoryException e) {
-      return 0;
-    }
   }
 
   private List<Node> selectNodesByQuery(SessionProvider sessionProvider,
@@ -525,37 +983,6 @@ public class TrashStorageImpl implements TrashStorage {
       return path;
     }
     return path.substring(0, leftBracket);
-  }
-
-  /** Store original path of deleted node.
-   * Return restore_id of deleted node. Use when find node in trash to undo
-   * @param nodeName name of removed node
-   * @param restorePath path of node before removing
-   * @param nodeWs node workspace before removing
-   * @throws RepositoryException
-   */
-  private String addRestorePathInfo(String nodeName, String restorePath, String nodeWs) throws RepositoryException {
-    String restoreId = java.util.UUID.randomUUID().toString();
-    NodeIterator nodes = this.getTrashHomeNode().getNodes(nodeName);
-    Node node = null;
-    while (nodes.hasNext()) {
-      Node currentNode = nodes.nextNode();
-      if (node == null) {
-        node = currentNode;
-      } else {
-        if (node.getIndex() < currentNode.getIndex()) {
-          node = currentNode;
-        }
-      }
-    }
-    if (node != null) {
-      node.addMixin(NodeTypeConstants.EXO_RESTORE_LOCATION);
-      node.setProperty(NodeTypeConstants.RESTORE_PATH, restorePath);
-      node.setProperty(NodeTypeConstants.RESTORE_WORKSPACE, nodeWs);
-      node.setProperty(NodeTypeConstants.TRASH_ID, restoreId);
-      node.save();
-    }
-    return restoreId;
   }
 
   private void removeMixinRestoreLocation(Session session, String restorePath) throws RepositoryException {
@@ -658,33 +1085,73 @@ public class TrashStorageImpl implements TrashStorage {
 
   @Override
   public void updateRestorePath(String oldPath, String newPath) throws RepositoryException {
-    SessionProvider sessionProvider = sessionProviderService.getSystemSessionProvider(null);
-    Session session = sessionProvider.getSession(this.trashWorkspace, repositoryService.getCurrentRepository());
+    String movedPath = oldPath.startsWith("/") ? oldPath : "/" + oldPath;
+    // A session of its own, so that a rewrite that fails leaves nothing
+    // pending for a later save of the same thread.
+    SessionProvider trashProvider = createSystemProvider();
+    try {
+      Session trashSession = trashProvider.getSession(this.trashWorkspace, repositoryService.getCurrentRepository());
+      // The statement only narrows the candidates: a pattern reads the
+      // characters of the path its own way, so each one is checked again.
+      String statement = "SELECT * FROM " + NodeTypeConstants.EXO_RESTORE_LOCATION + " WHERE jcr:path LIKE '" + this.trashHome + "/%' AND "
+          + NodeTypeConstants.RESTORE_PATH + " LIKE '" + escapeLikePattern(movedPath) + "/%' ESCAPE '\\'";
+      List<String> candidateIds = new ArrayList<>();
+      NodeIterator candidates = trashSession.getWorkspace().getQueryManager().createQuery(statement, Query.SQL).execute().getNodes();
+      while (candidates.hasNext()) {
+        candidateIds.add(((ExtendedNode) candidates.nextNode()).getIdentifier());
+      }
+      for (String candidateId : candidateIds) {
+        followFolderMove(trashSession, trashProvider, candidateId, movedPath, newPath);
+      }
+    } finally {
+      trashProvider.close();
+    }
+  }
 
-    String safePath = oldPath.startsWith("/") ? oldPath : "/" + oldPath;
-    String queryStr = """
-                        SELECT * FROM exo:restoreLocation
-                        WHERE jcr:path LIKE '%s/%%'
-                        AND exo:restorePath LIKE '%s%%'
-                        """.formatted(
-                          trashHome.replace("'", "''"),
-                          safePath.replace("'", "''"));
-    QueryManager queryManager = session.getWorkspace().getQueryManager();
-    Query query = queryManager.createQuery(queryStr, Query.SQL);
-    QueryResult result = query.execute();
-
-    NodeIterator nodes = result.getNodes();
-    while (nodes.hasNext()) {
-      Node node = nodes.nextNode();
-      if (node.hasProperty(RESTORE_PATH)) {
-        String restorePath = node.getProperty(RESTORE_PATH).getString();
-
-        //Update path prefix
-        String updatedPath = restorePath.replaceFirst("^" + oldPath, newPath);
-        node.setProperty(RESTORE_PATH, updatedPath);
+  /**
+   * Rewrites the path a node of the trash was deleted from when it lies
+   * under a folder that moved, in a save of its own. The Recycle Bin an item
+   * is in is the one of the drive it was deleted from, whatever the folder
+   * becomes: where it is restored to follows the folder inside that drive,
+   * and an item whose folder left it keeps the path it had. A node that
+   * cannot be rewritten is reported and left as it was, and the others still
+   * follow.
+   */
+  private void followFolderMove(Session trashSession, SessionProvider trashProvider, String nodeId, String movedPath, String newPath) {
+    try {
+      Node node = ((ExtendedSession) trashSession).getNodeByIdentifier(nodeId);
+      if (!node.hasProperty(NodeTypeConstants.RESTORE_PATH)) {
+        return;
+      }
+      String restorePath = node.getProperty(NodeTypeConstants.RESTORE_PATH).getString();
+      String restoreWorkspace = node.hasProperty(NodeTypeConstants.RESTORE_WORKSPACE) ? node.getProperty(NodeTypeConstants.RESTORE_WORKSPACE)
+                                                                                           .getString()
+                                                                                      : null;
+      if (!restorePath.startsWith(movedPath + "/") || restoreWorkspace != null && !restoreWorkspace.equals(this.trashWorkspace)) {
+        return;
+      }
+      String newRestorePath = newPath + restorePath.substring(movedPath.length());
+      String ownerId = node.hasProperty(NodeTypeConstants.RECYCLE_BIN_OWNER) ? node.getProperty(NodeTypeConstants.RECYCLE_BIN_OWNER).getString()
+                                                                              : null;
+      if (ownerId != null
+          && !ownerId.equals(JCRDocumentsUtil.resolveRecycleBinOwner(newRestorePath, nodeHierarchyCreator, identityManager, spaceService, trashProvider))) {
+        return;
+      }
+      node.setProperty(NodeTypeConstants.RESTORE_PATH, newRestorePath);
+      trashSession.save();
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.warn("The path the node {} of the trash was deleted from could not follow the move of {} to {}", nodeId, movedPath, newPath, e);
+      try {
+        trashSession.refresh(false);
+      } catch (RepositoryException | RuntimeException refreshFailure) {
+        LOG.warn("The changes pending on the node {} of the trash could not be discarded", nodeId, refreshFailure);
       }
     }
-    session.save();
+  }
+
+  /** A text as a pattern reads it literally: its quote is doubled and its wildcards are escaped. */
+  private static String escapeLikePattern(String text) {
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
   }
 
 }

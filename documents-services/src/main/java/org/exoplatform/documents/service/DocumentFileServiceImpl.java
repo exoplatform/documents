@@ -26,8 +26,10 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.jcr.AccessDeniedException;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
@@ -48,17 +50,21 @@ import org.exoplatform.commons.file.model.FileInfo;
 import org.exoplatform.commons.file.model.FileItem;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.HTMLSanitizer;
+import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.FileListingType;
+import org.exoplatform.documents.constant.RecycleBinSortField;
 import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.plugin.DocumentCategoryPlugin;
 import org.exoplatform.documents.storage.DocumentFileStorage;
 import org.exoplatform.documents.storage.JCRDeleteFileStorage;
+import org.exoplatform.documents.storage.RecycleBinStorage;
 import org.exoplatform.services.listener.ListenerService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.Authenticator;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityConstants;
 import org.exoplatform.services.security.IdentityRegistry;
 import org.exoplatform.services.thumbnail.ImageThumbnailService;
@@ -1033,33 +1039,175 @@ public class DocumentFileServiceImpl implements DocumentFileService {
   }
 
   @Override
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public List<TrashElementNode> getDeletedDocuments(TrashElementNodeFilter filter) throws RepositoryException {
-    return jcrDeleteFileStorage.getDeletedDocuments(filter);
+    String username = getRecycleBinCaller();
+    RecycleBinSortField sortField = filter != null && filter.getSortField() == DocumentSortField.NAME ? RecycleBinSortField.NAME
+                                                                                                      : RecycleBinSortField.DELETED_DATE;
+    RecycleBinFilter binFilter = filter == null ? new RecycleBinFilter()
+                                                : new RecycleBinFilter(0, null, sortField, filter.isAscending(), filter.getOffset(), filter.getLimit());
+    try {
+      return getRecycleBinService().getItems(RecycleBinScope.user(), binFilter, username)
+                                   .stream()
+                                   .map(DocumentFileServiceImpl::toTrashElement)
+                                   .toList();
+    } catch (ObjectNotFoundException | IllegalAccessException e) {
+      throw new AccessDeniedException(e.getMessage());
+    }
   }
 
   @Override
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public int countDeletedDocuments() {
-    return jcrDeleteFileStorage.countDeletedDocuments();
+    try {
+      return getRecycleBinService().countItems(RecycleBinScope.user(), null, getRecycleBinCaller());
+    } catch (ObjectNotFoundException | IllegalAccessException | AccessDeniedException e) {
+      throw new IllegalStateException("The Recycle Bin of the current user cannot be counted", e);
+    }
   }
 
   @Override
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public void restoreDocumentFromTrash(String trashNodePath) throws RepositoryException {
-    jcrDeleteFileStorage.restoreFromTrash(trashNodePath);
+    String username = getRecycleBinCaller();
+    RecycleBinItem item = getRecycleBinStorage().getItemAt(trashNodePath);
+    if (item == null) {
+      throw new PathNotFoundException("No item of a Recycle Bin is at the path " + trashNodePath);
+    }
+    try {
+      getRecycleBinService().restoreItem(item.getId(), getHeldScope(item), username);
+    } catch (ObjectNotFoundException e) {
+      throw new PathNotFoundException("No item of a Recycle Bin is at the path " + trashNodePath);
+    } catch (IllegalAccessException e) {
+      throw new AccessDeniedException(e.getMessage());
+    }
   }
 
   @Override
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public void deleteDocumentPermanently(String documentPath) throws ObjectNotFoundException, RepositoryException {
-    jcrDeleteFileStorage.deleteDocumentPermanently(documentPath);
+    String username = getRecycleBinCaller();
+    RecycleBinItem item = getRecycleBinStorage().getItemAt(documentPath);
+    if (item == null) {
+      throw new ObjectNotFoundException("No item of a Recycle Bin is at the path " + documentPath);
+    }
+    try {
+      getRecycleBinService().deleteItem(item.getId(), getHeldScope(item), username);
+    } catch (IllegalAccessException e) {
+      throw new AccessDeniedException(e.getMessage());
+    }
+  }
+
+  /**
+   * The Recycle Bin service is looked for when it is needed and never kept:
+   * it lives in a container that starts after this component.
+   */
+  RecycleBinService getRecycleBinService() {
+    return ExoContainerContext.getService(RecycleBinService.class);
+  }
+
+  RecycleBinStorage getRecycleBinStorage() {
+    return CommonsUtils.getService(RecycleBinStorage.class);
+  }
+
+  /** The user of the current conversation state: the former trash methods name no caller. */
+  private static String getRecycleBinCaller() throws AccessDeniedException {
+    ConversationState state = ConversationState.getCurrent();
+    String username = state == null || state.getIdentity() == null ? null : state.getIdentity().getUserId();
+    if (StringUtils.isBlank(username) || IdentityConstants.ANONIM.equals(username)) {
+      throw new AccessDeniedException("A Recycle Bin is opened by a user of the platform only");
+    }
+    return username;
+  }
+
+  /**
+   * The bin an item is in, as its holder names it: the caller's own for an
+   * item of a personal drive, the space's for an item of a space. The bin of
+   * any drive an administrator may open is never one of them.
+   */
+  private RecycleBinScope getHeldScope(RecycleBinItem item) throws AccessDeniedException {
+    Identity owner = item.getOwnerId() == null ? null : identityManager.getIdentity(String.valueOf(item.getOwnerId()));
+    if (owner != null && owner.isSpace()) {
+      Space space = spaceService.getSpaceByPrettyName(owner.getRemoteId());
+      if (space != null) {
+        return RecycleBinScope.space(Long.parseLong(space.getId()));
+      }
+    } else if (owner != null && owner.isUser()) {
+      return RecycleBinScope.user();
+    }
+    throw new AccessDeniedException("The item " + item.getId() + " is in no Recycle Bin a user holds");
+  }
+
+  private static TrashElementNode toTrashElement(RecycleBinItem item) {
+    TrashElementNode trashElement = new TrashElementNode();
+    trashElement.setId(item.getDocumentId());
+    trashElement.setName(item.getName());
+    trashElement.setPath(item.getPath());
+    trashElement.setRestorePath(item.getRestorePath());
+    trashElement.setMimeType(item.getMimeType());
+    trashElement.setSize(item.getSize());
+    trashElement.setFolder(item.isFolder());
+    if (item.getDeletedDate() != null) {
+      trashElement.setModifiedDate(item.getDeletedDate());
+    }
+    return trashElement;
   }
 
   @Override
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public void deleteDocumentsPermanently(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException {
-   jcrDeleteFileStorage.deleteDocumentsPermanently(actionId, trashElementNodes, getAclUserIdentity(userIdentityId));
+    startTrashBulkAction(actionId, ActionType.PERMANENTLY_DELETE, trashElementNodes, userIdentityId);
   }
 
   @Override
+  @Deprecated(since = "7.3.0", forRemoval = false)
   public void restoreDocuments(int actionId, List<AbstractNode> trashElementNodes, long userIdentityId) throws IllegalAccessException {
-    jcrDeleteFileStorage.restoreDocuments(actionId, trashElementNodes, getAclUserIdentity(userIdentityId));
+    startTrashBulkAction(actionId, ActionType.RESTORE, trashElementNodes, userIdentityId);
+  }
+
+  /**
+   * The former bulk actions of the trash name their items by path and no
+   * bin: each item is looked for at its turn and acted on through the bin
+   * the user holds it in.
+   */
+  private void startTrashBulkAction(int actionId,
+                                    ActionType actionType,
+                                    List<AbstractNode> trashElementNodes,
+                                    long userIdentityId) throws IllegalAccessException {
+    org.exoplatform.services.security.Identity aclIdentity = getAclUserIdentity(userIdentityId);
+    String username = aclIdentity.getUserId();
+    if (StringUtils.isBlank(username) || IdentityConstants.ANONIM.equals(username)) {
+      throw new IllegalAccessException("A Recycle Bin is opened by a user of the platform only");
+    }
+    // Looked for here, on the thread of the request: the action runs on another.
+    RecycleBinService recycleBinService = getRecycleBinService();
+    RecycleBinStorage recycleBinStorage = getRecycleBinStorage();
+    Map<String, String> pathsByKey = new LinkedHashMap<>();
+    for (AbstractNode node : trashElementNodes) {
+      pathsByKey.put(node.getId() == null ? node.getPath() : node.getId(), node.getPath());
+    }
+    ActionData actionData = new ActionData();
+    actionData.setActionId(String.valueOf(actionId));
+    actionData.setActionType(actionType.name());
+    actionData.setIdentity(aclIdentity);
+    actionData.setUserName(username);
+    actionData.setNumberOfItems(pathsByKey.size());
+    jcrDeleteFileStorage.executeBulkAction(actionData, new ArrayList<>(pathsByKey.keySet()), key -> {
+      RecycleBinItem item = recycleBinStorage.getItemAt(pathsByKey.get(key));
+      if (item == null) {
+        return false;
+      }
+      try {
+        if (actionType == ActionType.RESTORE) {
+          recycleBinService.restoreItem(item.getId(), getHeldScope(item), username);
+        } else {
+          recycleBinService.deleteItem(item.getId(), getHeldScope(item), username);
+        }
+        return true;
+      } catch (ObjectNotFoundException e) {
+        return false;
+      }
+    });
   }
 
   @Override

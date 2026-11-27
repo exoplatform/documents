@@ -63,6 +63,7 @@ import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.constant.UploadConflictAction;
 import org.exoplatform.documents.model.*;
 import org.exoplatform.documents.storage.DocumentFileStorage;
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentFileSearchResult;
 import org.exoplatform.documents.storage.jcr.search.DocumentPagedTextExtractor;
@@ -231,6 +232,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
 
   private FileUploadHandler                         fileUploadHandler;
 
+  /** Tells a node in the trash, which a public link no longer serves. */
+  private final TrashStorage                        trashStorage;
+
   /** Files of this many MB or larger are not read to extract their text on the fly. */
   public static final String                        TEXT_EXTRACTION_MAX_SIZE_MB_PROPERTY     =
                                                                                          "exo.documents.textExtraction.maxFileSizeMb";
@@ -357,7 +361,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                                 IdentityRegistry identityRegistry,
                                 ActivityManager activityManager,
                                 BulkStorageActionService bulkStorageActionService,
-                                DocumentService documentService) {
+                                DocumentService documentService,
+                                TrashStorage trashStorage) {
     this.identityManager = identityManager;
     this.spaceService = spaceService;
     this.repositoryService = repositoryService;
@@ -369,6 +374,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     this.activityManager = activityManager;
     this.bulkStorageActionService = bulkStorageActionService;
     this.documentService = documentService;
+    this.trashStorage = trashStorage;
   }
 
   @Override
@@ -4360,7 +4366,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       ManageableRepository repository = repositoryService.getCurrentRepository();
       Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
       Node node = getNodeByIdentifier(systemSession, documentId);
-      if (node != null) {
+      // A node in the trash, at any depth, is answered as a missing one: its
+      // public link serves again once it is restored, under the same id.
+      if (node != null && !trashStorage.isInTrash(node)) {
         return withContent ? toDownloadItem(node) : toDownloadInfo(node);
       }
     } catch (Exception e) {
@@ -4386,11 +4394,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       // Not a getUserSessionProvider session: the visitor's request carries no
       // identity of aclIdentity's user
       userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
-      Node node = getNodeByIdentifier(userSession, folderId);
-      if (node != null) {
-        return zipFolder(node);
-      }
-      throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
+      // The creator reads a trashed folder they own: the trash is tested here,
+      // whatever the caller checked first.
+      return zipFolder(readableFolder(userSession, folderId));
     } catch (ObjectNotFoundException e) {
       throw e;
     } catch (Exception e) {
@@ -4414,9 +4420,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     Session userSession = null;
     try {
       userSession = JCRDocumentsUtil.openUserSession(repositoryService, aclIdentity);
-      if (getNodeByIdentifier(userSession, folderId) == null) {
-        throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
-      }
+      readableFolder(userSession, folderId);
     } catch (RepositoryException e) {
       throw new IllegalStateException("Folder " + folderId + " cannot be checked", e);
     } finally {
@@ -4424,6 +4428,18 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         userSession.logout();
       }
     }
+  }
+
+  /** The folder a session reads under an id, out of the trash. */
+  private Node readableFolder(Session userSession, String folderId) throws RepositoryException, ObjectNotFoundException {
+    Node node = getNodeByIdentifier(userSession, folderId);
+    if (node == null) {
+      throw new ObjectNotFoundException("Folder " + folderId + " is not readable by the identity whose rights apply");
+    }
+    if (trashStorage.isInTrash(node)) {
+      throw new ObjectNotFoundException("Folder " + folderId + " is in the trash");
+    }
+    return node;
   }
 
   /**
@@ -4452,7 +4468,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         parentPath = "";
         walkFolderPath = tempFolderPath + "/";
       }
-      JCRDocumentsUtil.createTempFilesAndFolders(node, "", "", walkFolderPath, parentPath);
+      // A shortcut whose target is in the trash brings nothing into the archive.
+      JCRDocumentsUtil.createTempFilesAndFolders(node, walkFolderPath, parentPath, trashStorage);
       zip = Files.createTempFile(ZIP_PREFIX, ZIP_EXTENSION); // NOSONAR
       zipFiles(zip.toString(), tempFolderPath);
       built = true;

@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import org.exoplatform.commons.exception.ObjectNotFoundException;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.documents.model.TrashElementNode;
 import org.exoplatform.documents.model.TrashElementNodeFilter;
@@ -38,6 +39,7 @@ import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.impl.core.NodeImpl;
 import org.exoplatform.services.jcr.impl.core.SessionImpl;
 import org.exoplatform.services.listener.ListenerService;
+import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.model.Profile;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
@@ -59,11 +61,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.security.AccessControlException;
 import javax.jcr.AccessDeniedException;
 import javax.jcr.Node;
+import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.nodetype.NodeType;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDeleteFileStorageTest {
@@ -240,12 +244,16 @@ public class JCRDeleteFileStorageTest {
     jcrDeleteFileStorage.deleteDocument(path ,"1", true, true, 0, userID,  currentOwnerId);
 
     when(node.isCheckedOut()).thenReturn(true);
-    when(trashStorage.moveToTrash(node, sessionProvider)).thenReturn(trashId);
+    when(identityManager.getIdentity(String.valueOf(currentOwnerId))).thenReturn(currentIdentity);
+    when(trashStorage.moveToTrash(node, sessionProvider, username)).thenReturn(trashId);
     when(trashStorage.getNodeByTrashId(trashId)).thenReturn(node);
     when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
     when(node.getPrimaryNodeType()).thenReturn(nodeType);
 
     jcrDeleteFileStorage.deleteDocument(path ,"1", false, true, 0, userID,  currentOwnerId);
+
+    // The user deleting the document is handed to the trash, which records it.
+    verify(trashStorage, times(1)).moveToTrash(node, sessionProvider, username);
 
     verify((ExtendedNode)node, times(1)).checkPermission(anyString());
 
@@ -320,7 +328,10 @@ public class JCRDeleteFileStorageTest {
     // behalf without one), but the node lives inside the acting user's own Private space.
     doThrow(new AccessControlException("denied")).when((ExtendedNode) node).checkPermission(anyString());
     JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.isInUserPrivateSpace(node, username)).thenReturn(true);
-    when(trashStorage.moveToTrash(node, sessionProvider)).thenReturn(trashId);
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    when(identityManager.getIdentity(String.valueOf(currentOwnerId))).thenReturn(currentIdentity);
+    when(trashStorage.moveToTrash(node, sessionProvider, username)).thenReturn(trashId);
     when(trashStorage.getNodeByTrashId(trashId)).thenReturn(node);
     NodeType nodeType = mock(NodeType.class);
     when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
@@ -328,7 +339,124 @@ public class JCRDeleteFileStorageTest {
 
     jcrDeleteFileStorage.deleteDocument(path, "1", false, true, 0, userID, currentOwnerId);
 
-    verify(trashStorage, times(1)).moveToTrash(node, sessionProvider);
+    verify(trashStorage, times(1)).moveToTrash(node, sessionProvider, username);
+  }
+
+  @Test
+  public void testDelayedDeleteResolvesTheDeletingUserBeforeTheDelay() throws Exception {
+    String username = "testuser";
+    String path = "/document/file1";
+    long currentOwnerId = 2;
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    when(identityManager.getIdentity(String.valueOf(currentOwnerId))).thenReturn(currentIdentity);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    ExtendedSession session1 = mock(ExtendedSession.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession(Mockito.any(), Mockito.any())).thenReturn(session1);
+
+    jcrDeleteFileStorage.start();
+    try {
+      // The delayed task runs on a thread that knows no user: the deleting user is
+      // resolved while the request is at hand, an hour before the task here.
+      jcrDeleteFileStorage.deleteDocument(path, "delayed-1", false, true, 3600, userID, currentOwnerId);
+
+      verify(identityManager, times(1)).getIdentity(String.valueOf(currentOwnerId));
+      verify(trashStorage, never()).moveToTrash(any(), any(), anyString());
+    } finally {
+      JCRDeleteFileStorageImpl.documentsToDeleteQueue.remove("delayed-1");
+      jcrDeleteFileStorage.stop();
+    }
+  }
+
+  @Test
+  public void testDelayedDeleteMovesToTheTrashAsTheDeletingUser() throws Exception {
+    String username = "testuser";
+    String path = "/document/file1";
+    long currentOwnerId = 2;
+    org.exoplatform.services.security.Identity userID = new org.exoplatform.services.security.Identity(username);
+    Identity currentIdentity = new Identity(OrganizationIdentityProvider.NAME, username);
+    currentIdentity.setId(String.valueOf(currentOwnerId));
+    when(identityManager.getIdentity(String.valueOf(currentOwnerId))).thenReturn(currentIdentity);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
+    ExtendedSession session1 = mock(ExtendedSession.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, userID)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession(Mockito.any(), Mockito.any())).thenReturn(session1);
+    NodeImpl node = Mockito.mock(NodeImpl.class);
+    // The static mocks reach only the thread of the test: the delayed task
+    // finds the node through the session itself.
+    when(session1.itemExists(path)).thenReturn(true);
+    when(session1.getItem(path)).thenReturn(node);
+    when(node.getPath()).thenReturn(path);
+    when(node.isCheckedOut()).thenReturn(true);
+    AtomicReference<String> userOfTheMove = new AtomicReference<>("none");
+    when(trashStorage.moveToTrash(node, sessionProvider, username)).thenAnswer(invocation -> {
+      ConversationState state = ConversationState.getCurrent();
+      userOfTheMove.set(state == null ? null : state.getIdentity().getUserId());
+      return "-1";
+    });
+
+    jcrDeleteFileStorage.start();
+    try {
+      jcrDeleteFileStorage.deleteDocument(path, "delayed-2", false, true, 1, userID, currentOwnerId);
+
+      // The repository records the user the thread acts as as the last one to
+      // change the document: the delayed task acts as the user deleting.
+      verify(trashStorage, timeout(10000)).moveToTrash(node, sessionProvider, username);
+      assertEquals(username, userOfTheMove.get());
+    } finally {
+      JCRDeleteFileStorageImpl.documentsToDeleteQueue.remove("delayed-2");
+      jcrDeleteFileStorage.stop();
+    }
+  }
+
+  @Test
+  public void testAShortcutDeletedGoesToTheRecycleBinOfItsDriveAsItsDeleterDid() throws Exception {
+    String username = "testuser";
+    String path = "/Users/t___/te___/tes___/testuser/Private/Documents/report.docx";
+    long currentOwnerId = 2;
+    ExtendedSession shortcutSession = mock(ExtendedSession.class);
+    NodeImpl shortcut = prepareShortcutToDelete(username, currentOwnerId, shortcutSession, "shortcut-1", path);
+
+    try (MockedStatic<CommonsUtils> commonsUtils = mockStatic(CommonsUtils.class)) {
+      commonsUtils.when(() -> CommonsUtils.getService(JCRDocumentFileStorage.class)).thenReturn(mock(JCRDocumentFileStorage.class));
+      jcrDeleteFileStorage.deleteDocument(shortcutSession, path, "shortcut-1", false, true, 0,
+                                          new org.exoplatform.services.security.Identity(username), currentOwnerId);
+    }
+
+    // Kept in the Recycle Bin as deleted by its deleter, not removed for good
+    verify(trashStorage).moveToTrash(shortcut, sessionProvider, username);
+    verify(shortcut, never()).remove();
+  }
+
+  @Test
+  public void testAShortcutDeletedWithADelayGoesToTheRecycleBinOfItsDrive() throws Exception {
+    String username = "testuser";
+    String path = "/Users/t___/te___/tes___/testuser/Private/Documents/plan.docx";
+    long currentOwnerId = 2;
+    ExtendedSession shortcutSession = mock(ExtendedSession.class);
+    NodeImpl shortcut = prepareShortcutToDelete(username, currentOwnerId, shortcutSession, "shortcut-2", path);
+
+    jcrDeleteFileStorage.start();
+    try {
+      try (MockedStatic<CommonsUtils> commonsUtils = mockStatic(CommonsUtils.class)) {
+        commonsUtils.when(() -> CommonsUtils.getService(JCRDocumentFileStorage.class)).thenReturn(mock(JCRDocumentFileStorage.class));
+        jcrDeleteFileStorage.deleteDocument(shortcutSession, path, "shortcut-2", false, true, 1,
+                                            new org.exoplatform.services.security.Identity(username), currentOwnerId);
+      }
+
+      verify(trashStorage, timeout(10000)).moveToTrash(shortcut, sessionProvider, username);
+      verify(shortcut, never()).remove();
+    } finally {
+      JCRDeleteFileStorageImpl.documentsToDeleteQueue.remove("shortcut-2");
+      jcrDeleteFileStorage.stop();
+    }
   }
 
   @Test
@@ -379,6 +507,36 @@ public class JCRDeleteFileStorageTest {
     // Already in trash: the delete removes the node outright instead of moving it there.
     when(trashStorage.isInTrash(node)).thenReturn(true);
     return node;
+  }
+
+  private NodeImpl prepareShortcutToDelete(String username,
+                                           long userIdentityId,
+                                           Session shortcutSession,
+                                           String shortcutId,
+                                           String path) throws Exception {
+    Identity deleter = new Identity(OrganizationIdentityProvider.NAME, username);
+    deleter.setId(String.valueOf(userIdentityId));
+    when(identityManager.getIdentity(String.valueOf(userIdentityId))).thenReturn(deleter);
+    when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(sessionProvider);
+
+    NodeImpl shortcut = Mockito.mock(NodeImpl.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(shortcutSession, shortcutId)).thenReturn(shortcut);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(shortcutSession, path)).thenReturn(shortcut);
+    // The static mocks reach only the thread of the test: a delayed deletion
+    // finds the node through the session itself.
+    when(shortcutSession.itemExists(path)).thenReturn(true);
+    when(shortcutSession.getItem(path)).thenReturn(shortcut);
+    when(shortcut.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    NodeType symlinkType = mock(NodeType.class);
+    when(symlinkType.getName()).thenReturn(NodeTypeConstants.EXO_SYMLINK);
+    when(shortcut.getPrimaryNodeType()).thenReturn(symlinkType);
+    when(shortcut.getNodes()).thenReturn(mock(NodeIterator.class));
+    when(shortcut.getPath()).thenReturn(path);
+    when(shortcut.getParent()).thenReturn(mock(NodeImpl.class));
+    when(shortcut.isCheckedOut()).thenReturn(true);
+    when(trashStorage.moveToTrash(shortcut, sessionProvider, username)).thenReturn("trash-" + shortcutId);
+    when(trashStorage.getNodeByTrashId("trash-" + shortcutId)).thenReturn(shortcut);
+    return shortcut;
   }
 
   @Test
@@ -469,6 +627,17 @@ public class JCRDeleteFileStorageTest {
     when(trashStorage.isInTrash(node)).thenReturn(true);
     jcrDeleteFileStorage.deleteDocumentPermanently(trashNodePath);
     verify(node).remove();
+  }
+
+  @Test
+  public void aBulkActionOnItemsIsStartedThroughTheBulkActionsWithTheListenerOfTheStorage() {
+    org.exoplatform.documents.model.ActionData actionData = new org.exoplatform.documents.model.ActionData();
+    List<String> itemIds = List.of("a", "b");
+    org.exoplatform.documents.storage.BulkItemAction itemAction = itemId -> true;
+
+    jcrDeleteFileStorage.executeBulkAction(actionData, itemIds, itemAction);
+
+    verify(bulkStorageActionService).executeItemAction(listenerService, actionData, itemIds, itemAction);
   }
 
 }

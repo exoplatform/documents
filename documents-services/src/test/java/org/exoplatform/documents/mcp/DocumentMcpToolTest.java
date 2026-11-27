@@ -19,6 +19,7 @@ package org.exoplatform.documents.mcp;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -141,6 +142,8 @@ public class DocumentMcpToolTest {
 
   private FavoriteService                favoriteService;
 
+  private org.exoplatform.documents.service.RecycleBinService recycleBinService;
+
   private Identity                       currentIdentity;
 
   private DocumentMcpTool                documentMcpTool;
@@ -164,6 +167,7 @@ public class DocumentMcpToolTest {
     uploadService = Mockito.mock(UploadService.class);
     publicDocumentAccessService = Mockito.mock(PublicDocumentAccessService.class);
     favoriteService = Mockito.mock(FavoriteService.class);
+    recycleBinService = Mockito.mock(org.exoplatform.documents.service.RecycleBinService.class);
     currentIdentity = new Identity(USERNAME);
 
     org.exoplatform.social.core.identity.model.Identity socialIdentity =
@@ -184,7 +188,8 @@ public class DocumentMcpToolTest {
                                           portalConfigService,
                                           uploadService,
                                           publicDocumentAccessService,
-                                          favoriteService) {
+                                          favoriteService,
+                                          recycleBinService) {
       @Override
       public Identity getCurrentUserAclIdentity() {
         return currentIdentity;
@@ -424,7 +429,8 @@ public class DocumentMcpToolTest {
                                                    Mockito.mock(UserPortalConfigService.class),
                                                    Mockito.mock(UploadService.class),
                                                    publicDocumentAccessService,
-                                                   favoriteService);
+                                                   favoriteService,
+                                                   recycleBinService);
     ActingIdentity limited = ActingIdentity.agent("agent-docs", "DOCS", Origin.PROPOSAL, 7L);
     ActingIdentity unlimited = ActingIdentity.person(USERNAME, Origin.CHAT);
     try (MockedStatic<McpToolUtils> mocked = Mockito.mockStatic(McpToolUtils.class)) {
@@ -2013,34 +2019,54 @@ public class DocumentMcpToolTest {
   }
 
   @Test
-  public void undoDeleteDocumentRestoresFromTrash() throws Exception {
-    // After an immediate delete the node lives in trash but keeps its id; undo must
-    // actually restore it from trash (the delayed-delete cancel path is a no-op).
-    FileNode trashed = fileNode(DOCUMENT_ID, "application/pdf");
-    trashed.setPath("/Trash/report.pdf");
-    // The trashed node must be resolved through the SYSTEM-session overload
-    // (getDocumentById(id)), not the user-session one: trash lives under a system
-    // session and a regular user session cannot read the trashed node.
-    when(documentFileService.getDocumentById(DOCUMENT_ID)).thenReturn(trashed);
-
+  public void undoDeleteDocumentAsksTheRecycleBinForTheCurrentUser() throws Exception {
     documentMcpTool.undoDeleteDocument(DOCUMENT_ID);
 
-    verify(documentFileService).restoreDocumentFromTrash(eq("/Trash/report.pdf"));
-    // It must use the system-session overload, NOT the user-session one (which would
-    // false-negative on a trashed node).
-    verify(documentFileService).getDocumentById(DOCUMENT_ID);
-    verify(documentFileService, never()).getDocumentById(DOCUMENT_ID, USERNAME);
-    // It must NOT rely on the no-op delayed-delete cancel.
+    verify(recycleBinService).undoDelete(DOCUMENT_ID, USERNAME);
+    // Neither the former restore by path, which names no caller, nor the
+    // cancellation of a delayed delete, which restores nothing.
+    verify(documentFileService, never()).restoreDocumentFromTrash(anyString());
     verify(documentFileService, never()).undoDeleteDocument(anyString(), anyLong());
   }
 
   @Test
-  public void undoDeleteDocumentNotFoundFails() throws Exception {
-    // The system-session overload returns null when the node is genuinely gone.
-    when(documentFileService.getDocumentById(DOCUMENT_ID)).thenReturn(null);
+  public void undoDeleteDocumentTellsWhyADocumentDoesNotComeBack() throws Exception {
+    // Never silently succeed: each refusal of the Recycle Bin surfaces.
+    org.mockito.Mockito.doThrow(new ObjectNotFoundException("recycleBin.item.notFound")).when(recycleBinService).undoDelete(DOCUMENT_ID, USERNAME);
+    IllegalStateException gone = assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    assertTrue(gone.getMessage(), gone.getMessage().contains("can no longer be found in the trash"));
 
-    // Never silently succeed: a document no longer in trash must surface a clear error.
-    assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    org.mockito.Mockito.doThrow(new IllegalArgumentException("recycleBin.restore.locationMissing")).when(recycleBinService).undoDelete(DOCUMENT_ID, USERNAME);
+    IllegalStateException missing = assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    assertTrue(missing.getMessage(), missing.getMessage().contains("the folder it was deleted from no longer exists"));
+
+    org.mockito.Mockito.doThrow(new IllegalArgumentException("recycleBin.restore.shortcutTargetInBin"))
+                       .when(recycleBinService)
+                       .undoDelete(DOCUMENT_ID, USERNAME);
+    IllegalStateException targetInBin = assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    assertTrue(targetInBin.getMessage(), targetInBin.getMessage().contains("restore that document first"));
+
+    org.mockito.Mockito.doThrow(new IllegalArgumentException("recycleBin.restore.shortcutTargetGone"))
+                       .when(recycleBinService)
+                       .undoDelete(DOCUMENT_ID, USERNAME);
+    IllegalStateException targetGone = assertThrows(IllegalStateException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    assertTrue(targetGone.getMessage(), targetGone.getMessage().contains("the document it points to no longer exists"));
+
+    org.mockito.Mockito.doThrow(new IllegalAccessException("recycleBin.restore.targetForbidden"))
+                       .when(recycleBinService)
+                       .undoDelete(DOCUMENT_ID, USERNAME);
+    IllegalAccessException noTarget = assertThrows(IllegalAccessException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID));
+    assertTrue(noTarget.getMessage(), noTarget.getMessage().contains("you can no longer add content to the folder it was deleted from"));
+
+    IllegalAccessException forbidden = new IllegalAccessException("User john may not restore the deleted document");
+    org.mockito.Mockito.doThrow(forbidden).when(recycleBinService).undoDelete(DOCUMENT_ID, USERNAME);
+    assertSame(forbidden, assertThrows(IllegalAccessException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID)));
+
+    IllegalArgumentException other = new IllegalArgumentException("another reason");
+    org.mockito.Mockito.doThrow(other).when(recycleBinService).undoDelete(DOCUMENT_ID, USERNAME);
+    assertSame(other, assertThrows(IllegalArgumentException.class, () -> documentMcpTool.undoDeleteDocument(DOCUMENT_ID)));
+
+    assertThrows(IllegalArgumentException.class, () -> documentMcpTool.undoDeleteDocument(" "));
   }
 
   @Test

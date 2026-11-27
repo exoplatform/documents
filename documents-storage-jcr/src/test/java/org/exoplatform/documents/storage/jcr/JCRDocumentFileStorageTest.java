@@ -37,6 +37,7 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.model.*;
+import org.exoplatform.documents.storage.TrashStorage;
 import org.exoplatform.documents.storage.jcr.bulkactions.BulkStorageActionService;
 import org.exoplatform.documents.storage.jcr.search.DocumentSearchServiceConnector;
 import org.exoplatform.documents.storage.jcr.search.DocumentTextExtractor;
@@ -127,6 +128,9 @@ public class JCRDocumentFileStorageTest {
   @Mock
   private org.exoplatform.services.cms.documents.DocumentService documentService;
 
+  @Mock
+  private TrashStorage                                   trashStorage;
+
 
   private JCRDocumentFileStorage         jcrDocumentFileStorage;
 
@@ -151,7 +155,8 @@ public class JCRDocumentFileStorageTest {
                                                              identityRegistry,
                                                              activityManager,
                                                              bulkStorageActionService,
-                                                             documentService);
+                                                             documentService,
+                                                             trashStorage);
   }
 
   @Test
@@ -2451,6 +2456,31 @@ public class JCRDocumentFileStorageTest {
   }
 
   @Test
+  public void aPublicLinkServesNoNodeInTheTrashAndServesItAgainOnceItIsRestored() throws RepositoryException {
+    SessionProvider systemSessionProvider = mockSystemSessionProvider();
+    Session session = systemSessionProvider.getSession("collaboration", repositoryService.getCurrentRepository());
+    NodeImpl node = mock(NodeImpl.class);
+    when(node.getIdentifier()).thenReturn("trashed-1");
+    when(node.hasNode(NodeTypeConstants.JCR_CONTENT)).thenReturn(false);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "trashed-1")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getTitle(node)).thenReturn("report.pdf");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toDownloadInfo(node)).thenCallRealMethod();
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.toDownloadItem(node)).thenCallRealMethod();
+    when(trashStorage.isInTrash(node)).thenReturn(true);
+
+    // Answered as a missing node, whose endpoints answer 404, with nothing read
+    assertNull(jcrDocumentFileStorage.getDocumentDownloadInfo("trashed-1"));
+    assertNull(jcrDocumentFileStorage.getDocumentDownloadItem("trashed-1"));
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.toDownloadInfo(node), never());
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.toDownloadItem(node), never());
+
+    // A restore keeps the node's id: the same link serves it again
+    when(trashStorage.isInTrash(node)).thenReturn(false);
+    assertEquals("report.pdf", jcrDocumentFileStorage.getDocumentDownloadInfo("trashed-1").getItemName());
+    assertEquals("report.pdf", jcrDocumentFileStorage.getDocumentDownloadItem("trashed-1").getItemName());
+  }
+
+  @Test
   public void getDocumentDownloadInfoOfAFolder() throws RepositoryException {
     SessionProvider systemSessionProvider = mockSystemSessionProvider();
     Session session = systemSessionProvider.getSession("collaboration", repositoryService.getCurrentRepository());
@@ -2524,7 +2554,10 @@ public class JCRDocumentFileStorageTest {
       JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.cleanFiles(any(File.class)));
 
       JCR_DOCUMENTS_UTIL.clearInvocations();
-      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.createTempFilesAndFolders(eq(node), anyString(), anyString(), anyString(), anyString()))
+      // The zipping works again: only the copy fails. The parent's titles path
+      // is null here, the util class being mocked.
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.zipFiles(anyString(), anyString())).thenAnswer(invocation -> null);
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.createTempFilesAndFolders(eq(node), anyString(), any(), eq(trashStorage)))
                         .thenThrow(new RepositoryException("unreadable child"));
       assertNull(jcrDocumentFileStorage.downloadFolder("failing", identity));
       JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.cleanFiles(any(File.class)));
