@@ -1499,7 +1499,7 @@ public class DocumentMcpToolTest {
    * The other add-ons are asked only when the name lookup and the title
    * search both found nothing; a failing contributor is skipped, a null
    * answer and a blank id are ignored, an id named twice comes back once, and
-   * the hits stop at the cap, the ids described at a few times it (EXO-95443).
+   * the hits stop at the cap, the ids read at MAX_CONTRIBUTED_IDS (EXO-95443).
    * Mutants: the contributors asked after a hit; the failure propagated; the
    * duplicate kept; the cap dropped; the described ids unbounded.
    *
@@ -1545,14 +1545,14 @@ public class DocumentMcpToolTest {
 
     assertEquals(List.of(DOCUMENT_ID, second), models.stream().map(DocumentModel::getId).toList());
     List<DocumentNameLookupHit> many = new java.util.ArrayList<>();
-    for (int index = 0; index < 3 * DocumentMcpTool.CONTRIBUTED_FACTOR; index++) {
-      many.add(hit(String.format("bb0688cd7f00010134384ab7e1b15a%02d", index)));
+    for (int index = 0; index < DocumentMcpTool.MAX_CONTRIBUTED_IDS + 20; index++) {
+      many.add(hit(String.format("bb0688cd7f00010134384ab7e1b1%04d", index)));
     }
     when(answering.findByName(any())).thenReturn(many);
     ArgumentCaptor<java.util.Collection<String>> described = ArgumentCaptor.forClass(java.util.Collection.class);
     documentMcpTool.searchDocuments(null, "Contract QA-92501", null, null, null, null, 2, null, null);
     verify(documentFileService, org.mockito.Mockito.atLeastOnce()).describeForIndex(described.capture());
-    assertEquals(2 * DocumentMcpTool.CONTRIBUTED_FACTOR, described.getValue().size());
+    assertEquals(DocumentMcpTool.MAX_CONTRIBUTED_IDS, described.getValue().size());
   }
 
   /**

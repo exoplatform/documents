@@ -313,11 +313,11 @@ public class DocumentMcpTool implements McpToolPlugin {
   static final int                 MAX_NAME_MATCHES       = 20;
 
   /**
-   * How many contributed ids, at most, a name lookup describes per file it
-   * may return: enough for the filters to drop some, never an unbounded
-   * system-session read.
+   * The most contributed ids a name lookup reads, all contributors together:
+   * the files a filter drops never take the place of one it keeps within it,
+   * and the system-session description stays bounded.
    */
-  static final int                 CONTRIBUTED_FACTOR     = 5;
+  static final int                 MAX_CONTRIBUTED_IDS    = 100;
 
   /** The drive name a name lookup gives for the user's own drive. */
   static final String              PERSONAL_DRIVE         = "personal drive";
@@ -1579,8 +1579,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * reads each one back with the user's own rights: a contributed id that
    * names no file, a file in the trash, a file outside the space searched or
    * a file the user may not read is dropped, so that a contributor never
-   * decides what the user sees. A contributor that fails is skipped. The cap
-   * applies to the files kept, so that the files a filter drops never take
+   * decides what the user sees. A contributor that fails is skipped. At most
+   * {@link #MAX_CONTRIBUTED_IDS} ids are read, and the cap applies to the
+   * files kept, so that within those ids the files a filter drops never take
    * the place of one it keeps.
    *
    * @param name the name the lookup and the title search found nothing for
@@ -1616,7 +1617,7 @@ public class DocumentMcpTool implements McpToolPlugin {
       answer.stream()
             .filter(hit -> hit != null && StringUtils.isNotBlank(hit.fileId()))
             .forEach(hit -> {
-              if (hits.size() < size * CONTRIBUTED_FACTOR) {
+              if (hits.size() < MAX_CONTRIBUTED_IDS) {
                 hits.putIfAbsent(hit.fileId(), hit);
               }
             });
