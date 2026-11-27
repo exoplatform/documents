@@ -656,8 +656,9 @@ public class JCRDeleteFileStorageTest {
 
     jcrDeleteFileStorage.deleteDocument("/folder/doc", "doc", false, true, 0, aclIdentity, 1L);
 
-    verify(trashStorage).moveToTrash(node, systemProvider);
-    verify(sessionProvider).close();
+    org.mockito.InOrder order = inOrder(trashStorage, sessionProvider);
+    order.verify(trashStorage).moveToTrash(node, systemProvider);
+    order.verify(sessionProvider).close();
     verify(systemProvider, never()).close();
   }
 
