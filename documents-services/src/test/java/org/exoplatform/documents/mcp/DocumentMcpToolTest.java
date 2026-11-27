@@ -74,7 +74,11 @@ import org.exoplatform.documents.model.FileNode;
 import org.exoplatform.documents.model.TranscriptionState;
 import org.exoplatform.documents.constant.TranscriptionStatus;
 import org.exoplatform.documents.model.FileVersion;
+import org.exoplatform.documents.model.DocumentIndexInfo;
+import org.exoplatform.documents.model.DocumentNameLookupHit;
+import org.exoplatform.documents.model.DocumentNameLookupRequest;
 import org.exoplatform.documents.model.FolderNode;
+import org.exoplatform.documents.service.DocumentNameLookupPlugin;
 import org.exoplatform.documents.model.FullTreeItem;
 import org.exoplatform.documents.model.NodePermission;
 import org.exoplatform.documents.model.PermissionEntry;
@@ -159,6 +163,8 @@ public class DocumentMcpToolTest {
 
   private boolean                        scopeUnreadable;
 
+  private List<DocumentNameLookupPlugin> nameLookupPlugins = new java.util.ArrayList<>();
+
   @Before
   public void setUp() throws Exception {
     documentFileService = Mockito.mock(DocumentFileService.class);
@@ -205,6 +211,11 @@ public class DocumentMcpToolTest {
       @Override
       public Locale getCurrentUserLocale() {
         return Locale.ENGLISH;
+      }
+
+      @Override
+      protected List<DocumentNameLookupPlugin> getNameLookupPlugins() {
+        return nameLookupPlugins;
       }
 
       @Override
@@ -1377,6 +1388,176 @@ public class DocumentMcpToolTest {
     assertEquals(1, models.size());
     assertEquals(DOCUMENT_ID, models.get(0).getId());
     assertEquals(DocumentMcpTool.TYPE_FILE, models.get(0).getType());
+  }
+
+  /**
+   * A name no file carries and no title holds, « Contract QA-92501 », is
+   * looked up in the other add-ons' data about files (EXO-95443): the file a
+   * form of that name is filled in on comes back as a file, with what the
+   * name matched and the values the form holds for it, read back with the
+   * user's own rights. The contributor is asked as the user, with the trimmed
+   * name, no space and the cap. Mutants: the contributors not asked; the hit
+   * not read back as the user; matched_by or matched_values dropped; another
+   * identity or name passed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsByNameLooksANameNoFileCarriesUpInOtherData() throws Exception {
+    when(documentFileService.findDocumentsByName("Contract QA-92501", null, USER_IDENTITY_ID, 5)).thenReturn(List.of());
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class), any(), anyInt(), anyInt()))
+        .thenReturn(List.of());
+    Map<String, String> values = new java.util.LinkedHashMap<>();
+    values.put("Client", "Ville de Villejuif");
+    values.put("Reviewer", "Argondicco");
+    DocumentNameLookupPlugin plugin = Mockito.mock(DocumentNameLookupPlugin.class);
+    when(plugin.findByName(any())).thenReturn(List.of(new DocumentNameLookupHit(DOCUMENT_ID, "form QA-92501 Contract", values)));
+    nameLookupPlugins.add(plugin);
+    when(documentFileService.describeForIndex(any())).thenReturn(Map.of(DOCUMENT_ID, indexInfo(DOCUMENT_ID, 0L)));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNodeNamed(DOCUMENT_ID, "qa-92501-root.txt"));
+
+    List<DocumentModel> models = documentMcpTool.searchDocuments(null, " Contract QA-92501 ", null, null, null, null, 5, null, null);
+
+    assertEquals(1, models.size());
+    assertEquals(DOCUMENT_ID, models.get(0).getId());
+    assertEquals(DocumentMcpTool.TYPE_FILE, models.get(0).getType());
+    assertEquals("form QA-92501 Contract", models.get(0).getMatchedBy());
+    assertEquals(values, models.get(0).getMatchedValues());
+    ArgumentCaptor<DocumentNameLookupRequest> request = ArgumentCaptor.forClass(DocumentNameLookupRequest.class);
+    verify(plugin).findByName(request.capture());
+    assertEquals(currentIdentity, request.getValue().viewer());
+    assertEquals("Contract QA-92501", request.getValue().name());
+    assertNull(request.getValue().spaceId());
+    assertEquals(5, request.getValue().limit());
+    assertEquals(Locale.ENGLISH, request.getValue().locale());
+    verify(documentFileService).getDocumentById(DOCUMENT_ID, USERNAME);
+  }
+
+  /**
+   * A contributor never decides what the user sees (EXO-95443): of the ids
+   * it names, only a file the user may read, out of the trash and in the
+   * space searched comes back. An id the user may not read, one no node
+   * carries, a file in the trash (which the index description leaves out),
+   * a file of another space and a folder are dropped. Mutants: the read-back
+   * as the user removed; the trash left in; the space not compared; a folder
+   * kept.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsByNameKeepsOnlyTheContributedFilesTheUserMayRead() throws Exception {
+    Space space = new Space();
+    space.setId(String.valueOf(SPACE_ID));
+    space.setPrettyName("f2_support");
+    when(spaceService.getSpaceById(String.valueOf(SPACE_ID))).thenReturn(space);
+    when(spaceService.canViewSpace(eq(space), eq(USERNAME))).thenReturn(true);
+    org.exoplatform.social.core.identity.model.Identity spaceIdentity =
+                                                                      new org.exoplatform.social.core.identity.model.Identity("space",
+                                                                                                                              "f2_support");
+    spaceIdentity.setId("200");
+    when(identityManager.getOrCreateSpaceIdentity("f2_support")).thenReturn(spaceIdentity);
+    when(documentFileService.findDocumentsByName("Contract QA-92501", 200L, USER_IDENTITY_ID, 20)).thenReturn(List.of());
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class), any(), anyInt(), anyInt()))
+        .thenReturn(List.of());
+    String unreadable = "aa0688cd7f00010134384ab7e1b15a41";
+    String missing = "aa0688cd7f00010134384ab7e1b15a42";
+    String trashed = "aa0688cd7f00010134384ab7e1b15a43";
+    String otherSpace = "aa0688cd7f00010134384ab7e1b15a44";
+    String folder = "aa0688cd7f00010134384ab7e1b15a45";
+    DocumentNameLookupPlugin plugin = Mockito.mock(DocumentNameLookupPlugin.class);
+    when(plugin.findByName(any())).thenReturn(List.of(hit(unreadable),
+                                                      hit(missing),
+                                                      hit(trashed),
+                                                      hit(otherSpace),
+                                                      hit(folder),
+                                                      hit(DOCUMENT_ID)));
+    nameLookupPlugins.add(plugin);
+    Map<String, DocumentIndexInfo> described = new HashMap<>();
+    for (String id : List.of(unreadable, missing, folder, DOCUMENT_ID)) {
+      described.put(id, indexInfo(id, SPACE_ID));
+    }
+    described.put(otherSpace, indexInfo(otherSpace, SPACE_ID + 1));
+    when(documentFileService.describeForIndex(any())).thenReturn(described);
+    when(documentFileService.getDocumentById(unreadable, USERNAME)).thenThrow(new IllegalAccessException("no"));
+    when(documentFileService.getDocumentById(missing, USERNAME)).thenThrow(new ObjectNotFoundException("gone"));
+    lenient().when(documentFileService.getDocumentById(trashed, USERNAME)).thenReturn(fileNodeNamed(trashed, "trashed.txt"));
+    lenient().when(documentFileService.getDocumentById(otherSpace, USERNAME)).thenReturn(fileNodeNamed(otherSpace, "other.txt"));
+    when(documentFileService.getDocumentById(folder, USERNAME)).thenReturn(folderNode(folder));
+    when(documentFileService.getDocumentById(DOCUMENT_ID, USERNAME)).thenReturn(fileNodeNamed(DOCUMENT_ID, "qa-92501-root.txt"));
+
+    List<DocumentModel> models = documentMcpTool.searchDocuments(null, "Contract QA-92501", SPACE_ID, null, null, null, null, null, null);
+
+    assertEquals(List.of(DOCUMENT_ID), models.stream().map(DocumentModel::getId).toList());
+    ArgumentCaptor<DocumentNameLookupRequest> request = ArgumentCaptor.forClass(DocumentNameLookupRequest.class);
+    verify(plugin).findByName(request.capture());
+    assertEquals(Long.valueOf(SPACE_ID), request.getValue().spaceId());
+  }
+
+  /**
+   * The other add-ons are asked only when the name lookup and the title
+   * search both found nothing; a failing contributor is skipped, a null
+   * answer and a blank id are ignored, an id named twice comes back once, and
+   * the hits stop at the cap (EXO-95443). Mutants: the contributors asked
+   * after a hit; the failure propagated; the duplicate kept; the cap dropped.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void searchDocumentsByNameAsksOtherDataOnlyWhenNothingElseFoundAndBoundsIt() throws Exception {
+    DocumentNameLookupPlugin failing = Mockito.mock(DocumentNameLookupPlugin.class);
+    when(failing.findByName(any())).thenThrow(new IllegalStateException("down"));
+    DocumentNameLookupPlugin silent = Mockito.mock(DocumentNameLookupPlugin.class);
+    when(silent.findByName(any())).thenReturn(null);
+    String second = "aa0688cd7f00010134384ab7e1b15a46";
+    String third = "aa0688cd7f00010134384ab7e1b15a47";
+    DocumentNameLookupPlugin answering = Mockito.mock(DocumentNameLookupPlugin.class);
+    when(answering.findByName(any())).thenReturn(java.util.Arrays.asList(null,
+                                                                         new DocumentNameLookupHit(" ", "form X", Map.of()),
+                                                                         hit(DOCUMENT_ID),
+                                                                         hit(DOCUMENT_ID),
+                                                                         hit(second),
+                                                                         hit(third)));
+    nameLookupPlugins.addAll(List.of(failing, silent, answering));
+    when(documentFileService.findDocumentsByName("Contract QA-92501", null, USER_IDENTITY_ID, 2)).thenReturn(List.of());
+    when(documentFileService.findDocumentsByName("titled", null, USER_IDENTITY_ID, 2)).thenReturn(List.of());
+    when(documentFileService.search(any(org.exoplatform.documents.model.DocumentTimelineFilter.class), any(), anyInt(), anyInt()))
+        .thenAnswer(invocation -> "titled".equals(((org.exoplatform.documents.model.DocumentTimelineFilter) invocation.getArgument(0)).getQuery())
+            ? List.of(fileNodeNamed(DOCUMENT_ID, "titled.txt"))
+            : List.of());
+    when(documentFileService.describeForIndex(any())).thenAnswer(invocation -> {
+      Map<String, DocumentIndexInfo> described = new HashMap<>();
+      for (Object id : (java.util.Collection<?>) invocation.getArgument(0)) {
+        described.put((String) id, indexInfo((String) id, 0L));
+      }
+      return described;
+    });
+    when(documentFileService.getDocumentById(any(), eq(USERNAME))).thenAnswer(invocation -> fileNodeNamed(invocation.getArgument(0), "f.txt"));
+
+    List<DocumentModel> titled = documentMcpTool.searchDocuments(null, "titled", null, null, null, null, 2, null, null);
+    assertEquals(1, titled.size());
+    assertNull(titled.get(0).getMatchedBy());
+    verify(answering, never()).findByName(any());
+
+    List<DocumentModel> models = documentMcpTool.searchDocuments(null, "Contract QA-92501", null, null, null, null, 2, null, null);
+
+    assertEquals(List.of(DOCUMENT_ID, second), models.stream().map(DocumentModel::getId).toList());
+  }
+
+  /**
+   * @param fileId a node id
+   * @return a contributed hit for it
+   */
+  private static DocumentNameLookupHit hit(String fileId) {
+    return new DocumentNameLookupHit(fileId, "form QA-92501 Contract", Map.of("Client", "Ville de Villejuif"));
+  }
+
+  /**
+   * @param id a file id
+   * @param spaceId the space whose library holds it, 0 for none
+   * @return its index description
+   */
+  private static DocumentIndexInfo indexInfo(String id, long spaceId) {
+    return new DocumentIndexInfo(id, "f.txt", USERNAME, USERNAME, 0L, 0L, null, null, spaceId, List.of(), List.of());
   }
 
   /**

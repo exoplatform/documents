@@ -296,7 +296,10 @@ public class DocumentToolDefinitionsTest {
     assertTrue(description, description.contains("its type (folder or file)") && !description.contains("is_folder"));
     assertTrue(description,
                description.contains("When no file or folder has exactly that name, it returns the text search's hits for that name "
-                   + "without its extension instead (files only, without space_name or folder_path), so an empty list means neither found anything."));
+                   + "without its extension instead (files only, without space_name or folder_path); when that finds nothing either, it "
+                   + "returns the files that name matches in other data about files, such as a form of that name filled in on them, each "
+                   + "with matched_by, what the name matched, and matched_values, what that data holds for the file: answer from those "
+                   + "values. So an empty list means none of them found anything."));
     assertTrue(description,
                description.contains("To see what changed in a folder found by name, call it again with that folder's document_id as "
                    + "parent_folder_id and with updated_since."));
