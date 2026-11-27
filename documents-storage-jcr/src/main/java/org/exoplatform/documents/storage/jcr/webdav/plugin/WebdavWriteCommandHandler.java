@@ -53,6 +53,7 @@ import org.exoplatform.documents.webdav.model.WebDavItemProperty;
 import org.exoplatform.documents.webdav.model.WebDavLockResponse;
 import org.exoplatform.services.jcr.RepositoryService;
 import org.exoplatform.services.jcr.access.PermissionType;
+import org.exoplatform.services.jcr.config.RepositoryConfigurationException;
 import org.exoplatform.services.jcr.core.ExtendedNode;
 import org.exoplatform.services.jcr.core.ManageableRepository;
 import org.exoplatform.services.jcr.core.nodetype.NodeTypeDataManager;
@@ -392,7 +393,48 @@ public class WebdavWriteCommandHandler {
     checkResourceExists(session, jcrPath);
     Node node = session.getRootNode().getNode(TextUtil.relativizePath(jcrPath));
     Version restoreVersion = node.getBaseVersion();
+    // The restore brings back the version's content, but the document and the
+    // nodes below it keep the access lists they have now
+    Map<String, String[]> ownPermissions = JCRDocumentsUtil.getOwnPermissions(node);
+    Map<String, Map<String, String[]>> descendantsPermissions = JCRDocumentsUtil.getDescendantsOwnPermissions(node);
     node.restore(restoreVersion, true);
+    keepAccessLists(session, node, ownPermissions, descendantsPermissions);
+  }
+
+  /**
+   * Puts back the access lists read before a restore, through a system
+   * session. The restored document is checked in: it is checked out, and
+   * checked in again, only when the private-access mixin has to be added or
+   * removed on it or on a node below it, which a checked-in node refuses.
+   */
+  @SneakyThrows
+  private void keepAccessLists(Session session,
+                               Node node,
+                               Map<String, String[]> ownPermissions,
+                               Map<String, Map<String, String[]>> descendantsPermissions) {
+    String uuid = node.getUUID();
+    try {
+      ManageableRepository repository = repositoryService.getDefaultRepository();
+      String workspace = session.getWorkspace().getName();
+      // The restore changed the mixins that the user's session still holds
+      boolean mixinChange = JCRDocumentsUtil.needsMixinChange(repository,
+                                                              workspace,
+                                                              uuid,
+                                                              ownPermissions,
+                                                              descendantsPermissions);
+      session.refresh(false);
+      if (mixinChange) {
+        node.checkout();
+      }
+      JCRDocumentsUtil.putBackOwnPermissions(repository, workspace, uuid, ownPermissions, descendantsPermissions);
+      if (mixinChange) {
+        session.refresh(false);
+        node.checkin();
+      }
+    } catch (RepositoryException | RepositoryConfigurationException | RuntimeException e) {
+      LOG.error("Checkout of document {} cancelled, but its access list could not be kept: check its access", uuid, e);
+      throw e;
+    }
   }
 
   @SneakyThrows

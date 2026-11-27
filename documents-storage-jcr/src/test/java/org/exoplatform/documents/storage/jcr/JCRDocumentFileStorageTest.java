@@ -80,6 +80,11 @@ import org.exoplatform.social.metadata.tag.model.TagName;
 import org.exoplatform.upload.UploadResource;
 import org.exoplatform.upload.UploadService;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+
 @RunWith(MockitoJUnitRunner.Silent.class)
 public class JCRDocumentFileStorageTest {
 
@@ -1230,6 +1235,41 @@ public class JCRDocumentFileStorageTest {
     this.jcrDocumentFileStorage.restoreVersion("123", "user");
     verify(node, times(1)).restore(version, true);
     verify(node, times(1)).checkin();
+  }
+
+  @Test
+  public void restoreVersionCreatesNoVersionWhenTheAccessListCannotBeKept() throws Exception {
+    org.exoplatform.services.security.Identity identity = mock(org.exoplatform.services.security.Identity.class);
+    when(identityRegistry.getIdentity("user")).thenReturn(identity);
+    ManageableRepository manageableRepository = mock(ManageableRepository.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(manageableRepository);
+    Session session = mock(Session.class);
+    SessionProvider sessionProvider = mock(SessionProvider.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, identity)).thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", manageableRepository)).thenReturn(session);
+    Version version = mock(Version.class);
+    Node frozen = mock(Node.class);
+    Node node = mock(Node.class);
+    when(session.getNodeByUUID("123")).thenReturn(version);
+    when(version.getNode(NodeTypeConstants.JCR_FROZEN_NODE)).thenReturn(frozen);
+    when(Utils.getStringProperty(frozen, NodeTypeConstants.JCR_FROZEN_UUID)).thenReturn("111");
+    when(session.getNodeByUUID("111")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.putBackOwnPermissions(any(), any(), nullable(String.class), any(), any()))
+                      .thenThrow(new javax.jcr.RepositoryException("refused"));
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(JCRDocumentFileStorage.class);
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThrows(IllegalStateException.class, () -> jcrDocumentFileStorage.restoreVersion("123", "user"));
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+    verify(node, never()).checkin();
+    List<ILoggingEvent> errors = appender.list.stream().filter(event -> event.getLevel() == Level.ERROR).toList();
+    assertEquals(1, errors.size());
+    assertEquals("the error is logged with it", "refused", errors.get(0).getThrowableProxy().getMessage());
   }
 
   @Test

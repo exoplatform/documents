@@ -1007,6 +1007,212 @@ public class JCRDocumentsUtil {
     return versionFileNode;
   }
 
+  /**
+   * Reads a document's own access list, to put it back after a change that
+   * resets it, such as a version restore
+   *
+   * @param node the document
+   * @return its own permissions by identity, or null when it has no list of
+   *         its own and reads its folder's
+   * @throws RepositoryException when the document can't be read
+   */
+  public static Map<String, String[]> getOwnPermissions(Node node) throws RepositoryException {
+    if (!node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+      return null; // NOSONAR null means no list of its own: the repository holds no empty one
+    }
+    return toPermissions((ExtendedNode) node);
+  }
+
+  /**
+   * Reads the own access list of every node below a document that a restore
+   * of the document brings back with it, to put them back as well, parents
+   * before their children. The walk goes down through the non-versionable
+   * nodes only, since a versionable node keeps its own history and is not
+   * touched by the restore.
+   *
+   * @param node the document
+   * @return the own permissions by identity of those nodes, by node id, null
+   *         for a node that has no list of its own
+   * @throws RepositoryException when a node can't be read
+   */
+  public static Map<String, Map<String, String[]>> getDescendantsOwnPermissions(Node node) throws RepositoryException {
+    Map<String, Map<String, String[]>> descendants = new LinkedHashMap<>();
+    collectDescendantsOwnPermissions(node, descendants);
+    return descendants;
+  }
+
+  private static void collectDescendantsOwnPermissions(Node node,
+                                                       Map<String, Map<String, String[]>> descendants) throws RepositoryException {
+    NodeIterator children = node.getNodes();
+    while (children.hasNext()) {
+      Node child = children.nextNode();
+      if (child.isNodeType(NodeTypeConstants.MIX_VERSIONABLE)) {
+        continue;
+      }
+      descendants.put(((ExtendedNode) child).getIdentifier(), getOwnPermissions(child));
+      collectDescendantsOwnPermissions(child, descendants);
+    }
+  }
+
+  private static Map<String, String[]> toPermissions(ExtendedNode node) throws RepositoryException {
+    Map<String, List<String>> permissions = new LinkedHashMap<>();
+    for (AccessControlEntry entry : node.getACL().getPermissionEntries()) {
+      permissions.computeIfAbsent(entry.getIdentity(), identity -> new ArrayList<>()).add(entry.getPermission());
+    }
+    Map<String, String[]> permissionsByIdentity = new LinkedHashMap<>();
+    permissions.forEach((identity, types) -> permissionsByIdentity.put(identity, types.toArray(new String[0])));
+    return permissionsByIdentity;
+  }
+
+  /**
+   * Gives a document back the access list read by
+   * {@link #getOwnPermissions(Node)}, through a system session, so that a
+   * user who may edit the document without changing its access can restore it.
+   * The document must be checked out when the private-access mixin has to be
+   * added or removed on it or on a node below it, as told by
+   * {@link #needsMixinChange}; only the lists change otherwise. The lists are
+   * saved in several steps: when one fails, the nodes whose list is not put
+   * back yet are logged with the error, which is rethrown.
+   *
+   * @param repository the repository holding the document
+   * @param workspace the document's workspace
+   * @param nodeUuid the document's UUID
+   * @param ownPermissions its own permissions, or null when it had no list of
+   *          its own
+   * @param descendantsPermissions the own permissions of the nodes below it, by
+   *          node id, as read by {@link #getDescendantsOwnPermissions(Node)}
+   * @throws RepositoryException when a list can't be put back
+   */
+  public static void putBackOwnPermissions(ManageableRepository repository,
+                                           String workspace,
+                                           String nodeUuid,
+                                           Map<String, String[]> ownPermissions,
+                                           Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
+    Session systemSession = repository.getSystemSession(workspace);
+    // The nodes whose list is not put back yet, named in the log when a save fails
+    Set<String> notPutBack = new LinkedHashSet<>();
+    notPutBack.add(nodeUuid);
+    notPutBack.addAll(descendantsPermissions.keySet());
+    try {
+      ExtendedNode node = (ExtendedNode) systemSession.getNodeByUUID(nodeUuid);
+      if (ownPermissions != null) {
+        if (!node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+          node.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+        }
+        node.setPermissions(ownPermissions);
+      } else if (node.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        // Removing the mixin keeps the list in effect: its folder's is set first
+        node.setPermissions(toPermissions((ExtendedNode) node.getParent()));
+        systemSession.save();
+        node.removeMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+      }
+      systemSession.save();
+      notPutBack.remove(nodeUuid);
+      // After the document's own list: a node that reads its folder's list reads the one just put back
+      putBackDescendantsPermissions(systemSession, descendantsPermissions, notPutBack);
+      systemSession.save();
+    } catch (RepositoryException | RuntimeException e) {
+      LOG.error("After the restore of a version of document {}, the access lists of the nodes {} were not put back: they may keep the lists of the restored version",
+                nodeUuid,
+                notPutBack,
+                e);
+      throw e;
+    } finally {
+      systemSession.logout();
+    }
+  }
+
+  /**
+   * Tells whether putting the access lists back adds or removes the
+   * private-access mixin on the document or on a node below it, which needs
+   * the document to be checked out
+   *
+   * @param repository the repository holding the document
+   * @param workspace the document's workspace
+   * @param nodeUuid the document's UUID
+   * @param ownPermissions the document's own permissions to put back, or null
+   * @param descendantsPermissions the permissions of the nodes below it, by node
+   *          id
+   * @return true when a mixin has to change
+   * @throws RepositoryException when a node can't be read
+   */
+  public static boolean needsMixinChange(ManageableRepository repository,
+                                         String workspace,
+                                         String nodeUuid,
+                                         Map<String, String[]> ownPermissions,
+                                         Map<String, Map<String, String[]>> descendantsPermissions) throws RepositoryException {
+    Session systemSession = repository.getSystemSession(workspace);
+    try {
+      if (systemSession.getNodeByUUID(nodeUuid).isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE) != (ownPermissions != null)) {
+        return true;
+      }
+      for (String descendantId : descendantsPermissions.keySet()) {
+        try {
+          boolean hasOwnList = ((ExtendedSession) systemSession).getNodeByIdentifier(descendantId)
+                                                                .isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE);
+          if (hasOwnList != (descendantsPermissions.get(descendantId) != null)) {
+            return true;
+          }
+        } catch (ItemNotFoundException e) {
+          // the restore did not bring this node back
+        }
+      }
+      return false;
+    } finally {
+      systemSession.logout();
+    }
+  }
+
+  private static void putBackDescendantsPermissions(Session systemSession,
+                                                    Map<String, Map<String, String[]>> descendantsPermissions,
+                                                    Set<String> notPutBack) throws RepositoryException {
+    // The lists are put back first and saved once: a node that reads its
+    // folder's list only sees a list changed in this session after a save
+    for (Map.Entry<String, Map<String, String[]>> descendant : descendantsPermissions.entrySet()) {
+      ExtendedNode child = findNode(systemSession, descendant.getKey());
+      if (child == null) {
+        notPutBack.remove(descendant.getKey()); // the restore did not bring this node back
+        continue;
+      }
+      if (descendant.getValue() == null) {
+        continue; // it has no list to put back: its list, if any, is removed below
+      }
+      if (!child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        child.addMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+      }
+      child.setPermissions(descendant.getValue());
+    }
+    systemSession.save();
+    descendantsPermissions.forEach((nodeId, permissions) -> {
+      if (permissions != null) {
+        notPutBack.remove(nodeId);
+      }
+    });
+    // Then the lists that are gone are removed, parents first, each removal saved
+    for (Map.Entry<String, Map<String, String[]>> descendant : descendantsPermissions.entrySet()) {
+      if (descendant.getValue() != null) {
+        continue;
+      }
+      ExtendedNode child = findNode(systemSession, descendant.getKey());
+      if (child != null && child.isNodeType(NodeTypeConstants.EXO_PRIVILEGEABLE)) {
+        // Removing the mixin keeps the list in effect: its folder's is set first
+        child.setPermissions(toPermissions((ExtendedNode) child.getParent()));
+        systemSession.save();
+        child.removeMixin(NodeTypeConstants.EXO_PRIVILEGEABLE);
+        systemSession.save();
+      }
+      notPutBack.remove(descendant.getKey());
+    }
+  }
+
+  private static ExtendedNode findNode(Session systemSession, String nodeId) throws RepositoryException {
+    try {
+      return (ExtendedNode) ((ExtendedSession) systemSession).getNodeByIdentifier(nodeId);
+    } catch (ItemNotFoundException e) {
+      return null;
+    }
+  }
+
   public static String increaseNameIndex(String origin, int count) {
     int index = origin.indexOf('.');
     if (index == -1) {
