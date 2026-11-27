@@ -24,8 +24,8 @@ import java.util.Map;
  * A file that a name matches in another add-on's data.
  *
  * @param fileId the file's node identifier
- * @param matchedBy what the name matched, in the user's language, such as
- *          « form QA-92501 Contract »
+ * @param matchedBy a short label naming what the name matched, such as
+ *          « form « QA-92501 Contract » »
  * @param values what that data holds for the file, label to value as plain
  *          text, in display order; empty when it shows nothing more
  */

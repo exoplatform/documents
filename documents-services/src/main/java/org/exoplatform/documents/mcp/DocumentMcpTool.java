@@ -312,6 +312,13 @@ public class DocumentMcpTool implements McpToolPlugin {
   /** The most matches a name lookup of search_documents returns. */
   static final int                 MAX_NAME_MATCHES       = 20;
 
+  /**
+   * How many contributed ids, at most, a name lookup describes per file it
+   * may return: enough for the filters to drop some, never an unbounded
+   * system-session read.
+   */
+  static final int                 CONTRIBUTED_FACTOR     = 5;
+
   /** The drive name a name lookup gives for the user's own drive. */
   static final String              PERSONAL_DRIVE         = "personal drive";
 
@@ -1493,7 +1500,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param updatedSince must be blank
    * @return the matches, in the order of their path; when no file or folder
    *         has exactly that name, the text search's hits for it instead
-   *         ({@link #searchNameAsText})
+   *         ({@link #searchNameAsText}), and when that finds nothing either,
+   *         the files the other add-ons' data names
+   *         ({@link #lookUpNameInOtherData})
    * @throws ObjectNotFoundException when the space doesn't exist, or no space
    *           of the user carries the name
    * @throws IllegalAccessException when the user can't view the space
@@ -1606,7 +1615,11 @@ public class DocumentMcpTool implements McpToolPlugin {
       }
       answer.stream()
             .filter(hit -> hit != null && StringUtils.isNotBlank(hit.fileId()))
-            .forEach(hit -> hits.putIfAbsent(hit.fileId(), hit));
+            .forEach(hit -> {
+              if (hits.size() < size * CONTRIBUTED_FACTOR) {
+                hits.putIfAbsent(hit.fileId(), hit);
+              }
+            });
     }
     if (hits.isEmpty()) {
       return List.of();
