@@ -297,18 +297,22 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @SneakyThrows
   public long getRootFolderOwnerId(String documentId) {
     SessionProvider sessionProvider = SessionProvider.createSystemProvider();
-    ManageableRepository repository = repositoryService.getCurrentRepository();
-    Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-    Node node = getNodeByIdentifier(systemSession, documentId);
-    if (node != null) {
-      org.exoplatform.social.core.identity.model.Identity ownerIdentity = getOwnerIdentityFromNodePath(node.getPath(),
-                                                                                                       identityManager,
-                                                                                                       spaceService);
-      if (ownerIdentity != null) {
-        return ownerIdentity.getIdentityId();
+    try {
+      ManageableRepository repository = repositoryService.getCurrentRepository();
+      Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+      Node node = getNodeByIdentifier(systemSession, documentId);
+      if (node != null) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = getOwnerIdentityFromNodePath(node.getPath(),
+                                                                                                         identityManager,
+                                                                                                         spaceService);
+        if (ownerIdentity != null) {
+          return ownerIdentity.getIdentityId();
+        }
       }
+      return 0;
+    } finally {
+      sessionProvider.close();
     }
-    return 0;
   }
 
   @Override
@@ -1727,13 +1731,28 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
                            String conflictAction) throws Exception {
     Node node;
     String username = aclIdentity.getUserId();
-    if (StringUtils.isBlank(fileId) && ownerId > 0) {
-      org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
-      SessionProvider sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
-      node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
-    } else {
-      node = getNodeByIdentifier(session, fileId);
+    SessionProvider sessionProvider = null;
+    try {
+      if (StringUtils.isBlank(fileId) && ownerId > 0) {
+        org.exoplatform.social.core.identity.model.Identity ownerIdentity = identityManager.getIdentity(String.valueOf(ownerId));
+        sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+        node = getIdentityRootNode(spaceService, nodeHierarchyCreator, username, ownerIdentity, sessionProvider);
+      } else {
+        node = getNodeByIdentifier(session, fileId);
+      }
+      moveNode(session, node, username, destPath, conflictAction);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
+  }
+
+  private void moveNode(Session session,
+                        Node node,
+                        String username,
+                        String destPath,
+                        String conflictAction) throws Exception {
     if (node == null) {
       return;
     }
@@ -2343,6 +2362,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     Node rootNode = null;
     Node shared = null;
     SessionProvider sessionProvider = null;
+    SessionProvider userSessionProvider = null;
     try {
       sessionProvider = SessionProvider.createSystemProvider();
       ManageableRepository repository = repositoryService.getCurrentRepository();
@@ -2364,8 +2384,8 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
         shared = rootNode.getNode(SHARED_FOLDER_NAME);
       }
       if (destIdentity.isSpace()) {
-        sessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
-        session = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+        userSessionProvider = getUserSessionProvider(repositoryService, aclIdentity);
+        session = userSessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
         shared = getNodeByIdentifier(session, ((ExtendedNode) shared).getIdentifier());
       }
       if (currentNode.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
@@ -2433,6 +2453,9 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       throw new IllegalStateException("Error updating sharing of document'" + documentId + " to identity " + destId, e);
     } finally {
+      if (userSessionProvider != null) {
+        userSessionProvider.close();
+      }
       if (sessionProvider != null) {
         sessionProvider.close();
       }
@@ -2798,9 +2821,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public List<FileVersion> getFileVersions(String fileNodeId, String aclIdentity) {
     List<FileVersion> fileVersions = new ArrayList<>();
     Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
+    SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      sessionProvider = getUserSessionProvider(repositoryService, identity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       Node node = session.getNodeByUUID(fileNodeId);
       Version rootVersion = node.getVersionHistory().getRootVersion();
       VersionIterator versionIterator = node.getVersionHistory().getAllVersions();
@@ -2813,6 +2838,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error while getting file versions", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
     fileVersions.sort(Collections.reverseOrder());
     return fileVersions;
@@ -2824,9 +2853,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   @Override
   public AbstractNode getDocumentById(String documentId, String username) throws ObjectNotFoundException, IllegalAccessException {
     Identity identity = identityRegistry.getIdentity(String.valueOf(username));
+    SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      sessionProvider = getUserSessionProvider(repositoryService, identity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       AbstractNode abstractNode = getDocumentById(session, documentId, identity);
       if (abstractNode == null) {
         throw new ObjectNotFoundException(String.format(NODE_NOT_FOUND_MESSAGE, documentId));
@@ -2837,6 +2868,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       throw new ObjectNotFoundException(String.format(NODE_NOT_FOUND_MESSAGE, documentId));
     } catch (RepositoryException e) {
       throw new IllegalAccessException(String.format("Node with id %s not accessible to user %s", documentId, username));
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
@@ -3038,9 +3073,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public FileVersion updateVersionSummary(String originFileId, String versionId, String summary, String aclIdentity) {
     Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
     FileVersion versionFileNode = new FileVersion();
+    SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      sessionProvider = getUserSessionProvider(repositoryService, identity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       Node node = session.getNodeByUUID(originFileId);
       Version version = (Version) session.getNodeByUUID(versionId);
       versionFileNode.setId(versionId);
@@ -3060,6 +3097,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       session.save();
     } catch (Exception e) {
       throw new IllegalStateException("Error while adding or updating version summary", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
     return versionFileNode;
   }
@@ -3073,9 +3114,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public FileVersion restoreVersion(String versionId, String aclIdentity) {
     Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
     FileVersion versionFileNode = new FileVersion();
+    SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      sessionProvider = getUserSessionProvider(repositoryService, identity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       Version version = (Version) session.getNodeByUUID(versionId);
       Node frozen = version.getNode(NodeTypeConstants.JCR_FROZEN_NODE);
       Node node;
@@ -3099,6 +3142,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       session.save();
     } catch (RepositoryException e) {
       throw new IllegalStateException("Error while restoring version", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
     return versionFileNode;
   }
@@ -3217,9 +3264,11 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
   public FileVersion createNewVersion(String nodeId, String aclIdentity, InputStream newContent) {
     Identity identity = identityRegistry.getIdentity(String.valueOf(aclIdentity));
     FileVersion fileVersion = new FileVersion();
+    SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
-      Session session = getUserSessionProvider(repositoryService, identity).getSession(COLLABORATION, manageableRepository);
+      sessionProvider = getUserSessionProvider(repositoryService, identity);
+      Session session = sessionProvider.getSession(COLLABORATION, manageableRepository);
       Node node = session.getNodeByUUID(nodeId);
       if (node.hasNode(NodeTypeConstants.JCR_CONTENT)) {
         // Make the file versionable if it isn't yet: otherwise the whole write was
@@ -3248,6 +3297,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error while creating new version", e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
     return fileVersion;
   }
@@ -3296,7 +3349,7 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
    */
   @Override
   public boolean hasEditPermissions(String nodeId, Identity aclUserIdentity) {
-    SessionProvider sessionProvider;
+    SessionProvider sessionProvider = null;
     try {
       ManageableRepository manageableRepository = repositoryService.getCurrentRepository();
       sessionProvider = JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclUserIdentity);
@@ -3307,6 +3360,10 @@ public class JCRDocumentFileStorage implements DocumentFileStorage {
     } catch (Exception e) {
       LOG.error("Error while checking edit permissions on document {}", nodeId, e);
       return false;
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 

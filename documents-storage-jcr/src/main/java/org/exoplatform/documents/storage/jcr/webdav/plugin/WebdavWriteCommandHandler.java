@@ -280,8 +280,12 @@ public class WebdavWriteCommandHandler {
     Node node = (Node) session.getItem(jcrPath);
     forceUnlock(node);
     if (canRemoveNode(node)) {
-      trashStorage.moveToTrash(node,
-                               new SessionProvider(((SessionImpl) session).getUserState()));
+      SessionProvider sessionProvider = new SessionProvider(((SessionImpl) session).getUserState());
+      try {
+        trashStorage.moveToTrash(node, sessionProvider);
+      } finally {
+        sessionProvider.close();
+      }
       pathCommandHandler.deleteMapping(jcrPath);
     } else {
       throw new WebDavException(HttpStatus.SC_FORBIDDEN, String.format("Resource with path '%s' can't be removed", webDavPath));

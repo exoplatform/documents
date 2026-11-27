@@ -784,16 +784,20 @@ public class JCRDocumentsUtil {
     } else if (ownerIdentity.isUser()) {
       checkNotDeleted(ownerIdentity);
       SessionProvider systemSession = SessionProvider.createSystemProvider();
-      Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, ownerIdentity.getRemoteId());
-      Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
-      if(username.equals(ownerIdentity.getRemoteId())){
-        String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
-        if (session.itemExists(privatePathNode)) {
-          identityRootNode = (Node) session.getItem(privatePathNode);
+      try {
+        Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, ownerIdentity.getRemoteId());
+        Session session = sessionProvider.getSession(sessionProvider.getCurrentWorkspace(), sessionProvider.getCurrentRepository());
+        if(username.equals(ownerIdentity.getRemoteId())){
+          String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
+          if (session.itemExists(privatePathNode)) {
+            identityRootNode = (Node) session.getItem(privatePathNode);
+          }
+        }else{
+          String publicPathNode = identityNode.getPath()+"/"+USER_PUBLIC_ROOT_NODE;
+          identityRootNode = (Node) session.getItem(publicPathNode);
         }
-      }else{
-        String publicPathNode = identityNode.getPath()+"/"+USER_PUBLIC_ROOT_NODE;
-        identityRootNode = (Node) session.getItem(publicPathNode);
+      } finally {
+        systemSession.close();
       }
 
     }
@@ -810,11 +814,15 @@ public class JCRDocumentsUtil {
     } else if (ownerIdentity.isUser()) {
       checkNotDeleted(ownerIdentity);
       SessionProvider systemSession = SessionProvider.createSystemProvider();
-      Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, ownerIdentity.getRemoteId());
-      String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
+      try {
+        Node identityNode = nodeHierarchyCreator.getUserNode(systemSession, ownerIdentity.getRemoteId());
+        String privatePathNode = identityNode.getPath()+"/"+USER_PRIVATE_ROOT_NODE;
         if (session.itemExists(privatePathNode)) {
           identityRootNode = (Node) session.getItem(privatePathNode);
         }
+      } finally {
+        systemSession.close();
+      }
      }
     return identityRootNode;
   }
@@ -1322,18 +1330,25 @@ public class JCRDocumentsUtil {
       if (node.isNodeType(NodeTypeConstants.EXO_SYMLINK)) {
         RepositoryService repositoryService = CommonsUtils.getService(RepositoryService.class);
         SessionProvider sessionProvider = SessionProvider.createSystemProvider();
-        ManageableRepository repository = repositoryService.getCurrentRepository();
-        Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
-        String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
-        Node sourceNode = getNodeByIdentifier(systemSession, sourceNodeId);
-        if (sourceNode != null && sourceNode.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)
-                                            .getDate()
-                                            .compareTo(node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate()) > 0) {
-          nodeToModify = sourceNode;
+        try {
+          ManageableRepository repository = repositoryService.getCurrentRepository();
+          Session systemSession = sessionProvider.getSession(repository.getConfiguration().getDefaultWorkspaceName(), repository);
+          String sourceNodeId = node.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID).getString();
+          Node sourceNode = getNodeByIdentifier(systemSession, sourceNodeId);
+          if (sourceNode != null && sourceNode.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)
+                                              .getDate()
+                                              .compareTo(node.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate()) > 0) {
+            nodeToModify = sourceNode;
+          }
+          long modifiedDate = nodeToModify.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate().getTimeInMillis();
+          trashElementNode.setModifiedDate(modifiedDate);
+        } finally {
+          sessionProvider.close();
         }
+      } else {
+        long modifiedDate = nodeToModify.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate().getTimeInMillis();
+        trashElementNode.setModifiedDate(modifiedDate);
       }
-      long modifiedDate = nodeToModify.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE).getDate().getTimeInMillis();
-      trashElementNode.setModifiedDate(modifiedDate);
     }
     if (node.hasProperty(NodeTypeConstants.RESTORE_PATH)) {
       trashElementNode.setRestorePath(node.getProperty(NodeTypeConstants.RESTORE_PATH).getString());

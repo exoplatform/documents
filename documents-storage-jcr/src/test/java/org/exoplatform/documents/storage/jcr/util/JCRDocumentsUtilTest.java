@@ -16,6 +16,7 @@
  */
 package org.exoplatform.documents.storage.jcr.util;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -834,5 +835,125 @@ public class JCRDocumentsUtilTest {
     public long getPosition() {
       return position;
     }
+  }
+
+  @Test
+  public void getIdentityRootNodeClosesTheSystemProviderOfTheUserNodeLookup() throws Exception {
+    org.exoplatform.social.core.identity.model.Identity owner = mock(org.exoplatform.social.core.identity.model.Identity.class);
+    when(owner.isUser()).thenReturn(true);
+    when(owner.getRemoteId()).thenReturn("owner");
+    org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator hierarchyCreator =
+                                                                                     mock(org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator.class);
+    org.exoplatform.services.jcr.ext.common.SessionProvider systemProvider =
+                                                                           mock(org.exoplatform.services.jcr.ext.common.SessionProvider.class);
+    Node userNode = mock(Node.class);
+    when(userNode.getPath()).thenReturn("/Users/owner");
+    when(hierarchyCreator.getUserNode(systemProvider, "owner")).thenReturn(userNode);
+    Node privateNode = mock(Node.class);
+    Session session = mock(Session.class);
+    when(session.itemExists("/Users/owner/Private")).thenReturn(true);
+    when(session.getItem("/Users/owner/Private")).thenReturn(privateNode);
+    org.exoplatform.services.jcr.ext.common.SessionProvider userProvider =
+                                                                         mock(org.exoplatform.services.jcr.ext.common.SessionProvider.class);
+    when(userProvider.getSession(any(), any())).thenReturn(session);
+
+    try (MockedStatic<org.exoplatform.services.jcr.ext.common.SessionProvider> providers =
+                                                                                         mockStatic(org.exoplatform.services.jcr.ext.common.SessionProvider.class)) {
+      providers.when(org.exoplatform.services.jcr.ext.common.SessionProvider::createSystemProvider).thenReturn(systemProvider);
+
+      assertEquals(privateNode,
+                   JCRDocumentsUtil.getIdentityRootNode(mock(SpaceService.class), hierarchyCreator, "owner", owner, userProvider));
+      assertEquals(privateNode, JCRDocumentsUtil.getIdentityRootNode(mock(SpaceService.class), hierarchyCreator, owner, session));
+    }
+
+    verify(systemProvider, times(2)).close();
+  }
+
+  @Test
+  public void getIdentityRootNodeClosesTheSystemProviderWhenTheLookupFails() throws Exception {
+    org.exoplatform.social.core.identity.model.Identity owner = mock(org.exoplatform.social.core.identity.model.Identity.class);
+    when(owner.isUser()).thenReturn(true);
+    when(owner.getRemoteId()).thenReturn("owner");
+    org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator hierarchyCreator =
+                                                                                     mock(org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator.class);
+    org.exoplatform.services.jcr.ext.common.SessionProvider systemProvider =
+                                                                           mock(org.exoplatform.services.jcr.ext.common.SessionProvider.class);
+    when(hierarchyCreator.getUserNode(systemProvider, "owner")).thenThrow(new RepositoryException("down"));
+
+    try (MockedStatic<org.exoplatform.services.jcr.ext.common.SessionProvider> providers =
+                                                                                         mockStatic(org.exoplatform.services.jcr.ext.common.SessionProvider.class)) {
+      providers.when(org.exoplatform.services.jcr.ext.common.SessionProvider::createSystemProvider).thenReturn(systemProvider);
+      Session session = mock(Session.class);
+
+      assertThrows(RepositoryException.class,
+                   () -> JCRDocumentsUtil.getIdentityRootNode(mock(SpaceService.class), hierarchyCreator, owner, session));
+    }
+
+    verify(systemProvider).close();
+  }
+
+  @Test
+  public void retrieveTrashElementPropertiesOfASymlinkClosesTheSystemProvider() throws Exception {
+    NodeImpl symlink = mock(NodeImpl.class);
+    Property modified = mock(Property.class);
+    Calendar linkDate = Calendar.getInstance();
+    linkDate.set(2023, Calendar.JANUARY, 1);
+    Calendar targetDate = Calendar.getInstance();
+    targetDate.set(2024, Calendar.JANUARY, 1);
+    when(modified.getDate()).thenReturn(linkDate);
+    Property uuid = mock(Property.class);
+    when(uuid.getString()).thenReturn("target");
+    when(symlink.hasProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)).thenReturn(true);
+    when(symlink.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)).thenReturn(modified);
+    when(symlink.isNodeType(NodeTypeConstants.EXO_SYMLINK)).thenReturn(true);
+    when(symlink.getProperty(NodeTypeConstants.EXO_SYMLINK_UUID)).thenReturn(uuid);
+    when(symlink.getName()).thenReturn("link");
+    when(symlink.getPath()).thenReturn("/link");
+    when(symlink.getIdentifier()).thenReturn("linkId");
+    NodeType nodeType = mock(NodeType.class);
+    when(nodeType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(symlink.getPrimaryNodeType()).thenReturn(nodeType);
+    Node target = mock(Node.class);
+    Property targetModified = mock(Property.class);
+    when(targetModified.getDate()).thenReturn(targetDate);
+    when(target.getProperty(NodeTypeConstants.EXO_LAST_MODIFIED_DATE)).thenReturn(targetModified);
+    org.exoplatform.services.jcr.core.ManageableRepository repository =
+                                                                      mock(org.exoplatform.services.jcr.core.ManageableRepository.class);
+    org.exoplatform.services.jcr.config.RepositoryEntry entry = mock(org.exoplatform.services.jcr.config.RepositoryEntry.class);
+    when(repository.getConfiguration()).thenReturn(entry);
+    when(entry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    org.exoplatform.services.jcr.RepositoryService repositoryService = mock(org.exoplatform.services.jcr.RepositoryService.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    COMMONS_UTILS_UTIL.when(() -> CommonsUtils.getService(org.exoplatform.services.jcr.RepositoryService.class))
+                      .thenReturn(repositoryService);
+    org.exoplatform.services.jcr.ext.common.SessionProvider systemProvider =
+                                                                           mock(org.exoplatform.services.jcr.ext.common.SessionProvider.class);
+    ExtendedSession systemSession = mock(ExtendedSession.class);
+    java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
+    org.mockito.Mockito.doAnswer(invocation -> {
+      closed.set(true);
+      return null;
+    }).when(systemProvider).close();
+    when(systemProvider.getSession("collaboration", repository)).thenReturn(systemSession);
+    when(systemSession.getNodeByIdentifier("target")).thenAnswer(invocation -> {
+      assertFalse("The session is read after its provider closed", closed.get());
+      return target;
+    });
+    // the source node's dates are read through the system session: dead once its provider closed
+    when(targetModified.getDate()).thenAnswer(invocation -> {
+      assertFalse("The source node is read after its provider closed", closed.get());
+      return targetDate;
+    });
+
+    TrashElementNode result = new TrashElementNode();
+    try (MockedStatic<org.exoplatform.services.jcr.ext.common.SessionProvider> providers =
+                                                                                         mockStatic(org.exoplatform.services.jcr.ext.common.SessionProvider.class)) {
+      providers.when(org.exoplatform.services.jcr.ext.common.SessionProvider::createSystemProvider).thenReturn(systemProvider);
+
+      JCRDocumentsUtil.retrieveTrashElementProperties(symlink, result);
+    }
+
+    assertEquals(targetDate.getTimeInMillis(), result.getModifiedDate());
+    verify(systemProvider).close();
   }
 }

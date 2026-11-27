@@ -17,6 +17,7 @@
 package org.exoplatform.documents.storage.jcr;
 
 import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -116,7 +117,7 @@ public class JCRDeleteFileStorageTest {
 
   @Before
   public void setUp() throws Exception {
-    jcrDeleteFileStorage = new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService, bulkStorageActionService);
+    jcrDeleteFileStorage = spy(new JCRDeleteFileStorageImpl(repositoryService, identityManager, trashStorage, favoriteService, portalContainer, sessionProviderService, listenerService, bulkStorageActionService));
   }
 
   @Test
@@ -145,6 +146,7 @@ public class JCRDeleteFileStorageTest {
   @Test
   public void testADocumentDeletedWithADelayIsDeletedWhenTheNodeStops() throws Exception {
     javax.jcr.Session pendingSession = mock(javax.jcr.Session.class);
+    doReturn(pendingSession).when(jcrDeleteFileStorage).openDeletionSession(any());
     jcrDeleteFileStorage.start();
     jcrDeleteFileStorage.deleteDocument(pendingSession, "/document/pending", "pending1", false, true, 3600,
                                         new org.exoplatform.services.security.Identity("testuser"), 2);
@@ -159,6 +161,7 @@ public class JCRDeleteFileStorageTest {
   @Test
   public void testADocumentWhoseDeletionIsUndoneIsNotDeletedWhenTheNodeStops() throws Exception {
     javax.jcr.Session pendingSession = mock(javax.jcr.Session.class);
+    doReturn(pendingSession).when(jcrDeleteFileStorage).openDeletionSession(any());
     jcrDeleteFileStorage.start();
     jcrDeleteFileStorage.deleteDocument(pendingSession, "/document/undone", "pending2", false, true, 3600,
                                         new org.exoplatform.services.security.Identity("testuser"), 2);
@@ -185,6 +188,7 @@ public class JCRDeleteFileStorageTest {
       ended.set(true);
       return false;
     });
+    doReturn(runningSession).when(jcrDeleteFileStorage).openDeletionSession(any());
     jcrDeleteFileStorage.start();
     jcrDeleteFileStorage.deleteDocument(runningSession, "/document/running", "running1", false, true, 1,
                                         new org.exoplatform.services.security.Identity("testuser"), 2);
@@ -610,5 +614,111 @@ public class JCRDeleteFileStorageTest {
     assertThrows(IllegalAccessException.class, () -> jcrDeleteFileStorage.restoreFromTrash("elsewhere", mary));
     verify(trashStorage, never()).restoreFromTrash(anyString(), any());
     verify(userSession).logout();
+  }
+
+  @Test
+  public void deleteDocumentClosesTheUserProvider() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", repository)).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "doc"))
+                      .thenThrow(new IllegalStateException("repository down"));
+
+    jcrDeleteFileStorage.deleteDocument("/folder", "doc", false, false, 0, aclIdentity, 1L);
+
+    verify(sessionProvider).close();
+  }
+
+  @Test
+  public void anImmediateDeletionMovesTheDocumentToTheTrashThenClosesTheUserProvider() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    SessionProvider systemProvider = mock(SessionProvider.class);
+    when(sessionProviderService.getSystemSessionProvider(any())).thenReturn(systemProvider);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", repository)).thenReturn(session);
+    NodeImpl node = mock(NodeImpl.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "doc")).thenReturn(node);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(session, "/folder/doc")).thenReturn(node);
+    when(node.isCheckedOut()).thenReturn(true);
+    when(trashStorage.moveToTrash(node, systemProvider)).thenReturn("trash-doc");
+    when(trashStorage.getNodeByTrashId("trash-doc")).thenReturn(node);
+    NodeType fileType = mock(NodeType.class);
+    when(fileType.getName()).thenReturn(NodeTypeConstants.NT_FILE);
+    when(node.getPrimaryNodeType()).thenReturn(fileType);
+
+    jcrDeleteFileStorage.deleteDocument("/folder/doc", "doc", false, true, 0, aclIdentity, 1L);
+
+    org.mockito.InOrder order = inOrder(trashStorage, sessionProvider);
+    order.verify(trashStorage).moveToTrash(node, systemProvider);
+    order.verify(sessionProvider).close();
+    verify(systemProvider, never()).close();
+  }
+
+  @Test
+  public void aDelayedDeletionReadsThroughASessionOfItsOwnOpenedAfterTheRequestProviderClosed() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    AtomicBoolean requestProviderClosed = new AtomicBoolean();
+    doAnswer(invocation -> {
+      requestProviderClosed.set(true);
+      return null;
+    }).when(sessionProvider).close();
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", repository)).thenReturn(session);
+    javax.jcr.Node node = mock(javax.jcr.Node.class);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "doc")).thenReturn(node);
+    // a logged-out session reads nothing
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByPath(eq(session), any())).thenAnswer(invocation -> {
+      assertFalse("The request's session is read after its provider closed", requestProviderClosed.get());
+      return null;
+    });
+    javax.jcr.Session deletionSession = mock(javax.jcr.Session.class);
+    doAnswer(invocation -> {
+      assertTrue("The deletion session is opened after the request provider closed", requestProviderClosed.get());
+      return deletionSession;
+    }).when(jcrDeleteFileStorage).openDeletionSession(aclIdentity);
+    jcrDeleteFileStorage.start();
+
+    jcrDeleteFileStorage.deleteDocument("/folder/doc", "doc", false, false, 3600, aclIdentity, 1L);
+    verify(sessionProvider).close();
+    jcrDeleteFileStorage.stop();
+
+    org.mockito.InOrder order = inOrder(sessionProvider, jcrDeleteFileStorage, deletionSession);
+    order.verify(sessionProvider).close();
+    order.verify(jcrDeleteFileStorage).openDeletionSession(aclIdentity);
+    order.verify(deletionSession).logout();
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByPath(deletionSession, "/folder/doc"));
+    JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.getNodeByPath(session, "/folder/doc"), never());
+  }
+
+  @Test
+  public void anUndoneDelayedDeletionOpensNoSession() throws Exception {
+    org.exoplatform.services.security.Identity aclIdentity = mock(org.exoplatform.services.security.Identity.class);
+    when(repositoryService.getCurrentRepository()).thenReturn(repository);
+    when(repository.getConfiguration()).thenReturn(repositoryEntry);
+    when(repositoryEntry.getDefaultWorkspaceName()).thenReturn("collaboration");
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getUserSessionProvider(repositoryService, aclIdentity))
+                      .thenReturn(sessionProvider);
+    when(sessionProvider.getSession("collaboration", repository)).thenReturn(session);
+    JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.getNodeByIdentifier(session, "doc")).thenReturn(mock(javax.jcr.Node.class));
+    jcrDeleteFileStorage.start();
+
+    jcrDeleteFileStorage.deleteDocument("/folder/doc", "doc", false, false, 3600, aclIdentity, 1L);
+    jcrDeleteFileStorage.undoDelete("doc", 1L);
+    jcrDeleteFileStorage.stop();
+
+    verify(jcrDeleteFileStorage, never()).openDeletionSession(any());
+    verify(sessionProvider).close();
   }
 }

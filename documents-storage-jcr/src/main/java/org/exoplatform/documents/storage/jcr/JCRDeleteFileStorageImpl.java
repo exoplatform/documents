@@ -181,6 +181,10 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
           + documentId);
     } catch (Exception e) {
       LOG.error("Error when deleting the document" + folderPath, e);
+    } finally {
+      if (sessionProvider != null) {
+        sessionProvider.close();
+      }
     }
   }
 
@@ -203,11 +207,18 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
       pendingDeletions.put(documentId, () -> {
         ExoContainerContext.setCurrentContainer(container);
         RequestLifeCycle.begin(container);
+        // The request's session is closed once the request ends, long before the
+        // delay: the deletion reads through a session of its own
+        Session deletionSession = null;
         try {
-          moveToTrash(finalFolderPath, session, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
+          deletionSession = openDeletionSession(identity);
+          moveToTrash(finalFolderPath, deletionSession, userIdentityId, favorite, !isSymlink && checkToMoveToTrash);
         } catch (Exception e) {
           LOG.error("Error when deleting the document with path" + finalFolderPath, e);
         } finally {
+          if (deletionSession != null) {
+            deletionSession.logout();
+          }
           RequestLifeCycle.end();
         }
       });
@@ -377,6 +388,19 @@ public class JCRDeleteFileStorageImpl implements JCRDeleteFileStorage, Startable
                                                null,
                                                null,
                                                0);
+  }
+
+  /**
+   * Opens the session a delayed deletion reads through: one that applies the
+   * rights of the given identity whatever the thread it runs on. The caller logs
+   * it out.
+   *
+   * @param identity the identity that deletes the document
+   * @return the session
+   * @throws RepositoryException when the session cannot be opened
+   */
+  Session openDeletionSession(Identity identity) throws RepositoryException {
+    return JCRDocumentsUtil.openUserSession(repositoryService, identity);
   }
 
   private void deletePendingDocument(String documentId) {
