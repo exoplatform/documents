@@ -26,8 +26,11 @@ import org.exoplatform.services.security.Identity;
  *
  * @param viewer the user who looks the name up, with their memberships
  * @param name the name as the user gave it
- * @param spaceId the id of the one space searched, null for every place
- * @param limit the most files wanted
+ * @param spaceId the id of the one space searched, null for every place: for
+ *          a space, a contributor may answer files of every place, more than
+ *          {@code limit}, and the caller keeps the space's
+ * @param limit the most files wanted; the caller reads at most 100
+ *          contributed ids, all contributors together
  * @param locale the user's language, for the labels of what matched
  */
 public record DocumentNameLookupRequest(Identity viewer, String name, Long spaceId, int limit, Locale locale) {
