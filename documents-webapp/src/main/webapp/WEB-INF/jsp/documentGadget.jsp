@@ -18,7 +18,8 @@
 %>
 <%@ page import="javax.portlet.PortletPreferences" %>
 <%@ page import="org.exoplatform.portal.localization.LocaleContextInfoUtils" %>
-<%@ page import="org.apache.commons.text.StringEscapeUtils" %>
+<%@ page import="org.exoplatform.documents.utils.DocumentUtils" %>
+<%@ page import="org.exoplatform.documents.portlet.DocumentGadgetSettings" %>
 
 <%@ taglib uri="http://java.sun.com/portlet_2_0" prefix="portlet" %>
 <portlet:defineObjects/>
@@ -30,18 +31,18 @@
   String id = "DocumentGadget-" + renderRequest.getWindowID();
 
   PortletPreferences preferences = renderRequest.getPreferences();
-  String viewOptions = preferences.getValue("viewOptions", "list");
-  String documentType = preferences.getValue("documentType", "recentDocument");
-  String spaceIdentityId = preferences.getValue("spaceIdentityId", "");
-  boolean customHeader = Boolean.parseBoolean(preferences.getValue("customHeader", "false"));
-  boolean displaySeeMore = Boolean.parseBoolean(preferences.getValue("displaySeeMore", "true"));
-  int maxDocumentsToList = Integer.parseInt(preferences.getValue("maxDocumentsToList", "4"));
-  String categoryIds = preferences.getValue("categoryIds", "[]").replace("\"", "`");
-  String excludeCategoryIds = preferences.getValue("excludeCategoryIds", "[]").replace("\"", "`");
-  String selectedFoldersId = preferences.getValue("selectedFoldersId", "");
-  boolean displayAccessDrive = Boolean.parseBoolean(preferences.getValue("displayAccessDrive", "false"));
-  String driveUrl = preferences.getValue("driveUrl", "");
-  boolean opensInSameTab = Boolean.parseBoolean(preferences.getValue("opensInSameTab", "true"));
+  String viewOptions = DocumentGadgetSettings.valueOrDefault("viewOptions", preferences.getValue("viewOptions", null), "list");
+  String documentType = DocumentGadgetSettings.valueOrDefault("documentType", preferences.getValue("documentType", null), "recentDocument");
+  String spaceIdentityId = DocumentGadgetSettings.valueOrDefault("spaceIdentityId", preferences.getValue("spaceIdentityId", null), "");
+  boolean customHeader = Boolean.parseBoolean(DocumentGadgetSettings.valueOrDefault("customHeader", preferences.getValue("customHeader", null), "false"));
+  boolean displaySeeMore = Boolean.parseBoolean(DocumentGadgetSettings.valueOrDefault("displaySeeMore", preferences.getValue("displaySeeMore", null), "true"));
+  int maxDocumentsToList = Integer.parseInt(DocumentGadgetSettings.valueOrDefault("maxDocumentsToList", preferences.getValue("maxDocumentsToList", null), "4"));
+  String categoryIds = DocumentGadgetSettings.valueOrDefault("categoryIds", preferences.getValue("categoryIds", null), "[]");
+  String excludeCategoryIds = DocumentGadgetSettings.valueOrDefault("excludeCategoryIds", preferences.getValue("excludeCategoryIds", null), "[]");
+  String selectedFoldersId = DocumentGadgetSettings.valueOrDefault("selectedFoldersId", preferences.getValue("selectedFoldersId", null), "");
+  boolean displayAccessDrive = Boolean.parseBoolean(DocumentGadgetSettings.valueOrDefault("displayAccessDrive", preferences.getValue("displayAccessDrive", null), "false"));
+  String driveUrl = DocumentGadgetSettings.valueOrDefault("driveUrl", preferences.getValue("driveUrl", null), "");
+  boolean opensInSameTab = Boolean.parseBoolean(DocumentGadgetSettings.valueOrDefault("opensInSameTab", preferences.getValue("opensInSameTab", null), "true"));
 
 %>
 
@@ -51,22 +52,22 @@
     id="<%=id%>">
     <script type="text/javascript">
       require(['PORTLET/documents-portlet/DocumentGadget'], app => app.init({
-        id: '<%= id %>',
-        settingName: '<%= settingName %>',
+        id: <%=DocumentUtils.toScriptStringLiteral(id)%>,
+        settingName: <%=DocumentUtils.toScriptStringLiteral(settingName)%>,
         canEdit: <%=canEdit%>,
-        viewOptions: '<%=viewOptions%>',
-        documentType: '<%=documentType%>',
-        spaceIdentityId: '<%=spaceIdentityId%>',
+        viewOptions: <%=DocumentUtils.toScriptStringLiteral(viewOptions)%>,
+        documentType: <%=DocumentUtils.toScriptStringLiteral(documentType)%>,
+        spaceIdentityId: <%=DocumentUtils.toScriptStringLiteral(spaceIdentityId)%>,
         customHeader: <%=customHeader%>,
-        headerTitle: <%=headerTitle == null ? null : String.format("'%s'", StringEscapeUtils.escapeJava(headerTitle).replace("\\\"", "\"").replace("\\\\\"", "\\\""))%>,
+        headerTitle: <%=DocumentUtils.toScriptStringLiteral(headerTitle)%>,
         displaySeeMore: <%=displaySeeMore%>,
         maxDocumentsToList: <%=maxDocumentsToList%>,
-        categoryIds: <%=categoryIds%>,
-        excludeCategoryIds: <%=excludeCategoryIds%>,
-        selectedFoldersId: '<%=selectedFoldersId%>',
-        saveSettingsUrl: '<%=saveSettingsUrl%>',
+        categoryIds: JSON.parse(<%=DocumentUtils.toScriptStringLiteral(categoryIds)%>),
+        excludeCategoryIds: JSON.parse(<%=DocumentUtils.toScriptStringLiteral(excludeCategoryIds)%>),
+        selectedFoldersId: <%=DocumentUtils.toScriptStringLiteral(selectedFoldersId)%>,
+        saveSettingsUrl: <%=DocumentUtils.toScriptStringLiteral(saveSettingsUrl)%>,
         displayAccessDrive: <%=displayAccessDrive%>,
-        driveUrl: '<%=driveUrl%>',
+        driveUrl: <%=DocumentUtils.toScriptStringLiteral(driveUrl)%>,
         opensInSameTab: <%=opensInSameTab%>
       }));
     </script>

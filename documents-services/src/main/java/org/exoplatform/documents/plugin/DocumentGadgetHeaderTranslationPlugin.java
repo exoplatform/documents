@@ -19,6 +19,10 @@ package org.exoplatform.documents.plugin;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import org.exoplatform.portal.config.UserACL;
+import org.exoplatform.services.security.Identity;
+
+import io.meeds.social.cms.service.CMSService;
 import io.meeds.social.translation.plugin.TranslationPlugin;
 import io.meeds.social.translation.service.TranslationService;
 
@@ -31,6 +35,12 @@ public class DocumentGadgetHeaderTranslationPlugin extends TranslationPlugin {
 
   @Autowired
   private TranslationService translationService;
+
+  @Autowired
+  private CMSService         cmsService;
+
+  @Autowired
+  private UserACL            userAcl;
 
   @PostConstruct
   public void init() {
@@ -49,7 +59,9 @@ public class DocumentGadgetHeaderTranslationPlugin extends TranslationPlugin {
 
   @Override
   public boolean hasEditPermission(String objectId, String username) {
-    return true;
+    // The title is edited by the users who may edit the gadget's settings
+    Identity identity = userAcl.getUserIdentity(username);
+    return identity != null && cmsService.hasEditPermission(identity, DOCUMENT_GADGET_OBJECT_TYPE, objectId);
   }
 
   @Override

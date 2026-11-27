@@ -252,4 +252,22 @@ public class DocumentUtilsTest {
     when(node.getACL()).thenReturn(acl(entries));
     assertFalse(DocumentUtils.hasIdentityPermission(node, REDACTOR_REF));
   }
+
+  @Test
+  public void testAValuePrintedInAScriptStringCanCloseNeitherTheStringNorTheScript() {
+    assertEquals("null", DocumentUtils.toScriptStringLiteral(null));
+    assertEquals("'Recent documents'", DocumentUtils.toScriptStringLiteral("Recent documents"));
+    String literal = DocumentUtils.toScriptStringLiteral("it's a \"title\" </p><b>bold</b> \\");
+    String body = literal.substring(1, literal.length() - 1);
+    assertTrue(literal.startsWith("'") && literal.endsWith("'"));
+    assertFalse("no unescaped single quote", body.matches(".*(?<!\\\\)'.*"));
+    assertFalse("no tag opened or closed", body.contains("<"));
+    assertTrue(body.contains("\\'"));
+    assertTrue(body.contains("\\\""));
+    assertTrue(body.contains("\\u003C\\/p>"));
+    assertTrue("the trailing backslash is escaped, so it cannot escape the closing quote", literal.endsWith(" \\\\'"));
+    assertEquals("'a\\\\b'", DocumentUtils.toScriptStringLiteral("a\\b"));
+    String comment = DocumentUtils.toScriptStringLiteral("<!--note");
+    assertEquals("'\\u003C!--note'", comment);
+  }
 }
