@@ -201,7 +201,9 @@ public class DocumentToolDefinitionsTest {
             // documents cd18fc178 (EXO-94927), replaced by the name lookup (EXO-95137)
             "217914868e5e94688a4c3ed5e2d2f47e52878dbac8684dabaa1aeb7927a9ae95",
             // the name lookup's first text (EXO-95137)
-            "d2f7cb52b8ca1620446925ac96cf831d92e8ee0563a9cdff62ba2710083cac44")
+            "d2f7cb52b8ca1620446925ac96cf831d92e8ee0563a9cdff62ba2710083cac44",
+            // the name lookup with its text search only, before the other add-ons' data (EXO-95443)
+            "8d6306652b20b0c79a9b10b82ca24e8f1f468ab32c776c02afbb3d107dc23480")
         .forEach(digest -> assertTrue(digest + " not in " + replaced, replaced.contains(digest)));
     Map<String, Object> current = new TreeMap<>();
     current.put("description", description);
