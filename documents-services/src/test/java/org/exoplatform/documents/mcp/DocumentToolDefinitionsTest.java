@@ -213,6 +213,61 @@ public class DocumentToolDefinitionsTest {
   }
 
   /**
+   * list_folder_children says that with updated_since it lists the direct
+   * children only (EXO-95504): a document changed inside a sub-folder is not
+   * listed, so an empty listing never means nothing changed below the folder,
+   * and the files changed anywhere below it are search_documents' with
+   * parent_folder_id and updated_since, which lists files only; its
+   * updated_since parameter says the same. A booted instance takes the text
+   * through mcp-server's upgrade digests: the module's upgrades file lists
+   * every text the tool shipped before, never the current one.
+   * Mutants: the sentence reverted, the parameter reverted, a shipped digest
+   * removed, the current digest listed.
+   *
+   * @throws Exception never
+   */
+  @Test
+  public void listFolderChildrenSaysItsChangesSinceAreTheDirectChildrenOnly() throws Exception {
+    JsonMapper mapper = JsonMapper.builder().build();
+    JsonNode listing = null;
+    for (JsonNode tool : mapper.readTree(resource("ai-tool-definitions.json")).get("tools")) {
+      if ("list_folder_children".equals(tool.get("name").asString())) {
+        listing = tool;
+      }
+    }
+    assertNotNull(listing);
+    String description = listing.get("description").asString();
+    assertTrue(description,
+               description.contains("With updated_since, lists only the direct children changed since that date, the most recent first: "
+                   + "a document changed inside a sub-folder is not listed, so an empty listing never means nothing changed below the folder; "
+                   + "for the files changed anywhere below the folder, use search_documents with parent_folder_id and updated_since, which lists files only"));
+    String since = listing.get("input_schema").get("properties").get("updated_since").get("description").asString();
+    assertTrue(since, since.endsWith("only the direct children changed since then, never a document inside a sub-folder."));
+
+    Set<String> replaced = new HashSet<>();
+    for (JsonNode tool : mapper.readTree(resource("ai-tool-definition-upgrades.json")).get("tools")) {
+      if ("list_folder_children".equals(tool.get("name").asString())) {
+        tool.get("replaced_definitions").forEach(digest -> replaced.add(digest.asString()));
+      }
+    }
+    // the digests (jq -jcS '{description, input_schema}' | shasum -a 256) of the texts shipped before EXO-95504:
+    // documents b7c525821, then 481c799dd (EXO-91672), 65d727949, 660c025a0 and 82707c99b
+    List.of("3d1cb13990cbba8b6f7b7c1f6bda097c028b55d475c9066dc6df593f9b7d7ed2",
+            "adade35044236d3eac2fe2eca64b79a1416c7167b7f656c22bc5b63bacd61e40",
+            "4528eb30b7332ad1ed915afa9779b8162c4c936d8e4adbe85aedaffe6007202b",
+            "f5b35e0028bc7f9c37278a41eeac5ebf6f0051a7301467c2ae60f2c43839969e",
+            "eb38025b32390bffb5d981270130bc79037397ab0316b088c9eb4267df2be8a8")
+        .forEach(digest -> assertTrue(digest + " not in " + replaced, replaced.contains(digest)));
+    Map<String, Object> current = new TreeMap<>();
+    current.put("description", description);
+    current.put("input_schema", sorted(mapper.treeToValue(listing.get("input_schema"), Object.class)));
+    String digest = HexFormat.of()
+                             .formatHex(MessageDigest.getInstance("SHA-256")
+                                                     .digest(mapper.writeValueAsString(current).getBytes(StandardCharsets.UTF_8)));
+    assertFalse("the current text replaces nothing: " + digest, replaced.contains(digest));
+  }
+
+  /**
    * search_documents finds a file or a folder by its name (EXO-95137): it
    * takes a name, its description states the cap the tool applies, the
    * fields each match carries, the text search it falls back to and the
