@@ -2554,7 +2554,10 @@ public class JCRDocumentFileStorageTest {
       JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.cleanFiles(any(File.class)));
 
       JCR_DOCUMENTS_UTIL.clearInvocations();
-      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.createTempFilesAndFolders(eq(node), anyString(), anyString(), anyString(), anyString()))
+      // The zipping works again: only the copy fails. The parent's titles path
+      // is null here, the util class being mocked.
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.zipFiles(anyString(), anyString())).thenAnswer(invocation -> null);
+      JCR_DOCUMENTS_UTIL.when(() -> JCRDocumentsUtil.createTempFilesAndFolders(eq(node), anyString(), any(), eq(trashStorage)))
                         .thenThrow(new RepositoryException("unreadable child"));
       assertNull(jcrDocumentFileStorage.downloadFolder("failing", identity));
       JCR_DOCUMENTS_UTIL.verify(() -> JCRDocumentsUtil.cleanFiles(any(File.class)));
