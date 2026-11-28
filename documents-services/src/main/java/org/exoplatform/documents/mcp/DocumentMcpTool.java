@@ -63,6 +63,7 @@ import org.exoplatform.commons.api.settings.data.Context;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.exception.ObjectNotFoundException;
 import org.exoplatform.commons.file.services.FileService;
+import org.exoplatform.container.ExoContainer;
 import org.exoplatform.container.ExoContainerContext;
 import org.exoplatform.documents.constant.DocumentSortField;
 import org.exoplatform.documents.constant.DocumentUploadLimit;
@@ -87,6 +88,9 @@ import org.exoplatform.documents.mcp.model.DocumentsSizeModel;
 import org.exoplatform.documents.model.AbstractNode;
 import org.exoplatform.documents.model.BreadCrumbItem;
 import org.exoplatform.documents.model.DocumentFolderFilter;
+import org.exoplatform.documents.model.DocumentIndexInfo;
+import org.exoplatform.documents.model.DocumentNameLookupHit;
+import org.exoplatform.documents.model.DocumentNameLookupRequest;
 import org.exoplatform.documents.model.DocumentNameMatch;
 import org.exoplatform.documents.model.DocumentOutlineEntry;
 import org.exoplatform.documents.model.DocumentTextContent;
@@ -109,6 +113,7 @@ import org.exoplatform.documents.model.PermissionEntry;
 import org.exoplatform.documents.model.PermissionRole;
 import org.exoplatform.documents.model.PublicDocumentAccess;
 import org.exoplatform.documents.service.DocumentFileService;
+import org.exoplatform.documents.service.DocumentNameLookupPlugin;
 import org.exoplatform.documents.service.PublicDocumentAccessService;
 import org.exoplatform.portal.config.UserACL;
 import org.exoplatform.portal.config.UserPortalConfigService;
@@ -306,6 +311,13 @@ public class DocumentMcpTool implements McpToolPlugin {
 
   /** The most matches a name lookup of search_documents returns. */
   static final int                 MAX_NAME_MATCHES       = 20;
+
+  /**
+   * The most contributed ids a name lookup reads, all contributors together:
+   * the files a filter drops never take the place of one it keeps within it,
+   * and the system-session description stays bounded.
+   */
+  static final int                 MAX_CONTRIBUTED_IDS    = 100;
 
   /** The drive name a name lookup gives for the user's own drive. */
   static final String              PERSONAL_DRIVE         = "personal drive";
@@ -1488,7 +1500,9 @@ public class DocumentMcpTool implements McpToolPlugin {
    * @param updatedSince must be blank
    * @return the matches, in the order of their path; when no file or folder
    *         has exactly that name, the text search's hits for it instead
-   *         ({@link #searchNameAsText})
+   *         ({@link #searchNameAsText}), and when that finds nothing either,
+   *         the files the other add-ons' data names
+   *         ({@link #lookUpNameInOtherData})
    * @throws ObjectNotFoundException when the space doesn't exist, or no space
    *           of the user carries the name
    * @throws IllegalAccessException when the user can't view the space
@@ -1519,7 +1533,8 @@ public class DocumentMcpTool implements McpToolPlugin {
                                                                               getCurrentUserIdentityId(),
                                                                               size);
     if (matches.isEmpty()) {
-      return searchNameAsText(name.trim(), ownerId, size);
+      List<DocumentModel> titled = searchNameAsText(name.trim(), ownerId, size);
+      return titled.isEmpty() ? lookUpNameInOtherData(name.trim(), searchedSpaceId, size) : titled;
     }
     Map<Long, String> driveNames = new HashMap<>();
     return matches.stream().map(match -> toNameMatchModel(match, driveNames)).toList();
@@ -1556,6 +1571,107 @@ public class DocumentMcpTool implements McpToolPlugin {
       model.setType(TYPE_FILE);
       return model;
     }).toList();
+  }
+
+  /**
+   * Asks the add-ons that hold named data about files (a form filled in on a
+   * file, for instance) which files a name no file carries matches, then
+   * reads each one back with the user's own rights: a contributed id that
+   * names no file, a file in the trash, a file outside the space searched or
+   * a file the user may not read is dropped, so that a contributor never
+   * decides what the user sees. A contributor that fails is skipped. At most
+   * {@link #MAX_CONTRIBUTED_IDS} ids are read, and the cap applies to the
+   * files kept, so that within those ids the files a filter drops never take
+   * the place of one it keeps.
+   *
+   * @param name the name the lookup and the title search found nothing for
+   * @param spaceId the id of the one space searched, null for every place
+   * @param size the most hits
+   * @return the readable files, in the contributors' order, each with what
+   *         the name matched and the values it holds for the file
+   */
+  private List<DocumentModel> lookUpNameInOtherData(String name, Long spaceId, int size) {
+    List<DocumentNameLookupPlugin> plugins = getNameLookupPlugins();
+    if (plugins.isEmpty()) {
+      return List.of();
+    }
+    DocumentNameLookupRequest request = new DocumentNameLookupRequest(getCurrentUserAclIdentity(),
+                                                                      name,
+                                                                      spaceId,
+                                                                      size,
+                                                                      getCurrentUserLocale());
+    Map<String, DocumentNameLookupHit> hits = new LinkedHashMap<>();
+    for (DocumentNameLookupPlugin plugin : plugins) {
+      List<DocumentNameLookupHit> answer;
+      try {
+        answer = plugin.findByName(request);
+      } catch (RuntimeException e) {
+        LOG.warn("Name lookup contributor {} failed, the lookup goes on without it: {}",
+                 plugin.getClass().getName(),
+                 e.getMessage());
+        continue;
+      }
+      if (answer == null) {
+        continue;
+      }
+      answer.stream()
+            .filter(hit -> hit != null && StringUtils.isNotBlank(hit.fileId()))
+            .forEach(hit -> {
+              if (hits.size() < MAX_CONTRIBUTED_IDS) {
+                hits.putIfAbsent(hit.fileId(), hit);
+              }
+            });
+    }
+    if (hits.isEmpty()) {
+      return List.of();
+    }
+    Map<String, DocumentIndexInfo> files = documentFileService.describeForIndex(hits.keySet());
+    List<DocumentModel> models = new ArrayList<>();
+    for (DocumentNameLookupHit hit : hits.values()) {
+      if (models.size() >= size) {
+        break;
+      }
+      DocumentIndexInfo info = files.get(hit.fileId());
+      if (info == null || (spaceId != null && info.spaceId() != spaceId.longValue())) {
+        continue;
+      }
+      FileNode file = getReadableFile(hit.fileId());
+      if (file != null) {
+        DocumentModel model = toDocumentFileModel(file);
+        model.setType(TYPE_FILE);
+        model.setMatchedBy(hit.matchedBy());
+        model.setMatchedValues(hit.values().isEmpty() ? null : hit.values());
+        models.add(model);
+      }
+    }
+    return models;
+  }
+
+  /**
+   * @param fileId a node identifier
+   * @return the file the id names, read with the user's rights, or null when
+   *         no node carries it, the user may not read it, or it is no file
+   */
+  private FileNode getReadableFile(String fileId) {
+    try {
+      return documentFileService.getDocumentById(fileId, getCurrentUserName()) instanceof FileNode file ? file : null;
+    } catch (IllegalAccessException | ObjectNotFoundException e) {
+      return null;
+    }
+  }
+
+  /**
+   * The name lookup contributors, looked up by type at each lookup: an
+   * add-on's Spring {@code @Service} is registered in the portal container,
+   * which any webapp's code can read.
+   *
+   * @return the contributors, empty when none
+   */
+  protected List<DocumentNameLookupPlugin> getNameLookupPlugins() {
+    ExoContainer container = ExoContainerContext.getCurrentContainer();
+    List<DocumentNameLookupPlugin> plugins = container == null ? null
+                                                               : container.getComponentInstancesOfType(DocumentNameLookupPlugin.class);
+    return plugins == null ? List.of() : plugins;
   }
 
   /**

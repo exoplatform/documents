@@ -201,7 +201,9 @@ public class DocumentToolDefinitionsTest {
             // documents cd18fc178 (EXO-94927), replaced by the name lookup (EXO-95137)
             "217914868e5e94688a4c3ed5e2d2f47e52878dbac8684dabaa1aeb7927a9ae95",
             // the name lookup's first text (EXO-95137)
-            "d2f7cb52b8ca1620446925ac96cf831d92e8ee0563a9cdff62ba2710083cac44")
+            "d2f7cb52b8ca1620446925ac96cf831d92e8ee0563a9cdff62ba2710083cac44",
+            // the name lookup with its text search only, before the other add-ons' data (EXO-95443)
+            "8d6306652b20b0c79a9b10b82ca24e8f1f468ab32c776c02afbb3d107dc23480")
         .forEach(digest -> assertTrue(digest + " not in " + replaced, replaced.contains(digest)));
     Map<String, Object> current = new TreeMap<>();
     current.put("description", description);
@@ -296,7 +298,10 @@ public class DocumentToolDefinitionsTest {
     assertTrue(description, description.contains("its type (folder or file)") && !description.contains("is_folder"));
     assertTrue(description,
                description.contains("When no file or folder has exactly that name, it returns the text search's hits for that name "
-                   + "without its extension instead (files only, without space_name or folder_path), so an empty list means neither found anything."));
+                   + "without its extension instead (files only, without space_name or folder_path); when that finds nothing either, it "
+                   + "returns the files that name matches in other data about files, such as a form of that name filled in on them, each "
+                   + "with matched_by, what the name matched, and matched_values, what that data holds for the file: answer from those "
+                   + "values. So an empty list means none of them found anything."));
     assertTrue(description,
                description.contains("To see what changed in a folder found by name, call it again with that folder's document_id as "
                    + "parent_folder_id and with updated_since."));

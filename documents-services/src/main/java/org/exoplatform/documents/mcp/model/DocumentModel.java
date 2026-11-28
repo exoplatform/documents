@@ -16,6 +16,8 @@
  */
 package org.exoplatform.documents.mcp.model;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -94,6 +96,20 @@ public abstract class DocumentModel {
    */
   @JsonProperty("type")
   private String    type;
+
+  /**
+   * What a name no file carries matched in another add-on's data, such as
+   * « form QA-92501 Contract », for a file found that way; null otherwise.
+   */
+  @JsonProperty("matched_by")
+  private String    matchedBy;
+
+  /**
+   * What that data holds for the file, label to value, for a file found
+   * through it; null otherwise.
+   */
+  @JsonProperty("matched_values")
+  private Map<String, String> matchedValues;
 
   /**
    * Builds the document's common fields, its rights left unknown.
